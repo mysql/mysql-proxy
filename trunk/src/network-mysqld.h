@@ -16,6 +16,17 @@
 #ifndef _NETWORK_MYSQLD_H_
 #define _NETWORK_MYSQLD_H_
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef HAVE_SYS_TIME_H
+/**
+ * event.h needs struct timeval and doesn't include sys/time.h itself
+ */
+#include <sys/time.h>
+#endif
+
 #include <sys/types.h>
 #include <sys/socket.h>
 
