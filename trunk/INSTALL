@@ -49,12 +49,12 @@ Ubuntu/Debian
 
   $ apt-get install \
       pkg-config \
-      liblua5.1 \
+      liblua5.1-0 \
       liblua5.1-dev \
       libevent-dev \
-      libevent  \
+      libevent1  \
       libglib2.0-0 \
-      libglib2.0-0-dev 
+      libglib2.0-dev 
 
 On Debian and Ubuntu you need to tell the configure script that it has to use 
 "pkg-config lua5.1" to detect the lua-libriaries instead of the default 
