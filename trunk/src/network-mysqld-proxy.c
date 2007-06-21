@@ -251,10 +251,19 @@ static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields
 	/* the first chunk is the length
 	 *  */
 	if (packet->len != NET_HEADER_SIZE + 1) {
-		write(STDERR_FILENO, packet->str, packet->len);
-		g_error("%s.%d: "F_SIZE_T" != 5", 
-				__FILE__, __LINE__,
-				packet->len);
+		/**
+		 * looks like this isn't a result-set
+		 * 
+		 *    read(6, "\1\0\0\1", 4)                  = 4
+		 *    read(6, "\2", 1)                        = 1
+		 *
+		 * is expected. We might got called on a non-result, tell the user about it.
+		 */
+#if 0
+		g_debug("%s.%d: network_mysqld_result_parse_fields() got called on a non-resultset. "F_SIZE_T" != 5", __FILE__, __LINE__, packet->len);
+#endif
+
+		return NULL;
 	}
 	
 	field_count = packet->str[NET_HEADER_SIZE]; /* the byte after the net-header is the field-count */
@@ -1227,8 +1236,14 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	return 1;
 }
 
+/**
+ * parse the result-set of the query
+ *
+ * @return if this is not a result-set we return -1
+ */
 static int parse_resultset_fields(proxy_resultset_t *res) {
 	GString *packet = res->result_queue->head->data;
+	GList *chunk;
 
 	if (res->fields) return 0;
 
@@ -1243,12 +1258,19 @@ static int parse_resultset_fields(proxy_resultset_t *res) {
 		res->query_status = MYSQLD_PACKET_OK;
 		break;
 	}
-	
+
 	/* parse the fields */
 	res->fields = network_mysqld_proto_fields_init();
 
-	/* scan the resultset */
-	res->rows_chunk_head = network_mysqld_result_parse_fields(res->result_queue->head, res->fields)->next;
+	if (!res->fields) return -1;
+
+	chunk = network_mysqld_result_parse_fields(res->result_queue->head, res->fields);
+
+	/* no result-set found */
+	if (!chunk) return -1;
+
+	/* skip the end-of-fields chunk */
+	res->rows_chunk_head = chunk->next;
 
 	return 0;
 }
@@ -1324,9 +1346,12 @@ static int proxy_resultset_get(lua_State *L) {
 	} else if (0 == strcmp(key, "warning_count")) {
 		lua_pushinteger(L, res->warning_count);
 	} else if (0 == strcmp(key, "query_status")) {
-		parse_resultset_fields(res);
-
-		lua_pushinteger(L, res->query_status);
+		if (0 != parse_resultset_fields(res)) {
+			/* not a result-set */
+			lua_pushnil(L);
+		} else {
+			lua_pushinteger(L, res->query_status);
+		}
 	} else {
 		lua_pushnil(L);
 	}
