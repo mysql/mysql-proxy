@@ -1,3 +1,22 @@
+--[[
+
+   Copyright (C) 2007 MySQL AB
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; version 2 of the License.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+--]]
+
 ---
 -- read_query() can rewrite packets
 --
@@ -13,11 +32,43 @@
 --
 function read_query( packet )
 	if string.byte(packet) == proxy.COM_QUERY then
-		print("we got a normal query: " .. string.sub(packet, 2))
+		local query = string.sub(packet, 2)
 
-		proxy.queries:append(1, string.char(proxy.COM_QUERY) .. "SELECT 1" )
+		print("we got a normal query: " .. query)
 
-		return proxy.PROXY_SEND_QUERY
+		-- try to match the string up to the first non-alphanum
+		local f_s, f_e, command = string.find(packet, "^%s*(%w+)", 2)
+		local option
+
+		if f_e then
+			-- if that match, take the next sub-string as option
+			f_s, f_e, option = string.find(packet, "^%s+(%w+)", f_e + 1)
+		end
+		
+		-- support 
+		--
+		-- ls [db]
+		-- cd db
+		-- who
+
+		if command == "ls" then
+			if option then
+				-- FIXME: SQL INJECTION
+				proxy.queries:append(1, string.char(proxy.COM_QUERY) .. "SHOW TABLES FROM " .. option )
+			else
+				proxy.queries:append(1, string.char(proxy.COM_QUERY) .. "SHOW TABLES" )
+			end
+
+			return proxy.PROXY_SEND_QUERY
+		elseif command == "who" then
+			proxy.queries:append(1, string.char(proxy.COM_QUERY) .. "SHOW PROCESSLIST" )
+
+			return proxy.PROXY_SEND_QUERY
+		elseif command == "cd" and option then
+			proxy.queries:append(1, string.char(proxy.COM_INIT_DB) .. option )
+
+			return proxy.PROXY_SEND_QUERY
+		end
 	end
 end
 
@@ -37,3 +88,4 @@ end
 function read_query_result(inj)
 	 
 end
+
