@@ -56,6 +56,7 @@
 			} \
 		} while(0);
 
+#define CRASHME() do { char *_crashme = NULL; *_crashme = 0; } while(0);
 
 typedef enum { 
 	BACKEND_STATE_UNKNOWN, 
@@ -330,6 +331,7 @@ lua_State *lua_load_script(const gchar *name) {
 
 	if (0 != luaL_loadfile(L, name)) {
 		/* oops, an error, return it */
+		g_warning("luaL_loadfile(%s) failed", name);
 
 		return L;
 	}
@@ -651,17 +653,18 @@ int lua_register_callback(network_mysqld_con *con) {
 		L = lua_load_script(con->config.proxy.lua_script);
 		
 		if (lua_isstring(L, -1)) {
-			g_warning("lua_load_file(%s): %s", con->config.proxy.lua_script, lua_tostring(L, -1));
+			g_warning("lua_load_file(%s) failed: %s", con->config.proxy.lua_script, lua_tostring(L, -1));
 
 			lua_pop(L, 1); /* remove the error-msg and the function copy from the stack */
 	
 			lua_free_script(L);
 
 			L = NULL;
-		} else {
+		} else if (lua_isfunction(L, -1)) {
 			lua_init_fenv(L);
 
 			/* cache the script */
+			g_assert(lua_isfunction(L, -1));
 			lua_pushvalue(L, -1);
 
 			st->injected.L = L;
@@ -670,8 +673,9 @@ int lua_register_callback(network_mysqld_con *con) {
 			if (lua_pcall(L, 0, 0, 0) != 0) {
 				g_error("%s", lua_tostring(L, -1));
 			}
-
 			/* on the stack should be the script now, keep it there */
+		} else {
+			g_error("lua_load_file(%s): returned a %s", con->config.proxy.lua_script, lua_typename(L, lua_type(L, -1)));
 		}
 	} else {
 		L = st->injected.L;
@@ -684,6 +688,9 @@ int lua_register_callback(network_mysqld_con *con) {
 	g_assert(lua_istable(L, -1));
 		
 	lua_getfield(L, -1, "proxy");
+	if (!lua_istable(L, -1)) {
+		g_error("fenv.proxy should be a table, but is %s", lua_typename(L, lua_type(L, -1)));
+	}
 	g_assert(lua_istable(L, -1));
 
 	q_p = lua_newuserdata(L, sizeof(GQueue *));
@@ -1479,9 +1486,9 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
 
 		} else if (lua_isnil(L, -1)) {
 			/* no function defined, let's send the result-set */
-
+			lua_pop(L, 1); /* pop the nil */
 		} else {
-			g_message("%s.%d: %s", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
+			g_message("%s.%d: (network_mysqld_con_handle_proxy_resultset) got wrong type: %s", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
 			lua_pop(L, 1); /* pop the nil */
 		}
 		lua_pop(L, 1); /* fenv */
@@ -1848,8 +1855,15 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		 */
 		switch (packet->str[NET_HEADER_SIZE + 0]) {
 		case MYSQLD_PACKET_ERR:
-			if (recv_sock->mysqld_version >= 50114) {
-				/* we expect to get 2 ERR packets */
+			if (recv_sock->mysqld_version > 50113 && recv_sock->mysqld_version < 50118) {
+				/**
+				 * Bug #25371
+				 *
+				 * COM_CHANGE_USER returns 2 ERR packets instead of one
+				 *
+				 * we can auto-correct the issue if needed and remove the second packet
+				 * Some clients handle this issue and expect a double ERR packet.
+				 */
 				if (recv_sock->packet_id == 2) {
 					if (con->config.proxy.fix_bug_25371) {
 						send_packet = 0;
@@ -2272,7 +2286,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 				st->backend_ndx = ret;
 			}
 		} else if (lua_isnil(L, -1)) {
-			g_message("%s.%d: .connect_server is not set or nil (%s)", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
+#if 0
+			g_debug("%s.%d: function connect_server is defined", __FILE__, __LINE__);
+#endif
 			lua_pop(L, 1); /* pop the nil */
 		} else {
 			g_message("%s.%d: %s", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
