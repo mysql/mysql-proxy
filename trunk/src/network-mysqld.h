@@ -28,10 +28,17 @@
 #endif
 
 #include <sys/types.h>
-#include <sys/socket.h>
+#include <sys/socket.h>     /** struct sockaddr */
 
-#include <netinet/in.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>     /** struct sockaddr_in */
+#endif
 #include <netinet/tcp.h>
+
+#ifdef HAVE_SYS_UN_H
+#include <sys/un.h>         /** struct sockaddr_un */
+
+#endif
 
 #include <unistd.h>
 
@@ -158,6 +165,9 @@ typedef struct {
 typedef struct {
 	union {
 		struct sockaddr_in ipv4;
+#ifdef HAVE_SYS_UN_H
+		struct sockaddr_un un;
+#endif
 	} addr;
 
 	gchar *str;

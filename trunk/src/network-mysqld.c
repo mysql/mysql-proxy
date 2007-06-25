@@ -316,7 +316,20 @@ int network_mysqld_con_set_address(network_address *addr, gchar *address) {
 		addr->len = sizeof(struct sockaddr_in);
 
 		addr->str = g_strdup(address);
+#ifdef HAVE_SYS_UN_H
+	} else if (address[0] == '/') {
+		if (strlen(address) >= sizeof(addr->addr.un.sun_path) - 1) {
+			g_critical("unix-path is too long: %s", address);
+			return -1;
+		}
+
+		addr->addr.un.sun_family = AF_UNIX;
+		strcpy(addr->addr.un.sun_path, address);
+		addr->len = sizeof(struct sockaddr_un);
+		addr->str = g_strdup(address);
+#endif
 	} else {
+		/* might be a unix socket */
 		g_critical("address has to contain a <ip>:<port>, got '%s'", address);
 		return -1;
 	}
@@ -324,13 +337,24 @@ int network_mysqld_con_set_address(network_address *addr, gchar *address) {
 	return 0;
 }
 
+/**
+ * connect to the address defined in con->addr
+ *
+ * @see network_mysqld_set_address 
+ */
 int network_mysqld_con_connect(network_mysqld *UNUSED_PARAM(srv), network_socket * con) {
 	int val = 1;
 
 	g_assert(con->addr.len);
 
-	if (-1 == (con->fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))) {
-		g_critical("socket() failed");
+	/**
+	 * con->addr.addr.ipv4.sin_family is always mapped to the same field 
+	 * even if it is not a IPv4 address as we use a union
+	 */
+	if (-1 == (con->fd = socket(con->addr.addr.ipv4.sin_family, SOCK_STREAM, 0))) {
+		g_critical("%s.%d: socket(%s) failed: %s", 
+				__FILE__, __LINE__,
+				con->addr.str, strerror(errno));
 		return -1;
 	}
 
