@@ -4,6 +4,7 @@
   * added script examples for rewriting and injection
   * added support for UNIX sockets
   * added protection against duplicate resultsets from a script
+  * added missing dependency to libmysqlclient-dev to the INSTALL file
   * fixed assertion if read_query_result() is not provided 
     when PROXY_SEND_QUERY is used
   * fixed warning if connect_server() is not provided

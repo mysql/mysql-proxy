@@ -40,9 +40,10 @@ As you have the source in the right place and the configure script exists, you h
 to make sure that the dependencies are in place;
 
 - libevent 1.x or higher (1.3b or later is prefered)
-- lua 5.1
+- lua 5.1.x or higher
 - glib2 2.4.0 or higer
 - pkg-config 
+- mysql 5.0.x or higer developer files
 
 Ubuntu/Debian
 -------------
@@ -54,7 +55,8 @@ Ubuntu/Debian
       libevent-dev \
       libevent1  \
       libglib2.0-0 \
-      libglib2.0-dev 
+      libglib2.0-dev \
+      libmysqlclient-dev
 
 On Debian and Ubuntu you need to tell the configure script that it has to use 
 "pkg-config lua5.1" to detect the lua-libriaries instead of the default 
