@@ -137,6 +137,7 @@ typedef struct {
 #ifdef HAVE_LUA_H
 		lua_State *L;
 #endif
+		int sent_resultset;    /** make sure we send only one result back to the client */
 	} injected;
 
 	plugin_srv_state *global_state;
@@ -1468,7 +1469,21 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
 
 			switch (ret) {
 			case PROXY_SEND_RESULT:
-				break;
+				if (!st->injected.sent_resultset) {
+					/**
+					 * make sure we send only one result-set per client-query
+					 */
+					st->injected.sent_resultset++;
+					break;
+				}
+				g_warning("%s.%d: got asked to send a resultset, but ignoring it as we already have sent %d resultset(s). injection-id: %d",
+						__FILE__, __LINE__,
+						st->injected.sent_resultset,
+						inj->type);
+
+				st->injected.sent_resultset++;
+
+				/* fall through */
 			case PROXY_IGNORE_RESULT:
 				/* trash the packets for the injection query */
 				while ((packet = g_queue_pop_head(send_sock->send_queue->chunks))) g_string_free(packet, TRUE);
@@ -1715,6 +1730,14 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	return RET_SUCCESS;
 }
 
+/**
+ * gets called after a query has been read
+ *
+ * - calls the lua script via network_mysqld_con_handle_proxy_stmt()
+ * - extracts con->default_db if INIT_DB is called
+ *
+ * @see network_mysqld_con_handle_proxy_stmt
+ */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	GString *packet;
 	GList *chunk;
@@ -1724,6 +1747,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 
 	send_sock = con->server;
 	recv_sock = con->client;
+	st->injected.sent_resultset = 0;
 
 	chunk = recv_sock->recv_queue->chunks->head;
 
@@ -1744,6 +1768,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		send_sock->packet_id = recv_sock->packet_id;
 
 		network_queue_append_chunk(send_sock->send_queue, packet);
+
+		/**
+		 * FIXME: check that packet->str points to the 
+		 * packet we really send. It might have gotten rewritten.
+		 */
 
 		if (packet->str[NET_HEADER_SIZE] == COM_INIT_DB) {
 			/**
@@ -1794,7 +1823,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 }
 
 /**
- * if we have other injected queries in the queue, send them
+ * decide about the next state after the result-set has been written 
+ * to the client
+ * 
+ * if we still have data in the queue, back to proxy_send_query()
+ * otherwise back to proxy_read_query() to pick up a new client query
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	network_socket *recv_sock, *send_sock;
@@ -1821,7 +1854,16 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	return RET_SUCCESS;
 }
 
-
+/**
+ * handle the query-result we received from the server
+ *
+ * - decode the result-set to track if we are finished already
+ * - handles BUG#25371 if requested
+ * - if the packet is finished, calls the network_mysqld_con_handle_proxy_resultset
+ *   to handle the resultset in the lua-scripts
+ *
+ * @see network_mysqld_con_handle_proxy_resultset
+ */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	int is_finished = 0;
 	int send_packet = 1; /* shall we forward this packet ? */
@@ -2169,6 +2211,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 
 		network_mysqld_con_handle_proxy_resultset(srv, con);
 		
+		/**
+		 * if the send-queue is empty, we have nothing to send
+		 * and can read the next query */	
 		if (send_sock->send_queue->chunks) {
 			con->state = CON_STATE_SEND_QUERY_RESULT;
 		} else {
