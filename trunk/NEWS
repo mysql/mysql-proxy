@@ -3,11 +3,13 @@
 
   * added script examples for rewriting and injection
   * added support for UNIX sockets
+  * added protection against duplicate resultsets from a script
   * fixed assertion if read_query_result() is not provided 
     when PROXY_SEND_QUERY is used
   * fixed warning if connect_server() is not provided
   * fixed handling of duplicate ERR on COM_CHANGE_USER in MySQL 5.1.18+
   * fixed compile error with MySQL 4.1.x on missing COM_STMT_*
+  * fixed mysql check in configure to die when mysql.h isn't detected
 
 0.5.0 - 2007-06-19
 
