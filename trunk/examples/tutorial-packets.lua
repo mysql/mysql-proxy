@@ -200,9 +200,9 @@ function read_query_result( inj )
   -- the query
 
   -- the result-set
-  local res = inj.resultset
-  local packet = inj.query
-  local raw_len = string.len(res.raw)
+  local res      = assert(inj.resultset)
+  local packet   = assert(inj.query)
+  local raw_len  = assert(res.raw):len()
 
   local flags    = res.flags
 
@@ -218,7 +218,9 @@ function read_query_result( inj )
                "no_good_index_used = " .. flags.no_good_index_used .. ", " ..
                "no_index_used = " .. flags.no_index_used .. " }")
   print("| result.warning_count = " .. res.warning_count)
-  print("| result.query_status = " .. res.query_status)
+  if res.query_status then
+    print("| result.query_status = " .. res.query_status)
+  end
   print("| query_time = " .. inj.query_time .. "us")
   print("| .--- result-set")
   print("| | command = " .. command_names[string.byte(packet) + 1])
