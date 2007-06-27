@@ -30,8 +30,8 @@ You should have a configure script, ready to build.
 Installing from Source 
 ======================
 
-  $ gzip -cd mysql-proxy-0.5.0.tar.gz | tar xf -
-  $ cd mysql-proxy-0.5.0
+  $ gzip -cd mysql-proxy-<version>.tar.gz | tar xf -
+  $ cd mysql-proxy-<version>
 
 Preparing the Build
 ===================
@@ -63,6 +63,25 @@ On Debian and Ubuntu you need to tell the configure script that it has to use
 "pkg-config lua".
 
   $ ./configure --with-lua=lua5.1
+
+openSUSE
+--------
+
+Make sure that the following RPM packages (and their dependencies) are
+installed (use YaST or any other package management tool to install these):
+
+- glib2-devel
+- mysql-devel
+- lua-devel
+- libevent
+
+You can convert the source tarball into an installable binary RPM by running
+the following command:
+
+  $ rpmbuild -ta --clean mysql-proxy-<version>.tar.gz
+
+The binary will be installed in /usr/sbin/mysql-proxy, the example lua scripts
+are placed into /usr/share/doc/packages/mysql-proxy
 
 All other Platforms
 -------------------
