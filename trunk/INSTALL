@@ -8,7 +8,7 @@ Installing from SVN
 
 Get the SVN source from:
 
-  $ svn co .../mysql-proxy/trunk/ mysql-proxy/
+  $ svn co http://svn.mysql.com/svnpublic/mysql-proxy/ mysql-proxy
 
 Later you can update the tree by running
 
@@ -68,6 +68,11 @@ All other Platforms
 -------------------
 
   $ ./configure 
+
+In case libevent is not detected correctly, you should set LDFLAGS and CPPFLAGS:
+
+  $ ./configure LDFLAGS="-L/path/to/libevent.so" CPPFLAGS="-I/path/to/event.h"
+
 
 Building
 ========
