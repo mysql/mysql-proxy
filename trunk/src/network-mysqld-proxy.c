@@ -40,7 +40,7 @@
 #include "sys-pedantic.h"
 
 #define TIME_DIFF_US(t2, t1) \
-	        ((t2->tv_sec - t1->tv_sec) * 1000000.0 + (t2->tv_usec - t1->tv_usec))
+	        ((t2.tv_sec - t1.tv_sec) * 1000000.0 + (t2.tv_usec - t1.tv_usec))
 
 #define C(x) x, sizeof(x) - 1
 
@@ -129,9 +129,6 @@ typedef struct {
 	struct {
 		GQueue *queries;       /** queries we want to executed */
 
-		GTimeVal started;      /** when have we sent the query to the server */
-		GTimeVal finished;
-
 		int server_status;
 		int warning_count;
 #ifdef HAVE_LUA_H
@@ -154,6 +151,9 @@ typedef struct {
 	GQueue *result_queue; /* the data to parse */
 	int server_status;    /* server_status for the result-set */
 	int warning_count;    /* warning_count for the result-set */
+
+	GTimeVal ts_read_query;          /* timestamp when we added this query to the queues */
+	GTimeVal ts_read_query_result;   /* when we first finished it */
 } injection;
 
 static injection *injection_init(int type, GString *query) {
@@ -162,6 +162,12 @@ static injection *injection_init(int type, GString *query) {
 	i = g_new0(injection, 1);
 	i->type = type;
 	i->query = query;
+
+	/**
+	 * we have to assume that injection_init() is only used by the read_query call
+	 * which should be fine
+	 */
+	g_get_current_time(&(i->ts_read_query));
 
 	return i;
 }
@@ -807,8 +813,6 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 
 	/* ok, here we go */
 
-	g_get_current_time(&(st->injected.started));
-
 #ifdef HAVE_LUA_H
 	lua_register_callback(con);
 
@@ -989,7 +993,7 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 				 * injection_init(..., query);
 				 * 
 				 *  */
-	
+#if 0	
 				g_assert(lua_isfunction(L, -1));
 	
 				lua_getfenv(L, -1);
@@ -1037,7 +1041,7 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 	
 				}
 				lua_pop(L, 3); /* fenv + proxy + queries */
-	
+#endif	
 				g_assert(lua_isfunction(L, -1));
 
 				if (st->injected.queries->length) {
@@ -1087,7 +1091,7 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 */
 
 
-static gchar * get_time_str(GTimeVal *t1, GString *str) {
+static gchar * g_timeval_string(GTimeVal *t1, GString *str) {
 	size_t used_len;
 	
 	g_string_set_size(str, 63);
@@ -1375,6 +1379,8 @@ static int proxy_injection_get(lua_State *L) {
 		lua_pushinteger(L, inj->type);
 	} else if (0 == strcmp(key, "query")) {
 		lua_pushlstring(L, inj->query->str, inj->query->len);
+	} else if (0 == strcmp(key, "query_time")) {
+		lua_pushinteger(L, TIME_DIFF_US(inj->ts_read_query_result, inj->ts_read_query));
 	} else if (0 == strcmp(key, "resultset")) {
 		/* fields, rows */
 		proxy_resultset_t *res;
@@ -1420,6 +1426,8 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
 	if (0 == st->injected.queries->length) return 0;
 
 	inj = g_queue_pop_head(st->injected.queries);
+
+	g_get_current_time(&(inj->ts_read_query_result));
 
 #ifdef HAVE_LUA_H
 	/* call the lua script to pick a backend
@@ -1539,9 +1547,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	if (packet->str[NET_HEADER_SIZE + 0] != '\x0a') {
 		/* we only understand version 10
 		 *
-		 * but we might also receive a error-packet:
-		 * read(7, "E\0\0\0\377j\4Host \'10.100.1.221\' is not allowed to connect to this MySQL server", 127) = 73
+		 * FIXME: but we might also receive a error-packet:
 		 *
+		 * read(7, "E\0\0\0\377j\4Host \'10.100.1.221\' is not allowed to connect to this MySQL server", 127) = 73
 		 * 
 		 *  */
 		return -1;
@@ -1828,6 +1836,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
  * 
  * if we still have data in the queue, back to proxy_send_query()
  * otherwise back to proxy_read_query() to pick up a new client query
+ *
+ * @note we should only send one result back to the client
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	network_socket *recv_sock, *send_sock;
