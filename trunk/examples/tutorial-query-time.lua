@@ -51,4 +51,5 @@ end
 -- 
 function read_query_result(inj)
 	print("query-time: " .. (inj.query_time / 1000) .. "ms")
+	print("response-time: " .. (inj.response_time / 1000) .. "ms")
 end

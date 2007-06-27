@@ -79,37 +79,6 @@ typedef struct {
 	GTimeVal state_since;
 
 	/**
-	 * check how long this slave is behind the master 
-	 *
-	 * it is checked once a second (that's the resolution)
-	 */
-	guint seconds_behind_master;
-
-	/**
-	 * for the trx-tracking we need a PING-table:
-	 *
-	 * master> CREATE TABLE trx_tracking ( trx_id BININT UNSIGNED NOT NULL ) ENGINE = MEMORY;
-	 * master> INSERT INTO trx_tracking ( trx_id ) VALUES ( 1 );
-	 *
-	 * a PING is:
-	 * 
-	 * master> UPDATE trx_tracking SET @trx_id := trx_id = trx_id + 1; 
-	 * master> SELECT @trx_id;
-	 *
-	 * on the slave we execute track freshness once in a while with:
-	 *
-	 * slave> SELECT trx_id FROM trx_tracking WHERE trx_id > ?
-	 * 
-	 * if we don't get a result-set back we know that the slave is far behind
-	 * if we get a result-set we know that the slave is fresh enough
-	 * 
-	 * we leave it to the client to define a useful thresholds. He might want to have
-	 * hard limits which check the freshness before each query or he might be fine that
-	 * we are fresh enough to handle the normal delays.
-	 */
-	guint64 last_trx_id;
-
-	/**
 	 * use for the SQF balancing
 	 */
 	guint connected_clients;
@@ -153,7 +122,8 @@ typedef struct {
 	int warning_count;    /* warning_count for the result-set */
 
 	GTimeVal ts_read_query;          /* timestamp when we added this query to the queues */
-	GTimeVal ts_read_query_result;   /* when we first finished it */
+	GTimeVal ts_read_query_result_first;   /* when we first finished it */
+	GTimeVal ts_read_query_result_last;     /* when we first finished it */
 } injection;
 
 static injection *injection_init(int type, GString *query) {
@@ -1380,7 +1350,9 @@ static int proxy_injection_get(lua_State *L) {
 	} else if (0 == strcmp(key, "query")) {
 		lua_pushlstring(L, inj->query->str, inj->query->len);
 	} else if (0 == strcmp(key, "query_time")) {
-		lua_pushinteger(L, TIME_DIFF_US(inj->ts_read_query_result, inj->ts_read_query));
+		lua_pushinteger(L, TIME_DIFF_US(inj->ts_read_query_result_first, inj->ts_read_query));
+	} else if (0 == strcmp(key, "response_time")) {
+		lua_pushinteger(L, TIME_DIFF_US(inj->ts_read_query_result_last, inj->ts_read_query));
 	} else if (0 == strcmp(key, "resultset")) {
 		/* fields, rows */
 		proxy_resultset_t *res;
@@ -1426,8 +1398,6 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
 	if (0 == st->injected.queries->length) return 0;
 
 	inj = g_queue_pop_head(st->injected.queries);
-
-	g_get_current_time(&(inj->ts_read_query_result));
 
 #ifdef HAVE_LUA_H
 	/* call the lua script to pick a backend
@@ -1881,12 +1851,30 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	GList *chunk;
 	network_socket *recv_sock, *send_sock;
 	plugin_con_state *st = con->plugin_con_state;
+	injection *inj = NULL;
 
 	recv_sock = con->server;
 	send_sock = con->client;
 
 	chunk = recv_sock->recv_queue->chunks->tail;
 	packet = chunk->data;
+
+	/**
+	 * check if we want to forward the statement to the client 
+	 *
+	 * if not, clean the send-queue 
+	 */
+
+	if (0 != st->injected.queries->length) {
+		inj = g_queue_peek_head(st->injected.queries);
+	}
+
+	if (inj && inj->ts_read_query_result_first.tv_sec == 0) {
+		/**
+		 * log the time of the first received packet
+		 */
+		g_get_current_time(&(inj->ts_read_query_result_first));
+	}
 
 	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
 
@@ -2218,6 +2206,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		 * the resultset handler might decide to trash the send-queue
 		 * 
 		 * */
+
+		if (inj) {
+			g_get_current_time(&(inj->ts_read_query_result_last));
+		}
 
 		network_mysqld_con_handle_proxy_resultset(srv, con);
 		
