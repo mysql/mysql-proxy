@@ -243,6 +243,8 @@ struct network_mysqld_con {
 		CON_STATE_SEND_AUTH, 
 		CON_STATE_READ_AUTH_RESULT,
 		CON_STATE_SEND_AUTH_RESULT,
+		CON_STATE_READ_AUTH_OLD_PASSWORD,
+		CON_STATE_SEND_AUTH_OLD_PASSWORD,
 		CON_STATE_READ_QUERY,
 		CON_STATE_SEND_QUERY,
 		CON_STATE_READ_QUERY_RESULT,
@@ -268,6 +270,14 @@ struct network_mysqld_con {
 		guint32 len;
 		enum enum_server_command command;
 
+		/**
+		 * each state can add their local parsing information
+		 *
+		 * auth_result is used to track the state
+		 * - OK  is fine
+		 * - ERR will close the connection
+		 * - EOF asks for old-password
+		 */
 		union {
 			struct {
 				int want_eofs;
@@ -281,6 +291,10 @@ struct network_mysqld_con {
 				PARSE_COM_QUERY_LOAD_DATA,
 				PARSE_COM_QUERY_LOAD_DATA_END_DATA
 			} query;
+
+			struct {
+				char state; /** OK, EOF, ERR */
+			} auth_result;
 		} state;
 	} parse;
 

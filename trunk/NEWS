@@ -5,6 +5,7 @@
   * added support for UNIX sockets
   * added protection against duplicate resultsets from a script
   * added missing dependency to libmysqlclient-dev to the INSTALL file
+  * added support for pre-4.1 passwords in a 4.1 connection
   * fixed assertion if read_query_result() is not provided 
     when PROXY_SEND_QUERY is used
   * fixed warning if connect_server() is not provided

@@ -767,8 +767,56 @@ retval_t plugin_call(network_mysqld *srv, network_mysqld_con *con, int state) {
 		func = con->plugins.con_send_auth_result;
 
 		if (!func) { /* default implementation */
-			con->state = CON_STATE_READ_QUERY;
+			switch (con->parse.state.auth_result.state) {
+			case MYSQLD_PACKET_OK:
+				con->state = CON_STATE_READ_QUERY;
+				break;
+			case MYSQLD_PACKET_ERR:
+				con->state = CON_STATE_ERROR;
+				break;
+			case MYSQLD_PACKET_EOF:
+				/**
+				 * the MySQL 4.0 hash in a MySQL 4.1+ connection
+				 */
+				con->state = CON_STATE_READ_AUTH_OLD_PASSWORD;
+				break;
+			default:
+				g_error("%s.%d: unexpected state for SEND_AUTH_RESULT: %02x", 
+						__FILE__, __LINE__,
+						con->parse.state.auth_result.state);
+			}
 		}
+		break;
+	case CON_STATE_READ_AUTH_OLD_PASSWORD: {
+		/** move the packet to the send queue */
+		GString *packet;
+		GList *chunk;
+		network_socket *recv_sock, *send_sock;
+
+		recv_sock = con->client;
+		send_sock = con->server;
+
+		chunk = recv_sock->recv_queue->chunks->head;
+		packet = chunk->data;
+
+		/* we aren't finished yet */
+		if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
+
+		network_queue_append_chunk(send_sock->send_queue, packet);
+
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+
+		/**
+		 * send it out to the client 
+		 */
+		con->state = CON_STATE_SEND_AUTH_OLD_PASSWORD;
+		break; }
+	case CON_STATE_SEND_AUTH_OLD_PASSWORD:
+		/**
+		 * data is at the server, read the response next 
+		 */
+		con->state = CON_STATE_READ_AUTH_RESULT;
 		break;
 	case CON_STATE_READ_QUERY:
 		func = con->plugins.con_read_query;
@@ -994,6 +1042,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_READ_AUTH_RESULT: {
 			/* read the auth result from the server */
 			network_socket *recv_sock;
+			GList *chunk;
+			GString *packet;
 
 			recv_sock = con->server;
 
@@ -1010,6 +1060,18 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH_RESULT) returned an error", __FILE__, __LINE__);
 				return;
 			}
+
+			/**
+			 * depending on the result-set we have different exit-points
+			 * - OK  -> READ_QUERY
+			 * - EOF -> (read old password hash) 
+			 * - ERR -> ERROR
+			 */
+			chunk = recv_sock->recv_queue->chunks->head;
+			packet = chunk->data;
+			g_assert(packet);
+			g_assert(packet->len > NET_HEADER_SIZE);
+			con->parse.state.auth_result.state = packet->str[NET_HEADER_SIZE];
 
 			switch (plugin_call(srv, con, con->state)) {
 			case RET_SUCCESS:
@@ -1046,6 +1108,57 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 				
 			break; }
+		case CON_STATE_READ_AUTH_OLD_PASSWORD: 
+			/* read auth from client */
+
+			switch (network_mysqld_read(srv, con->client)) {
+			case RET_SUCCESS:
+				break;
+			case RET_WAIT_FOR_EVENT:
+				WAIT_FOR_EVENT(con->client, EV_READ, NULL);
+
+				return;
+			case RET_ERROR_RETRY:
+			case RET_ERROR:
+				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH_OLD_PASSWORD) returned an error", __FILE__, __LINE__);
+				return;
+			}
+
+			switch (plugin_call(srv, con, con->state)) {
+			case RET_SUCCESS:
+				break;
+			default:
+				g_error("%s.%d: plugin_call(CON_STATE_READ_AUTH_OLD_PASSWORD) != RET_SUCCESS", __FILE__, __LINE__);
+				break;
+			}
+
+			break; 
+		case CON_STATE_SEND_AUTH_OLD_PASSWORD:
+			/* send the auth-response to the server */
+			switch (network_mysqld_write(srv, con->server)) {
+			case RET_SUCCESS:
+				break;
+			case RET_WAIT_FOR_EVENT:
+				WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
+
+				return;
+			case RET_ERROR_RETRY:
+			case RET_ERROR:
+				/* might be a connection close, we should just close the connection and be happy */
+				g_error("%s.%d: network_mysqld_write(CON_STATE_SEND_AUTH_OLD_PASSWORD) returned an error", __FILE__, __LINE__);
+				return;
+			}
+
+			switch (plugin_call(srv, con, con->state)) {
+			case RET_SUCCESS:
+				break;
+			default:
+				g_error("%s.%d: plugin_call(CON_STATE_SEND_AUTH_OLD_PASSWORD) != RET_SUCCESS", __FILE__, __LINE__);
+				break;
+			}
+
+			break;
+
 		case CON_STATE_READ_QUERY: {
 			network_socket *recv_sock;
 
