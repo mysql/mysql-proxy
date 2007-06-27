@@ -240,9 +240,9 @@ int main(int argc, char **argv) {
 
 	GOptionEntry admin_entries[] = 
 	{
-		{ "admin-address",           0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of pseudo mysql-server (default: :4041)", "<ip:port>" },
+		{ "admin-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of pseudo mysql-server (default: :4041)", "<ip:port>" },
 		
-		{ NULL,               0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
+		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 
 	GOptionEntry proxy_entries[] = 
@@ -251,7 +251,7 @@ int main(int argc, char **argv) {
 		{ "proxy-read-only-address",  0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the proxy-server for read-only connection (default: :4042)", "<ip:port>" },
 		{ "proxy-backend-addresses",  0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "address:port of the remote backend-servers (default: not set)", "<ip:port>" },
 		
-		{ "proxy-profiling",          0, 0, G_OPTION_ARG_NONE, NULL, "enable profiling of queries", NULL },
+		{ "proxy-skip-profiling",     0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "disables profiling of queries (default: enabled)", NULL },
 
 		{ "proxy-fix-bug-25371",      0, 0, G_OPTION_ARG_NONE, NULL, "fix bug #25371 (mysqld > 5.1.12) for older libmysql versions", NULL },
 		{ "proxy-lua-script",         0, 0, G_OPTION_ARG_STRING, NULL, "filename of the lua script (default: not set)", "<file>" },
@@ -261,15 +261,16 @@ int main(int argc, char **argv) {
 
 	GOptionEntry main_entries[] = 
 	{
-		{ "version",           0, 0, G_OPTION_ARG_NONE, NULL, "Show version", NULL },
+		{ "version",                  0, 0, G_OPTION_ARG_NONE, NULL, "Show version", NULL },
 		
-		{ NULL,               0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
+		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 
 
 	srv = network_mysqld_init();
 	srv->config.network_type          = NETWORK_TYPE_PROXY;  /* doesn't matter anymore */
-	srv->config.proxy.fix_bug_25371         = 0; /** double ERR packet on AUTH failures */
+	srv->config.proxy.fix_bug_25371   = 0; /** double ERR packet on AUTH failures */
+	srv->config.proxy.profiling       = 1;
 
 	i = 0;
 	admin_entries[i++].arg_data = &(srv->config.admin.address);
