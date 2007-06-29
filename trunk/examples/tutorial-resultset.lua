@@ -64,7 +64,7 @@ function read_query( packet )
 		end
 	
 		-- we got our commands, execute it
-		if command == "show" and option == "querycounter" then
+		if string.lower(command) == "show" and string.lower(option) == "querycounter" then
 			---
 			-- proxy.PROXY_SEND_RESULT requires 
 			--
@@ -90,7 +90,7 @@ function read_query( packet )
 
 			-- we have our result, send it back
 			return proxy.PROXY_SEND_RESULT
-		elseif command == "show" and option == "myerror" then
+		elseif string.lower(command) == "show" and string.lower(option) == "myerror" then
 			proxy.response.type = proxy.MYSQLD_PACKET_ERR
 			proxy.response.errmsg = "my first error"
 			
