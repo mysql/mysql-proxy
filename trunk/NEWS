@@ -12,13 +12,14 @@
 
   * changed --proxy.profiling to --proxy-skip-profiling
 
-  * fixed assertion if read_query_result() is not provided 
+  * fixed assertion when read_query_result() is not provided 
     when PROXY_SEND_QUERY is used
   * fixed warning if connect_server() is not provided
   * fixed handling of duplicate ERR on COM_CHANGE_USER in MySQL 5.1.18+
   * fixed compile error with MySQL 4.1.x on missing COM_STMT_*
   * fixed mysql check in configure to die when mysql.h isn't detected
   * fixed crash on fields > 250 bytes when the resultset is inspected
+  * fixed assertion when a error occurs at initial script exec time
 
 0.5.0 - 2007-06-19
 

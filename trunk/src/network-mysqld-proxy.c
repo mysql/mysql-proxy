@@ -664,7 +664,12 @@ int lua_register_callback(network_mysqld_con *con) {
 		
 			/* push the functions on the stack */
 			if (lua_pcall(L, 0, 0, 0) != 0) {
-				g_error("%s", lua_tostring(L, -1));
+				g_critical("(lua-error) [%s]\n%s", con->config.proxy.lua_script, lua_tostring(L, -1));
+
+				lua_close(st->injected.L);
+				st->injected.L = NULL;
+
+				L = NULL;
 			}
 			/* on the stack should be the script now, keep it there */
 		} else {

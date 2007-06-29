@@ -17,6 +17,9 @@
 
 --]]
 
+-- we need at least 0.5.1
+assert(proxy.PROXY_VERSION >= 0x00502, "you need at least mysql-proxy 0.5.1 to run this module")
+
 ---
 -- read_query() gets the client query before it reaches the server
 --
