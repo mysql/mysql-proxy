@@ -590,6 +590,10 @@ void lua_init_fenv(lua_State *L) {
 	DEF(MYSQL_TYPE_ENUM);
 	DEF(MYSQL_TYPE_GEOMETRY);
 	DEF(MYSQL_TYPE_BIT);
+
+	/* cheat with DEF() a bit :) */
+#define PROXY_VERSION PACKAGE_VERSION_ID
+	DEF(PROXY_VERSION);
 #undef DEF
 	/**
 	 * proxy.response knows 3 fields with strict types:
