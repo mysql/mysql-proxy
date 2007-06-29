@@ -23,33 +23,34 @@
 guint64 network_mysqld_proto_decode_lenenc(GString *s, guint *_off) {
 	int off = *_off;
 	guint64 ret = 0;
+	unsigned char *bytestream = (unsigned char *)s->str;
 	
-	if ((unsigned char)s->str[off] < 251) { /* */
-		ret = s->str[off];
-	} else if ((unsigned char)s->str[off] == 251) { /* NULL in row-data */
-		ret = s->str[off];
-	} else if ((unsigned char)s->str[off] == 252) { /* */
-		ret = (s->str[off + 1] << 0) | 
-			(s->str[off + 2] << 8) ;
+	if (bytestream[off] < 251) { /* */
+		ret = bytestream[off];
+	} else if (bytestream[off] == 251) { /* NULL in row-data */
+		ret = bytestream[off];
+	} else if (bytestream[off] == 252) { /* 2 byte length*/
+		ret = (bytestream[off + 1] << 0) | 
+			(bytestream[off + 2] << 8) ;
 		off += 2;
-	} else if ((unsigned char)s->str[off] == 253) { /* */
-		ret = (s->str[off + 1]   <<  0) | 
-			(s->str[off + 2] <<  8) |
-			(s->str[off + 3] << 16) |
-			(s->str[off + 4] << 24);
+	} else if (bytestream[off] == 253) { /* 4 byte */
+		ret = (bytestream[off + 1]   <<  0) | 
+			(bytestream[off + 2] <<  8) |
+			(bytestream[off + 3] << 16) |
+			(bytestream[off + 4] << 24);
 
 		off += 4;
-	} else if ((unsigned char)s->str[off] == 254) { /* */
-		ret = (s->str[off + 5] << 0) |
-			(s->str[off + 6] << 8) |
-			(s->str[off + 7] << 16) |
-			(s->str[off + 8] << 24);
+	} else if (bytestream[off] == 254) { /* 8 byte */
+		ret = (bytestream[off + 5] << 0) |
+			(bytestream[off + 6] << 8) |
+			(bytestream[off + 7] << 16) |
+			(bytestream[off + 8] << 24);
 		ret <<= 32;
 
-		ret |= (s->str[off + 1] <<  0) | 
-			(s->str[off + 2] <<  8) |
-			(s->str[off + 3] << 16) |
-			(s->str[off + 4] << 24);
+		ret |= (bytestream[off + 1] <<  0) | 
+			(bytestream[off + 2] <<  8) |
+			(bytestream[off + 3] << 16) |
+			(bytestream[off + 4] << 24);
 		
 
 		off += 8;
