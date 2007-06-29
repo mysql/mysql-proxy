@@ -95,11 +95,24 @@ typedef struct {
 } plugin_srv_state;
 
 typedef struct {
+	/**
+	 * the content of the OK packet 
+	 */
+	int server_status;
+	int warning_count;
+	guint64 affected_rows;
+	guint64 insert_id;
+
+	/**
+	 * MYSQLD_PACKET_OK or MYSQLD_PACKET_ERR
+	 */	
+	int query_status;
+} query_status;
+
+typedef struct {
 	struct {
 		GQueue *queries;       /** queries we want to executed */
-
-		int server_status;
-		int warning_count;
+		query_status qstat;
 #ifdef HAVE_LUA_H
 		lua_State *L;
 #endif
@@ -118,8 +131,7 @@ typedef struct {
 
 	/* the userdata's need them */
 	GQueue *result_queue; /* the data to parse */
-	int server_status;    /* server_status for the result-set */
-	int warning_count;    /* warning_count for the result-set */
+	query_status qstat;
 
 	GTimeVal ts_read_query;          /* timestamp when we added this query to the queues */
 	GTimeVal ts_read_query_result_first;   /* when we first finished it */
@@ -776,8 +788,8 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 	
 	}
 
-	st->injected.server_status = 0;
-	st->injected.warning_count = 0;
+	/* reset the query status */
+	memset(&(st->injected.qstat), 0, sizeof(st->injected.qstat));
 	
 	while ((inj = g_queue_pop_head(st->injected.queries))) injection_free(inj);
 
@@ -1085,9 +1097,7 @@ typedef struct {
 	GList *rows_chunk_head; /* check*/
 	GList *row;
 
-	int server_status;
-	int warning_count;
-	int query_status;
+	query_status qstat;
 } proxy_resultset_t;
 
 proxy_resultset_t *proxy_resultset_init() {
@@ -1205,6 +1215,9 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 			
 			off += 0;
 		} else {
+			g_assert(field_len <= packet->len + NET_HEADER_SIZE);
+			g_assert(off + field_len <= packet->len + NET_HEADER_SIZE);
+
 			lua_pushlstring(L, packet->str + off, field_len);
 
 			off += field_len;
@@ -1232,12 +1245,12 @@ static int parse_resultset_fields(proxy_resultset_t *res) {
 	switch (packet->str[NET_HEADER_SIZE]) {
 	case MYSQLD_PACKET_OK:
 	case MYSQLD_PACKET_ERR:
-		res->query_status = packet->str[NET_HEADER_SIZE];
+		res->qstat.query_status = packet->str[NET_HEADER_SIZE];
 
 		return 0;
 	default:
 		/* OK with a resultset */
-		res->query_status = MYSQLD_PACKET_OK;
+		res->qstat.query_status = MYSQLD_PACKET_OK;
 		break;
 	}
 
@@ -1314,25 +1327,29 @@ static int proxy_resultset_get(lua_State *L) {
 		lua_pushlstring(L, s->str + 4, s->len - 4);
 	} else if (0 == strcmp(key, "flags")) {
 		lua_newtable(L);
-		lua_pushinteger(L, (res->server_status & SERVER_STATUS_IN_TRANS) != 0);
+		lua_pushinteger(L, (res->qstat.server_status & SERVER_STATUS_IN_TRANS) != 0);
 		lua_setfield(L, -2, "in_trans");
 
-		lua_pushinteger(L, (res->server_status & SERVER_STATUS_AUTOCOMMIT) != 0);
+		lua_pushinteger(L, (res->qstat.server_status & SERVER_STATUS_AUTOCOMMIT) != 0);
 		lua_setfield(L, -2, "auto_commit");
 		
-		lua_pushinteger(L, (res->server_status & SERVER_QUERY_NO_GOOD_INDEX_USED) != 0);
+		lua_pushinteger(L, (res->qstat.server_status & SERVER_QUERY_NO_GOOD_INDEX_USED) != 0);
 		lua_setfield(L, -2, "no_good_index_used");
 		
-		lua_pushinteger(L, (res->server_status & SERVER_QUERY_NO_INDEX_USED) != 0);
+		lua_pushinteger(L, (res->qstat.server_status & SERVER_QUERY_NO_INDEX_USED) != 0);
 		lua_setfield(L, -2, "no_index_used");
 	} else if (0 == strcmp(key, "warning_count")) {
-		lua_pushinteger(L, res->warning_count);
+		lua_pushinteger(L, res->qstat.warning_count);
+	} else if (0 == strcmp(key, "affected_rows")) {
+		lua_pushnumber(L, res->qstat.affected_rows);
+	} else if (0 == strcmp(key, "insert_id")) {
+		lua_pushnumber(L, res->qstat.insert_id);
 	} else if (0 == strcmp(key, "query_status")) {
 		if (0 != parse_resultset_fields(res)) {
 			/* not a result-set */
 			lua_pushnil(L);
 		} else {
-			lua_pushinteger(L, res->query_status);
+			lua_pushinteger(L, res->qstat.query_status);
 		}
 	} else {
 		lua_pushnil(L);
@@ -1362,8 +1379,7 @@ static int proxy_injection_get(lua_State *L) {
 		*res_p = res = proxy_resultset_init();
 
 		res->result_queue = inj->result_queue;
-		res->server_status = inj->server_status;
-		res->warning_count = inj->warning_count;
+		res->qstat = inj->qstat;
 
 		/* if the meta-table is new, add __index to it */
 		if (1 == luaL_newmetatable(L, "proxy.resultset")) {
@@ -1421,8 +1437,7 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
 			*inj_p = inj;
 
 			inj->result_queue = con->client->send_queue->chunks;
-			inj->server_status = st->injected.server_status;
-			inj->warning_count = st->injected.warning_count;
+			inj->qstat = st->injected.qstat;
 
 			/* if the meta-table is new, add __index to it */
 			if (1 == luaL_newmetatable(L, "proxy.injection")) {
@@ -2066,12 +2081,14 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 			case MYSQLD_PACKET_OK: { /* e.g. DELETE FROM tbl */
 				int server_status;
 				int warning_count;
+				guint64 affected_rows;
+				guint64 insert_id;
 				GString s;
 
 				s.str = packet->str + NET_HEADER_SIZE;
 				s.len = packet->len - NET_HEADER_SIZE;
 
-				network_mysqld_proto_decode_ok_packet(&s, NULL, NULL, &server_status, &warning_count, NULL);
+				network_mysqld_proto_decode_ok_packet(&s, &affected_rows, &insert_id, &server_status, &warning_count, NULL);
 				if (server_status & SERVER_MORE_RESULTS_EXISTS) {
 				
 				} else {
@@ -2079,8 +2096,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 					srv->stats.queries++;
 				}
 
-				st->injected.server_status = server_status;
-				st->injected.warning_count = warning_count;
+				st->injected.qstat.server_status = server_status;
+				st->injected.qstat.warning_count = warning_count;
+				st->injected.qstat.affected_rows = affected_rows;
+				st->injected.qstat.insert_id     = insert_id;
 
 				break; }
 			case MYSQLD_PACKET_NULL:
@@ -2139,8 +2158,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 						is_finished = 1;
 					}
 
-					st->injected.server_status = packet->str[NET_HEADER_SIZE + 3] | (packet->str[NET_HEADER_SIZE + 4] >> 8);
-					st->injected.warning_count = packet->str[NET_HEADER_SIZE + 1] | (packet->str[NET_HEADER_SIZE + 2] >> 8);
+					st->injected.qstat.server_status = packet->str[NET_HEADER_SIZE + 3] | (packet->str[NET_HEADER_SIZE + 4] >> 8);
+					st->injected.qstat.warning_count = packet->str[NET_HEADER_SIZE + 1] | (packet->str[NET_HEADER_SIZE + 2] >> 8);
 				}
 
 				break;
