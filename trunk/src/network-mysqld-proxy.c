@@ -127,7 +127,7 @@ typedef struct {
 typedef struct {
 	GString *query;
 
-	int type; /* a unique id set by the scripts to map the query to a handler */
+	int id; /* a unique id set by the scripts to map the query to a handler */
 
 	/* the userdata's need them */
 	GQueue *result_queue; /* the data to parse */
@@ -138,11 +138,11 @@ typedef struct {
 	GTimeVal ts_read_query_result_last;     /* when we first finished it */
 } injection;
 
-static injection *injection_init(int type, GString *query) {
+static injection *injection_init(int id, GString *query) {
 	injection *i;
 
 	i = g_new0(injection, 1);
-	i->type = type;
+	i->id = id;
 	i->query = query;
 
 	/**
@@ -1372,7 +1372,9 @@ static int proxy_injection_get(lua_State *L) {
 	const char *key = luaL_checkstring(L, 2);
 
 	if (0 == strcmp(key, "type")) {
-		lua_pushinteger(L, inj->type);
+		lua_pushinteger(L, inj->id); /** DEPRECATED: use "inj.id" instead */
+	} else if (0 == strcmp(key, "id")) {
+		lua_pushinteger(L, inj->id);
 	} else if (0 == strcmp(key, "query")) {
 		lua_pushlstring(L, inj->query->str, inj->query->len);
 	} else if (0 == strcmp(key, "query_time")) {
@@ -1481,7 +1483,7 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
 				g_warning("%s.%d: got asked to send a resultset, but ignoring it as we already have sent %d resultset(s). injection-id: %d",
 						__FILE__, __LINE__,
 						st->injected.sent_resultset,
-						inj->type);
+						inj->id);
 
 				st->injected.sent_resultset++;
 

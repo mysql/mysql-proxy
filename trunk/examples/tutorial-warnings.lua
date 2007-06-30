@@ -53,14 +53,14 @@ end
 -- 
 function read_query_result(inj)
 
-	if (inj.type == 1) then
+	if (inj.id == 1) then
   		local res = assert(inj.resultset)
 
 		if res.warning_count > 0 then
 			print("Query had warnings: " .. inj.query:sub(2))
 			proxy.queries:append(2, string.char(proxy.COM_QUERY) .. "SHOW WARNINGS" )
 		end
-	elseif (inj.type == 2) then
+	elseif (inj.id == 2) then
 		for row in inj.resultset.rows do
 			print(string.format("warning: [%d] %s", row[1], row[2]))
 		end

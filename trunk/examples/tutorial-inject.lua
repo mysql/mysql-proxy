@@ -35,6 +35,9 @@ function read_query( packet )
 		print("we got a normal query: " .. string.sub(packet, 2))
 
 		proxy.queries:append(1, packet )
+		-- generate a new COM_QUERY packet
+		--   [ \3SELECT NOW() ]
+		-- and inject it with the id = 2
 		proxy.queries:append(2, string.char(proxy.COM_QUERY) .. "SELECT NOW()" )
 
 		return proxy.PROXY_SEND_QUERY
@@ -55,9 +58,12 @@ end
 --   * proxy.PROXY_IGNORE_RESULT to drop the result-set
 -- 
 function read_query_result(inj)
-	print("injected result-set: id = " .. inj.type)
+	print("injected result-set: id = " .. inj.id)
 
-	if (inj.type == 2) then
+	-- inj.id = 2 was assigned above in the  proxy.queries:append()
+	-- 
+	-- drop the resultset when we are done to hide it from the client
+	if (inj.id == 2) then
 		for row in inj.resultset.rows do
 			print("injected query returned: " .. row[0])
 		end
