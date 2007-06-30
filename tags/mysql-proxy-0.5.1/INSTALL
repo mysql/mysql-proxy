@@ -1,0 +1,104 @@
+Installation Instructions
+*************************
+
+Copyright (C) 2007 MySQL AB
+
+Installing from SVN
+===================
+
+Get the SVN source from:
+
+  $ svn co http://svn.mysql.com/svnpublic/mysql-proxy/ mysql-proxy
+
+Later you can update the tree by running
+
+  $ cd mysql-proxy/
+  $ svn up
+
+As you built from SVN none of the configure scripts is prepared. You need:
+
+- autoconf 2.56 or higer
+- automake 1.9 or higher
+
+to generate the configure script. Use the provided autogen.sh to rebuild 
+the config-scripts:
+
+  $ sh ./autogen.sh
+
+You should have a configure script, ready to build.
+
+Installing from Source 
+======================
+
+  $ gzip -cd mysql-proxy-<version>.tar.gz | tar xf -
+  $ cd mysql-proxy-<version>
+
+Preparing the Build
+===================
+
+As you have the source in the right place and the configure script exists, you have 
+to make sure that the dependencies are in place;
+
+- libevent 1.x or higher (1.3b or later is prefered)
+- lua 5.1.x or higher
+- glib2 2.4.0 or higer
+- pkg-config 
+- mysql 5.0.x or higer developer files
+
+Ubuntu/Debian
+-------------
+
+  $ apt-get install \
+      pkg-config \
+      liblua5.1-0 \
+      liblua5.1-dev \
+      libevent-dev \
+      libevent1  \
+      libglib2.0-0 \
+      libglib2.0-dev \
+      libmysqlclient-dev
+
+On Debian and Ubuntu you need to tell the configure script that it has to use 
+"pkg-config lua5.1" to detect the lua-libriaries instead of the default 
+"pkg-config lua".
+
+  $ ./configure --with-lua=lua5.1
+
+openSUSE
+--------
+
+Make sure that the following RPM packages (and their dependencies) are
+installed (use YaST or any other package management tool to install these):
+
+- glib2-devel
+- mysql-devel
+- lua-devel
+- libevent
+
+You can convert the source tarball into an installable binary RPM by running
+the following command:
+
+  $ rpmbuild -ta --clean mysql-proxy-<version>.tar.gz
+
+The binary will be installed in /usr/sbin/mysql-proxy, the example lua scripts
+are placed into /usr/share/doc/packages/mysql-proxy
+
+All other Platforms
+-------------------
+
+  $ ./configure 
+
+In case libevent is not detected correctly, you should set LDFLAGS and CPPFLAGS:
+
+  $ ./configure LDFLAGS="-L/path/to/libevent.so" CPPFLAGS="-I/path/to/event.h"
+
+
+Building
+========
+
+  $ make
+  $ make install
+
+You should have a /usr/local/sbin/mysql-proxy now.
+
+

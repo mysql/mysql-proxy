@@ -1,0 +1,42 @@
+#
+# Simple RPM spec file for mysql-proxy
+# written by Lenz Grimmer <lenz@mysql.com>
+#
+%define prefix   /usr
+
+Summary: A Proxy for the MySQL Client/Server protocol
+Name: mysql-proxy
+Version: @VERSION@
+Release: 0
+License: GPL
+Group: Applications/Networking
+Source: %{name}-%{version}.tar.gz
+URL: http://forge.mysql.com/wiki/MySQL_Proxy
+Buildroot: %{_tmppath}/%{name}-%{version}-%{release}-root
+BuildRequires: mysql-devel glib2-devel libevent
+
+%description
+MySQL Proxy is a simple program that sits between your client and MySQL
+server(s) that can monitor, analyze or transform their communication. Its
+flexibility allows for unlimited uses; common ones include: load balancing;
+failover; query analysis; query filtering and modification; and many more.
+
+%prep
+%setup
+
+%build
+%configure
+make
+
+%install
+[ "$RPM_BUILD_ROOT" != "/" ] && [ -d $RPM_BUILD_ROOT ] && rm -rf $RPM_BUILD_ROOT;
+%makeinstall
+
+%clean
+[ "$RPM_BUILD_ROOT" != "/" ] && [ -d $RPM_BUILD_ROOT ] && rm -rf $RPM_BUILD_ROOT;
+
+%files
+%defattr(-,root,root)
+%doc README COPYING INSTALL NEWS
+%doc examples/*.lua
+%{_sbindir}/%{name}
