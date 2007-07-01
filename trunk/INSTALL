@@ -27,6 +27,19 @@ the config-scripts:
 
 You should have a configure script, ready to build.
 
+MacOS X
+-------
+
+In case you are using fink some packages are in different locations and need to be adjusted.
+
+pkg-config installs its pkg.m4 into the fink locations while automake looks in 
+/usr/local/share/aclocal. Setting ACLOCAL_FLAGS to get a include directory makes aclocal
+aware of the new location.
+
+  $ ACLOCAL_FLAGS="-I /sw/share/aclocal/"
+  $ export ACLOCAL_FLAGS
+  $ sh ./autogen.sh
+
 Installing from Source 
 ======================
 
@@ -83,15 +96,27 @@ the following command:
 The binary will be installed in /usr/sbin/mysql-proxy, the example lua scripts
 are placed into /usr/share/doc/packages/mysql-proxy
 
+
 All other Platforms
 -------------------
 
+On most platforms a simple configure run works nicely:
+
   $ ./configure 
+
+
+If lua isn't shipped with a lua.pc file for pkg-config we need to override the 
+pkg-config checks:
+
+  $ ./configure \
+    LUA_CFLAGS="-I/path/to/lua.h" \
+    LUA_LDFLAGS="-L/path/to/liblua.so -llua"
 
 In case libevent is not detected correctly, you should set LDFLAGS and CPPFLAGS:
 
-  $ ./configure LDFLAGS="-L/path/to/libevent.so" CPPFLAGS="-I/path/to/event.h"
-
+  $ ./configure \
+    LDFLAGS="-L/path/to/libevent.so" \
+    CPPFLAGS="-I/path/to/event.h"
 
 Building
 ========
