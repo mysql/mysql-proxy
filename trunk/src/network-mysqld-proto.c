@@ -17,30 +17,35 @@
 
 #include "sys-pedantic.h"
 
+#define CRASHME() do { char *_crashme = NULL; *_crashme = 0; } while(0);
 /**
  * decode a length-encoded integer
  */
 guint64 network_mysqld_proto_decode_lenenc(GString *s, guint *_off) {
-	int off = *_off;
+	guint off = *_off;
 	guint64 ret = 0;
 	unsigned char *bytestream = (unsigned char *)s->str;
+
+	g_assert(off < s->len);
 	
 	if (bytestream[off] < 251) { /* */
 		ret = bytestream[off];
 	} else if (bytestream[off] == 251) { /* NULL in row-data */
 		ret = bytestream[off];
 	} else if (bytestream[off] == 252) { /* 2 byte length*/
+		g_assert(off + 2 < s->len);
 		ret = (bytestream[off + 1] << 0) | 
 			(bytestream[off + 2] << 8) ;
 		off += 2;
-	} else if (bytestream[off] == 253) { /* 4 byte */
+	} else if (bytestream[off] == 253) { /* 3 byte */
+		g_assert(off + 3 < s->len);
 		ret = (bytestream[off + 1]   <<  0) | 
 			(bytestream[off + 2] <<  8) |
-			(bytestream[off + 3] << 16) |
-			(bytestream[off + 4] << 24);
+			(bytestream[off + 3] << 16);
 
-		off += 4;
+		off += 3;
 	} else if (bytestream[off] == 254) { /* 8 byte */
+		g_assert(off + 8 < s->len);
 		ret = (bytestream[off + 5] << 0) |
 			(bytestream[off + 6] << 8) |
 			(bytestream[off + 7] << 16) |
@@ -96,6 +101,9 @@ guint64 network_mysqld_proto_get_int_len(GString *packet, guint *_off, gsize siz
 	guint off = *_off;
 
 	g_assert(*_off < packet->len);
+	if (*_off + size > packet->len) {
+		CRASHME();
+	}
 	g_assert(*_off + size <= packet->len);
 
 	for (i = 0, shift = 0; i < size; i++, shift += 8) {
