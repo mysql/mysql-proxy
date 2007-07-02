@@ -1,4 +1,9 @@
 
+0.6.0 -
+
+  * fixed decoding of len-encoded ints for 3-byte notation
+  * fixed check for glib2 to require at least 2.6.0
+
 0.5.1 - 2007-06-30
 
   * added script examples for rewriting and injection
