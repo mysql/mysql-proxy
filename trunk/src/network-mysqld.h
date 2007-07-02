@@ -345,6 +345,7 @@ int network_mysqld_server_connection_init(network_mysqld *srv, network_mysqld_co
 int network_mysqld_proxy_connection_init(network_mysqld *srv, network_mysqld_con *con);
 
 network_mysqld *network_mysqld_init(void);
+void network_mysqld_init_libevent(network_mysqld *m);
 void *network_mysqld_thread(void *);
 void network_mysqld_free(network_mysqld *);
 

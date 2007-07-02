@@ -222,7 +222,7 @@ network_mysqld *network_mysqld_init() {
 
 	m = g_new0(network_mysqld, 1);
 
-	m->event_base  = event_init();
+	m->event_base  = NULL;
 
 	m->index_usage = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, network_mysqld_index_status_free_void);
 	m->tables      = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, network_mysqld_tables_free_void);
@@ -230,6 +230,16 @@ network_mysqld *network_mysqld_init() {
 	m->cons        = g_ptr_array_new();
 	
 	return m;
+}
+
+/**
+ * init libevent
+ *
+ * kqueue has to be called after the fork() of daemonize
+ *
+ */
+void network_mysqld_init_libevent(network_mysqld *m) {
+	m->event_base  = event_init();
 }
 
 void network_mysqld_free(network_mysqld *m) {

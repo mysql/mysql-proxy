@@ -431,6 +431,7 @@ int main(int argc, char **argv) {
 	}
 #endif
 
+	network_mysqld_init_libevent(srv);
 
 	if (network_mysqld_thread(srv)) {
 		/* looks like we failed */
