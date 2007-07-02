@@ -1219,7 +1219,7 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 
 		field_len = network_mysqld_proto_decode_lenenc(packet, &off);
 
-		if (field_len == MYSQLD_PACKET_NULL) {
+		if (field_len == 251) {
 			lua_pushnil(L);
 			
 			off += 0;
