@@ -9,16 +9,22 @@ MYSQL_DB=test
 PROXY_HOST=127.0.0.1
 PROXY_PORT=4040
 
+exitcode=0
+
 if test x$srcdir = x; then
 	srcdir=`dirname $0`
 fi
+if test x$builddir = x; then
+	builddir=`dirname $0`
+fi
+
 
 PROXY_PIDFILE=`pwd`/mysql-proxy-test.pid
 PROXY_BACKEND_PIDFILE=`pwd`/mysql-proxy-test-backend.pid
 
 ## us it to inject strace or valgrind
 PROXY_TRACE=
-PROXY_BINPATH=$srcdir/../src/mysql-proxy
+PROXY_BINPATH=$builddir/src/mysql-proxy
 PROXY_PARAMS=                    ## extra params
 
 ## allow local override of the default params
@@ -64,12 +70,17 @@ if test $# = 0; then
 		f=`basename $i | sed 's/\.test$//'`
 		echo -n "[$f] "
 		run_test $f
+		exitcode=$?
+
+		if test x$exitcode != x0; then
+			break
+		fi
 	done
 else
 	f=`basename $1 | sed 's/\.test$//'`
 	run_test $f
+	exitcode=$?
 fi
-
 
 ## cleanup
 if test -e $PROXY_PIDFILE; then
@@ -82,3 +93,4 @@ if test -e $PROXY_BACKEND_PIDFILE; then
 	rm $PROXY_BACKEND_PIDFILE
 fi
 
+exit $exitcode
