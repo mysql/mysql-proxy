@@ -1,6 +1,7 @@
 
 0.6.0 -
 
+  * added daemon and pid-file
   * fixed decoding of len-encoded ints for 3-byte notation
   * fixed check for glib2 to require at least 2.6.0
 

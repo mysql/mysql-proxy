@@ -138,6 +138,8 @@ typedef struct {
 	} proxy;
 
 	enum { NETWORK_TYPE_SERVER, NETWORK_TYPE_PROXY } network_type;
+
+	gchar *pid_file;
 } network_mysqld_config;
 
 typedef struct {

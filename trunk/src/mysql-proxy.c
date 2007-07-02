@@ -13,19 +13,30 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */ 
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#ifdef HAVE_SIGNAL_H
 #include <signal.h>
+#endif
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include <glib.h>
-#include <stdio.h>
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
 #include "sys-pedantic.h"
-
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 
 /**
  * signal handlers have to be volatile
@@ -223,6 +234,36 @@ int connections_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 	return 0;
 }
 
+#ifndef _WIN32
+/**
+ * start the agent in the background 
+ * 
+ * UNIX-version
+ */
+static void daemonize(void) {
+#ifdef SIGTTOU
+	signal(SIGTTOU, SIG_IGN);
+#endif
+#ifdef SIGTTIN
+	signal(SIGTTIN, SIG_IGN);
+#endif
+#ifdef SIGTSTP
+	signal(SIGTSTP, SIG_IGN);
+#endif
+	if (fork() != 0) exit(0);
+	
+	if (setsid() == -1) exit(0);
+
+	signal(SIGHUP, SIG_IGN);
+
+	if (fork() != 0) exit(0);
+	
+	chdir("/");
+	
+	umask(0);
+}
+#endif
+
 
 #define GETTEXT_PACKAGE "mysql-proxy"
 
@@ -237,6 +278,7 @@ int main(int argc, char **argv) {
 	int i;
 	int exit_code = 0;
 	int print_version = 0;
+	int daemon_mode = 1;
 
 	GOptionEntry admin_entries[] = 
 	{
@@ -261,7 +303,9 @@ int main(int argc, char **argv) {
 
 	GOptionEntry main_entries[] = 
 	{
-		{ "version",                  0, 0, G_OPTION_ARG_NONE, NULL, "Show version", NULL },
+		{ "version",                 'V', 0, G_OPTION_ARG_NONE, NULL, "Show version", NULL },
+		{ "no-daemon",               'D', G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "Don't startin daemon-mode", NULL },
+		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -285,11 +329,10 @@ int main(int argc, char **argv) {
 	proxy_entries[i++].arg_data = &(srv->config.proxy.fix_bug_25371);
 	proxy_entries[i++].arg_data = &(srv->config.proxy.lua_script);
 
-	main_entries[0].arg_data    = &(print_version);
-	
-	signal(SIGINT,  signal_handler);
-	signal(SIGTERM, signal_handler);
-	signal(SIGPIPE, SIG_IGN);
+	i = 0;
+	main_entries[i++].arg_data    = &(print_version);
+	main_entries[i++].arg_data    = &(daemon_mode);
+	main_entries[i++].arg_data    = &(srv->config.pid_file);
 
 	g_log_set_default_handler(log_func, NULL);
 
@@ -341,6 +384,42 @@ int main(int argc, char **argv) {
 	table->select    = index_usage_select;
 	table->user_data = srv;
 	g_hash_table_insert(srv->tables, g_strdup("index_usage"), table);
+
+#ifndef _WIN32	
+	signal(SIGINT,  signal_handler);
+	signal(SIGTERM, signal_handler);
+	signal(SIGPIPE, SIG_IGN);
+
+	if (daemon_mode) {
+		
+		daemonize();
+
+		/**
+		 * write the PID file
+		 */
+
+		if (srv->config.pid_file) {
+			int fd;
+			gchar *pid_str;
+
+			if (-1 == (fd = open(srv->config.pid_file, O_WRONLY|O_TRUNC|O_CREAT, 0600))) {
+				g_critical("%s.%d: open(%s) failed: %s", 
+						__FILE__, __LINE__,
+						srv->config.pid_file,
+						strerror(errno));
+				return -1;
+			}
+
+			pid_str = g_strdup_printf("%d", getpid());
+
+			write(fd, pid_str, strlen(pid_str));
+			g_free(pid_str);
+
+			close(fd);
+		}
+	}
+#endif
+
 
 	if (network_mysqld_thread(srv)) {
 		/* looks like we failed */
