@@ -701,13 +701,53 @@ retval_t network_mysqld_write(network_mysqld *srv, network_socket *con) {
 	return ret;
 }
 
+
+/**
+ * encode a GString in to a MySQL len-encoded string 
+ *
+ * @param destination string
+ * @param string to encode
+ * @param length of the string
+ */
 int g_string_lenenc_append_len(GString *dest, const char *s, size_t len) {
-	g_string_append_c(dest, len);
-	if (len) g_string_append_len(dest, s, len);
+	if (!s) {
+		g_string_append_c(dest, (gchar)251);
+	} else if (len < 251) {
+		g_string_append_c(dest, len);
+	} else if (len < 65536) {
+		g_string_append_c(dest, (gchar)252);
+		g_string_append_c(dest, (len >> 0) & 0xff);
+		g_string_append_c(dest, (len >> 8) & 0xff);
+	} else if (len < 16777216) {
+		g_string_append_c(dest, (gchar)253);
+		g_string_append_c(dest, (len >> 0) & 0xff);
+		g_string_append_c(dest, (len >> 8) & 0xff);
+		g_string_append_c(dest, (len >> 16) & 0xff);
+	} else {
+		g_string_append_c(dest, (gchar)254);
+
+		g_string_append_c(dest, (len >> 0) & 0xff);
+		g_string_append_c(dest, (len >> 8) & 0xff);
+		g_string_append_c(dest, (len >> 16) & 0xff);
+		g_string_append_c(dest, (len >> 24) & 0xff);
+
+		g_string_append_c(dest, (len >> 32) & 0xff);
+		g_string_append_c(dest, (len >> 40) & 0xff);
+		g_string_append_c(dest, (len >> 48) & 0xff);
+		g_string_append_c(dest, (len >> 56) & 0xff);
+	}
+
+	if (s) g_string_append_len(dest, s, len);
 
 	return 0;
 }
 
+/**
+ * encode a GString in to a MySQL len-encoded string 
+ *
+ * @param destination string
+ * @param string to encode
+ */
 int g_string_lenenc_append(GString *dest, const char *s) {
 	return g_string_lenenc_append_len(dest, s, s ? strlen(s) : 0);
 }
@@ -1507,12 +1547,12 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 		
 		g_string_truncate(s, 0);
 
-		g_string_lenenc_append(s, field->catalog ? field->catalog : "def");        /* catalog */
-		g_string_lenenc_append(s, field->db);          /* database */
-		g_string_lenenc_append(s, field->table);       /* table */
-		g_string_lenenc_append(s, field->org_table);   /* org_table */
-		g_string_lenenc_append(s, field->name);        /* name */
-		g_string_lenenc_append(s, field->org_name);    /* org_name */
+		g_string_lenenc_append(s, field->catalog ? field->catalog : "def");   /* catalog */
+		g_string_lenenc_append(s, field->db ? field->db : "");                /* database */
+		g_string_lenenc_append(s, field->table ? field->table : "");          /* table */
+		g_string_lenenc_append(s, field->org_table ? field->org_table : "");  /* org_table */
+		g_string_lenenc_append(s, field->name ? field->name : "");            /* name */
+		g_string_lenenc_append(s, field->org_name ? field->org_name : "");    /* org_name */
 
 		g_string_append_c(s, '\x0c');                  /* length of the following block, 12 byte */
 		g_string_append_len(s, "\x08\x00", 2);         /* charset */
