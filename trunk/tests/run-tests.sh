@@ -1,39 +1,41 @@
 #!/bin/sh 
 
-MYSQL_USER=root
-MYSQL_PASSWORD=
-MYSQL_HOST=127.0.0.1
-MYSQL_PORT=3306
-MYSQL_DB=test
+## allow local override of the default params
+test -x $srcdir/run-tests-conf.sh && . $srcdir/run-tests-conf.sh
 
-PROXY_HOST=127.0.0.1
-PROXY_PORT=4040
+MYSQL_USER=${MYSQL_USER:-root}
+MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
+MYSQL_HOST=${MYSQL_HOST:-127.0.0.1}
+MYSQL_PORT=${MYSQL_PORT:-3306}
+MYSQL_DB=${MYSQL_DB:-test}
+
+PROXY_HOST=${PROXY_HOST:-127.0.0.1}
+PROXY_PORT=${PROXY_PORT:-4040}
+PROXY_TMP_LUASCRIPT=${PROXY_TMP_LUASCRIPT:-/tmp/proxy.tmp.lua}
+
+srcdir=${srcdir:-`dirname $0`}
+builddir=${builddir:-`dirname $0`/..}
+
+PROXY_TRACE=${PROXY_TRACE:-}   ## us it to inject strace or valgrind
+PROXY_PARAMS=${PROXY_PARAMS:-} ## extra params
+PROXY_BINPATH=${PROXY_BINPATH:-$builddir/src/mysql-proxy}
 
 exitcode=0
 
-if test x$srcdir = x; then
-	srcdir=`dirname $0`
-fi
-if test x$builddir = x; then
-	builddir=`dirname $0`
-fi
-
-
 PROXY_PIDFILE=`pwd`/mysql-proxy-test.pid
 PROXY_BACKEND_PIDFILE=`pwd`/mysql-proxy-test-backend.pid
-
-## us it to inject strace or valgrind
-PROXY_TRACE=
-PROXY_BINPATH=$builddir/src/mysql-proxy
-PROXY_PARAMS=                    ## extra params
-
-## allow local override of the default params
-test -x $srcdir/run-tests-conf.sh && . $srcdir/run-tests-conf.sh
 
 ## if we have no params run all tests
 ## otherwise assume we got a test-name like t/select-null.test
 
 run_test() {
+	if test -e $srcdir/t/$f.lua; then
+		cp $srcdir/t/$f.lua $PROXY_TMP_LUASCRIPT
+	else
+		## reset the script
+		echo > $PROXY_TMP_LUASCRIPT
+	fi
+
 	mysqltest \
 		--user="$MYSQL_USER" \
 		--password="$MYSQL_PASSWORD" \
@@ -57,10 +59,13 @@ if test x$PROXY_BACKEND_PORT != x; then
 		$PROXY_PARAMS
 else
 	## start the proxy only
+	echo > $PROXY_TMP_LUASCRIPT
+
 	$PROXY_TRACE $PROXY_BINPATH \
 		--proxy-backend-addresses="$MYSQL_HOST:$MYSQL_PORT" \
 		--proxy-address="$PROXY_HOST:$PROXY_PORT" \
 		--pid-file=$PROXY_PIDFILE \
+		--proxy-lua-script=$PROXY_TMP_LUASCRIPT \
 		$PROXY_PARAMS
 fi
 
