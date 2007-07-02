@@ -719,7 +719,7 @@ retval_t network_mysqld_write(network_mysqld *srv, network_socket *con) {
  * @param string to encode
  * @param length of the string
  */
-int g_string_lenenc_append_len(GString *dest, const char *s, size_t len) {
+int g_string_lenenc_append_len(GString *dest, const char *s, guint64 len) {
 	if (!s) {
 		g_string_append_c(dest, (gchar)251);
 	} else if (len < 251) {
