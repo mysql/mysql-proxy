@@ -42,7 +42,7 @@ run_test() {
 		--host="$PROXY_HOST" \
 		--port="$PROXY_PORT" \
 		--test-file="$srcdir/t/$f.test" \
-		--result-file="$srcdir/r/$f.result"
+		--result-file="$srcdir/r/$f.result" > /dev/null
 }
 
 if test x$PROXY_BACKEND_PORT != x; then
@@ -90,11 +90,20 @@ fi
 ## cleanup
 if test -e $PROXY_PIDFILE; then
 	kill `cat $PROXY_PIDFILE`
+
+	## wait until the process is gone
+	while kill -0 `cat $PROXY_PIDFILE` 2>/dev/null; do
+		sleep 1
+	done
 	rm $PROXY_PIDFILE
 fi
 
 if test -e $PROXY_BACKEND_PIDFILE; then
 	kill `cat $PROXY_BACKEND_PIDFILE`
+	## wait until the process is gone
+	while kill -0 `cat $PROXY_PIDFILE` 2>/dev/null; do
+		sleep 1
+	done
 	rm $PROXY_BACKEND_PIDFILE
 fi
 
