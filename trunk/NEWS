@@ -3,8 +3,14 @@
 
   * added --no-daemon and --pid-file
   * added --no-proxy to disable the proxy 
+  * added testcases 
+
   * fixed decoding of len-encoded ints for 3-byte notation
   * fixed check for glib2 to require at least 2.6.0
+  * fixed mem-leak with proxy.response.* is used
+  * fixed handling of (SQL) NULL in result-sets
+  * fixed inj.resultset.affected_rows on SELECT queries
+  * fixed len-encoding on proxy.resulsets
 
 0.5.1 - 2007-06-30
 

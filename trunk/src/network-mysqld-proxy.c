@@ -103,6 +103,8 @@ typedef struct {
 	guint64 affected_rows;
 	guint64 insert_id;
 
+	int was_resultset; /** if set, affected_rows and insert_id are ignored */
+
 	/**
 	 * MYSQLD_PACKET_OK or MYSQLD_PACKET_ERR
 	 */	
@@ -871,6 +873,7 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 						GPtrArray *fields;
 						GPtrArray *rows;
 						gsize i;
+						int field_count = 0;
 						
 						lua_getfield(L, -1, "resultset"); /* proxy.response.resultset */
 						g_assert(lua_istable(L, -1));
@@ -880,8 +883,7 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 	
 						fields = g_ptr_array_new();
 						
-						for (i = 1; ; i++) {
-	
+						for (i = 1, field_count = 0; ; i++, field_count++) {
 							lua_rawgeti(L, -1, i);
 							
 							if (lua_istable(L, -1)) { /** proxy.response.resultset.fields[i] */
@@ -922,15 +924,17 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 								gsize j;
 	
 								row = g_ptr_array_new();
+
+								/* we should have as many columns as we had fields */
 					
-								for (j = 1; ; j++) {
+								for (j = 1; j < field_count + 1; j++) {
 									lua_rawgeti(L, -1, j);
 	
 									if (lua_isnil(L, -1)) {
-										lua_pop(L, 1);
-										break;
-									} 
-									g_ptr_array_add(row, g_strdup(lua_tostring(L, -1)));
+										g_ptr_array_add(row, NULL);
+									} else {
+										g_ptr_array_add(row, g_strdup(lua_tostring(L, -1)));
+									}
 	
 									lua_pop(L, 1);
 								}
@@ -948,6 +952,30 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 						lua_pop(L, 1);
 	
 						network_mysqld_con_send_resultset(con->client, fields, rows);
+
+						/**
+						 * someone should cleanup 
+						 */
+						if (fields) {
+							network_mysqld_proto_fields_free(fields);
+							fields = NULL;
+						}
+				
+						if (rows) {
+							for (i = 0; i < rows->len; i++) {
+								GPtrArray *row = rows->pdata[i];
+								gsize j;
+				
+								for (j = 0; j < row->len; j++) {
+									if (row->pdata[j]) g_free(row->pdata[j]);
+								}
+				
+								g_ptr_array_free(row, TRUE);
+							}
+							g_ptr_array_free(rows, TRUE);
+							rows = NULL;
+						}
+
 						
 						lua_pop(L, 1); /* .resultset */
 						
@@ -1350,9 +1378,21 @@ static int proxy_resultset_get(lua_State *L) {
 	} else if (0 == strcmp(key, "warning_count")) {
 		lua_pushinteger(L, res->qstat.warning_count);
 	} else if (0 == strcmp(key, "affected_rows")) {
-		lua_pushnumber(L, res->qstat.affected_rows);
+		/**
+		 * if the query had a result-set (SELECT, ...) 
+		 * affected_rows and insert_id are not valid
+		 */
+		if (res->qstat.was_resultset) {
+			lua_pushnil(L);
+		} else {
+			lua_pushnumber(L, res->qstat.affected_rows);
+		}
 	} else if (0 == strcmp(key, "insert_id")) {
-		lua_pushnumber(L, res->qstat.insert_id);
+		if (res->qstat.was_resultset) {
+			lua_pushnil(L);
+		} else {
+			lua_pushnumber(L, res->qstat.insert_id);
+		}
 	} else if (0 == strcmp(key, "query_status")) {
 		if (0 != parse_resultset_fields(res)) {
 			/* not a result-set */
@@ -2111,6 +2151,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 				st->injected.qstat.warning_count = warning_count;
 				st->injected.qstat.affected_rows = affected_rows;
 				st->injected.qstat.insert_id     = insert_id;
+				st->injected.qstat.was_resultset = 0;
 
 				break; }
 			case MYSQLD_PACKET_NULL:
@@ -2171,6 +2212,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 
 					st->injected.qstat.server_status = packet->str[NET_HEADER_SIZE + 3] | (packet->str[NET_HEADER_SIZE + 4] >> 8);
 					st->injected.qstat.warning_count = packet->str[NET_HEADER_SIZE + 1] | (packet->str[NET_HEADER_SIZE + 2] >> 8);
+
+					st->injected.qstat.was_resultset = 1;
 				}
 
 				break;

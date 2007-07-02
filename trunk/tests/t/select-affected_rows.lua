@@ -16,6 +16,8 @@ function read_query(packet)
 			return proxy.PROXY_SEND_RESULT
 		else
 			proxy.queries:append(1, packet)
+
+			return proxy.PROXY_SEND_QUERY
 		end
 	end
 end

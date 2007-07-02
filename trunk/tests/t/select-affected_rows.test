@@ -1,2 +1,4 @@
 SELECT 1;
 SELECT affected_rows;
+SET @a = 1;
+SELECT affected_rows;
