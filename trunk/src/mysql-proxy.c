@@ -279,6 +279,7 @@ int main(int argc, char **argv) {
 	int exit_code = 0;
 	int print_version = 0;
 	int daemon_mode = 1;
+	int start_proxy = 1;
 
 	GOptionEntry admin_entries[] = 
 	{
@@ -298,13 +299,15 @@ int main(int argc, char **argv) {
 		{ "proxy-fix-bug-25371",      0, 0, G_OPTION_ARG_NONE, NULL, "fix bug #25371 (mysqld > 5.1.12) for older libmysql versions", NULL },
 		{ "proxy-lua-script",         0, 0, G_OPTION_ARG_STRING, NULL, "filename of the lua script (default: not set)", "<file>" },
 		
+		{ "no-proxy",                 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "Don't start proxy-server", NULL },
+		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 
 	GOptionEntry main_entries[] = 
 	{
 		{ "version",                 'V', 0, G_OPTION_ARG_NONE, NULL, "Show version", NULL },
-		{ "no-daemon",               'D', G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "Don't startin daemon-mode", NULL },
+		{ "no-daemon",               'D', G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "Don't start in daemon-mode", NULL },
 		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
@@ -328,11 +331,12 @@ int main(int argc, char **argv) {
 
 	proxy_entries[i++].arg_data = &(srv->config.proxy.fix_bug_25371);
 	proxy_entries[i++].arg_data = &(srv->config.proxy.lua_script);
+	proxy_entries[i++].arg_data = &(start_proxy);
 
 	i = 0;
-	main_entries[i++].arg_data    = &(print_version);
-	main_entries[i++].arg_data    = &(daemon_mode);
-	main_entries[i++].arg_data    = &(srv->config.pid_file);
+	main_entries[i++].arg_data  = &(print_version);
+	main_entries[i++].arg_data  = &(daemon_mode);
+	main_entries[i++].arg_data  = &(srv->config.pid_file);
 
 	g_log_set_default_handler(log_func, NULL);
 
@@ -362,10 +366,17 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 
-	if (!srv->config.proxy.address) srv->config.proxy.address = g_strdup(":4040");
-	if (!srv->config.proxy.backend_addresses) {
-		srv->config.proxy.backend_addresses = g_new0(char *, 2);
-		srv->config.proxy.backend_addresses[0] = g_strdup("127.0.0.1:3306");
+	if (start_proxy) {
+		if (!srv->config.proxy.address) srv->config.proxy.address = g_strdup(":4040");
+		if (!srv->config.proxy.backend_addresses) {
+			srv->config.proxy.backend_addresses = g_new0(char *, 2);
+			srv->config.proxy.backend_addresses[0] = g_strdup("127.0.0.1:3306");
+		}
+	} else {
+		if (srv->config.proxy.address) {
+			g_free(srv->config.proxy.address);
+			srv->config.proxy.address = NULL;
+		}
 	}
 
 	if (!srv->config.admin.address) srv->config.admin.address = g_strdup(":4041");
@@ -431,3 +442,4 @@ int main(int argc, char **argv) {
 
 	return exit_code;
 }
+
