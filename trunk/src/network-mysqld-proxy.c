@@ -2507,7 +2507,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_cleanup) {
 
 	if (st == NULL) return RET_SUCCESS;
 
-	st->backend->connected_clients--;
+	if (st->backend) {
+		st->backend->connected_clients--;
+	}
 
 	plugin_con_state_free(st);
 

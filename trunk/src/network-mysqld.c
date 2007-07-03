@@ -967,7 +967,12 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 				break;
 			case RET_ERROR:
-				g_error("%s.%d: plugin_call(CON_STATE_CONNECT_SERVER) returned an error", __FILE__, __LINE__);
+				/**
+				 * connecting failed and no option to retry
+				 *
+				 * close the connection
+				 */
+				con->state = CON_STATE_ERROR;
 				break;
 			default:
 				g_error("%s.%d: ...", __FILE__, __LINE__);

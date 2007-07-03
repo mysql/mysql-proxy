@@ -11,6 +11,7 @@
   * fixed handling of (SQL) NULL in result-sets
   * fixed inj.resultset.affected_rows on SELECT queries
   * fixed len-encoding on proxy.resulsets
+  * fixed assertion when all backends are down and we try to connect
 
 0.5.1 - 2007-06-30
 
