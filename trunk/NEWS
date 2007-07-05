@@ -12,6 +12,7 @@
   * fixed inj.resultset.affected_rows on SELECT queries
   * fixed len-encoding on proxy.resulsets
   * fixed assertion when all backends are down and we try to connect
+  * fixed assertion when connection to the MySQL 6.0.1
 
 0.5.1 - 2007-06-30
 

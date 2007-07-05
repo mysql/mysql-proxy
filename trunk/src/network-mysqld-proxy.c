@@ -1599,21 +1599,31 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	}
 
 	if (off - 1 >= 6) {
+		/**
+		 * 5.0.22-...
+		 * 6.0.1-alpha
+		 */
 		g_assert(packet->str[NET_HEADER_SIZE + 1] >= '0' && packet->str[NET_HEADER_SIZE + 1] <= '9');
 		g_assert(packet->str[NET_HEADER_SIZE + 2] == '.');
 		g_assert(packet->str[NET_HEADER_SIZE + 3] >= '0' && packet->str[NET_HEADER_SIZE + 3] <= '9');
 		g_assert(packet->str[NET_HEADER_SIZE + 4] == '.');
-		g_assert(packet->str[NET_HEADER_SIZE + 5] >= '0' && packet->str[NET_HEADER_SIZE + 5] <= '9');
-		g_assert(packet->str[NET_HEADER_SIZE + 6] >= '0' && packet->str[NET_HEADER_SIZE + 6] <= '9');
+
 
 		recv_sock->mysqld_version  = ((unsigned char)packet->str[NET_HEADER_SIZE + 1] - '0') * 10000;
 		recv_sock->mysqld_version +=              0  * 1000; /* the minor version is only one digit for now */
 		recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 3] - '0') * 100;
-		recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 5] - '0') * 10;
-		recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 6] - '0') * 1;
-#if 0
-					g_message("(proxy) mysqld-version: %d", recv_sock->mysqld_version);
-#endif
+
+		/**
+		 * we might either get a patch-level with 1 or 2 digits
+		 */
+		g_assert(packet->str[NET_HEADER_SIZE + 5] >= '0' && packet->str[NET_HEADER_SIZE + 5] <= '9');
+
+		if (packet->str[NET_HEADER_SIZE + 6] >= '0' && packet->str[NET_HEADER_SIZE + 6] <= '9') {
+			recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 5] - '0') * 1;
+		} else {
+			recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 5] - '0') * 10;
+			recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 6] - '0') * 1;
+		}
 	}
 
 	off++;    /* the terminating \0 */
