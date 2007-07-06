@@ -154,7 +154,6 @@ function run_test(filename)
 			["test-file"] = srcdir .. "/t/" .. testname .. ".test",
 			["result-file"] = srcdir .. "/r/" .. testname .. ".result"
 		})
-
 	)
 end
 
@@ -187,7 +186,11 @@ else
 		local testname = file:match("(.+\.test)$")
 
 		if testname then
+			print("# >> " .. testname .. " started")
+
 			local r = run_test("t/" .. testname)
+			
+			print("# << (exitcode = " .. r .. ")" )
 
 			if r ~= 0 and exitcode == 0 then
 				exitcode = r
@@ -209,6 +212,7 @@ os.remove(PROXY_PIDFILE)
 if exitcode == 0 then
 	os.exit(0)
 else
+	print("mysql-test exit-code: " .. exitcode)
 	os.exit(-1)
 end
 
