@@ -197,6 +197,8 @@ else
 end
 
 -- shut dowm the proxy
+--
+-- win32 has tasklist and taskkill on the shell
 if 0 == os.execute("kill -TERM `cat ".. PROXY_PIDFILE .." `") then
 	while 0 == os.execute("kill -0 `cat ".. PROXY_PIDFILE .." ` 2> /dev/null") do
 		os.execute("sleep 1")
