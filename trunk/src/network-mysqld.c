@@ -494,16 +494,16 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
 	
 	g_string_append_len(packet, 
 			C("\xff"     /* type: error */
-			  "\x00\x00" /* errno */
+			  "\xe8\x03" /* errno: 1000 */
 			  "#"        /* insert-id */
 			  "00S00"    /* SQLSTATE */
 			 ));
 
-	if (errmsg_len < 250) {
-		g_string_append_c(packet, (guchar)errmsg_len);
+	if (errmsg_len < 512) {
 		g_string_append_len(packet, errmsg, errmsg_len);
 	} else {
-		g_string_append_c(packet, 0);
+		/* truncate the err-msg */
+		g_string_append_len(packet, errmsg, 512);
 	}
 
 	network_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
@@ -669,6 +669,9 @@ retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_soc
 			case EAGAIN:
 				return RET_WAIT_FOR_EVENT;
 			default:
+				g_message("%s.%d: write() failed: %s", 
+						__FILE__, __LINE__, 
+						strerror(errno));
 				return RET_ERROR;
 			}
 		} else if (len == 0) {
@@ -1370,8 +1373,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case RET_ERROR_RETRY:
 			case RET_ERROR:
-				g_error("%s.%d: network_mysqld_write(CON_STATE_SEND_QUERY_RESULT) returned an error", __FILE__, __LINE__);
-				return;
+				g_critical("%s.%d: network_mysqld_write(CON_STATE_SEND_QUERY_RESULT) returned an error", __FILE__, __LINE__);
+
+				con->state = CON_STATE_ERROR;
+				break;
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
