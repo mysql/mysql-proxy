@@ -99,6 +99,7 @@ enum Log_event_type
 };
 
 #define MYSQLD_PACKET_OK   (0)
+#define MYSQLD_PACKET_RAW  (-6) /* used for proxy.response.type only */
 #define MYSQLD_PACKET_NULL (-5) /* 0xfb */
                                 /* 0xfc */
                                 /* 0xfd */
