@@ -1012,55 +1012,6 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 				 * injection_init(..., query);
 				 * 
 				 *  */
-#if 0	
-				g_assert(lua_isfunction(L, -1));
-	
-				lua_getfenv(L, -1);
-				g_assert(lua_istable(L, -1));
-				
-				lua_getfield(L, -1, "proxy"); /* proxy.* from the env  */
-				g_assert(lua_istable(L, -1));
-	
-				lua_getfield(L, -1, "queries"); /* proxy.queries is a array*/
-				if (lua_istable(L, -1)) {
-					gsize i;
-	
-					for (i = 1; ; i++) {
-						lua_rawgeti(L, -1, i);
-	
-						if (lua_isnil(L, -1)) {
-							lua_pop(L, 1); /* pop the nil and leave the loop */
-							break;
-						} else if (lua_istable(L, -1)) {
-							int resp_type;
-							GString *query;
-					
-							const char *str;
-							size_t str_len;
-	
-							lua_getfield(L, -1, "query"); /* proxy.queries[i].query */
-							g_assert(lua_isstring(L, -1));
-							str = lua_tolstring(L, -1, &str_len);
-							lua_pop(L, 1);
-	
-							lua_getfield(L, -1, "type"); /* proxy.queries[i].type */
-							g_assert(lua_isnumber(L, -1));
-							resp_type = lua_tonumber(L, -1);
-							lua_pop(L, 1);
-
-							query = g_string_sized_new(str_len);
-							g_string_append_len(query, str, str_len);
-
-							g_queue_push_tail(st->injected.queries, injection_init(resp_type, query));
-						} else {
-						}
-							
-						lua_pop(L, 1);
-					}
-	
-				}
-				lua_pop(L, 3); /* fenv + proxy + queries */
-#endif	
 				g_assert(lua_isfunction(L, -1));
 
 				if (st->injected.queries->length) {
