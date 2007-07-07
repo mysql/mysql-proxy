@@ -219,8 +219,8 @@ function read_query_result( inj )
                "no_index_used = " .. flags.no_index_used .. " }")
   print("| result.warning_count = " .. res.warning_count)
   if res.affected_rows then
-    print("| result.affected_rows = " .. res.affected_rows or 0)
-    print("| result.insert_id = " .. res.insert_id or 0)
+    print("| result.affected_rows = " .. res.affected_rows)
+    print("| result.insert_id = " .. res.insert_id)
   end
   if res.query_status then
     print("| result.query_status = " .. res.query_status)
