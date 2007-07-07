@@ -143,7 +143,6 @@ gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize l
 }
 
 gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off) {
-	gchar *str;
 	guint64 len;
 
 	len = network_mysqld_proto_decode_lenenc(packet, _off);
@@ -155,26 +154,26 @@ gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off) {
 }
 
 gchar *network_mysqld_proto_get_string(GString *packet, guint *_off) {
-	gchar *str;
 	guint len;
+	gchar *r = NULL;
 
 	for (len = 0; *_off + len < packet->len && *(packet->str + *_off + len); len++);
 
 	g_assert(*(packet->str + *_off + len) == '\0'); /* this has to be a \0 */
 
-	if (len == 0) {
-		*_off += 1;
+	if (len > 0) {
+		g_assert(*_off < packet->len);
+		g_assert(*_off + len <= packet->len);
 
-		return NULL;
+		/**
+		 * copy the string w/o the NUL byte 
+		 */
+		r = network_mysqld_proto_get_string_len(packet, _off, len);
 	}
-	
-	g_assert(*_off < packet->len);
-	g_assert(*_off + len <= packet->len);
 
-	/**
-	 * copy the string incl. the NUL byte 
-	 */
-	return network_mysqld_proto_get_string_len(packet, _off, len + 1);
+	*_off += 1;
+
+	return r;
 }
 
 
@@ -202,27 +201,27 @@ gchar *network_mysqld_proto_get_gstring_len(GString *packet, guint *_off, gsize 
 }
 
 gchar *network_mysqld_proto_get_gstring(GString *packet, guint *_off, GString *out) {
-	gchar *str;
 	guint len;
+	gchar *r = NULL;
 
 	for (len = 0; *_off + len < packet->len && *(packet->str + *_off + len); len++);
 
 	g_assert(*(packet->str + *_off + len) == '\0'); /* this has to be a \0 */
 
-	if (len == 0) {
-		*_off += 1;
+	if (len > 0) {
+		g_assert(*_off < packet->len);
+		g_assert(*_off + len <= packet->len);
 
-		return NULL;
+		r = network_mysqld_proto_get_gstring_len(packet, _off, len, out);
 	}
-	
-	g_assert(*_off < packet->len);
-	g_assert(*_off + len <= packet->len);
 
-	return network_mysqld_proto_get_gstring_len(packet, _off, len + 1, out);
+	/* skip the \0 */
+	*_off += 1;
+
+	return r;
 }
 
 gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GString *out) {
-	gchar *str;
 	guint64 len;
 
 	len = network_mysqld_proto_decode_lenenc(packet, _off);
