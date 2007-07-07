@@ -127,6 +127,21 @@ guint32 network_mysqld_proto_get_int32(GString *packet, guint *_off) {
 	return network_mysqld_proto_get_int_len(packet, _off, 4);
 }
 
+gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize len) {
+	gchar *str;
+
+	g_assert(*_off < packet->len);
+	if (*_off + len > packet->len) {
+		g_error("packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, *_off, len, packet->len);
+	}
+
+	str = len ? g_strndup(packet->str + *_off, len) : NULL; 
+
+	*_off += len;
+
+	return str;
+}
+
 gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off) {
 	gchar *str;
 	guint64 len;
@@ -135,12 +150,8 @@ gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off) {
 	
 	g_assert(*_off < packet->len);
 	g_assert(*_off + len <= packet->len);
-
-	str = len ? g_strndup(packet->str + *_off, len) : NULL; 
-
-	*_off += len;
-
-	return str;
+	
+	return network_mysqld_proto_get_string_len(packet, _off, len);
 }
 
 gchar *network_mysqld_proto_get_string(GString *packet, guint *_off) {
@@ -160,26 +171,66 @@ gchar *network_mysqld_proto_get_string(GString *packet, guint *_off) {
 	g_assert(*_off < packet->len);
 	g_assert(*_off + len <= packet->len);
 
-	str = len ? g_strndup(packet->str + *_off, len) : NULL; 
-
-	*_off += len + 1;
-
-	return str;
+	/**
+	 * copy the string incl. the NUL byte 
+	 */
+	return network_mysqld_proto_get_string_len(packet, _off, len + 1);
 }
 
-gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize len) {
-	gchar *str;
 
+/**
+ * copy a len bytes from the packet into the out 
+ *
+ * increments _off by len
+ *
+ * @param out a GString which cares the string
+ * @return a pointer to the string in out
+ */
+gchar *network_mysqld_proto_get_gstring_len(GString *packet, guint *_off, gsize len, GString *out) {
 	g_assert(*_off < packet->len);
 	if (*_off + len > packet->len) {
 		g_error("packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, *_off, len, packet->len);
 	}
 
-	str = len ? g_strndup(packet->str + *_off, len) : NULL; 
+	g_string_truncate(out, 0);
+	if (len) {
+		g_string_append_len(out, packet->str + *_off, len);
+		*_off += len;
+	}
 
-	*_off += len;
+	return out->str;
+}
 
-	return str;
+gchar *network_mysqld_proto_get_gstring(GString *packet, guint *_off, GString *out) {
+	gchar *str;
+	guint len;
+
+	for (len = 0; *_off + len < packet->len && *(packet->str + *_off + len); len++);
+
+	g_assert(*(packet->str + *_off + len) == '\0'); /* this has to be a \0 */
+
+	if (len == 0) {
+		*_off += 1;
+
+		return NULL;
+	}
+	
+	g_assert(*_off < packet->len);
+	g_assert(*_off + len <= packet->len);
+
+	return network_mysqld_proto_get_gstring_len(packet, _off, len + 1, out);
+}
+
+gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GString *out) {
+	gchar *str;
+	guint64 len;
+
+	len = network_mysqld_proto_decode_lenenc(packet, _off);
+	
+	g_assert(*_off < packet->len);
+	g_assert(*_off + len <= packet->len);
+	
+	return network_mysqld_proto_get_gstring_len(packet, _off, len, out);
 }
 
 MYSQL_FIELD *network_mysqld_proto_field_init() {

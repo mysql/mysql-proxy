@@ -30,6 +30,10 @@ gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off);
 gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize len);
 gchar *network_mysqld_proto_get_string(GString *packet, guint *_off);
 
+gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GString *out);
+gchar *network_mysqld_proto_get_gstring_len(GString *packet, guint *_off, gsize len, GString *out);
+gchar *network_mysqld_proto_get_gstring(GString *packet, guint *_off, GString *out);
+
 guint64 network_mysqld_proto_decode_lenenc(GString *s, guint *_off);
 int network_mysqld_proto_decode_ok_packet(GString *s, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg);
 
