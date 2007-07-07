@@ -17,6 +17,10 @@
 #include "config.h"
 #endif
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -798,9 +802,8 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	size_t str_len;
 	gsize i;
 
-	g_assert(lua_isfunction(L, -1));
-
-	lua_getfenv(L, -1);
+	/**
+	 * on the stack should be the fenv of our function */
 	g_assert(lua_istable(L, -1));
 	
 	lua_getfield(L, -1, "proxy"); /* proxy.* from the env  */
@@ -811,7 +814,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		g_message("%s.%d: proxy.response isn't set in %s", __FILE__, __LINE__, 
 				con->config.proxy.lua_script);
 
-		lua_pop(L, 3); /* fenv + proxy + nil */
+		lua_pop(L, 2); /* proxy + nil */
 
 		return -1;
 	} else if (!lua_istable(L, -1)) {
@@ -819,7 +822,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 				lua_typename(L, lua_type(L, -1)),
 				con->config.proxy.lua_script);
 
-		lua_pop(L, 3); /* fenv + proxy + response */
+		lua_pop(L, 2); /* proxy + response */
 		return -1;
 	}
 
@@ -831,7 +834,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		g_message("%s.%d: proxy.response.type isn't set in %s", __FILE__, __LINE__, 
 				con->config.proxy.lua_script);
 
-		lua_pop(L, 4); /* fenv + proxy + nil */
+		lua_pop(L, 3); /* proxy + nil */
 
 		return -1;
 
@@ -840,7 +843,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 				lua_typename(L, lua_type(L, -1)),
 				con->config.proxy.lua_script);
 		
-		lua_pop(L, 4); /* fenv + proxy + response + type */
+		lua_pop(L, 3); /* proxy + response + type */
 
 		return -1;
 	} else {
@@ -1018,12 +1021,12 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	default:
 		g_message("proxy.response.type is unknown: %d", resp_type);
 
-		lua_pop(L, 3);
+		lua_pop(L, 2); /* proxy + response */
 
 		return -1;
 	}
 
-	lua_pop(L, 3);
+	lua_pop(L, 2);
 
 	return 0;
 }
@@ -1104,8 +1107,6 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 				lua_pop(L, 1);
 			}
 
-			lua_pop(L, 1); /* fenv */
-
 			switch (ret) {
 			case PROXY_SEND_RESULT:
 				/* check the proxy.response table for content,
@@ -1124,8 +1125,6 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 					network_mysqld_con_send_error(con->client, C("(lua) handling proxy.response failed, check error-log"));
 				}
 	
-				g_assert(lua_isfunction(L, -1));
-				
 				break;
 			case PROXY_NO_DECISION:
 				break;
@@ -1135,7 +1134,6 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 				 * injection_init(..., query);
 				 * 
 				 *  */
-				g_assert(lua_isfunction(L, -1));
 
 				if (st->injected.queries->length) {
 					ret = PROXY_SEND_INJECTION;
@@ -1145,10 +1143,12 @@ static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSE
 			default:
 				break;
 			}
+			lua_pop(L, 1); /* fenv */
 		} else {
 			lua_pop(L, 2); /* fenv + nil */
-			g_assert(lua_isfunction(L, -1));
 		}
+
+		g_assert(lua_isfunction(L, -1));
 
 		if (ret != PROXY_NO_DECISION) {
 			return ret;
@@ -1635,11 +1635,138 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
 	return 0;
 }
 
+/**
+ * call the lua function to intercept the handshake packet
+ *
+ * @return PROXY_SEND_QUERY  to send the packet from the client
+ *         PROXY_NO_DECISION to pass the server packet unmodified
+ */
+int proxy_lua_read_handshake(network_mysqld_con *con) {
+	plugin_con_state *st = con->plugin_con_state;
+	plugin_srv_state *g = st->global_state;
+	network_socket   *recv_sock = con->server;
+	network_socket   *send_sock = con->client;
+	int ret = PROXY_NO_DECISION; /* send what the server gave us */
+
+#ifdef HAVE_LUA_H
+	lua_State *L;
+
+	/* call the lua script to pick a backend
+	 * */
+	lua_register_callback(con);
+
+	if (!st->injected.L) return ret;
+
+	L = st->injected.L;
+
+	g_assert(lua_isfunction(L, -1));
+	lua_getfenv(L, -1);
+	g_assert(lua_istable(L, -1));
+	
+	lua_getfield(L, -1, "read_handshake");
+	if (lua_isfunction(L, -1)) {
+		/* export
+		 *
+		 * every thing we know about it
+		 *  */
+
+		lua_newtable(L);
+
+		lua_pushlstring(L, recv_sock->scramble_buf->str, recv_sock->scramble_buf->len);
+		lua_setfield(L, -2, "scramble");
+		lua_pushinteger(L, recv_sock->mysqld_version);
+		lua_setfield(L, -2, "mysqld_version");
+		lua_pushinteger(L, recv_sock->thread_id);
+		lua_setfield(L, -2, "thread_id");
+		lua_pushstring(L, recv_sock->addr.str);
+		lua_setfield(L, -2, "server_addr");
+
+		/* resolve the peer-addr if necessary */
+		if (!send_sock->addr.str) {
+			switch (send_sock->addr.addr.common.sa_family) {
+			case AF_INET:
+				send_sock->addr.str = g_strdup_printf("%s:%d", 
+						inet_ntoa(send_sock->addr.addr.ipv4.sin_addr),
+						send_sock->addr.addr.ipv4.sin_port);
+				break;
+			default:
+				g_message("%s.%d: can't convert addr-type %d into a string", 
+						 __FILE__, __LINE__, 
+						 send_sock->addr.addr.common.sa_family);
+				break;
+			}
+		}
+
+		lua_pushstring(L, send_sock->addr.str);
+		lua_setfield(L, -2, "client_addr");
+
+		if (lua_pcall(L, 1, 1, 0) != 0) {
+			g_critical("(read_handshake) %s", lua_tostring(L, -1));
+
+			lua_pop(L, 1); /* errmsg */
+
+			/* the script failed, but we have a useful default */
+		} else {
+			if (lua_isnumber(L, -1)) {
+				ret = lua_tonumber(L, -1);
+			}
+			lua_pop(L, 1);
+		}
+	
+		switch (ret) {
+		case PROXY_NO_DECISION:
+			break;
+		case PROXY_SEND_QUERY:
+			/**
+			 * proxy.response.type = ERR, RAW, ...
+			 */
+
+			if (proxy_lua_handle_proxy_response(con)) {
+				/**
+				 * handling proxy.response failed
+				 *
+				 * send a ERR packet
+				 */
+		
+				network_mysqld_con_send_error(con->client, C("(lua) handling proxy.response failed, check error-log"));
+			}
+
+			break;
+		default:
+			ret = PROXY_NO_DECISION;
+			break;
+		}
+	} else if (lua_isnil(L, -1)) {
+		lua_pop(L, 1); /* pop the nil */
+	} else {
+		g_message("%s.%d: %s", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
+		lua_pop(L, 1); /* pop the ... */
+	}
+	lua_pop(L, 1); /* fenv */
+
+	g_assert(lua_isfunction(L, -1));
+#endif
+	return ret;
+}
+
+
+/**
+ * parse the hand-shake packet from the server
+ *
+ *
+ * @note the SSL and COMPRESS flags are disabled as we can't 
+ *       intercept or parse them.
+ */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	GString *packet;
 	GList *chunk;
 	network_socket *recv_sock, *send_sock;
 	guint off = 0;
+	int maj, min, patch;
+	guint16 server_cap = 0;
+	guint8  server_lang = 0;
+	guint16 server_status = 0;
+	gchar *scramble_1, *scramble_2;
 
 	send_sock = con->client;
 	recv_sock = con->server;
@@ -1647,79 +1774,153 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	chunk = recv_sock->recv_queue->chunks->tail;
 	packet = chunk->data;
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
-
-	/* scan the handshake for the server-caps and disable compression
-	 *
-	 * 
-	 *  */
-
-	if (packet->str[NET_HEADER_SIZE + 0] != '\x0a') {
-		/* we only understand version 10
+	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) {
+		/**
+		 * packet is too short, looks nasty.
 		 *
-		 * FIXME: but we might also receive a error-packet:
-		 *
-		 * read(7, "E\0\0\0\377j\4Host \'10.100.1.221\' is not allowed to connect to this MySQL server", 127) = 73
-		 * 
-		 *  */
-		return -1;
+		 * report an error and let the core send a error to the 
+		 * client
+		 */
+
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+
+		return RET_ERROR;
 	}
 
-	/* next is the version string */
+	if (packet->str[NET_HEADER_SIZE + 0] == '\xff') {
+		/* the server doesn't like us and sends a ERR packet
+		 *
+		 * forward it to the client */
+
+		network_queue_append_chunk(send_sock->send_queue, packet);
+
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+
+		return RET_ERROR;
+	} else if (packet->str[NET_HEADER_SIZE + 0] != '\x0a') {
+		/* the server isn't 4.1+ server, send a client a ERR packet
+		 */
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+
+		network_mysqld_con_send_error(send_sock, C("unknown protocol"));
+
+		return RET_ERROR;
+	}
+
+	/* scan for a \0 */
 	for (off = NET_HEADER_SIZE + 1; packet->str[off] && off < packet->len + NET_HEADER_SIZE; off++);
 
 	if (packet->str[off] != '\0') {
-		return -1;
+		/* the server has sent us garbage */
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+
+		network_mysqld_con_send_error(send_sock, C("protocol 10, but version number not terminated"));
+
+		return RET_ERROR;
 	}
 
-	if (off - 1 >= 6) {
-		/**
-		 * 5.0.22-...
-		 * 6.0.1-alpha
-		 */
-		g_assert(packet->str[NET_HEADER_SIZE + 1] >= '0' && packet->str[NET_HEADER_SIZE + 1] <= '9');
-		g_assert(packet->str[NET_HEADER_SIZE + 2] == '.');
-		g_assert(packet->str[NET_HEADER_SIZE + 3] >= '0' && packet->str[NET_HEADER_SIZE + 3] <= '9');
-		g_assert(packet->str[NET_HEADER_SIZE + 4] == '.');
+	if (3 != sscanf(packet->str + NET_HEADER_SIZE + 1, "%d.%d.%d%*s", &maj, &min, &patch)) {
+		/* can't parse the protocol */
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
+		network_mysqld_con_send_error(send_sock, C("protocol 10, but version number not parsable"));
 
-		recv_sock->mysqld_version  = ((unsigned char)packet->str[NET_HEADER_SIZE + 1] - '0') * 10000;
-		recv_sock->mysqld_version +=              0  * 1000; /* the minor version is only one digit for now */
-		recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 3] - '0') * 100;
-
-		/**
-		 * we might either get a patch-level with 1 or 2 digits
-		 */
-		g_assert(packet->str[NET_HEADER_SIZE + 5] >= '0' && packet->str[NET_HEADER_SIZE + 5] <= '9');
-
-		if (packet->str[NET_HEADER_SIZE + 6] >= '0' && packet->str[NET_HEADER_SIZE + 6] <= '9') {
-			recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 5] - '0') * 1;
-		} else {
-			recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 5] - '0') * 10;
-			recv_sock->mysqld_version += ((unsigned char)packet->str[NET_HEADER_SIZE + 6] - '0') * 1;
-		}
+		return RET_ERROR;
 	}
 
-	off++;    /* the terminating \0 */
+	/**
+	 * out of range 
+	 */
+	if (min   < 0 || min   > 100 ||
+	    patch < 0 || patch > 100 ||
+	    maj   < 0 || maj   > 10) {
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
-	recv_sock->thread_id = 
-		((unsigned char)packet->str[off + 0] << 0) |
-		((unsigned char)packet->str[off + 1] << 8) |
-		((unsigned char)packet->str[off + 2] << 16) |
-		((unsigned char)packet->str[off + 3] << 24);
+		network_mysqld_con_send_error(send_sock, C("protocol 10, but version number out of range"));
 
+		return RET_ERROR;
+	}
+
+	recv_sock->mysqld_version = 
+		maj * 10000 +
+		min *   100 +
+		patch;
+
+	/* skip the \0 */
+	off++;
+
+	recv_sock->thread_id = network_mysqld_proto_get_int32(packet, &off);
 	send_sock->thread_id = recv_sock->thread_id;
-	
-	con->filename = g_strdup_printf("query-dump-%d.txt", recv_sock->thread_id);
-	
-	off += 4; /* thread-id */
-	off += 8; /* scramble buf */
 
-	off++; /* the filler */
+	/**
+	 * get the scramble buf
+	 *
+	 * 8 byte here and some the other 12 somewhen later
+	 */	
+	scramble_1 = network_mysqld_proto_get_string_len(packet, &off, 8);
 
-	/* we can't sniff compressed packets */
+	network_mysqld_proto_skip(packet, &off, 1);
+
+	/* we can't sniff compressed packets nor do we support SSL */
 	packet->str[off] &= ~(CLIENT_COMPRESS);
+	packet->str[off] &= ~(CLIENT_SSL);
+
+	server_cap    = network_mysqld_proto_get_int16(packet, &off);
+
+	if (server_cap & CLIENT_COMPRESS) {
+		packet->str[off-2] &= ~(CLIENT_COMPRESS);
+	}
+
+	if (server_cap & CLIENT_SSL) {
+		packet->str[off-1] &= ~(CLIENT_SSL >> 8);
+	}
+
 	
+	server_lang   = network_mysqld_proto_get_int8(packet, &off);
+	server_status = network_mysqld_proto_get_int16(packet, &off);
+	
+	network_mysqld_proto_skip(packet, &off, 13);
+	
+	scramble_2 = network_mysqld_proto_get_string_len(packet, &off, 13);
+
+	/**
+	 * scramble_1 + scramble_2 == scramble
+	 *
+	 * a len-encoded string
+	 */
+
+	g_string_truncate(recv_sock->scramble_buf, 0);
+	g_string_append_len(recv_sock->scramble_buf, scramble_1, 8);
+	g_string_append_len(recv_sock->scramble_buf, scramble_2, 13);
+
+	g_free(scramble_1);
+	g_free(scramble_2);
+
+	switch (proxy_lua_read_handshake(con)) {
+	case PROXY_NO_DECISION:
+		break;
+	case PROXY_SEND_QUERY:
+		/* the client overwrote and wants to send its own packet
+		 * it is already in the queue */
+
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+
+		return RET_ERROR;
+	default:
+		g_error("%s.%d: ...", __FILE__, __LINE__);
+		break;
+	} 
+
+	/*
+	 * move the packets to the server queue 
+	 */
 	network_queue_append_chunk(send_sock->send_queue, packet);
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
@@ -1729,6 +1930,71 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	con->state = CON_STATE_SEND_HANDSHAKE;
 
 	return RET_SUCCESS;
+}
+
+int proxy_lua_read_auth(network_mysqld_con *con) {
+	plugin_con_state *st = con->plugin_con_state;
+	plugin_srv_state *g = st->global_state;
+
+#ifdef HAVE_LUA_H
+	lua_State *L;
+
+	/* call the lua script to pick a backend
+	 * */
+	lua_register_callback(con);
+
+	if (!st->injected.L) return 0;
+
+	L = st->injected.L;
+
+	g_assert(lua_isfunction(L, -1));
+	lua_getfenv(L, -1);
+	g_assert(lua_istable(L, -1));
+	
+	lua_getfield(L, -1, "read_auth");
+	if (lua_isfunction(L, -1)) {
+		int ret = 0;
+
+		/* export
+		 *
+		 * every thing we know about it
+		 *  */
+
+		lua_newtable(L);
+
+		lua_pushlstring(L, con->username->str, con->username->len);
+		lua_setfield(L, -2, "username");
+		lua_pushlstring(L, con->scrambled_password->str, con->scrambled_password->len);
+		lua_setfield(L, -2, "password");
+		lua_pushlstring(L, con->default_db->str, con->default_db->len);
+		lua_setfield(L, -2, "default_db");
+
+		if (lua_pcall(L, 1, 1, 0) != 0) {
+			g_critical("(read_auth) %s", lua_tostring(L, -1));
+
+			lua_pop(L, 1); /* errmsg */
+
+			/* the script failed, but we have a useful default */
+		} else {
+			if (lua_isnumber(L, -1)) {
+				ret = lua_tonumber(L, -1);
+			}
+			lua_pop(L, 1);
+		}
+
+		/* ret should be a index into */
+
+	} else if (lua_isnil(L, -1)) {
+		lua_pop(L, 1); /* pop the nil */
+	} else {
+		g_message("%s.%d: %s", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
+		lua_pop(L, 1); /* pop the ... */
+	}
+	lua_pop(L, 1); /* fenv */
+
+	g_assert(lua_isfunction(L, -1));
+#endif
+	return 0;
 }
 
 typedef struct {
@@ -1771,13 +2037,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	 *  \0\0\0\0
 	 *  \0\0\0       - fillers
 	 *  root\0       - username
-	 *  \24~\272\361
-	 *  \346\211\353D - scramble-buf
-	 *  
-	 *  \351\24\243\223 
-	 *  \257\0^\n
-	 *  \254t\347\365
-	 *  \244           - should be one byte, is 13 bytes
+	 *  \24          - len of the scrambled buf
+	 *    ~    \272 \361 \346
+	 *    \211 \353 D    \351
+	 *    \24  \243 \223 \257
+	 *    \0   ^    \n   \254
+	 *    t    \347 \365 \244
 	 *  
 	 *  world\0
 	 */
@@ -1788,39 +2053,18 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 	network_mysqld_proto_skip(packet, &off, 23);
 	
-	auth.user            = network_mysqld_proto_get_string(packet, &off);
-	auth.scramble_buf    = NULL;
-	auth.db_name         = NULL;
-
-
-	/**
-	 * check if we have a password at all:
-	 * 
-	 * read(6, "*\0\0\1\205\246\3\0\0\0\0\1\10\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0temproot\0\0", 63) = 46
-	 *
-	 * - username: temproot\0 
-	 * - the scramble-buffer never has a \0 byte, aka no scramble-buf
-	 * 
-	 */
-
-	if (packet->str[off] != 0) {
-		auth.scramble_buf    = network_mysqld_proto_get_string_len(packet, &off, 8);
-
-		/** should be 1 instead of 13 bytes */
-		network_mysqld_proto_skip(packet, &off, 13);
-	} else {
-		network_mysqld_proto_skip(packet, &off, 1); /* the filler */
-	}
+	network_mysqld_proto_get_gstring(packet, &off, con->username);
+	network_mysqld_proto_get_lenenc_gstring(packet, &off, con->scrambled_password);
 
 	if (off != packet->len) {
-		auth.db_name         = network_mysqld_proto_get_string(packet, &off);
+		network_mysqld_proto_get_gstring(packet, &off, con->default_db);
 	}
 
-	g_string_assign(con->default_db, auth.db_name ? auth.db_name : "");
+	/**
+	 * looks like we finished parsing, call the lua function
+	 */
 
-	if (auth.user) g_free(auth.user);
-	if (auth.scramble_buf) g_free(auth.scramble_buf);
-	if (auth.db_name) g_free(auth.db_name);
+	proxy_lua_read_auth(con);
 
 	network_queue_append_chunk(send_sock->send_queue, packet);
 

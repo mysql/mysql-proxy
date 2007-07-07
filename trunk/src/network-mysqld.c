@@ -144,9 +144,9 @@ network_socket *network_socket_init() {
 	s->recv_queue = network_queue_init();
 	s->recv_raw_queue = network_queue_init();
 
-	s->mysqld_version = 50112;
-
 	s->packet_len = PACKET_LEN_UNSET;
+
+	s->scramble_buf = g_string_new(NULL);
 	
 	return s;
 }
@@ -168,6 +168,8 @@ void network_socket_free(network_socket *s) {
 		closesocket(s->fd);
 	}
 
+	g_string_free(s->scramble_buf, 1);
+
 	g_free(s);
 }
 
@@ -178,6 +180,8 @@ network_mysqld_con *network_mysqld_con_init(network_mysqld *srv) {
 	con = g_new0(network_mysqld_con, 1);
 
 	con->default_db = g_string_new(NULL);
+	con->username   = g_string_new(NULL);
+	con->scrambled_password = g_string_new(NULL);
 	con->srv = srv;
 
 	g_ptr_array_add(srv->cons, con);
@@ -188,11 +192,9 @@ network_mysqld_con *network_mysqld_con_init(network_mysqld *srv) {
 void network_mysqld_con_free(network_mysqld_con *con) {
 	if (!con) return;
 
+	g_string_free(con->username,   TRUE);
 	g_string_free(con->default_db, TRUE);
-
-	if (con->filename) {
-		g_free(con->filename);
-	}
+	g_string_free(con->scrambled_password, TRUE);
 
 	if (con->server) network_socket_free(con->server);
 	if (con->client) network_socket_free(con->client);
@@ -979,6 +981,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			default:
 				g_error("%s.%d: ...", __FILE__, __LINE__);
+				
 				break;
 			}
 
@@ -1010,6 +1013,17 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			switch (plugin_call(srv, con, con->state)) {
 			case RET_SUCCESS:
+				break;
+			case RET_ERROR:
+				/**
+				 * we couldn't understand the pack from the server 
+				 * 
+				 * we have something in the queue and will send it to the client
+				 * and close the connection afterwards
+				 */
+				
+				con->state = CON_STATE_SEND_ERROR;
+
 				break;
 			default:
 				g_error("%s.%d: ...", __FILE__, __LINE__);
@@ -1386,6 +1400,29 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				g_error("%s.%d: ...", __FILE__, __LINE__);
 				break;
 			}
+
+			break;
+		case CON_STATE_SEND_ERROR:
+			/**
+			 * send error to the client
+			 * and close the connections afterwards
+			 *  */
+
+			switch (network_mysqld_write(srv, con->client)) {
+			case RET_SUCCESS:
+				break;
+			case RET_WAIT_FOR_EVENT:
+				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
+				return;
+			case RET_ERROR_RETRY:
+			case RET_ERROR:
+				g_critical("%s.%d: network_mysqld_write(CON_STATE_SEND_ERROR) returned an error", __FILE__, __LINE__);
+
+				con->state = CON_STATE_ERROR;
+				break;
+			}
+				
+			con->state = CON_STATE_ERROR;
 
 			break;
 		}
