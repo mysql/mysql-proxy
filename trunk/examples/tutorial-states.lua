@@ -28,6 +28,13 @@ function read_auth( auth )
 	print("    username      : " .. auth.username)
 	print("    password      : " .. string.format("%q", auth.password))
 	print("    default_db    : " .. auth.default_db)
+
+	if auth.username == "evil" then
+		proxy.response.type = proxy.MYSQLD_PACKET_ERR
+		proxy.response.errmsg = "evil logins are not allowed"
+		
+		return proxy.PROXY_SEND_RESULT
+	end
 end
 
 function read_query( packet ) 

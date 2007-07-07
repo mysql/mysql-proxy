@@ -1641,12 +1641,12 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
  * @return PROXY_SEND_QUERY  to send the packet from the client
  *         PROXY_NO_DECISION to pass the server packet unmodified
  */
-int proxy_lua_read_handshake(network_mysqld_con *con) {
+proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
 	plugin_con_state *st = con->plugin_con_state;
 	plugin_srv_state *g = st->global_state;
 	network_socket   *recv_sock = con->server;
 	network_socket   *send_sock = con->client;
-	int ret = PROXY_NO_DECISION; /* send what the server gave us */
+	proxy_stmt_ret ret = PROXY_NO_DECISION; /* send what the server gave us */
 
 #ifdef HAVE_LUA_H
 	lua_State *L;
@@ -1932,9 +1932,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	return RET_SUCCESS;
 }
 
-int proxy_lua_read_auth(network_mysqld_con *con) {
+proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
 	plugin_con_state *st = con->plugin_con_state;
 	plugin_srv_state *g = st->global_state;
+	proxy_stmt_ret ret = PROXY_NO_DECISION;
 
 #ifdef HAVE_LUA_H
 	lua_State *L;
@@ -1953,7 +1954,6 @@ int proxy_lua_read_auth(network_mysqld_con *con) {
 	
 	lua_getfield(L, -1, "read_auth");
 	if (lua_isfunction(L, -1)) {
-		int ret = 0;
 
 		/* export
 		 *
@@ -1982,6 +1982,30 @@ int proxy_lua_read_auth(network_mysqld_con *con) {
 			lua_pop(L, 1);
 		}
 
+		switch (ret) {
+		case PROXY_NO_DECISION:
+			break;
+		case PROXY_SEND_RESULT:
+			/* answer directly */
+
+			con->client->packet_id++;
+			
+			if (proxy_lua_handle_proxy_response(con)) {
+				/**
+				 * handling proxy.response failed
+				 *
+				 * send a ERR packet
+				 */
+		
+				network_mysqld_con_send_error(con->client, C("(lua) handling proxy.response failed, check error-log"));
+			}
+
+			break;
+		default:
+			ret = PROXY_NO_DECISION;
+			break;
+		}
+
 		/* ret should be a index into */
 
 	} else if (lua_isnil(L, -1)) {
@@ -1994,7 +2018,7 @@ int proxy_lua_read_auth(network_mysqld_con *con) {
 
 	g_assert(lua_isfunction(L, -1));
 #endif
-	return 0;
+	return ret;
 }
 
 typedef struct {
@@ -2064,14 +2088,26 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	 * looks like we finished parsing, call the lua function
 	 */
 
-	proxy_lua_read_auth(con);
+	switch (proxy_lua_read_auth(con)) {
+	case PROXY_SEND_RESULT:
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+		
+		con->state = CON_STATE_SEND_AUTH_RESULT;
 
-	network_queue_append_chunk(send_sock->send_queue, packet);
+		break;
+	case PROXY_NO_DECISION:
+		network_queue_append_chunk(send_sock->send_queue, packet);
 
-	recv_sock->packet_len = PACKET_LEN_UNSET;
-	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 	
-	con->state = CON_STATE_SEND_AUTH;
+		con->state = CON_STATE_SEND_AUTH;
+		break;
+	default:
+		g_error("%s.%d: ... ", __FILE__, __LINE__);
+		break;
+	}
 
 	return RET_SUCCESS;
 }
