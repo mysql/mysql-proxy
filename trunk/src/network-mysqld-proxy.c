@@ -314,7 +314,7 @@ static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields
 	return chunk;
 }
 
-void g_hash_table_reset_gstring(gpointer UNUSED_PARAM(_key), gpointer _value, gpointer UNUSED_PARAM(ser_data)) {
+static void g_hash_table_reset_gstring(gpointer UNUSED_PARAM(_key), gpointer _value, gpointer UNUSED_PARAM(ser_data)) {
 	GString *value = _value;
 
 	g_string_truncate(value, 0);
@@ -1042,133 +1042,6 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	return 0;
 }
 
-static proxy_stmt_ret network_mysqld_con_handle_proxy_stmt(network_mysqld *UNUSED_PARAM(srv), network_mysqld_con *con, GString *packet) {
-	plugin_con_state *st = con->plugin_con_state;
-	char command = -1;
-	injection *inj;
-
-	if (!con->config.proxy.profiling) return PROXY_SEND_QUERY;
-
-	if (packet->len < NET_HEADER_SIZE) return PROXY_SEND_QUERY; /* packet too short */
-
-	command = packet->str[NET_HEADER_SIZE + 0];
-
-	if (COM_QUERY == command) {
-		/* we need some more data after the COM_QUERY */
-		if (packet->len < NET_HEADER_SIZE + 2) return PROXY_SEND_QUERY;
-		if (0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("LOAD "))) return PROXY_SEND_QUERY;
-
-		/* don't cover them with injected queries as it trashes the result */
-		if (0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("SHOW ERRORS"))) return PROXY_SEND_QUERY;
-		if (0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("select @@error_count"))) return PROXY_SEND_QUERY;
-	
-	}
-
-	/* reset the query status */
-	memset(&(st->injected.qstat), 0, sizeof(st->injected.qstat));
-	
-	while ((inj = g_queue_pop_head(st->injected.queries))) injection_free(inj);
-
-	/* ok, here we go */
-
-#ifdef HAVE_LUA_H
-	lua_register_callback(con);
-
-	if (st->injected.L) {
-		lua_State *L = st->injected.L;
-		proxy_stmt_ret ret = PROXY_NO_DECISION;
-
-		g_assert(lua_isfunction(L, -1));
-		lua_getfenv(L, -1);
-		g_assert(lua_istable(L, -1));
-
-		/**
-		 * reset proxy.response to a empty table 
-		 */
-		lua_getfield(L, -1, "proxy");
-		g_assert(lua_istable(L, -1));
-
-		lua_newtable(L);
-		lua_setfield(L, -2, "response");
-
-		lua_pop(L, 1);
-		
-		/**
-		 * get the call back
-		 */
-		lua_getfield(L, -1, "read_query");
-		if (lua_isfunction(L, -1)) {
-
-			/* pass the packet as parameter */
-			lua_pushlstring(L, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE);
-
-			if (lua_pcall(L, 1, 1, 0) != 0) {
-				/* hmm, the query failed */
-				g_critical("(read_query) %s", lua_tostring(L, -1));
-
-				lua_pop(L, 2); /* fenv + errmsg */
-
-				/* perhaps we should clean up ?*/
-
-				return PROXY_SEND_QUERY;
-			} else {
-				if (lua_isnumber(L, -1)) {
-					ret = lua_tonumber(L, -1);
-				}
-				lua_pop(L, 1);
-			}
-
-			switch (ret) {
-			case PROXY_SEND_RESULT:
-				/* check the proxy.response table for content,
-				 *
-				 */
-	
-				con->client->packet_id++;
-
-				if (proxy_lua_handle_proxy_response(con)) {
-					/**
-					 * handling proxy.response failed
-					 *
-					 * send a ERR packet
-					 */
-			
-					network_mysqld_con_send_error(con->client, C("(lua) handling proxy.response failed, check error-log"));
-				}
-	
-				break;
-			case PROXY_NO_DECISION:
-				break;
-			case PROXY_SEND_QUERY:
-				/* send the injected queries
-				 *
-				 * injection_init(..., query);
-				 * 
-				 *  */
-
-				if (st->injected.queries->length) {
-					ret = PROXY_SEND_INJECTION;
-				}
-	
-				break;
-			default:
-				break;
-			}
-			lua_pop(L, 1); /* fenv */
-		} else {
-			lua_pop(L, 2); /* fenv + nil */
-		}
-
-		g_assert(lua_isfunction(L, -1));
-
-		if (ret != PROXY_NO_DECISION) {
-			return ret;
-		}
-	}
-#endif
-	return PROXY_NO_DECISION;
-}
-
 /**
  * TODO: port to lua
 
@@ -1536,11 +1409,12 @@ static int proxy_injection_get(lua_State *L) {
 	return 1;
 }
 #endif
-static int proxy_lua_read_query_result(network_mysqld_con *con) {
+static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 	network_socket *send_sock = con->client;
 	network_socket *recv_sock = con->server;
 	injection *inj = NULL;
 	plugin_con_state *st = con->plugin_con_state;
+	proxy_stmt_ret ret = PROXY_NO_DECISION;
 
 	/**
 	 * check if we want to forward the statement to the client 
@@ -1548,7 +1422,7 @@ static int proxy_lua_read_query_result(network_mysqld_con *con) {
 	 * if not, clean the send-queue 
 	 */
 
-	if (0 == st->injected.queries->length) return 0;
+	if (0 == st->injected.queries->length) return PROXY_NO_DECISION;
 
 	inj = g_queue_pop_head(st->injected.queries);
 
@@ -1566,7 +1440,6 @@ static int proxy_lua_read_query_result(network_mysqld_con *con) {
 		
 		lua_getfield(L, -1, "read_query_result");
 		if (lua_isfunction(L, -1)) {
-			proxy_stmt_ret ret = PROXY_NO_DECISION;
 			injection **inj_p;
 			GString *packet;
 
@@ -1668,7 +1541,7 @@ static int proxy_lua_read_query_result(network_mysqld_con *con) {
 
 	injection_free(inj);
 
-	return 0;
+	return ret;
 }
 
 /**
@@ -1677,7 +1550,7 @@ static int proxy_lua_read_query_result(network_mysqld_con *con) {
  * @return PROXY_SEND_QUERY  to send the packet from the client
  *         PROXY_NO_DECISION to pass the server packet unmodified
  */
-proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
+static proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
 	plugin_con_state *st = con->plugin_con_state;
 	network_socket   *recv_sock = con->server;
 	network_socket   *send_sock = con->client;
@@ -1970,7 +1843,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	return RET_SUCCESS;
 }
 
-proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
+static proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
 	plugin_con_state *st = con->plugin_con_state;
 	proxy_stmt_ret ret = PROXY_NO_DECISION;
 
@@ -2174,7 +2047,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	return RET_SUCCESS;
 }
 
-proxy_stmt_ret proxy_lua_read_auth_result(network_mysqld_con *con) {
+static proxy_stmt_ret proxy_lua_read_auth_result(network_mysqld_con *con) {
 	plugin_con_state *st = con->plugin_con_state;
 	proxy_stmt_ret ret = PROXY_NO_DECISION;
 	network_socket *recv_sock = con->server;
@@ -2306,6 +2179,137 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	return RET_SUCCESS;
 }
 
+static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
+	plugin_con_state *st = con->plugin_con_state;
+	char command = -1;
+	injection *inj;
+	network_socket *recv_sock = con->client;
+	GList   *chunk  = recv_sock->recv_queue->chunks->head;
+	GString *packet = chunk->data;
+
+	if (!con->config.proxy.profiling) return PROXY_SEND_QUERY;
+
+	if (packet->len < NET_HEADER_SIZE) return PROXY_SEND_QUERY; /* packet too short */
+
+	command = packet->str[NET_HEADER_SIZE + 0];
+
+	if (COM_QUERY == command) {
+		/* we need some more data after the COM_QUERY */
+		if (packet->len < NET_HEADER_SIZE + 2) return PROXY_SEND_QUERY;
+		if (0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("LOAD "))) return PROXY_SEND_QUERY;
+
+		/* don't cover them with injected queries as it trashes the result */
+		if (0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("SHOW ERRORS"))) return PROXY_SEND_QUERY;
+		if (0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("select @@error_count"))) return PROXY_SEND_QUERY;
+	
+	}
+
+	/* reset the query status */
+	memset(&(st->injected.qstat), 0, sizeof(st->injected.qstat));
+	
+	while ((inj = g_queue_pop_head(st->injected.queries))) injection_free(inj);
+
+	/* ok, here we go */
+
+#ifdef HAVE_LUA_H
+	lua_register_callback(con);
+
+	if (st->injected.L) {
+		lua_State *L = st->injected.L;
+		proxy_stmt_ret ret = PROXY_NO_DECISION;
+
+		g_assert(lua_isfunction(L, -1));
+		lua_getfenv(L, -1);
+		g_assert(lua_istable(L, -1));
+
+		/**
+		 * reset proxy.response to a empty table 
+		 */
+		lua_getfield(L, -1, "proxy");
+		g_assert(lua_istable(L, -1));
+
+		lua_newtable(L);
+		lua_setfield(L, -2, "response");
+
+		lua_pop(L, 1);
+		
+		/**
+		 * get the call back
+		 */
+		lua_getfield(L, -1, "read_query");
+		if (lua_isfunction(L, -1)) {
+
+			/* pass the packet as parameter */
+			lua_pushlstring(L, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE);
+
+			if (lua_pcall(L, 1, 1, 0) != 0) {
+				/* hmm, the query failed */
+				g_critical("(read_query) %s", lua_tostring(L, -1));
+
+				lua_pop(L, 2); /* fenv + errmsg */
+
+				/* perhaps we should clean up ?*/
+
+				return PROXY_SEND_QUERY;
+			} else {
+				if (lua_isnumber(L, -1)) {
+					ret = lua_tonumber(L, -1);
+				}
+				lua_pop(L, 1);
+			}
+
+			switch (ret) {
+			case PROXY_SEND_RESULT:
+				/* check the proxy.response table for content,
+				 *
+				 */
+	
+				con->client->packet_id++;
+
+				if (proxy_lua_handle_proxy_response(con)) {
+					/**
+					 * handling proxy.response failed
+					 *
+					 * send a ERR packet
+					 */
+			
+					network_mysqld_con_send_error(con->client, C("(lua) handling proxy.response failed, check error-log"));
+				}
+	
+				break;
+			case PROXY_NO_DECISION:
+				break;
+			case PROXY_SEND_QUERY:
+				/* send the injected queries
+				 *
+				 * injection_init(..., query);
+				 * 
+				 *  */
+
+				if (st->injected.queries->length) {
+					ret = PROXY_SEND_INJECTION;
+				}
+	
+				break;
+			default:
+				break;
+			}
+			lua_pop(L, 1); /* fenv */
+		} else {
+			lua_pop(L, 2); /* fenv + nil */
+		}
+
+		g_assert(lua_isfunction(L, -1));
+
+		if (ret != PROXY_NO_DECISION) {
+			return ret;
+		}
+	}
+#endif
+	return PROXY_NO_DECISION;
+}
+
+
 /**
  * gets called after a query has been read
  *
@@ -2337,7 +2341,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 
 	con->parse.len = recv_sock->packet_len;
 
-	switch (network_mysqld_con_handle_proxy_stmt(srv, con, packet)) {
+	switch (proxy_lua_read_query(con)) {
 	case PROXY_NO_DECISION:
 	case PROXY_SEND_QUERY:
 		/* no injection, pass on the chunk as is */
@@ -2936,12 +2940,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 				st->backend_ndx = ret;
 			}
 		} else if (lua_isnil(L, -1)) {
-#if 0
-			g_debug("%s.%d: function connect_server is defined", __FILE__, __LINE__);
-#endif
+			/* function not defined */
 			lua_pop(L, 1); /* pop the nil */
 		} else {
-			g_message("%s.%d: %s", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
+			g_message("%s.%d: connect_server() should be function, but is %s", 
+					__FILE__, __LINE__, 
+					lua_typename(L, lua_type(L, -1)));
+
 			lua_pop(L, 1); /* pop the nil */
 		}
 		lua_pop(L, 1); /* fenv */
