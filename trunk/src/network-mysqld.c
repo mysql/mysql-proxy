@@ -47,7 +47,8 @@
 #include <mysql.h>
 
 #include "network-mysqld.h"
-
+#include "network-mysqld-proto.h"
+#include "network-conn-pool.h"
 
 /**
  * 4.1 uses other defines
@@ -64,13 +65,6 @@
 #define COM_STMT_CLOSE          COM_CLOSE_STMT
 #define COM_STMT_SEND_LONG_DATA COM_LONG_DATA
 #define COM_STMT_RESET          COM_RESET_STMT
-#endif
-
-#ifndef _WIN32
-/**
- * use closesocket() to close sockets to be compatible with win32
- */
-#define closesocket(x) close(x)
 #endif
 
 #ifdef _WIN32
@@ -111,66 +105,6 @@ retval_t plugin_call_cleanup(network_mysqld *srv, network_mysqld_con *con) {
 	if (!func) return RET_SUCCESS;
 
 	return (*func)(srv, con);
-}
-
-network_queue *network_queue_init() {
-	network_queue *queue;
-
-	queue = g_new0(network_queue, 1);
-
-	queue->chunks = g_queue_new();
-	
-	return queue;
-}
-
-void network_queue_free(network_queue *queue) {
-	GString *packet;
-
-	if (!queue) return;
-
-	while ((packet = g_queue_pop_head(queue->chunks))) g_string_free(packet, TRUE);
-
-	g_queue_free(queue->chunks);
-
-	g_free(queue);
-}
-
-network_socket *network_socket_init() {
-	network_socket *s;
-	
-	s = g_new0(network_socket, 1);
-
-	s->send_queue = network_queue_init();
-	s->recv_queue = network_queue_init();
-	s->recv_raw_queue = network_queue_init();
-
-	s->packet_len = PACKET_LEN_UNSET;
-
-	s->scramble_buf = g_string_new(NULL);
-	
-	return s;
-}
-
-void network_socket_free(network_socket *s) {
-	if (!s) return;
-
-	network_queue_free(s->send_queue);
-	network_queue_free(s->recv_queue);
-	network_queue_free(s->recv_raw_queue);
-#if 0
-	/* */
-	if (s->addr.str) {
-		g_free(s->addr.str);
-	}
-#endif
-
-	if (s->fd != -1) {
-		closesocket(s->fd);
-	}
-
-	g_string_free(s->scramble_buf, 1);
-
-	g_free(s);
 }
 
 
@@ -438,43 +372,6 @@ static void dump_str(const char *msg, const unsigned char *s, size_t len) {
 
 }
 
-int network_mysqld_packet_set_header(unsigned char *header, size_t len, unsigned char id) {
-	g_assert(len <= PACKET_LEN_MAX);
-
-	header[0] = (len >>  0) & 0xFF;
-	header[1] = (len >>  8) & 0xFF;
-	header[2] = (len >> 16) & 0xFF;
-	header[3] = id;
-
-	return 0;
-}
-
-size_t network_mysqld_packet_get_header(unsigned char *header) {
-	return header[0] | header[1] << 8 | header[2] << 16;
-}
-
-int network_queue_append(network_queue *queue, const char *data, size_t len, int packet_id) {
-	unsigned char header[4];
-	GString *s;
-
-	network_mysqld_packet_set_header(header, len, packet_id);
-
-	s = g_string_sized_new(len + 4);
-
-	g_string_append_len(s, (gchar *)header, 4);
-	g_string_append_len(s, data, len);
-
-	g_queue_push_tail(queue->chunks, s);
-
-	return 0;
-}
-
-int network_queue_append_chunk(network_queue *queue, GString *chunk) {
-	g_queue_push_tail(queue->chunks, chunk);
-
-	return 0;
-}
-
 int network_mysqld_con_send_ok(network_socket *con) {
 	const unsigned char packet_ok[] = 
 		"\x00" /* field-count */
@@ -623,7 +520,7 @@ retval_t network_mysqld_read(network_mysqld *srv, network_socket *con) {
 			break;
 		}
 
-		con->packet_len = network_mysqld_packet_get_header(con->header);
+		con->packet_len = network_mysqld_proto_get_header(con->header);
 		con->packet_id  = con->header[3]; /* packet-id if the next packet */
 
 		packet = g_string_sized_new(con->packet_len + NET_HEADER_SIZE);
@@ -923,7 +820,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				g_error("%s.%d: neither nor", __FILE__, __LINE__);
 			}
 		} else {
-			con->state = CON_STATE_ERROR;
+			if (con->client && event_fd == con->client->fd) {
+				/* the client closed the connection, let's keep the server side open */
+				con->state = CON_STATE_CLOSE_CLIENT;
+			} else {
+				/* server side closed on use, oops, close both sides */
+				con->state = CON_STATE_ERROR;
+			}
 		}
 	}
 
@@ -937,6 +840,15 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		switch (con->state) {
 		case CON_STATE_ERROR:
 			/* we can't go on, close the connection */
+			plugin_call_cleanup(srv, con);
+			network_mysqld_con_free(con);
+
+			con = NULL;
+
+			return;
+		case CON_STATE_CLOSE_CLIENT:
+			/* the server connection is still fine, 
+			 * let's keep it open for reuse */
 			plugin_call_cleanup(srv, con);
 			network_mysqld_con_free(con);
 

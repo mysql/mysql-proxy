@@ -5,6 +5,8 @@
   * added --no-proxy to disable the proxy 
   * added testcases 
   * added support for proxy.response.packets
+  * added hooks for read_auth() and read_handshake()
+  * added connection pooling
 
   * fixed decoding of len-encoded ints for 3-byte notation
   * fixed check for glib2 to require at least 2.6.0

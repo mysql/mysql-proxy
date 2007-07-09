@@ -17,6 +17,15 @@
 #include "config.h"
 #endif
 
+#ifdef HAVE_SYS_FILIO_H
+/**
+ * required for FIONREAD on solaris
+ */
+#include <sys/filio.h>
+#endif
+
+#include <sys/ioctl.h>
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -41,6 +50,7 @@
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
+#include "network-conn-pool.h"
 #include "sys-pedantic.h"
 
 #define TIME_DIFF_US(t2, t1) \
@@ -77,15 +87,14 @@ typedef enum {
 typedef struct {
 	network_address addr;
 
-	backend_state_t state;
-	backend_type_t type;
+	backend_state_t state;   /**< UP or DOWN */
+	backend_type_t type;     /**< ReadWrite or ReadOnly */
 
-	GTimeVal state_since;
+	GTimeVal state_since;    /**< timestamp of the last state-change */
 
-	/**
-	 * use for the SQF balancing
-	 */
-	guint connected_clients;
+	network_connection_pool *pool; /**< the pool of open connections */
+
+	guint connected_clients; /**< number of open connections to this backend for SQF */
 } backend_t;
 
 typedef struct {
@@ -218,6 +227,8 @@ static backend_t *backend_init() {
 	backend_t *b;
 
 	b = g_new0(backend_t, 1);
+
+	b->pool = network_connection_pool_init();
 
 	return b;
 }
@@ -724,7 +735,7 @@ int lua_register_callback(network_mysqld_con *con) {
 		lua_pushvalue(L, -1); /* meta.__index = meta */
 		lua_setfield(L, -2, "__index");
 	}
-	
+
 	lua_setmetatable(L, -2);
 
 	lua_setfield(L, -2, "queries");
@@ -1643,7 +1654,6 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
  */
 proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
 	plugin_con_state *st = con->plugin_con_state;
-	plugin_srv_state *g = st->global_state;
 	network_socket   *recv_sock = con->server;
 	network_socket   *send_sock = con->client;
 	proxy_stmt_ret ret = PROXY_NO_DECISION; /* send what the server gave us */
@@ -1901,6 +1911,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 
 	g_free(scramble_1);
 	g_free(scramble_2);
+	
+	g_string_truncate(recv_sock->auth_handshake_packet, 0);
+	g_string_append_len(recv_sock->auth_handshake_packet, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE);
 
 	switch (proxy_lua_read_handshake(con)) {
 	case PROXY_NO_DECISION:
@@ -1934,7 +1947,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 
 proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
 	plugin_con_state *st = con->plugin_con_state;
-	plugin_srv_state *g = st->global_state;
 	proxy_stmt_ret ret = PROXY_NO_DECISION;
 
 #ifdef HAVE_LUA_H
@@ -2097,7 +2109,32 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 		break;
 	case PROXY_NO_DECISION:
-		network_queue_append_chunk(send_sock->send_queue, packet);
+		if (con->server->is_authed) {
+			GString *com_change_user = g_string_new(NULL);
+			/* copy incl. the nul */
+			g_string_append_c(com_change_user, COM_CHANGE_USER);
+			g_string_append_len(com_change_user, con->username->str, con->username->len + 1);
+
+			g_assert(con->scrambled_password->len < 250);
+
+			g_string_append_c(com_change_user, (con->scrambled_password->len & 0xff));
+			g_string_append_len(com_change_user, con->scrambled_password->str, con->scrambled_password->len);
+
+			g_string_append_len(com_change_user, con->default_db->str, con->default_db->len + 1);
+			
+			network_queue_append(send_sock->send_queue, 
+					com_change_user->str, 
+					com_change_user->len, 
+					0);
+
+			/**
+			 * the server is already authenticated, the client isn't
+			 *
+			 * transform the auth-packet into a COM_CHANGE_USER
+			 */
+		} else {
+			network_queue_append_chunk(send_sock->send_queue, packet);
+		}
 
 		recv_sock->packet_len = PACKET_LEN_UNSET;
 		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
@@ -2127,6 +2164,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
 
 	/* send the auth result to the client */
+	if (con->server->is_authed) {
+		/**
+		 * we injected a COM_CHANGE_USER above and have to correct to 
+		 * packet-id now 
+		 */
+		packet->str[3] = 2;
+	}
 	
 	network_queue_append_chunk(send_sock->send_queue, packet);
 
@@ -2705,8 +2749,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	 *
 	 * prefer SQF (shorted queue first) to load all backends equally
 	 */ 
-	con->server = network_socket_init();
-
 	st->backend = NULL;
 
 	g_get_current_time(&now);
@@ -2788,7 +2830,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		/**/
 		for (i = 0; i < g->backend_master_pool->len; i++) {
 			backend_t *cur = g->backend_master_pool->pdata[i];
-
+		
 			if (cur->state == BACKEND_STATE_DOWN) continue;
 	
 			if (cur->connected_clients < min_connected_clients) {
@@ -2806,27 +2848,49 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 	st->backend = backend;
 
-	con->server->addr = backend->addr;
+	/**
+	 * check if we have a connection in the pool for this backend
+	 */
 
-	if (0 != network_mysqld_con_connect(srv, con->server)) {
-		g_message("%s.%d: connecting to backend (%s) failed, marking it as down for ...", __FILE__, __LINE__, con->server->addr.str);
+	if (NULL == (con->server = network_connection_pool_get(backend->pool))) {
+		con->server = network_socket_init();
+		con->server->addr = backend->addr;
 
-		st->backend->state = BACKEND_STATE_DOWN;
-		g_get_current_time(&(st->backend->state_since));
+		if (0 != network_mysqld_con_connect(srv, con->server)) {
+			g_message("%s.%d: connecting to backend (%s) failed, marking it as down for ...", 
+					__FILE__, __LINE__, con->server->addr.str);
 
-		return RET_ERROR_RETRY;
+			st->backend->state = BACKEND_STATE_DOWN;
+			g_get_current_time(&(st->backend->state_since));
+
+			network_socket_free(con->server);
+			con->server = NULL;
+
+			return RET_ERROR_RETRY;
+		}
+
+		if (st->backend->state != BACKEND_STATE_UP) {
+			st->backend->state = BACKEND_STATE_UP;
+			g_get_current_time(&(st->backend->state_since));
+		}
+
+		fcntl(con->server->fd, F_SETFL, O_NONBLOCK | O_RDWR);
+	
+		con->state = CON_STATE_READ_HANDSHAKE;
+	} else {
+		/**
+		 * send the old hand-shake packet
+		 */
+
+		network_queue_append(con->client->send_queue, 
+				con->server->auth_handshake_packet->str, 
+				con->server->auth_handshake_packet->len,
+			       	0); /* packet-id */
+		
+		con->state = CON_STATE_SEND_HANDSHAKE;
 	}
 
 	st->backend->connected_clients++;
-
-	if (st->backend->state != BACKEND_STATE_UP) {
-		st->backend->state = BACKEND_STATE_UP;
-		g_get_current_time(&(st->backend->state_since));
-	}
-
-	fcntl(con->server->fd, F_SETFL, O_NONBLOCK | O_RDWR);
-
-	con->state = CON_STATE_READ_HANDSHAKE;
 
 	return RET_SUCCESS;
 }
@@ -2866,10 +2930,61 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 	return RET_SUCCESS;
 }
 
+/**
+ * handle the events of a idling server connection in the pool 
+ */
+void network_mysqld_con_idle_handle(int event_fd, short events, void *user_data) {
+	network_connection_pool_entry *pool_entry = user_data;
+	network_socket *srv_sock                  = pool_entry->srv_sock;
+	network_connection_pool *pool             = pool_entry->pool;
+
+	if (events == EV_READ) {
+		int b = -1;
+
+		if (ioctl(event_fd, FIONREAD, &b)) {
+			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, strerror(errno));
+		} else if (b != 0) {
+			g_critical("ioctl(%d, FIONREAD, ...) said there is something to read, oops: %d", event_fd, b);
+		} else {
+			/* the server decided the close the connection (wait_timeout, crash, ... )
+			 *
+			 * remove us from the connection pool and close the connection */
+
+			event_del(&(srv_sock->event));
+			network_socket_free(srv_sock);
+			
+			network_connection_pool_remove(pool, pool_entry);
+		}
+	}
+}
+
+
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_cleanup) {
 	plugin_con_state *st = con->plugin_con_state;
+	network_connection_pool_entry *pool_entry = NULL;
 
 	if (st == NULL) return RET_SUCCESS;
+
+	if (con->state == CON_STATE_CLOSE_CLIENT) {
+		/**
+		 * keep the server connection open 
+		 */
+
+		con->server->is_authed = 1;
+
+		/* insert the server socket into the connection pool */
+		pool_entry = network_connection_pool_add(st->backend->pool, con->server);
+
+		event_del(&(con->server->event));
+
+		event_set(&(con->server->event), con->server->fd, EV_READ, network_mysqld_con_idle_handle, pool_entry);
+		event_base_set(srv->event_base, &(con->server->event));
+		event_add(&(con->server->event), NULL);
+
+		/* network_mysqld_con_free would close the server connection on us, 
+		 * let's steal it */
+		con->server = NULL;
+	}
 
 	if (st->backend) {
 		st->backend->connected_clients--;

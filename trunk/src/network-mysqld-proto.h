@@ -19,6 +19,17 @@
 #include <glib.h>
 #include <mysql.h>
 
+#define MYSQLD_PACKET_OK   (0)
+#define MYSQLD_PACKET_RAW  (-6) /* used for proxy.response.type only */
+#define MYSQLD_PACKET_NULL (-5) /* 0xfb */
+                                /* 0xfc */
+                                /* 0xfd */
+#define MYSQLD_PACKET_EOF  (-2) /* 0xfe */
+#define MYSQLD_PACKET_ERR  (-1) /* 0xff */
+
+#define PACKET_LEN_UNSET   (0xffffffff)
+#define PACKET_LEN_MAX     (0x00ffffff)
+
 void network_mysqld_proto_skip(GString *packet, guint *_off, gsize size);
 
 guint64 network_mysqld_proto_get_int_len(GString *packet, guint *_off, gsize size);
@@ -42,5 +53,8 @@ void network_mysqld_proto_field_free(MYSQL_FIELD *field);
 
 GPtrArray *network_mysqld_proto_fields_init(void);
 void network_mysqld_proto_fields_free(GPtrArray *fields);
+
+size_t network_mysqld_proto_get_header(unsigned char *header);
+int network_mysqld_proto_set_header(unsigned char *header, size_t len, unsigned char id);
 
 #endif

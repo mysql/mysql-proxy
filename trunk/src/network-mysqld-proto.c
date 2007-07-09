@@ -271,3 +271,19 @@ void network_mysqld_proto_fields_free(GPtrArray *fields) {
 	g_ptr_array_free(fields, TRUE);
 }
 
+int network_mysqld_proto_set_header(unsigned char *header, size_t len, unsigned char id) {
+	g_assert(len <= PACKET_LEN_MAX);
+
+	header[0] = (len >>  0) & 0xFF;
+	header[1] = (len >>  8) & 0xFF;
+	header[2] = (len >> 16) & 0xFF;
+	header[3] = id;
+
+	return 0;
+}
+
+size_t network_mysqld_proto_get_header(unsigned char *header) {
+	return header[0] | header[1] << 8 | header[2] << 16;
+}
+
+
