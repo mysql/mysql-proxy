@@ -22,7 +22,6 @@ function read_handshake( auth )
 	end
 end
 
-
 function read_auth( auth )
 	print("--> there, look, the client is responding to the server auth packet")
 	print("    username      : " .. auth.username)
@@ -37,13 +36,43 @@ function read_auth( auth )
 	end
 end
 
+function read_auth_result( auth )
+	local state = auth.packet:byte()
+
+	if state == proxy.MYSQLD_PACKET_OK then
+		print("<-- auth ok");
+	elseif state == proxy.MYSQLD_PACKET_ERR then
+		print("<-- auth failed");
+	else
+		print("<-- auth ... don't know: " .. string.format("%q", auth.packet));
+	end
+end
+
 function read_query( packet ) 
 	print("--> someone sent us a query")
 	if packet:byte() == proxy.COM_QUERY then
 		print("    query: " .. packet:sub(2))
+
+		if packet:sub(2) == "SELECT 1" then
+			proxy.queries:append(1, packet)
+		end
 	end
+
 end
 
 function read_query_result( inj ) 
 	print("<-- ... ok, this only gets called when read_query() told us")
+
+	proxy.response = {
+		type = proxy.MYSQLD_PACKET_RAW,
+		packets = { 
+			"\255" ..
+			  "\255\004" .. -- errno
+			  "#" ..
+			  "12S23" ..
+			  "raw, raw, raw"
+		}
+	}
+
+	return proxy.PROXY_SEND_RESULT
 end

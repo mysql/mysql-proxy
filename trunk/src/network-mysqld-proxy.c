@@ -1536,8 +1536,9 @@ static int proxy_injection_get(lua_State *L) {
 	return 1;
 }
 #endif
-static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, network_mysqld_con *con) {
+static int proxy_lua_read_query_result(network_mysqld_con *con) {
 	network_socket *send_sock = con->client;
+	network_socket *recv_sock = con->server;
 	injection *inj = NULL;
 	plugin_con_state *st = con->plugin_con_state;
 
@@ -1565,7 +1566,7 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
 		
 		lua_getfield(L, -1, "read_query_result");
 		if (lua_isfunction(L, -1)) {
-			proxy_stmt_ret ret = PROXY_SEND_RESULT;
+			proxy_stmt_ret ret = PROXY_NO_DECISION;
 			injection **inj_p;
 			GString *packet;
 
@@ -1598,6 +1599,30 @@ static int network_mysqld_con_handle_proxy_resultset(network_mysqld *srv, networ
 
 			switch (ret) {
 			case PROXY_SEND_RESULT:
+				/**
+				 * replace the result-set the server sent us 
+				 */
+				while ((packet = g_queue_pop_head(send_sock->send_queue->chunks))) g_string_free(packet, TRUE);
+				
+				/**
+				 * we are a response to the client packet, hence one packet id more 
+				 */
+				send_sock->packet_id++;
+
+				if (proxy_lua_handle_proxy_response(con)) {
+					/**
+					 * handling proxy.response failed
+					 *
+					 * send a ERR packet in case there was no result-set sent yet
+					 */
+			
+					if (!st->injected.sent_resultset) {
+						network_mysqld_con_send_error(con->client, C("(lua) handling proxy.response failed, check error-log"));
+					}
+				}
+
+				/* fall through */
+			case PROXY_NO_DECISION:
 				if (!st->injected.sent_resultset) {
 					/**
 					 * make sure we send only one result-set per client-query
@@ -2149,6 +2174,92 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	return RET_SUCCESS;
 }
 
+proxy_stmt_ret proxy_lua_read_auth_result(network_mysqld_con *con) {
+	plugin_con_state *st = con->plugin_con_state;
+	proxy_stmt_ret ret = PROXY_NO_DECISION;
+	network_socket *recv_sock = con->server;
+	GList *chunk = recv_sock->recv_queue->chunks->tail;
+	GString *packet = chunk->data;
+
+#ifdef HAVE_LUA_H
+	lua_State *L;
+
+	/* call the lua script to pick a backend
+	 * */
+	lua_register_callback(con);
+
+	if (!st->injected.L) return 0;
+
+	L = st->injected.L;
+
+	g_assert(lua_isfunction(L, -1));
+	lua_getfenv(L, -1);
+	g_assert(lua_istable(L, -1));
+	
+	lua_getfield(L, -1, "read_auth_result");
+	if (lua_isfunction(L, -1)) {
+
+		/* export
+		 *
+		 * every thing we know about it
+		 *  */
+
+		lua_newtable(L);
+
+		lua_pushlstring(L, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE);
+		lua_setfield(L, -2, "packet");
+
+		if (lua_pcall(L, 1, 1, 0) != 0) {
+			g_critical("(read_auth_result) %s", lua_tostring(L, -1));
+
+			lua_pop(L, 1); /* errmsg */
+
+			/* the script failed, but we have a useful default */
+		} else {
+			if (lua_isnumber(L, -1)) {
+				ret = lua_tonumber(L, -1);
+			}
+			lua_pop(L, 1);
+		}
+
+		switch (ret) {
+		case PROXY_NO_DECISION:
+			break;
+		case PROXY_SEND_RESULT:
+			/* answer directly */
+
+			if (proxy_lua_handle_proxy_response(con)) {
+				/**
+				 * handling proxy.response failed
+				 *
+				 * send a ERR packet
+				 */
+		
+				network_mysqld_con_send_error(con->client, C("(lua) handling proxy.response failed, check error-log"));
+			}
+
+			break;
+		default:
+			ret = PROXY_NO_DECISION;
+			break;
+		}
+
+		/* ret should be a index into */
+
+	} else if (lua_isnil(L, -1)) {
+		lua_pop(L, 1); /* pop the nil */
+	} else {
+		g_message("%s.%d: %s", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
+		lua_pop(L, 1); /* pop the ... */
+	}
+	lua_pop(L, 1); /* fenv */
+
+	g_assert(lua_isfunction(L, -1));
+#endif
+	return ret;
+}
+
+
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	GString *packet;
 	GList *chunk;
@@ -2172,11 +2283,24 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 		packet->str[3] = 2;
 	}
 	
-	network_queue_append_chunk(send_sock->send_queue, packet);
+	switch (proxy_lua_read_auth_result(con)) {
+	case PROXY_SEND_RESULT:
+		recv_sock->packet_len = PACKET_LEN_UNSET;
+		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+		
+		break;
+	case PROXY_NO_DECISION:
+		network_queue_append_chunk(send_sock->send_queue, packet);
+
+		break;
+	default:
+		g_error("%s.%d: ... ", __FILE__, __LINE__);
+		break;
+	}
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-
+	
 	con->state = CON_STATE_SEND_AUTH_RESULT;
 
 	return RET_SUCCESS;
@@ -2692,8 +2816,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 			g_get_current_time(&(inj->ts_read_query_result_last));
 		}
 
-		network_mysqld_con_handle_proxy_resultset(srv, con);
-		
+		proxy_lua_read_query_result(con);
+
 		/**
 		 * if the send-queue is empty, we have nothing to send
 		 * and can read the next query */	
