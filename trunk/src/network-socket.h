@@ -20,6 +20,13 @@
 #include "config.h"
 #endif
 
+#ifdef HAVE_SYS_TIME_H
+/**
+ * event.h needs struct timeval and doesn't include sys/time.h itself
+ */
+#include <sys/time.h>
+#endif
+
 #include <sys/socket.h>     /** struct sockaddr */
 
 #ifdef HAVE_NETINET_IN_H
