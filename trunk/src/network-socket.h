@@ -28,6 +28,7 @@
 #endif
 
 #include <sys/socket.h>     /** struct sockaddr */
+#include <sys/types.h>      /** u_char */
 
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>     /** struct sockaddr_in */
