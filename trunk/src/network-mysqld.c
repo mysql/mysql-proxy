@@ -877,6 +877,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_CONNECT_SERVER:
 			switch (plugin_call(srv, con, con->state)) {
 			case RET_SUCCESS:
+				g_assert(con->server);
+
 				break;
 			case RET_ERROR_RETRY:
 				/* hack to force a retry */
@@ -889,15 +891,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				 *
 				 * close the connection
 				 */
-				con->state = CON_STATE_ERROR;
+				con->state = CON_STATE_SEND_ERROR;
 				break;
 			default:
 				g_error("%s.%d: ...", __FILE__, __LINE__);
 				
 				break;
 			}
-
-			g_assert(con->server);
 
 			break;
 		case CON_STATE_READ_HANDSHAKE: {
