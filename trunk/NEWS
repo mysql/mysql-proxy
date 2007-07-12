@@ -19,6 +19,11 @@
   * fixed assertion when connection to the MySQL 6.0.1
   * fixed crash if proxy.connection is used in connect_server()
   * fixed connection-stalling if read_query_result() throws an assert()ion
+  * fixed assertion at COM_SHUTDOWN (#29719)
+  * fixed assertion at login with empty password + empty default db (#29719)
+  * fixed assertion on result-packets like 
+    [ field-len | fields | EOF | ERR ] (#29732)
+  
 
 0.5.1 - 2007-06-30
 
