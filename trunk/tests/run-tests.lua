@@ -66,6 +66,8 @@ local PROXY_TRACE    = os.getenv("PROXY_TRACE")    or ""    -- use it to inject 
 local PROXY_PARAMS   = os.getenv("PROXY_PARAMS")   or ""    -- extra params
 local PROXY_BINPATH  = os.getenv("PROXY_BINPATH")  or builddir .. "/src/mysql-proxy"
 
+local COVERAGE_LCOV  = os.getenv("COVERAGE_LCOV")
+
 --
 -- end of user-vars
 --
@@ -130,6 +132,10 @@ function options_tostring(tbl, sep)
 	return s
 end
 
+function os_execute(cmdline)
+	print("$ " .. cmdline)
+	return os.execute(cmdline)
+end
 
 --- 
 -- run a test
@@ -145,7 +151,7 @@ function run_test(filename)
 		file_empty(PROXY_TMP_LUASCRIPT)
 	end
 
-	return os.execute(MYSQL_TEST_BIN .. " " ..
+	local ret = os_execute(MYSQL_TEST_BIN .. " " ..
 		options_tostring({
 			user     = MYSQL_USER,
 			password = MYSQL_PASSWORD,
@@ -155,6 +161,8 @@ function run_test(filename)
 			["result-file"] = srcdir .. "/r/" .. testname .. ".result"
 		})
 	)
+	
+	return ret
 end
 
 -- the proxy needs the lua-script to exist
@@ -166,6 +174,12 @@ if file_exists(PROXY_PIDFILE) then
 	os.remove(PROXY_PIDFILE)
 end
 
+if COVERAGE_LCOV then
+	-- os_execute(COVERAGE_LCOV .. 
+	--	" --zerocounters --directory ".. srcdir .. "/../src/" )
+end
+
+
 -- start the proxy
 assert(os.execute(PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
 	options_tostring({
@@ -173,14 +187,16 @@ assert(os.execute(PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
 		["proxy-address"]           = PROXY_HOST .. ":" .. PROXY_PORT,
 		["pid-file"]                = PROXY_PIDFILE,
 		["proxy-lua-script"]        = PROXY_TMP_LUASCRIPT,
-	})
+	}) .. " --no-daemon &"
 ))
 
 --
 -- if we have a argument, exectute the named test
 -- otherwise execute all tests we can find
-if arg[1] then
-	exitcode = run_test(arg[1])
+if #arg then
+	for i, a in ipairs(arg) do
+		exitcode = run_test(a)
+	end
 else
 	for file in lfs.dir(srcdir .. "/t/") do
 		local testname = file:match("(.+\.test)$")
@@ -208,6 +224,21 @@ if 0 == os.execute("kill -TERM `cat ".. PROXY_PIDFILE .." `") then
 	end
 end
 os.remove(PROXY_PIDFILE)
+
+if COVERAGE_LCOV then
+	os_execute(COVERAGE_LCOV .. 
+		" --quiet " ..
+		" --capture --directory ".. srcdir .. "/../src/" ..
+		" > " .. srcdir .. "/../tests.coverage.info" )
+
+	os_execute("genhtml " .. 
+		"--show-details " ..
+		"--output-directory " .. srcdir .. "/../coverage/ " ..
+		"--keep-descriptions " ..
+		"--frames " ..
+		srcdir .. "/../tests.coverage.info")
+end
+
 
 if exitcode == 0 then
 	os.exit(0)
