@@ -1181,9 +1181,7 @@ static int proxy_resultset_fields_get(lua_State *L) {
 	return 1;
 }
 
-#ifdef _WIN32
-#define PROXY_ASSERT(cond, fmt, ...) g_assert(cond)
-#else
+#ifndef _WIN32
 #define PROXY_ASSERT(cond, fmt, ...) \
 	if (!(cond)) g_error("%s.%d: assertion (%s) failed: " fmt, __FILE__, __LINE__, #cond, __VA_ARGS__); 
 #endif
@@ -1233,8 +1231,12 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 			 * FIXME: we only support fields in the row-iterator < 16M (packet-len)
 			 */
 			g_assert(field_len <= packet->len + NET_HEADER_SIZE);
+#ifdef _WIN32
+			g_assert(off + field_len <= packet->len + NET_HEADER_SIZE);
+#else
 			PROXY_ASSERT(off + field_len <= packet->len + NET_HEADER_SIZE, 
 					"%u + "F_U64" <= "F_U64, off, field_len, packet->len + NET_HEADER_SIZE);
+#endif
 
 			lua_pushlstring(L, packet->str + off, field_len);
 
