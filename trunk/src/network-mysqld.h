@@ -29,7 +29,12 @@
 
 #include <sys/types.h>
 
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#include <windows.h>
+#include <winsock2.h>
+#endif
 
 #include <mysql.h>
 

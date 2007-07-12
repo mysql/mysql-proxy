@@ -26,6 +26,7 @@
 #include <sys/filio.h>
 #endif
 
+#ifndef _WIN32
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
@@ -33,14 +34,20 @@
 #include <netinet/tcp.h>
 
 #include <netdb.h>
+#include <unistd.h>
+#else
+#include <winsock2.h>
+#define ioctl ioctlsocket
+#endif
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
+#ifdef HAVE_SIGNAL_H
 #include <signal.h>
+#endif
 
 #include <glib.h>
 
