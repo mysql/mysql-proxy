@@ -1184,7 +1184,7 @@ static int proxy_resultset_fields_get(lua_State *L) {
 
 static int proxy_resultset_rows_iter(lua_State *L) {
 	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, lua_upvalueindex(1));
-	guint32 off = 4;
+	guint32 off = NET_HEADER_SIZE; /* skip the packet-len and sequence-number */
 	GString *packet;
 	GPtrArray *fields = res->fields;
 	gsize i;
@@ -1198,6 +1198,16 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	/* if we find the 2nd EOF packet we are done */
 	if (packet->str[off] == MYSQLD_PACKET_EOF &&
 	    packet->len < 10) return 0;
+
+	/* a ERR packet instead of real rows
+	 *
+	 * like "explain select fld3 from t2 ignore index (fld3,not_existing)"
+	 *
+	 * see mysql-test/t/select.test
+	 *  */
+	if (packet->str[off] == MYSQLD_PACKET_ERR) {
+		return 0;
+	}
 
 	lua_newtable(L);
 
