@@ -188,13 +188,14 @@ gchar *network_mysqld_proto_get_string(GString *packet, guint *_off) {
  * @return a pointer to the string in out
  */
 gchar *network_mysqld_proto_get_gstring_len(GString *packet, guint *_off, gsize len, GString *out) {
-	g_assert(*_off < packet->len);
-	if (*_off + len > packet->len) {
-		g_error("packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, *_off, len, packet->len);
-	}
-
 	g_string_truncate(out, 0);
+
 	if (len) {
+		g_assert(*_off < packet->len);
+		if (*_off + len > packet->len) {
+			g_error("packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, *_off, len, packet->len);
+		}
+
 		g_string_append_len(out, packet->str + *_off, len);
 		*_off += len;
 	}
@@ -227,10 +228,7 @@ gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GSt
 	guint64 len;
 
 	len = network_mysqld_proto_decode_lenenc(packet, _off);
-	
-	g_assert(*_off < packet->len);
-	g_assert(*_off + len <= packet->len);
-	
+
 	return network_mysqld_proto_get_gstring_len(packet, _off, len, out);
 }
 
