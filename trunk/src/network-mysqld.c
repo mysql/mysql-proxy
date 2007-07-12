@@ -567,7 +567,7 @@ retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_soc
 
 	for (chunk = con->send_queue->chunks->head; chunk; ) {
 		GString *s = chunk->data;
-		ssize_t len;
+		gssize len;
 
 		g_assert(con->send_queue->offset < s->len);
 
