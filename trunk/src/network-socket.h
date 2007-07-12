@@ -27,8 +27,9 @@
 #include <sys/time.h>
 #endif
 
-#include <sys/socket.h>     /** struct sockaddr */
 #include <sys/types.h>      /** u_char */
+#ifndef _WIN32
+#include <sys/socket.h>     /** struct sockaddr */
 
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>     /** struct sockaddr_in */
@@ -38,17 +39,15 @@
 #ifdef HAVE_SYS_UN_H
 #include <sys/un.h>         /** struct sockaddr_un */
 #endif
-
-#include <glib.h>
-#include <event.h>
-
-#ifndef _WIN32
 /**
  * use closesocket() to close sockets to be compatible with win32
  */
 #define closesocket(x) close(x)
+#else
+#include <winsock2.h>
 #endif
-
+#include <glib.h>
+#include <event.h>
 
 /* a input or output stream */
 typedef struct {
