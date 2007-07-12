@@ -37,6 +37,7 @@
 #include <unistd.h>
 #else
 #include <winsock2.h>
+#include <io.h>
 #define ioctl ioctlsocket
 #endif
 
@@ -225,7 +226,7 @@ void network_mysqld_free(network_mysqld *m) {
  * connect to the proxy backend */
 int network_mysqld_con_set_address(network_address *addr, gchar *address) {
 	gchar *s;
-	uint   port;
+	guint port;
 
 	/* split the address:port */
 	if (NULL != (s = strchr(address, ':'))) {
@@ -422,9 +423,9 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
 
 retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_socket *con, char *dest, size_t we_want) {
 	GList *chunk;
-	ssize_t len;
+	gssize len;
 	network_queue *queue = con->recv_raw_queue;
-	size_t we_have;
+	gsize we_have;
 
 	/**
 	 * 1. we read all we can get into a local buffer,
@@ -437,7 +438,7 @@ retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_sock
 
 		s = g_string_sized_new(con->to_read + 1);
 
-		if (-1 == (len = read(con->fd, s->str, s->allocated_len - 1))) {
+		if (-1 == (len = recv(con->fd, s->str, s->allocated_len - 1, 0))) {
 			g_string_free(s, TRUE);
 			switch (errno) {
 			case EAGAIN:
@@ -570,7 +571,7 @@ retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_soc
 
 		g_assert(con->send_queue->offset < s->len);
 
-		if (-1 == (len = write(con->fd, s->str + con->send_queue->offset, s->len - con->send_queue->offset))) {
+		if (-1 == (len = send(con->fd, s->str + con->send_queue->offset, s->len - con->send_queue->offset, 0))) {
 			switch (errno) {
 			case EAGAIN:
 				return RET_WAIT_FOR_EVENT;
@@ -1364,7 +1365,7 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	socklen_t addr_len;
 	struct sockaddr_in ipv4;
 	int fd;
-
+	int i;
 
 	g_assert(events == EV_READ);
 	g_assert(con->server);
@@ -1374,8 +1375,12 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	if (-1 == (fd = accept(event_fd, (struct sockaddr *)&ipv4, &addr_len))) {
 		return ;
 	}
-
+#ifdef _WIN32
+	i = 1;
+	ioctlsocket(fd, FIONBIO, &i);
+#else
 	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
+#endif
 
 	/* looks like we open a client connection */
 	client_con = network_mysqld_con_init(con->srv);

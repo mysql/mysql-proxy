@@ -23,14 +23,18 @@
 #ifdef HAVE_SIGNAL_H
 #include <signal.h>
 #endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
+
+#ifdef _WIN32
+#include <process.h> /* getpid() */
+#include <io.h>      /* open() */
+#else
+#include <unistd.h>
+#endif
 
 #include <glib.h>
 

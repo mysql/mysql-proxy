@@ -1181,8 +1181,12 @@ static int proxy_resultset_fields_get(lua_State *L) {
 	return 1;
 }
 
+#ifdef _WIN32
+#define PROXY_ASSERT(cond, fmt, ...) g_assert(cond)
+#else
 #define PROXY_ASSERT(cond, fmt, ...) \
 	if (!(cond)) g_error("%s.%d: assertion (%s) failed: " fmt, __FILE__, __LINE__, #cond, __VA_ARGS__); 
+#endif
 
 static int proxy_resultset_rows_iter(lua_State *L) {
 	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, lua_upvalueindex(1));
@@ -3015,6 +3019,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	 */
 
 	if (NULL == (con->server = network_connection_pool_get(backend->pool))) {
+		int i;
+
 		con->server = network_socket_init();
 		con->server->addr = backend->addr;
 
@@ -3036,8 +3042,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 			g_get_current_time(&(st->backend->state_since));
 		}
 
+#ifdef _WIN32
+		i = 1;
+		ioctlsocket(con->server->fd, FIONBIO, &i);
+#else
 		fcntl(con->server->fd, F_SETFL, O_NONBLOCK | O_RDWR);
-	
+#endif
 		con->state = CON_STATE_READ_HANDSHAKE;
 	} else {
 		/**
