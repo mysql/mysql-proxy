@@ -1129,6 +1129,12 @@ static int proxy_resultset_gc_light(lua_State *L) {
 	return 0;
 }
 
+static int proxy_resultset_fields_len(lua_State *L) {
+	GPtrArray *fields = *(GPtrArray **)luaL_checkudata(L, 1, "proxy.resultset.fields");
+        lua_pushinteger(L, fields->len);
+        return 1;
+}
+
 static int proxy_resultset_field_get(lua_State *L) {
 	MYSQL_FIELD *field = *(MYSQL_FIELD **)luaL_checkudata(L, 1, "proxy.resultset.fields.field");
 	const char *key = luaL_checkstring(L, 2);
@@ -1282,6 +1288,8 @@ static int proxy_resultset_get(lua_State *L) {
 			if (1 == luaL_newmetatable(L, "proxy.resultset.fields")) {
 				lua_pushcfunction(L, proxy_resultset_fields_get);         /* (sp += 1) */
 				lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+                                lua_pushcfunction(L, proxy_resultset_fields_len);        /* (sp += 1) */
+                                lua_setfield(L, -2, "__len");                            /* (sp -= 1) */
 			}
 	
 			lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
