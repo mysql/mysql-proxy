@@ -75,13 +75,13 @@ end
 local function dump_connection() 
   print(".== connection ")
  
-  cur_backend_ndx = proxy.connection["backend_ndx"]
+  cur_backend_ndx = assert(proxy.connection["backend_ndx"])
   cur_backend = proxy.servers[cur_backend_ndx]
   
   print("| backend[ndx] = "      .. cur_backend_ndx)
   print("| connected_clients = " .. cur_backend["connected_clients"])
   print("| address = "           .. cur_backend["address"])
-  print("| server-version = "    .. proxy.connection["server_version"])
+  print("| server-version = "    .. proxy.connection["mysqld_version"])
   print("| default-db = "     .. proxy.connection["default_db"])
   print("| thread-id = "      .. proxy.connection["thread_id"])
   print("'== ")
