@@ -446,9 +446,9 @@ static int proxy_connection_get(lua_State *L) {
 		lua_pushinteger(L, con->server->mysqld_version);
 	} else if (0 == strcmp(key, "backend_ndx")) {
 		lua_pushinteger(L, st->backend_ndx);
+	} else {
+		lua_pushnil(L);
 	}
-
-	lua_pushnil(L);
 
 	return 1;
 }
@@ -711,6 +711,7 @@ int lua_register_callback(network_mysqld_con *con) {
 	 * - append(type, query)
 	 * - prepend(type, query)
 	 * - reset()
+	 * - len() and #proxy.queue
 	 *
 	 */
 	if (1 == luaL_newmetatable(L, "proxy.queue")) {
@@ -721,7 +722,9 @@ int lua_register_callback(network_mysqld_con *con) {
 		lua_pushcfunction(L, proxy_queue_reset);
 		lua_setfield(L, -2, "reset");
 		lua_pushcfunction(L, proxy_queue_len);
-		lua_setfield(L, -2, "len");
+		lua_setfield(L, -2, "len");   /* DEPRECATED: */
+		lua_pushcfunction(L, proxy_queue_len);
+		lua_setfield(L, -2, "__len"); /* support #proxy.queue too */
 
 		lua_pushvalue(L, -1); /* meta.__index = meta */
 		lua_setfield(L, -2, "__index");
