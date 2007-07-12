@@ -2566,6 +2566,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		break;
 	case COM_DEBUG:
 	case COM_SET_OPTION:
+	case COM_SHUTDOWN:
 		switch (packet->str[NET_HEADER_SIZE + 0]) {
 		case MYSQLD_PACKET_EOF:
 			is_finished = 1;
@@ -2886,6 +2887,14 @@ static void dumptable(lua_State *L) {
 }
 #endif
 
+/**
+ * connect to a backend
+ *
+ * @return
+ *   RET_SUCCESS        - connected successfully
+ *   RET_ERROR_RETRY    - connecting backend failed, call again to connect to another backend
+ *   RET_ERROR          - no backends available, adds a ERR packet to the client queue
+ */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	plugin_con_state *st = con->plugin_con_state;
 	plugin_srv_state *g = st->global_state;
@@ -2993,7 +3002,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	}
 
 	if (NULL == backend) {
-		g_message("%s.%d: all the backends are down", __FILE__, __LINE__);
+		network_mysqld_con_send_error(con->client, C("(proxy) all backends are down"));
 		return RET_ERROR;
 	}
 
