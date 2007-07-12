@@ -17,6 +17,8 @@
   * fixed len-encoding on proxy.resulsets
   * fixed assertion when all backends are down and we try to connect
   * fixed assertion when connection to the MySQL 6.0.1
+  * fixed crash if proxy.connection is used in connect_server()
+  * fixed connection-stalling if read_query_result() throws an assert()ion
 
 0.5.1 - 2007-06-30
 

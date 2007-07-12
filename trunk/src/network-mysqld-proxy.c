@@ -426,6 +426,11 @@ static int proxy_servers_get(lua_State *L) {
 	return 1;
 }
 
+/**
+ * get the connection information
+ *
+ * note: might be called in connect_server() before con->server is set 
+ */
 static int proxy_connection_get(lua_State *L) {
 	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.connection"); 
 	plugin_con_state *st;
@@ -435,26 +440,12 @@ static int proxy_connection_get(lua_State *L) {
 
 	if (0 == strcmp(key, "default_db")) {
 		lua_pushlstring(L, con->default_db->str, con->default_db->len);
-
-		return 1;
-	}
-
-	if (0 == strcmp(key, "thread_id")) {
+	} else if (0 == strcmp(key, "thread_id")) {
 		lua_pushinteger(L, con->client->thread_id);
-
-		return 1;
-	}
-
-	if (0 == strcmp(key, "server_version")) {
+	} else if (con->server && (0 == strcmp(key, "mysqld_version"))) {
 		lua_pushinteger(L, con->server->mysqld_version);
-
-		return 1;
-	}
-
-	if (0 == strcmp(key, "backend_ndx")) {
+	} else if (0 == strcmp(key, "backend_ndx")) {
 		lua_pushinteger(L, st->backend_ndx);
-
-		return 1;
 	}
 
 	lua_pushnil(L);
@@ -1185,6 +1176,9 @@ static int proxy_resultset_fields_get(lua_State *L) {
 	return 1;
 }
 
+#define PROXY_ASSERT(cond, fmt, ...) \
+	if (!(cond)) g_error("%s.%d: assertion (%s) failed: " fmt, __FILE__, __LINE__, #cond, __VA_ARGS__); 
+
 static int proxy_resultset_rows_iter(lua_State *L) {
 	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, lua_upvalueindex(1));
 	guint32 off = 4;
@@ -1216,8 +1210,12 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 			
 			off += 0;
 		} else {
+			/**
+			 * FIXME: we only support fields in the row-iterator < 16M (packet-len)
+			 */
 			g_assert(field_len <= packet->len + NET_HEADER_SIZE);
-			g_assert(off + field_len <= packet->len + NET_HEADER_SIZE);
+			PROXY_ASSERT(off + field_len <= packet->len + NET_HEADER_SIZE, 
+					"%u + "F_U64" <= "F_U64, off, field_len, packet->len + NET_HEADER_SIZE);
 
 			lua_pushlstring(L, packet->str + off, field_len);
 
@@ -1470,7 +1468,7 @@ static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 
 				lua_pop(L, 1); /* err-msg */
 
-				ret = PROXY_IGNORE_RESULT;
+				ret = PROXY_NO_DECISION;
 			} else {
 				if (lua_isnumber(L, -1)) {
 					ret = lua_tonumber(L, -1);
@@ -2286,6 +2284,9 @@ static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 	
 				break;
 			case PROXY_NO_DECISION:
+				/**
+				 * PROXY_NO_DECISION and PROXY_SEND_QUERY may pick another backend
+				 */
 				break;
 			case PROXY_SEND_QUERY:
 				/* send the injected queries
