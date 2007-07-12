@@ -402,34 +402,32 @@ int main(int argc, char **argv) {
 	signal(SIGPIPE, SIG_IGN);
 
 	if (daemon_mode) {
-		
 		daemonize();
+	}
+#endif
+	if (srv->config.pid_file) {
+		int fd;
+		gchar *pid_str;
 
 		/**
 		 * write the PID file
 		 */
 
-		if (srv->config.pid_file) {
-			int fd;
-			gchar *pid_str;
-
-			if (-1 == (fd = open(srv->config.pid_file, O_WRONLY|O_TRUNC|O_CREAT, 0600))) {
-				g_critical("%s.%d: open(%s) failed: %s", 
-						__FILE__, __LINE__,
-						srv->config.pid_file,
-						strerror(errno));
-				return -1;
-			}
-
-			pid_str = g_strdup_printf("%d", getpid());
-
-			write(fd, pid_str, strlen(pid_str));
-			g_free(pid_str);
-
-			close(fd);
+		if (-1 == (fd = open(srv->config.pid_file, O_WRONLY|O_TRUNC|O_CREAT, 0600))) {
+			g_critical("%s.%d: open(%s) failed: %s", 
+					__FILE__, __LINE__,
+					srv->config.pid_file,
+					strerror(errno));
+			return -1;
 		}
+
+		pid_str = g_strdup_printf("%d", getpid());
+
+		write(fd, pid_str, strlen(pid_str));
+		g_free(pid_str);
+
+		close(fd);
 	}
-#endif
 
 	network_mysqld_init_libevent(srv);
 
