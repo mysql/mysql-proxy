@@ -43,17 +43,19 @@
  */
 #ifdef _WIN32
 volatile int agent_shutdown = 0;
+#define STDERR_FILENO 2
 #else
 volatile sig_atomic_t agent_shutdown = 0;
 #endif
 
+#ifndef _WIN32
 static void signal_handler(int sig) {
 	switch (sig) {
 	case SIGINT: agent_shutdown = 1; break;
 	case SIGTERM: agent_shutdown = 1; break;
 	}
 }
-
+#endif
 static void log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags UNUSED_PARAM(log_level), const gchar *message, gpointer UNUSED_PARAM(user_data)) {
 	write(STDERR_FILENO, message, strlen(message));
 	write(STDERR_FILENO, "\n", 1);
