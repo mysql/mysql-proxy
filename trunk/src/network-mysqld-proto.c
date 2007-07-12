@@ -60,7 +60,9 @@ guint64 network_mysqld_proto_decode_lenenc(GString *s, guint *_off) {
 
 		off += 8;
 	} else {
-		g_assert(0);
+		g_error("%s.%d: bytestream[%d] is %d", 
+			__FILE__, __LINE__,
+			off, bytestream[off]);
 	}
 	off += 1;
 
