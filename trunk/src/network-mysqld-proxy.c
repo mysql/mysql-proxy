@@ -30,6 +30,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#define ioctlsocket ioctl
 #endif
 
 #include <string.h>
@@ -3115,7 +3116,7 @@ void network_mysqld_con_idle_handle(int event_fd, short events, void *user_data)
 	if (events == EV_READ) {
 		int b = -1;
 
-		if (ioctl(event_fd, FIONREAD, &b)) {
+		if (ioctlsocket(event_fd, FIONREAD, &b)) {
 			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, strerror(errno));
 		} else if (b != 0) {
 			g_critical("ioctl(%d, FIONREAD, ...) said there is something to read, oops: %d", event_fd, b);
