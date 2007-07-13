@@ -1420,8 +1420,20 @@ void handle_timeout() {
 void *network_mysqld_thread(void *_srv) {
 	network_mysqld *srv = _srv;
 
-	/* create the connection array */
+#ifdef _WIN32
+	WORD wVersionRequested;
+	WSADATA wsaData;
+	int err;
 
+	wVersionRequested = MAKEWORD( 2, 2 );
+
+	err = WSAStartup( wVersionRequested, &wsaData );
+	if ( err != 0 ) {
+		/* Tell the user that we could not find a usable */
+		/* WinSock DLL.                                  */
+		return NULL;
+	}
+#endif
 
 	/* setup the different handlers */
 
