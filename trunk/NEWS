@@ -23,6 +23,8 @@
   * fixed assertion at login with empty password + empty default db (#29719)
   * fixed assertion on result-packets like 
     [ field-len | fields | EOF | ERR ] (#29732)
+  * fixed compilation on win32
+  * fixed assertion on COM_BINLOG_DUMP (#29764)
   
 
 0.5.1 - 2007-06-30

@@ -2450,6 +2450,17 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	send_sock = con->server;
 	recv_sock = con->client;
 
+	if (con->parse.command == COM_BINLOG_DUMP) {
+		/**
+		 * the binlog dump is different as it doesn't have END packet
+		 *
+		 * FIXME: in 5.0.x a NON_BLOCKING option as added which sends a EOF
+		 */
+		con->state = CON_STATE_READ_QUERY_RESULT;
+
+		return RET_SUCCESS;
+	}
+
 	if (st->injected.queries->length == 0) {
 		con->state = CON_STATE_READ_QUERY;
 
@@ -2825,6 +2836,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 					con->parse.command,
 					con->parse.state.query);
 		}
+		break;
+	case COM_BINLOG_DUMP:
+		/**
+		 * the binlog-dump event stops, forward all packets as we see them
+		 * and keep the command active
+		 */
+		is_finished = 1;
 		break;
 	default:
 		g_error("%s.%d: COM_(0x%02x) is not handled", 
