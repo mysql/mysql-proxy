@@ -1313,6 +1313,9 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			}
 
+			/* if the write failed, don't call the plugin handlers */
+			if (con->state != CON_STATE_SEND_QUERY_RESULT) break;
+
 			switch (plugin_call(srv, con, con->state)) {
 			case RET_SUCCESS:
 				break;
