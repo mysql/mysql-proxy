@@ -75,6 +75,14 @@
 
 #define CRASHME() do { char *_crashme = NULL; *_crashme = 0; } while(0);
 
+typedef enum {
+	PROXY_NO_DECISION,
+	PROXY_SEND_QUERY,
+	PROXY_SEND_RESULT,
+	PROXY_SEND_INJECTION,
+	PROXY_IGNORE_RESULT       /** for read_query_result */
+} proxy_stmt_ret;
+
 typedef enum { 
 	BACKEND_STATE_UNKNOWN, 
 	BACKEND_STATE_UP, 
@@ -100,6 +108,10 @@ typedef struct {
 	guint connected_clients; /**< number of open connections to this backend for SQF */
 } backend_t;
 
+/**
+ * the shared information across all connections 
+ *
+ */
 typedef struct {
 	/**
 	 * our connection pool 
@@ -108,6 +120,9 @@ typedef struct {
 	GPtrArray *backend_master_pool; 
 
 	GTimeVal backend_last_check;
+#ifdef HAVE_LUA_H
+	lua_State *L;            /**< the global lua_State */
+#endif
 } plugin_srv_state;
 
 typedef struct {
@@ -133,6 +148,7 @@ typedef struct {
 		query_status qstat;
 #ifdef HAVE_LUA_H
 		lua_State *L;
+		int L_ref;
 #endif
 		int sent_resultset;    /** make sure we send only one result back to the client */
 	} injected;
@@ -185,6 +201,32 @@ void g_string_free_true(gpointer data) {
 	g_string_free(data, TRUE);
 }
 
+/**
+ * reset the script context of the connection 
+ */
+static void proxy_lua_free_script(plugin_con_state *st) {
+#ifdef HAVE_LUA_H
+	lua_State *L = st->injected.L;
+	plugin_srv_state *g  = st->global_state;
+
+	if (!st->injected.L) return;
+
+	g_assert(lua_isfunction(L, -1));
+	lua_pop(L, 1); /* function */
+
+	g_assert(lua_gettop(L) == 0);
+
+	luaL_unref(g->L, LUA_REGISTRYINDEX, st->injected.L_ref);
+		
+	/**
+	 * clean up our object 
+	 */
+	lua_gc(g->L, LUA_GCCOLLECT, 0);
+
+	st->injected.L = NULL;
+#endif
+}
+
 static plugin_con_state *plugin_con_state_init() {
 	plugin_con_state *st;
 
@@ -200,19 +242,110 @@ static void plugin_con_state_free(plugin_con_state *st) {
 
 	if (!st) return;
 
-#ifdef HAVE_LUA_H
-	if (st->injected.L) {
-		lua_pop(st->injected.L, 1);
-
-		lua_close(st->injected.L);
-		st->injected.L = NULL;
-	}
-#endif
+	proxy_lua_free_script(st);
 	
 	while ((inj = g_queue_pop_head(st->injected.queries))) injection_free(inj);
 	g_queue_free(st->injected.queries);
 
 	g_free(st);
+}
+
+/**
+ * init the global proxy object 
+ */
+static void proxy_lua_init_global_fenv(lua_State *L) {
+	
+	lua_newtable(L); /* my empty environment aka {}              (sp += 1) */
+#define DEF(x) \
+	lua_pushinteger(L, x); \
+	lua_setfield(L, -2, #x);
+	
+	DEF(PROXY_SEND_QUERY);
+	DEF(PROXY_SEND_RESULT);
+	DEF(PROXY_IGNORE_RESULT);
+
+	DEF(MYSQLD_PACKET_OK);
+	DEF(MYSQLD_PACKET_ERR);
+	DEF(MYSQLD_PACKET_RAW);
+
+	DEF(BACKEND_STATE_UNKNOWN);
+	DEF(BACKEND_STATE_UP);
+	DEF(BACKEND_STATE_DOWN);
+
+	DEF(BACKEND_TYPE_UNKNOWN);
+	DEF(BACKEND_TYPE_RW);
+	DEF(BACKEND_TYPE_RO);
+
+	DEF(COM_SLEEP);
+	DEF(COM_QUIT);
+	DEF(COM_INIT_DB);
+	DEF(COM_QUERY);
+	DEF(COM_FIELD_LIST);
+	DEF(COM_CREATE_DB);
+	DEF(COM_DROP_DB);
+	DEF(COM_REFRESH);
+	DEF(COM_SHUTDOWN);
+	DEF(COM_STATISTICS);
+	DEF(COM_PROCESS_INFO);
+	DEF(COM_CONNECT);
+	DEF(COM_PROCESS_KILL);
+	DEF(COM_DEBUG);
+	DEF(COM_PING);
+	DEF(COM_TIME);
+	DEF(COM_DELAYED_INSERT);
+	DEF(COM_CHANGE_USER);
+	DEF(COM_BINLOG_DUMP);
+	DEF(COM_TABLE_DUMP);
+	DEF(COM_CONNECT_OUT);
+	DEF(COM_REGISTER_SLAVE);
+	DEF(COM_STMT_PREPARE);
+	DEF(COM_STMT_EXECUTE);
+	DEF(COM_STMT_SEND_LONG_DATA);
+	DEF(COM_STMT_CLOSE);
+	DEF(COM_STMT_RESET);
+	DEF(COM_SET_OPTION);
+	DEF(COM_STMT_FETCH);
+#ifdef COM_DAEMON
+	/* MySQL 5.1+ */
+	DEF(COM_DAEMON);
+#endif
+	DEF(MYSQL_TYPE_DECIMAL);
+	DEF(MYSQL_TYPE_NEWDECIMAL);
+	DEF(MYSQL_TYPE_TINY);
+	DEF(MYSQL_TYPE_SHORT);
+	DEF(MYSQL_TYPE_LONG);
+	DEF(MYSQL_TYPE_FLOAT);
+	DEF(MYSQL_TYPE_DOUBLE);
+	DEF(MYSQL_TYPE_NULL);
+	DEF(MYSQL_TYPE_TIMESTAMP);
+	DEF(MYSQL_TYPE_LONGLONG);
+	DEF(MYSQL_TYPE_INT24);
+	DEF(MYSQL_TYPE_DATE);
+	DEF(MYSQL_TYPE_TIME);
+	DEF(MYSQL_TYPE_DATETIME);
+	DEF(MYSQL_TYPE_YEAR);
+	DEF(MYSQL_TYPE_NEWDATE);
+	DEF(MYSQL_TYPE_ENUM);
+	DEF(MYSQL_TYPE_SET);
+	DEF(MYSQL_TYPE_TINY_BLOB);
+	DEF(MYSQL_TYPE_MEDIUM_BLOB);
+	DEF(MYSQL_TYPE_LONG_BLOB);
+	DEF(MYSQL_TYPE_BLOB);
+	DEF(MYSQL_TYPE_VAR_STRING);
+	DEF(MYSQL_TYPE_STRING);
+	DEF(MYSQL_TYPE_GEOMETRY);
+	DEF(MYSQL_TYPE_BIT);
+
+	/* cheat with DEF() a bit :) */
+#define PROXY_VERSION PACKAGE_VERSION_ID
+	DEF(PROXY_VERSION);
+#undef DEF
+
+	lua_newtable(L);
+	lua_setfield(L, -2, "global");
+
+	lua_setglobal(L, "proxy");
+
 }
 
 static plugin_srv_state *plugin_srv_state_init() {
@@ -222,8 +355,22 @@ static plugin_srv_state *plugin_srv_state_init() {
 
 	st->backend_master_pool = g_ptr_array_new();
 	st->backend_slave_pool = g_ptr_array_new();
-	
+
+#ifdef HAVE_LUA_H
+	st->L = luaL_newstate();
+	luaL_openlibs(st->L);
+
+	proxy_lua_init_global_fenv(st->L);
+#endif
 	return st;
+}
+
+void plugin_srv_state_free(plugin_srv_state *g) {
+	if (!g) return;
+
+	lua_close(g->L);
+
+	g_free(g);
 }
 
 static backend_t *backend_init() {
@@ -323,21 +470,8 @@ static void g_hash_table_reset_gstring(gpointer UNUSED_PARAM(_key), gpointer _va
 	g_string_truncate(value, 0);
 }
 
-typedef enum {
-	PROXY_NO_DECISION,
-	PROXY_SEND_QUERY,
-	PROXY_SEND_RESULT,
-	PROXY_SEND_INJECTION,
-	PROXY_IGNORE_RESULT       /** for read_query_result */
-} proxy_stmt_ret;
-
 #ifdef HAVE_LUA_H
-lua_State *lua_load_script(const gchar *name) {
-	lua_State *L;
-
-	L = luaL_newstate();
-	luaL_openlibs(L);
-
+lua_State *lua_load_script(lua_State *L, const gchar *name) {
 	if (0 != luaL_loadfile(L, name)) {
 		/* oops, an error, return it */
 		g_warning("luaL_loadfile(%s) failed", name);
@@ -506,181 +640,65 @@ static int proxy_queue_len(lua_State *L) {
 }
 
 
-void lua_init_fenv(lua_State *L) {
-	/**
-	 * we want to create empty environment for our script
-	 *
-	 * setmetatable({}, {__index = _G})
-	 *
-	 * if a function, symbol is not defined in our env, __index will lookup
-	 * in the global env.
-	 *
-	 * all variables created in the script-env will be thrown
-	 * away at the end of the script run.
-	 */
-	lua_newtable(L); /* my empty environment aka {}              (sp += 1) */
-
-	lua_newtable(L); /* my empty environment aka {}              (sp += 1) */
-#define DEF(x) \
-	lua_pushinteger(L, x); \
-	lua_setfield(L, -2, #x);
-	
-	DEF(PROXY_SEND_QUERY);
-	DEF(PROXY_SEND_RESULT);
-	DEF(PROXY_IGNORE_RESULT);
-
-	DEF(MYSQLD_PACKET_OK);
-	DEF(MYSQLD_PACKET_ERR);
-	DEF(MYSQLD_PACKET_RAW);
-
-	DEF(BACKEND_STATE_UNKNOWN);
-	DEF(BACKEND_STATE_UP);
-	DEF(BACKEND_STATE_DOWN);
-
-	DEF(BACKEND_TYPE_UNKNOWN);
-	DEF(BACKEND_TYPE_RW);
-	DEF(BACKEND_TYPE_RO);
-
-	DEF(COM_SLEEP);
-	DEF(COM_QUIT);
-	DEF(COM_INIT_DB);
-	DEF(COM_QUERY);
-	DEF(COM_FIELD_LIST);
-	DEF(COM_CREATE_DB);
-	DEF(COM_DROP_DB);
-	DEF(COM_REFRESH);
-	DEF(COM_SHUTDOWN);
-	DEF(COM_STATISTICS);
-	DEF(COM_PROCESS_INFO);
-	DEF(COM_CONNECT);
-	DEF(COM_PROCESS_KILL);
-	DEF(COM_DEBUG);
-	DEF(COM_PING);
-	DEF(COM_TIME);
-	DEF(COM_DELAYED_INSERT);
-	DEF(COM_CHANGE_USER);
-	DEF(COM_BINLOG_DUMP);
-	DEF(COM_TABLE_DUMP);
-	DEF(COM_CONNECT_OUT);
-	DEF(COM_REGISTER_SLAVE);
-	DEF(COM_STMT_PREPARE);
-	DEF(COM_STMT_EXECUTE);
-	DEF(COM_STMT_SEND_LONG_DATA);
-	DEF(COM_STMT_CLOSE);
-	DEF(COM_STMT_RESET);
-	DEF(COM_SET_OPTION);
-	DEF(COM_STMT_FETCH);
-#ifdef COM_DAEMON
-	/* MySQL 5.1+ */
-	DEF(COM_DAEMON);
-#endif
-	DEF(MYSQL_TYPE_DECIMAL);
-	DEF(MYSQL_TYPE_NEWDECIMAL);
-	DEF(MYSQL_TYPE_TINY);
-	DEF(MYSQL_TYPE_SHORT);
-	DEF(MYSQL_TYPE_LONG);
-	DEF(MYSQL_TYPE_FLOAT);
-	DEF(MYSQL_TYPE_DOUBLE);
-	DEF(MYSQL_TYPE_NULL);
-	DEF(MYSQL_TYPE_TIMESTAMP);
-	DEF(MYSQL_TYPE_LONGLONG);
-	DEF(MYSQL_TYPE_INT24);
-	DEF(MYSQL_TYPE_DATE);
-	DEF(MYSQL_TYPE_TIME);
-	DEF(MYSQL_TYPE_DATETIME);
-	DEF(MYSQL_TYPE_YEAR);
-	DEF(MYSQL_TYPE_NEWDATE);
-	DEF(MYSQL_TYPE_ENUM);
-	DEF(MYSQL_TYPE_SET);
-	DEF(MYSQL_TYPE_TINY_BLOB);
-	DEF(MYSQL_TYPE_MEDIUM_BLOB);
-	DEF(MYSQL_TYPE_LONG_BLOB);
-	DEF(MYSQL_TYPE_BLOB);
-	DEF(MYSQL_TYPE_VAR_STRING);
-	DEF(MYSQL_TYPE_STRING);
-	DEF(MYSQL_TYPE_GEOMETRY);
-	DEF(MYSQL_TYPE_BIT);
-
-	/* cheat with DEF() a bit :) */
-#define PROXY_VERSION PACKAGE_VERSION_ID
-	DEF(PROXY_VERSION);
-#undef DEF
-	/**
-	 * proxy.response knows 3 fields with strict types:
-	 *
-	 * .type = <int>
-	 * .errmsg = <string>
-	 * .resultset = { 
-	 *   fields = { 
-	 *     { type = <int>, name = <string > }, 
-	 *     { ... } }, 
-	 *   rows = { 
-	 *     { ..., ... }, 
-	 *     { ..., ... } }
-	 * }
-	 */
-	lua_newtable(L);
-#if 0
-	lua_newtable(L); /* the meta-table for the response-table    (sp += 1) */
-	lua_pushcfunction(L, response_get);                       /* (sp += 1) */
-	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-	lua_pushcfunction(L, response_set);                       /* (sp += 1) */
-	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-	lua_setmetatable(L, -2); /* tie the metatable to response    (sp -= 1) */
-#endif
-	lua_setfield(L, -2, "response");
-
-	lua_setfield(L, -2, "proxy");
-
-	lua_newtable(L); /* the meta-table for the new env           (sp += 1) */
-	lua_pushvalue(L, LUA_GLOBALSINDEX);                       /* (sp += 1) */
-	lua_setfield(L, -2, "__index"); /* { __index = _G }          (sp -= 1) */
-	lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 1) */
-
-	lua_setfenv(L, -2); /* on the stack should be a modified env (sp -= 1) */
-}
-
-void lua_free_script(lua_State *L) {
-	lua_close(L);
-}
-
-int lua_register_callback(network_mysqld_con *con) {
+static int lua_register_callback(network_mysqld_con *con) {
 	lua_State *L = NULL;
 	plugin_con_state *st = con->plugin_con_state;
+	plugin_srv_state *g  = st->global_state;
 	GQueue **q_p;
 	network_mysqld_con **con_p;
 
 	if (!con->config.proxy.lua_script) return 0;
 
 	if (NULL == st->injected.L) {
-		L = lua_load_script(con->config.proxy.lua_script);
+		/**
+		 * create a side thread for this connection
+		 *
+		 * (this is not pre-emptive, it is just a new stack in the global env)
+		 */
+		L = lua_newthread(g->L);
+
+		/**
+		 * move the thread into the registry to clean up the global stack 
+		 */
+		st->injected.L_ref = luaL_ref(g->L, LUA_REGISTRYINDEX);
+
+		lua_load_script(L, con->config.proxy.lua_script);
 		
 		if (lua_isstring(L, -1)) {
 			g_warning("lua_load_file(%s) failed: %s", con->config.proxy.lua_script, lua_tostring(L, -1));
 
-			lua_pop(L, 1); /* remove the error-msg and the function copy from the stack */
+			lua_pop(L, 1); /* remove the error-msg from the stack */
 	
-			lua_free_script(L);
+			proxy_lua_free_script(st);
 
 			L = NULL;
 		} else if (lua_isfunction(L, -1)) {
-			lua_init_fenv(L);
+			/**
+			 * set the function env */
+			lua_newtable(L); /* my empty environment aka {}              (sp += 1) */
+			lua_newtable(L); /* the meta-table for the new env           (sp += 1) */
 
+			lua_pushvalue(L, LUA_GLOBALSINDEX);                       /* (sp += 1) */
+			lua_setfield(L, -2, "__index"); /* { __index = _G }          (sp -= 1) */
+			lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 1) */
+			lua_setfenv(L, -2); /* on the stack should be a modified env (sp -= 1) */
+			
 			/* cache the script */
 			g_assert(lua_isfunction(L, -1));
 			lua_pushvalue(L, -1);
 
-			st->injected.L = L;
-		
 			/* push the functions on the stack */
 			if (lua_pcall(L, 0, 0, 0) != 0) {
 				g_critical("(lua-error) [%s]\n%s", con->config.proxy.lua_script, lua_tostring(L, -1));
 
-				lua_close(st->injected.L);
-				st->injected.L = NULL;
+				lua_pop(L, 1); /* errmsg */
+			
+				proxy_lua_free_script(st);
 
 				L = NULL;
 			}
+			st->injected.L = L;
+		
 			/* on the stack should be the script now, keep it there */
 		} else {
 			g_error("lua_load_file(%s): returned a %s", con->config.proxy.lua_script, lua_typename(L, lua_type(L, -1)));
@@ -781,6 +799,32 @@ int lua_register_callback(network_mysqld_con *con) {
 	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */
 
 	lua_setfield(L, -2, "servers");
+
+	/**
+	 * proxy.response knows 3 fields with strict types:
+	 *
+	 * .type = <int>
+	 * .errmsg = <string>
+	 * .resultset = { 
+	 *   fields = { 
+	 *     { type = <int>, name = <string > }, 
+	 *     { ... } }, 
+	 *   rows = { 
+	 *     { ..., ... }, 
+	 *     { ..., ... } }
+	 * }
+	 */
+	lua_newtable(L);
+#if 0
+	lua_newtable(L); /* the meta-table for the response-table    (sp += 1) */
+	lua_pushcfunction(L, response_get);                       /* (sp += 1) */
+	lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+	lua_pushcfunction(L, response_set);                       /* (sp += 1) */
+	lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
+	lua_setmetatable(L, -2); /* tie the metatable to response    (sp -= 1) */
+#endif
+	lua_setfield(L, -2, "response");
+
 
 	lua_pop(L, 2); /* fenv + proxy */
 
@@ -3038,7 +3082,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	 */
 
 	if (NULL == (con->server = network_connection_pool_get(backend->pool))) {
-		int i;
+		int ioctlvar;
 
 		con->server = network_socket_init();
 		con->server->addr = backend->addr;
@@ -3062,8 +3106,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		}
 
 #ifdef _WIN32
-		i = 1;
-		ioctlsocket(con->server->fd, FIONBIO, &i);
+		ioctlvar = 1;
+		ioctlsocket(con->server->fd, FIONBIO, &ioctlvar);
 #else
 		fcntl(con->server->fd, F_SETFL, O_NONBLOCK | O_RDWR);
 #endif
@@ -3123,8 +3167,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 
 /**
  * handle the events of a idling server connection in the pool 
+ *
+ * make sure we know about connection close from the server side
+ * - wait_timeout
  */
-void network_mysqld_con_idle_handle(int event_fd, short events, void *user_data) {
+static void network_mysqld_con_idle_handle(int event_fd, short events, void *user_data) {
 	network_connection_pool_entry *pool_entry = user_data;
 	network_socket *srv_sock                  = pool_entry->srv_sock;
 	network_connection_pool *pool             = pool_entry->pool;
@@ -3132,6 +3179,10 @@ void network_mysqld_con_idle_handle(int event_fd, short events, void *user_data)
 	if (events == EV_READ) {
 		int b = -1;
 
+		/**
+		 * FIXME: we have to handle the case that the server really sent use something
+		 * up to now we just ignore it
+		 */
 		if (ioctlsocket(event_fd, FIONREAD, &b)) {
 			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, strerror(errno));
 		} else if (b != 0) {
@@ -3149,7 +3200,15 @@ void network_mysqld_con_idle_handle(int event_fd, short events, void *user_data)
 	}
 }
 
-
+/**
+ * cleanup the proxy specific data on the current connection 
+ *
+ * move the server connection into the connection pool in case it is a 
+ * good client-side close
+ *
+ * @return RET_SUCCESS
+ * @see plugin_call_cleanup
+ */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_cleanup) {
 	plugin_con_state *st = con->plugin_con_state;
 	network_connection_pool_entry *pool_entry = NULL;
@@ -3161,6 +3220,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_cleanup) {
 		 * keep the server connection open 
 		 */
 
+		/* the server connection is still authed */
 		con->server->is_authed = 1;
 
 		/* insert the server socket into the connection pool */

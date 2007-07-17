@@ -17,6 +17,11 @@
 
 --]]
 
+-- init the query-counter if it isn't done yet
+if not proxy.global.query_counter then
+	proxy.global.query_counter = 0
+end
+
 local query_counter = 0
 
 ---
@@ -33,6 +38,7 @@ local query_counter = 0
 --
 function read_query( packet )
 	-- a new query came in in this connection
+	proxy.global.query_counter = proxy.global.query_counter + 1
 	query_counter = query_counter + 1
 
 	if string.byte(packet) == proxy.COM_QUERY then
@@ -81,10 +87,11 @@ function read_query( packet )
 			proxy.response.type = proxy.MYSQLD_PACKET_OK
 			proxy.response.resultset = {
 				fields = { 
+					{ type = proxy.MYSQL_TYPE_LONG, name = "global_query_counter", },
 					{ type = proxy.MYSQL_TYPE_LONG, name = "query_counter", },
 				}, 
 				rows = { 
-					{ query_counter }
+					{ proxy.global.query_counter, query_counter }
 				}
 			}
 
