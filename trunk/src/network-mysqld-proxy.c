@@ -625,6 +625,27 @@ static int proxy_connection_get(lua_State *L) {
 	return 1;
 }
 
+/**
+ * get the connection information
+ *
+ * note: might be called in connect_server() before con->server is set 
+ */
+static int proxy_connection_set(lua_State *L) {
+	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.connection"); 
+	plugin_con_state *st;
+	const char *key = luaL_checkstring(L, 2);
+
+	st = con->plugin_con_state;
+
+	if (0 == strcmp(key, "backend_ndx")) {
+		st->backend_ndx = luaL_checkinteger(L, 3);
+	} else {
+		return luaL_error(L, "proxy.connection.%s is not writable", key);
+	}
+
+	return 0;
+}
+
 static int proxy_queue_append(lua_State *L) {
 	/* we expect 2 parameters */
 	GQueue *q = *(GQueue **)luaL_checkudata(L, 1, "proxy.queue");
@@ -813,6 +834,8 @@ static int lua_register_callback(network_mysqld_con *con) {
 	if (1 == luaL_newmetatable(L, "proxy.connection")) {
 		lua_pushcfunction(L, proxy_connection_get);               /* (sp += 1) */
 		lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+		lua_pushcfunction(L, proxy_connection_set);               /* (sp += 1) */
+		lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
 	}
 
 	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */
@@ -870,7 +893,7 @@ static int lua_register_callback(network_mysqld_con *con) {
  * handle the proxy.response.* table from the lua script
  *
  * proxy.response
- *   .type can be either ERR, OK or nil
+ *   .type can be either ERR, OK or RAW
  *   .resultset (in case of OK)
  *     .fields
  *     .rows
@@ -2292,11 +2315,16 @@ static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 	if (COM_QUERY == command) {
 		/* we need some more data after the COM_QUERY */
 		if (packet->len < NET_HEADER_SIZE + 2) return PROXY_SEND_QUERY;
-		if (0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("LOAD "))) return PROXY_SEND_QUERY;
+
+		/* LOAD DATA INFILE is nasty */
+		if (packet->len - NET_HEADER_SIZE - 1 >= sizeof("LOAD ") - 1 &&
+		    0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("LOAD "))) return PROXY_SEND_QUERY;
 
 		/* don't cover them with injected queries as it trashes the result */
-		if (0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("SHOW ERRORS"))) return PROXY_SEND_QUERY;
-		if (0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("select @@error_count"))) return PROXY_SEND_QUERY;
+		if (packet->len - NET_HEADER_SIZE - 1 >= sizeof("SHOW ERRORS") - 1 &&
+		    0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("SHOW ERRORS"))) return PROXY_SEND_QUERY;
+		if (packet->len - NET_HEADER_SIZE - 1 >= sizeof("select @@error_count") - 1 &&
+		    0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("select @@error_count"))) return PROXY_SEND_QUERY;
 	
 	}
 
@@ -2954,7 +2982,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 }
 
 #ifdef HAVE_LUA_H
-static void dumptable(lua_State *L) {
+/**
+ * dump the content of a lua table
+ */
+static void proxy_lua_dumptable(lua_State *L) {
 	g_assert(lua_istable(L, -1));
 
 	lua_pushnil(L);
@@ -2982,6 +3013,84 @@ static void dumptable(lua_State *L) {
 }
 #endif
 
+static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
+	proxy_stmt_ret ret = PROXY_NO_DECISION;
+
+#ifdef HAVE_LUA_H
+	plugin_con_state *st = con->plugin_con_state;
+	network_socket *recv_sock = con->server;
+	GList *chunk = recv_sock->recv_queue->chunks->tail;
+	GString *packet = chunk->data;
+	lua_State *L;
+
+	/* call the lua script to pick a backend
+	 * */
+	lua_register_callback(con);
+
+	if (!st->injected.L) return 0;
+
+	L = st->injected.L;
+
+	g_assert(lua_isfunction(L, -1));
+	lua_getfenv(L, -1);
+	g_assert(lua_istable(L, -1));
+	
+	lua_getfield(L, -1, "connect_server");
+	if (lua_isfunction(L, -1)) {
+		if (lua_pcall(L, 0, 1, 0) != 0) {
+			g_critical("%s.%d: (connect_server) %s", 
+					__FILE__, __LINE__,
+					lua_tostring(L, -1));
+
+			lua_pop(L, 1); /* errmsg */
+
+			/* the script failed, but we have a useful default */
+		} else {
+			if (lua_isnumber(L, -1)) {
+				ret = lua_tonumber(L, -1);
+			}
+			lua_pop(L, 1);
+		}
+
+		switch (ret) {
+		case PROXY_NO_DECISION:
+			break;
+		case PROXY_SEND_RESULT:
+			/* answer directly */
+
+			if (proxy_lua_handle_proxy_response(con)) {
+				/**
+				 * handling proxy.response failed
+				 *
+				 * send a ERR packet
+				 */
+		
+				network_mysqld_con_send_error(con->client, C("(lua) handling proxy.response failed, check error-log"));
+			}
+
+			break;
+		default:
+			ret = PROXY_NO_DECISION;
+			break;
+		}
+
+		/* ret should be a index into */
+
+	} else if (lua_isnil(L, -1)) {
+		lua_pop(L, 1); /* pop the nil */
+	} else {
+		g_message("%s.%d: %s", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
+		lua_pop(L, 1); /* pop the ... */
+	}
+	lua_pop(L, 1); /* fenv */
+
+	g_assert(lua_isfunction(L, -1));
+#endif
+	return ret;
+}
+
+
+
 /**
  * connect to a backend
  *
@@ -2998,12 +3107,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	guint i;
 	GTimeVal now;
 
-	/**
-	 * we can choose between different back addresses 
-	 *
-	 * prefer SQF (shorted queue first) to load all backends equally
-	 */ 
 	st->backend = NULL;
+	st->backend_ndx = -1;
 
 	g_get_current_time(&now);
 
@@ -3027,73 +3132,46 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		}
 	}
 
-#ifdef HAVE_LUA_H
-	/* call the lua script to pick a backend
-	 * */
-	lua_register_callback(con);
-
-	if (st->injected.L) {
-		lua_State *L = st->injected.L;
-
-		g_assert(lua_isfunction(L, -1));
-		lua_getfenv(L, -1);
-		g_assert(lua_istable(L, -1));
+	switch (proxy_lua_connect_server(con)) {
+	case PROXY_SEND_RESULT:
+		/* we answered directly ... like denial ...
+		 *
+		 * for sure we have something in the send-queue 
+		 *  */
 		
-		lua_getfield(L, -1, "connect_server");
-		if (lua_isfunction(L, -1)) {
-			int ret = 0;
+		return RET_ERROR;
+	case PROXY_NO_DECISION:
+		/* just go on */
 
-			if (lua_pcall(L, 0, 1, 0) != 0) {
-				g_critical("(connect_server) %s", lua_tostring(L, -1));
-
-				lua_pop(L, 1); /* errmsg */
-
-				/* the script failed, but we have a useful default */
-			} else {
-				if (lua_isnumber(L, -1)) {
-					ret = lua_tonumber(L, -1);
-				}
-				lua_pop(L, 1);
-			}
-
-			/* ret should be a index into */
-
-			if (ret < 0 || ret >= g->backend_master_pool->len) {
-				backend = g->backend_master_pool->pdata[0];
-				st->backend_ndx = 0;
-			} else {
-				backend = g->backend_master_pool->pdata[ret];
-				st->backend_ndx = ret;
-			}
-		} else if (lua_isnil(L, -1)) {
-			/* function not defined */
-			lua_pop(L, 1); /* pop the nil */
-		} else {
-			g_message("%s.%d: connect_server() should be function, but is %s", 
-					__FILE__, __LINE__, 
-					lua_typename(L, lua_type(L, -1)));
-
-			lua_pop(L, 1); /* pop the nil */
-		}
-		lua_pop(L, 1); /* fenv */
-
-		g_assert(lua_isfunction(L, -1));
+		break;
+	default:
+		g_error("%s.%d: ... ", __FILE__, __LINE__);
+		break;
 	}
-#endif
 
-	if (!backend) {
-		/**/
+
+	if (st->backend_ndx < 0) {
+		/**
+		 * we can choose between different back addresses 
+		 *
+		 * prefer SQF (shorted queue first) to load all backends equally
+		 */ 
+
 		for (i = 0; i < g->backend_master_pool->len; i++) {
 			backend_t *cur = g->backend_master_pool->pdata[i];
 		
 			if (cur->state == BACKEND_STATE_DOWN) continue;
 	
 			if (cur->connected_clients < min_connected_clients) {
-				backend = cur;
 				st->backend_ndx = i;
 				min_connected_clients = cur->connected_clients;
 			}
 		}
+	} 
+	
+	if (st->backend_ndx >= 0 && 
+	    st->backend_ndx < g->backend_master_pool->len) {
+		backend = g->backend_master_pool->pdata[st->backend_ndx];
 	}
 
 	if (NULL == backend) {
