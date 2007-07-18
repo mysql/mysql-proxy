@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <time.h>
+#include <stdio.h>
 
 #include <errno.h>
 
@@ -250,6 +251,7 @@ static void plugin_con_state_free(plugin_con_state *st) {
 	g_free(st);
 }
 
+#ifdef HAVE_LUA_H
 /**
  * init the global proxy object 
  */
@@ -347,6 +349,7 @@ static void proxy_lua_init_global_fenv(lua_State *L) {
 	lua_setglobal(L, "proxy");
 
 }
+#endif
 
 static plugin_srv_state *plugin_srv_state_init() {
 	plugin_srv_state *g;
@@ -862,7 +865,6 @@ static int lua_register_callback(network_mysqld_con *con) {
 
 	return 0;
 }
-#endif
 
 /**
  * handle the proxy.response.* table from the lua script
@@ -878,11 +880,11 @@ static int lua_register_callback(network_mysqld_con *con) {
  */
 static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	plugin_con_state *st = con->plugin_con_state;
-	lua_State *L = st->injected.L;
 	int resp_type = 1;
 	const char *str;
 	size_t str_len;
 	gsize i;
+	lua_State *L = st->injected.L;
 
 	/**
 	 * on the stack should be the fenv of our function */
@@ -1112,6 +1114,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 
 	return 0;
 }
+#endif
 
 /**
  * turn a GTimeVal into string
@@ -1501,8 +1504,10 @@ static int proxy_injection_get(lua_State *L) {
 }
 #endif
 static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
+#ifdef HAVE_LUA_H
 	network_socket *send_sock = con->client;
 	network_socket *recv_sock = con->server;
+#endif
 	injection *inj = NULL;
 	plugin_con_state *st = con->plugin_con_state;
 	proxy_stmt_ret ret = PROXY_NO_DECISION;
@@ -1642,12 +1647,12 @@ static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
  *         PROXY_NO_DECISION to pass the server packet unmodified
  */
 static proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
+	proxy_stmt_ret ret = PROXY_NO_DECISION; /* send what the server gave us */
+#ifdef HAVE_LUA_H
 	plugin_con_state *st = con->plugin_con_state;
 	network_socket   *recv_sock = con->server;
 	network_socket   *send_sock = con->client;
-	proxy_stmt_ret ret = PROXY_NO_DECISION; /* send what the server gave us */
 
-#ifdef HAVE_LUA_H
 	lua_State *L;
 
 	/* call the lua script to pick a backend
@@ -1935,10 +1940,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 }
 
 static proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
-	plugin_con_state *st = con->plugin_con_state;
 	proxy_stmt_ret ret = PROXY_NO_DECISION;
 
 #ifdef HAVE_LUA_H
+	plugin_con_state *st = con->plugin_con_state;
 	lua_State *L;
 
 	/* call the lua script to pick a backend
@@ -2139,13 +2144,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 }
 
 static proxy_stmt_ret proxy_lua_read_auth_result(network_mysqld_con *con) {
-	plugin_con_state *st = con->plugin_con_state;
 	proxy_stmt_ret ret = PROXY_NO_DECISION;
+
+#ifdef HAVE_LUA_H
+	plugin_con_state *st = con->plugin_con_state;
 	network_socket *recv_sock = con->server;
 	GList *chunk = recv_sock->recv_queue->chunks->tail;
 	GString *packet = chunk->data;
-
-#ifdef HAVE_LUA_H
 	lua_State *L;
 
 	/* call the lua script to pick a backend
