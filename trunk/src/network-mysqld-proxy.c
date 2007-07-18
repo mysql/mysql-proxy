@@ -666,7 +666,17 @@ static int proxy_queue_len(lua_State *L) {
 	return 1;
 }
 
-
+/**
+ * setup the script before we hook function is executed 
+ *
+ * has to be called before any lua_pcall() is called to start a hook function
+ *
+ * - we use a global lua_State which is split into child-states with lua_newthread()
+ * - luaL_ref() moves the state into the registry and cleans up the global stack
+ * - on connection close we call luaL_unref() to hand the thread to the GC
+ *
+ * @see proxy_lua_free_script
+ */
 static int lua_register_callback(network_mysqld_con *con) {
 	lua_State *L = NULL;
 	plugin_con_state *st = con->plugin_con_state;
@@ -1099,31 +1109,10 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 }
 
 /**
- * TODO: port to lua
-
-
-	if (explain_field_len > index_stats->max_used_key_len) {
-		index_stats->max_used_key_len = explain_field_len;
-	}
-
-  - rolling averaging:
-  
-    avg_n+1 = (avg_n * n + (i_n+1)) / (n + 1)
-  
-    n       = used counter
-    avg_n   = avg-used-key-len
-    i_n+1   = the new value
-    avg_n+1 = the new average
-  
-
-	index_stats->avg_used_key_len = 
-		((index_stats->avg_used_key_len * index_stats->used) + 
-		 explain_field_len) / (index_stats->used + 1);
-
-	index_stats->used++;
-*/
-
-
+ * turn a GTimeVal into string
+ *
+ * @return string in ISO notation with micro-seconds
+ */
 static gchar * g_timeval_string(GTimeVal *t1, GString *str) {
 	size_t used_len;
 	
@@ -1140,15 +1129,20 @@ static gchar * g_timeval_string(GTimeVal *t1, GString *str) {
 }
 
 #ifdef HAVE_LUA_H
+/**
+ * parsed result set
+ *
+ * 
+ */
 typedef struct {
-	GQueue *result_queue;
+	GQueue *result_queue;   /**< where the packets are read from */
 
-	GPtrArray *fields;
+	GPtrArray *fields;      /**< the parsed fields */
 
-	GList *rows_chunk_head; /* check*/
-	GList *row;
+	GList *rows_chunk_head; /**< pointer to the EOF packet after the fields */
+	GList *row;             /**< the current row */
 
-	query_status qstat;
+	query_status qstat;     /**< state if this query */
 } proxy_resultset_t;
 
 proxy_resultset_t *proxy_resultset_init() {
@@ -1241,6 +1235,11 @@ static int proxy_resultset_fields_get(lua_State *L) {
 	return 1;
 }
 
+/**
+ * VC++ doesn't like my __VA_ARGS__ up to now 
+ *
+ * if someone finds the switch for C99 compat ...
+ */
 #ifndef _WIN32
 #define PROXY_ASSERT(cond, fmt, ...) \
 	if (!(cond)) g_error("%s.%d: assertion (%s) failed: " fmt, __FILE__, __LINE__, #cond, __VA_ARGS__); 
@@ -1282,7 +1281,7 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 
 		field_len = network_mysqld_proto_decode_lenenc(packet, &off);
 
-		if (field_len == 251) {
+		if (field_len == 251) { /** FIXME: use constant */
 			lua_pushnil(L);
 			
 			off += 0;
