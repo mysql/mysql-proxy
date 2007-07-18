@@ -133,7 +133,6 @@ typedef struct {
 
 	network_mysqld_config config;
 
-	GHashTable *index_usage;
 	struct {
 		guint64 queries;
 	} stats;
@@ -270,8 +269,8 @@ gboolean g_hash_table_true(gpointer UNUSED_PARAM(key), gpointer UNUSED_PARAM(val
 int g_string_lenenc_append(GString *dest, const char *s);
 
 int network_mysqld_con_set_address(network_address *addr, gchar *address);
-int network_mysqld_con_connect(network_mysqld *srv, network_socket *con);
-int network_mysqld_con_bind(network_mysqld *srv, network_socket *con);
+int network_mysqld_con_connect(network_socket *con);
+int network_mysqld_con_bind(network_socket *con);
 
 int network_queue_append(network_queue *queue, const char *data, size_t len, int packet_id);
 int network_queue_append_chunk(network_queue *queue, GString *chunk);
@@ -284,11 +283,12 @@ retval_t network_mysqld_read(network_mysqld *srv, network_socket *con);
 retval_t network_mysqld_write(network_mysqld *srv, network_socket *con);
 retval_t network_mysqld_write_len(network_mysqld *srv, network_socket *con, int send_chunks);
 
-int network_mysqld_server_init(network_mysqld *srv, network_socket *con);
-int network_mysqld_proxy_init(network_mysqld *srv, network_socket *con);
+int network_mysqld_server_init(network_mysqld_con *con);
+int network_mysqld_proxy_init(network_mysqld_con *con);
+void network_mysqld_proxy_free(network_mysqld_con *con);
 
-int network_mysqld_server_connection_init(network_mysqld *srv, network_mysqld_con *con);
-int network_mysqld_proxy_connection_init(network_mysqld *srv, network_mysqld_con *con);
+int network_mysqld_server_connection_init(network_mysqld_con *con);
+int network_mysqld_proxy_connection_init(network_mysqld_con *con);
 
 network_mysqld *network_mysqld_init(void);
 void network_mysqld_init_libevent(network_mysqld *m);

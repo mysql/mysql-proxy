@@ -349,26 +349,31 @@ static void proxy_lua_init_global_fenv(lua_State *L) {
 }
 
 static plugin_srv_state *plugin_srv_state_init() {
-	plugin_srv_state *st;
+	plugin_srv_state *g;
 
-	st = g_new0(plugin_srv_state, 1);
+	g = g_new0(plugin_srv_state, 1);
 
-	st->backend_master_pool = g_ptr_array_new();
-	st->backend_slave_pool = g_ptr_array_new();
+	g->backend_master_pool = g_ptr_array_new();
+	g->backend_slave_pool = g_ptr_array_new();
 
 #ifdef HAVE_LUA_H
-	st->L = luaL_newstate();
-	luaL_openlibs(st->L);
+	g->L = luaL_newstate();
+	luaL_openlibs(g->L);
 
-	proxy_lua_init_global_fenv(st->L);
+	proxy_lua_init_global_fenv(g->L);
 #endif
-	return st;
+	return g;
 }
 
 void plugin_srv_state_free(plugin_srv_state *g) {
 	if (!g) return;
 
+#ifdef HAVE_LUA_H
 	lua_close(g->L);
+#endif
+
+	g_ptr_array_free(g->backend_master_pool, TRUE);
+	g_ptr_array_free(g->backend_slave_pool, TRUE);
 
 	g_free(g);
 }
@@ -3103,7 +3108,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		con->server = network_socket_init();
 		con->server->addr = backend->addr;
 
-		if (0 != network_mysqld_con_connect(srv, con->server)) {
+		if (0 != network_mysqld_con_connect(con->server)) {
 			g_message("%s.%d: connecting to backend (%s) failed, marking it as down for ...", 
 					__FILE__, __LINE__, con->server->addr.str);
 
@@ -3146,34 +3151,50 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	return RET_SUCCESS;
 }
 
-NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
+
+plugin_srv_state *plugin_srv_state_get(network_mysqld *srv) {
 	static plugin_srv_state *global_state = NULL;
+	guint i;
+
+	/**
+	 * the global pool is started once 
+	 */
+
+	if (global_state) return global_state;
+	/* if srv is not set, return the old global-state (used at shutdown) */
+	if (!srv) return global_state;
+
+	global_state = plugin_srv_state_init();
+		
+	/* init the pool */
+	for (i = 0; srv->config.proxy.backend_addresses[i]; i++) {
+		backend_t *backend;
+		gchar *address = srv->config.proxy.backend_addresses[i];
+
+		backend = backend_init();
+
+		if (0 != network_mysqld_con_set_address(&backend->addr, address)) {
+			return NULL;
+		}
+
+		g_ptr_array_add(global_state->backend_master_pool, backend);
+	}
+
+	return global_state;
+}
+
+
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 	plugin_con_state *st = con->plugin_con_state;
 
 	g_assert(con->plugin_con_state == NULL);
 
 	st = plugin_con_state_init();
 
-	if (global_state == NULL) {
-		guint i;
-		global_state = plugin_srv_state_init();
-		
-		/* init the pool */
-		for (i = 0; srv->config.proxy.backend_addresses[i]; i++) {
-			backend_t *backend;
-			gchar *address = srv->config.proxy.backend_addresses[i];
-
-			backend = backend_init();
-
-			if (0 != network_mysqld_con_set_address(&backend->addr, address)) {
-				return RET_ERROR;
-			}
-
-			g_ptr_array_add(global_state->backend_master_pool, backend);
-		}
+	if (NULL == (st->global_state = plugin_srv_state_get(srv))) {
+		return RET_ERROR;
 	}
 
-	st->global_state = global_state;
 	con->plugin_con_state = st;
 	
 	con->state = CON_STATE_CONNECT_SERVER;
@@ -3264,7 +3285,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_cleanup) {
 	return RET_SUCCESS;
 }
 
-int network_mysqld_proxy_connection_init(network_mysqld *UNUSED_PARAM(srv), network_mysqld_con *con) {
+int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
 	con->plugins.con_init                      = proxy_init;
 	con->plugins.con_connect_server            = proxy_connect_server;
 	con->plugins.con_read_handshake            = proxy_read_handshake;
@@ -3282,14 +3303,14 @@ int network_mysqld_proxy_connection_init(network_mysqld *UNUSED_PARAM(srv), netw
  * bind to the proxy-address to listen for client connections we want
  * to forward to one of the backends
  */
-int network_mysqld_proxy_init(network_mysqld *srv, network_socket *con) {
-	gchar *address = srv->config.proxy.address;
+int network_mysqld_proxy_init(network_mysqld_con *con) {
+	gchar *address = con->config.proxy.address;
 
-	if (0 != network_mysqld_con_set_address(&con->addr, address)) {
+	if (0 != network_mysqld_con_set_address(&con->server->addr, address)) {
 		return -1;
 	}
 	
-	if (0 != network_mysqld_con_bind(srv, con)) {
+	if (0 != network_mysqld_con_bind(con->server)) {
 		return -1;
 	}
 
@@ -3297,3 +3318,8 @@ int network_mysqld_proxy_init(network_mysqld *srv, network_socket *con) {
 }
 
 
+void network_mysqld_proxy_free(network_mysqld_con *con) {
+	plugin_srv_state *g = plugin_srv_state_get(NULL);
+
+	plugin_srv_state_free(g);
+}

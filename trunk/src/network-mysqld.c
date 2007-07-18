@@ -91,20 +91,6 @@ void g_list_string_free(gpointer data, gpointer UNUSED_PARAM(user_data)) {
 	g_string_free(data, TRUE);
 }
 
-network_mysqld_index_status *network_mysqld_index_status_init() {
-	network_mysqld_index_status *s;
-
-	s = g_new0(network_mysqld_index_status, 1);
-
-	return s;
-}
-
-void network_mysqld_index_status_free(network_mysqld_index_status *s) {
-	if (!s) return;
-
-	g_free(s);
-}
-
 retval_t plugin_call_cleanup(network_mysqld *srv, network_mysqld_con *con) {
 	NETWORK_MYSQLD_PLUGIN_FUNC(func) = NULL;
 
@@ -153,11 +139,8 @@ void network_mysqld_con_free(network_mysqld_con *con) {
 /**
  * the free functions used by g_hash_table_new_full()
  */
-static void network_mysqld_index_status_free_void(void *s) {
-	network_mysqld_index_status_free(s);
-}
-
 static void network_mysqld_tables_free_void(void *s) {
+	g_message("%s.%d", __FILE__, __LINE__);
 	network_mysqld_table_free(s);
 }
 
@@ -168,7 +151,6 @@ network_mysqld *network_mysqld_init() {
 
 	m->event_base  = NULL;
 
-	m->index_usage = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, network_mysqld_index_status_free_void);
 	m->tables      = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, network_mysqld_tables_free_void);
 	
 	m->cons        = g_ptr_array_new();
@@ -201,7 +183,6 @@ void network_mysqld_free(network_mysqld *m) {
 	g_ptr_array_free(m->cons, TRUE);
 
 	g_hash_table_destroy(m->tables);
-	g_hash_table_destroy(m->index_usage);
 
 	if (m->config.proxy.backend_addresses) {
 		for (i = 0; m->config.proxy.backend_addresses[i]; i++) {
@@ -212,7 +193,7 @@ void network_mysqld_free(network_mysqld *m) {
 
 	if (m->config.proxy.address) g_free(m->config.proxy.address);
 	if (m->config.admin.address) g_free(m->config.admin.address);
-#if 0
+#ifdef HAVE_EVENT_BASE_FREE
 	/* only recent versions have this call */
 	event_base_free(m->event_base);
 #endif
@@ -298,7 +279,7 @@ int network_mysqld_con_set_address(network_address *addr, gchar *address) {
  *
  * @see network_mysqld_set_address 
  */
-int network_mysqld_con_connect(network_mysqld *UNUSED_PARAM(srv), network_socket * con) {
+int network_mysqld_con_connect(network_socket * con) {
 	int val = 1;
 
 	g_assert(con->addr.len);
@@ -327,7 +308,7 @@ int network_mysqld_con_connect(network_mysqld *UNUSED_PARAM(srv), network_socket
 	return 0;
 }
 
-int network_mysqld_con_bind(network_mysqld *UNUSED_PARAM(srv), network_socket * con) {
+int network_mysqld_con_bind(network_socket * con) {
 	int val = 1;
 
 	g_assert(con->addr.len);
@@ -1372,7 +1353,7 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	socklen_t addr_len;
 	struct sockaddr_in ipv4;
 	int fd;
-	int i;
+	int ioctlvar;
 
 	g_assert(events == EV_READ);
 	g_assert(con->server);
@@ -1383,8 +1364,8 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 		return ;
 	}
 #ifdef _WIN32
-	i = 1;
-	ioctlsocket(fd, FIONBIO, &i);
+	ioctlvar = 1;
+	ioctlsocket(fd, FIONBIO, &ioctlvar);
 #else
 	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
 #endif
@@ -1402,10 +1383,10 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 
 	switch (con->config.network_type) {
 	case NETWORK_TYPE_SERVER:
-		network_mysqld_server_connection_init(NULL, client_con);
+		network_mysqld_server_connection_init(client_con);
 		break;
 	case NETWORK_TYPE_PROXY:
-		network_mysqld_proxy_connection_init(NULL, client_con);
+		network_mysqld_proxy_connection_init(client_con);
 		break;
 	default:
 		g_error("%s.%d", __FILE__, __LINE__);
@@ -1426,6 +1407,7 @@ void handle_timeout() {
 
 void *network_mysqld_thread(void *_srv) {
 	network_mysqld *srv = _srv;
+	network_mysqld_con *proxy_con = NULL, *admin_con = NULL;
 
 #ifdef _WIN32
 	WORD wVersionRequested;
@@ -1453,7 +1435,7 @@ void *network_mysqld_thread(void *_srv) {
 		
 		con->server = network_socket_init();
 
-		if (0 != network_mysqld_server_init(srv, con->server)) {
+		if (0 != network_mysqld_server_init(con)) {
 			g_critical("%s.%d: network_mysqld_server_init() failed", __FILE__, __LINE__);
 
 			return NULL;
@@ -1463,6 +1445,8 @@ void *network_mysqld_thread(void *_srv) {
 		event_set(&(con->server->event), con->server->fd, EV_READ|EV_PERSIST, network_mysqld_con_accept, con);
 		event_base_set(srv->event_base, &(con->server->event));
 		event_add(&(con->server->event), NULL);
+		
+		admin_con = con;
 	}
 
 	if (srv->config.proxy.address) {
@@ -1474,7 +1458,7 @@ void *network_mysqld_thread(void *_srv) {
 		
 		con->server = network_socket_init();
 
-		if (0 != network_mysqld_proxy_init(srv, con->server)) {
+		if (0 != network_mysqld_proxy_init(con)) {
 			g_critical("%s.%d: network_mysqld_server_init() failed", __FILE__, __LINE__);
 			return NULL;
 		}
@@ -1483,6 +1467,8 @@ void *network_mysqld_thread(void *_srv) {
 		event_set(&(con->server->event), con->server->fd, EV_READ|EV_PERSIST, network_mysqld_con_accept, con);
 		event_base_set(srv->event_base, &(con->server->event));
 		event_add(&(con->server->event), NULL);
+
+		proxy_con = con;
 	}
 
 	while (!agent_shutdown) {
@@ -1501,6 +1487,28 @@ void *network_mysqld_thread(void *_srv) {
 
 			break;
 		}
+	}
+
+	/**
+	 * cleanup
+	 *
+	 * FIXME: the g_free() should be fixed. Currently the config. struct is shared
+	 * between all connections incl. the addr buffers. We can only free them once.
+	 */
+	if (proxy_con) {
+		network_mysqld_proxy_free(proxy_con);
+
+		g_free(proxy_con->server->addr.str);
+
+		event_del(&(proxy_con->server->event));
+		network_mysqld_con_free(proxy_con);
+	}
+	
+	if (admin_con) {
+		g_free(admin_con->server->addr.str);
+
+		event_del(&(admin_con->server->event));
+		network_mysqld_con_free(admin_con);
 	}
 
 	return NULL;

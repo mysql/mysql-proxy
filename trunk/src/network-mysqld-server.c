@@ -96,11 +96,6 @@ int network_mysqld_con_handle_stmt(network_mysqld *srv, network_mysqld_con *con,
 
 			con->client->packet_id++;
 			network_mysqld_con_send_resultset(con->client, fields, rows);
-		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("delete from index_usage"))) {
-			g_hash_table_foreach_remove(srv->index_usage, g_hash_table_true, NULL);
-		
-			con->client->packet_id++;
-			network_mysqld_con_send_ok(con->client);
 		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("update proxy_config set value=1 where option=\"proxy.profiling\""))) {
 			srv->config.proxy.profiling = 1;
 
@@ -272,7 +267,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 	return RET_SUCCESS;
 }
 
-int network_mysqld_server_connection_init(network_mysqld *UNUSED_PARAM(srv), network_mysqld_con *con) {
+int network_mysqld_server_connection_init(network_mysqld_con *con) {
 	con->plugins.con_init             = server_con_init;
 
 	con->plugins.con_read_auth        = server_read_auth;
@@ -282,16 +277,16 @@ int network_mysqld_server_connection_init(network_mysqld *UNUSED_PARAM(srv), net
 	return 0;
 }
 
-int network_mysqld_server_init(network_mysqld *srv, network_socket *con) {
-	gchar *address = srv->config.admin.address;
+int network_mysqld_server_init(network_mysqld_con *con) {
+	gchar *address = con->config.admin.address;
 
-	if (0 != network_mysqld_con_set_address(&(con->addr), address)) {
-		g_critical("%s.%d: network_mysqld_con_set_address(%s) failed", __FILE__, __LINE__, con->addr.str);
+	if (0 != network_mysqld_con_set_address(&(con->server->addr), address)) {
+		g_critical("%s.%d: network_mysqld_con_set_address(%s) failed", __FILE__, __LINE__, con->server->addr.str);
 		return -1;
 	}
 	
-	if (0 != network_mysqld_con_bind(srv, con)) {
-		g_critical("%s.%d: network_mysqld_con_bind(%s) failed", __FILE__, __LINE__, con->addr.str);
+	if (0 != network_mysqld_con_bind(con->server)) {
+		g_critical("%s.%d: network_mysqld_con_bind(%s) failed", __FILE__, __LINE__, con->server->addr.str);
 		return -1;
 	}
 

@@ -65,62 +65,6 @@ static void log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags UNUSE
 	write(STDERR_FILENO, "\n", 1);
 }
 
-void index_usage_rows(gpointer _key, gpointer _value, gpointer _rows) {
-	GPtrArray *rows = _rows;
-	GPtrArray *row;
-	gchar *key = _key;
-	network_mysqld_index_status *stats = _value;
-
-	row = g_ptr_array_new();
-	g_ptr_array_add(row, g_strdup(key));
-	g_ptr_array_add(row, g_strdup_printf(F_U64, stats->used));
-	g_ptr_array_add(row, g_strdup_printf("%u", stats->max_used_key_len));
-	g_ptr_array_add(row, g_strdup_printf("%.4f", stats->avg_used_key_len));
-	g_ptr_array_add(rows, row);
-}
-
-int index_usage_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
-	MYSQL_FIELD *field;
-	network_mysqld *srv = user_data;
-
-	field = network_mysqld_proto_field_init();
-	field->name = g_strdup("name");
-	field->org_name = g_strdup("name");
-	field->type = FIELD_TYPE_STRING;
-	field->flags = PRI_KEY_FLAG;
-	field->length = 32;
-
-	g_ptr_array_add(fields, field);
-
-	field = network_mysqld_proto_field_init();
-	field->name = g_strdup("used");
-	field->org_name = g_strdup("used");
-	field->type = FIELD_TYPE_LONGLONG;
-	field->flags = NUM_FLAG | UNSIGNED_FLAG;
-	field->length = 11;
-	g_ptr_array_add(fields, field);
-
-	field = network_mysqld_proto_field_init();
-	field->name = g_strdup("max_used_key_len");
-	field->org_name = g_strdup("max_used_key_len");
-	field->type = FIELD_TYPE_LONGLONG;
-	field->flags = NUM_FLAG | UNSIGNED_FLAG;
-	field->length = 11;
-	g_ptr_array_add(fields, field);
-
-	field = network_mysqld_proto_field_init();
-	field->name = g_strdup("avg_used_key_len");
-	field->org_name = g_strdup("avg_used_key_len");
-	field->type = FIELD_TYPE_DOUBLE;
-	field->flags = NUM_FLAG;
-	field->length = 11;
-	g_ptr_array_add(fields, field);
-
-	g_hash_table_foreach(srv->index_usage, index_usage_rows, rows);
-
-	return 0;
-}
-
 int config_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 	/**
 	 * show the current configuration 
@@ -397,11 +341,6 @@ int main(int argc, char **argv) {
 	table->user_data = srv;
 	g_hash_table_insert(srv->tables, g_strdup("proxy_config"), table);
 	
-	table = network_mysqld_table_init();
-	table->select    = index_usage_select;
-	table->user_data = srv;
-	g_hash_table_insert(srv->tables, g_strdup("index_usage"), table);
-
 #ifndef _WIN32	
 	signal(SIGINT,  signal_handler);
 	signal(SIGTERM, signal_handler);
