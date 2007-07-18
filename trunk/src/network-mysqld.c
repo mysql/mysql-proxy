@@ -284,7 +284,9 @@ int network_mysqld_con_set_address(network_address *addr, gchar *address) {
 #endif
 	} else {
 		/* might be a unix socket */
-		g_critical("address has to contain a <ip>:<port>, got '%s'", address);
+		g_critical("%s.%d: network_mysqld_con_set_address(%s) failed: address has to be <ip>:<port> for TCP or a absolute path starting with / for Unix sockets", 
+				__FILE__, __LINE__,
+				address);
 		return -1;
 	}
 
@@ -330,8 +332,10 @@ int network_mysqld_con_bind(network_mysqld *UNUSED_PARAM(srv), network_socket * 
 
 	g_assert(con->addr.len);
 
-	if (-1 == (con->fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))) {
-		g_critical("socket() failed");
+	if (-1 == (con->fd = socket(con->addr.addr.ipv4.sin_family, SOCK_STREAM, 0))) {
+		g_critical("%s.%d: socket(%s) failed: %s", 
+				__FILE__, __LINE__,
+				con->addr.str, strerror(errno));
 		return -1;
 	}
 

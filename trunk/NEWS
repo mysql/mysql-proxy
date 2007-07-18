@@ -9,6 +9,7 @@
   * added support in read_query_result() to overwrite the result-set
   * added connection pooling
   * added a global lua-scope proxy.global.* 
+  * added support for listening UNIX sockets
 
   * fixed decoding of len-encoded ints for 3-byte notation
   * fixed check for glib2 to require at least 2.6.0
