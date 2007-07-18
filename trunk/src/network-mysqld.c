@@ -140,7 +140,6 @@ void network_mysqld_con_free(network_mysqld_con *con) {
  * the free functions used by g_hash_table_new_full()
  */
 static void network_mysqld_tables_free_void(void *s) {
-	g_message("%s.%d", __FILE__, __LINE__);
 	network_mysqld_table_free(s);
 }
 
