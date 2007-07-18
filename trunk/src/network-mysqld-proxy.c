@@ -383,7 +383,15 @@ static backend_t *backend_init() {
 	return b;
 }
 
-
+/**
+ * parse the result-set packet and extract the fields
+ *
+ * @param chunk  list of mysql packets 
+ * @param fields empty array where the fields shall be stored in
+ *
+ * @return NULL if there is no resultset
+ *         pointer to the chunk after the fields (to the EOF packet)
+ */ 
 static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields) {
 	GString *packet = chunk->data;
 	guint8 field_count;
@@ -471,6 +479,13 @@ static void g_hash_table_reset_gstring(gpointer UNUSED_PARAM(_key), gpointer _va
 }
 
 #ifdef HAVE_LUA_H
+/**
+ * load the lua script
+ *
+ * wraps luaL_loadfile and prints warnings when needed
+ *
+ * @see luaL_loadfile
+ */
 lua_State *lua_load_script(lua_State *L, const gchar *name) {
 	if (0 != luaL_loadfile(L, name)) {
 		/* oops, an error, return it */
@@ -490,6 +505,18 @@ lua_State *lua_load_script(lua_State *L, const gchar *name) {
 	return L;
 }
 
+/**
+ * get the info about a backend
+ *
+ * proxy.server[0].
+ *   connected_clients => clients using this backend
+ *   address           => ip:port or unix-path of to the backend
+ *   state             => int(BACKEND_STATE_UP|BACKEND_STATE_DOWN) 
+ *   type              => int(BACKEND_TYPE_RW|BACKEND_TYPE_RO) 
+ *
+ * @return nil or requested information
+ * @see backend_state_t backend_type_t
+ */
 static int proxy_server_get(lua_State *L) {
 	backend_t *backend = *(backend_t **)luaL_checkudata(L, 1, "proxy.backend"); 
 	const char *key = luaL_checkstring(L, 2);
@@ -518,18 +545,18 @@ static int proxy_server_get(lua_State *L) {
 		return 1;
 	}
 
-	g_message("backend[%s] ... not found", key);
-
 	lua_pushnil(L);
 
 	return 1;
 }
 /**
- * proxy.servers[ndx]
+ * get proxy.servers[ndx]
  *
- * returns a (meta)table
+ * get the backend from the array of mysql backends. 
  *
- *  */
+ * @return nil or the backend
+ * @see proxy_server_get
+ */
 static int proxy_servers_get(lua_State *L) {
 	plugin_con_state *st;
 	backend_t *backend; 
@@ -774,19 +801,9 @@ static int lua_register_callback(network_mysqld_con *con) {
 	lua_setfield(L, -2, "connection");
 
 	/**
-	 * proxy.servers is partially writable
+	 * register proxy.servers[]
 	 *
-	 * .server_ip      = ... [RO]   (for debug)
-	 * .active_clients = <int> [RO] (used for SQF)
-	 * .state          = "up"|"down" [RO] ("up", we can send connection to this host)
-	 * .last_checked   = <unix-timestamp> [RO]
-	 *
-	 * all other fields are user dependent and are read-writable
-	 *
-	 * ... can be used to
-	 * - implement the trx-id via replication logging
-	 * - build a query cache which is invalided via replication 
-	 *
+	 * @see proxy_servers_get()
 	 */
 
 	con_p = lua_newuserdata(L, sizeof(con));
