@@ -306,13 +306,16 @@ static void proxy_lua_init_global_fenv(lua_State *L) {
 	DEF(COM_STMT_CLOSE);
 	DEF(COM_STMT_RESET);
 	DEF(COM_SET_OPTION);
+#if MYSQL_VERSION_ID >= 50000
 	DEF(COM_STMT_FETCH);
-#ifdef COM_DAEMON
-	/* MySQL 5.1+ */
+#if MYSQL_VERSION_ID >= 50100
 	DEF(COM_DAEMON);
 #endif
+#endif
 	DEF(MYSQL_TYPE_DECIMAL);
+#if MYSQL_VERSION_ID >= 50000
 	DEF(MYSQL_TYPE_NEWDECIMAL);
+#endif
 	DEF(MYSQL_TYPE_TINY);
 	DEF(MYSQL_TYPE_SHORT);
 	DEF(MYSQL_TYPE_LONG);
@@ -336,7 +339,9 @@ static void proxy_lua_init_global_fenv(lua_State *L) {
 	DEF(MYSQL_TYPE_VAR_STRING);
 	DEF(MYSQL_TYPE_STRING);
 	DEF(MYSQL_TYPE_GEOMETRY);
+#if MYSQL_VERSION_ID >= 50000
 	DEF(MYSQL_TYPE_BIT);
+#endif
 
 	/* cheat with DEF() a bit :) */
 #define PROXY_VERSION PACKAGE_VERSION_ID
@@ -1325,7 +1330,7 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 			g_assert(off + field_len <= packet->len + NET_HEADER_SIZE);
 #else
 			PROXY_ASSERT(off + field_len <= packet->len + NET_HEADER_SIZE, 
-					"%u + "F_U64" <= "F_U64, off, field_len, packet->len + NET_HEADER_SIZE);
+					"%u + "F_U64" <= "F_SIZE_T, off, field_len, packet->len + NET_HEADER_SIZE);
 #endif
 
 			lua_pushlstring(L, packet->str + off, field_len);
@@ -2713,6 +2718,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 			break;
 		}
 		break;
+#if MYSQL_VERSION_ID >= 50000
 	case COM_STMT_FETCH:
 		/*  */
 		switch (packet->str[NET_HEADER_SIZE + 0]) {
@@ -2728,6 +2734,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 			break;
 		}
 		break;
+#endif
 	case COM_QUIT: /* sometimes we get a packet before the connection closes */
 	case COM_STATISTICS:
 		/* just one packet, no EOF */
@@ -2859,11 +2866,18 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 
 				break;
 			case MYSQLD_PACKET_EOF:
+#if MYSQL_VERSION_ID >= 50000
+				/**
+				 * in 5.0 we have CURSORs which have no rows, just a field definition
+				 */
 				if (packet->str[NET_HEADER_SIZE + 3] & SERVER_STATUS_CURSOR_EXISTS) {
 					is_finished = 1;
 				} else {
 					con->parse.state.query = PARSE_COM_QUERY_RESULT;
 				}
+#else
+				con->parse.state.query = PARSE_COM_QUERY_RESULT;
+#endif
 				break;
 			default:
 				break;

@@ -23,6 +23,19 @@
 #endif
 #include <mysql.h>
 
+/**
+ * 4.1 uses other defines
+ *
+ * this should be one step to get closer to backward-compatibility
+ */
+#if MYSQL_VERSION_ID < 50000
+#define COM_STMT_EXECUTE        COM_EXECUTE
+#define COM_STMT_PREPARE        COM_PREPARE
+#define COM_STMT_CLOSE          COM_CLOSE_STMT
+#define COM_STMT_SEND_LONG_DATA COM_LONG_DATA
+#define COM_STMT_RESET          COM_RESET_STMT
+#endif
+
 #define MYSQLD_PACKET_OK   (0)
 #define MYSQLD_PACKET_RAW  (-6) /* used for proxy.response.type only */
 #define MYSQLD_PACKET_NULL (-5) /* 0xfb */

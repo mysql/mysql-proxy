@@ -58,23 +58,6 @@
 #include "network-mysqld-proto.h"
 #include "network-conn-pool.h"
 
-/**
- * 4.1 uses other defines
- *
- * this should be one step to get closer to backward-compatibility
- */
-#if defined(COM_EXECUTE)    && !defined(COM_STMT_EXECUTE) && \
-    defined(COM_PREPARE)    && !defined(COM_STMT_PREPARE) && \
-    defined(COM_CLOSE_STMT) && !defined(COM_STMT_CLOSE) && \
-    defined(COM_LONG_DATA)  && !defined(COM_STMT_SEND_LONG_DATA) && \
-    defined(COM_RESET_STMT) && !defined(COM_STMT_RESET)
-#define COM_STMT_EXECUTE        COM_EXECUTE
-#define COM_STMT_PREPARE        COM_PREPARE
-#define COM_STMT_CLOSE          COM_CLOSE_STMT
-#define COM_STMT_SEND_LONG_DATA COM_LONG_DATA
-#define COM_STMT_RESET          COM_RESET_STMT
-#endif
-
 #ifdef _WIN32
 extern volatile int agent_shutdown;
 #else
