@@ -109,14 +109,14 @@ If lua isn't shipped with a lua.pc file for pkg-config we need to override the
 pkg-config checks:
 
   $ ./configure \
-    LUA_CFLAGS="-I/path/to/lua.h" \
-    LUA_LDFLAGS="-L/path/to/liblua.so -llua"
+    LUA_CFLAGS="-I/directory/of/lua.h" \
+    LUA_LDFLAGS="-L/directory/of/liblua.so -llua"
 
 In case libevent is not detected correctly, you should set LDFLAGS and CPPFLAGS:
 
   $ ./configure \
-    LDFLAGS="-L/path/to/libevent.so" \
-    CPPFLAGS="-I/path/to/event.h"
+    LDFLAGS="-L/directory/of/libevent.so -levent" \
+    CPPFLAGS="-I/directory/of/event.h"
 
 Building
 ========
