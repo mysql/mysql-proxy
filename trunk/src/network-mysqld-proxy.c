@@ -3278,6 +3278,14 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		break;
 	}
 
+	if (st->backend_ndx >= 0 && 
+	    st->backend_ndx < g->backend_pool->len) {
+		backend_t *cur = g->backend_pool->pdata[st->backend_ndx];
+
+		if (cur->state == BACKEND_STATE_DOWN) {
+			st->backend_ndx = -1;
+		}
+	}
 
 	if (st->backend_ndx < 0) {
 		/**
