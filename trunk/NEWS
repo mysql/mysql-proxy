@@ -10,6 +10,8 @@
   * added connection pooling
   * added a global lua-scope proxy.global.* 
   * added support for listening UNIX sockets
+  * added handling of proxy.connection.backend_ndx in connect_server() 
+    and read_query() aka read/write splitting
 
   * fixed decoding of len-encoded ints for 3-byte notation
   * fixed check for glib2 to require at least 2.6.0
