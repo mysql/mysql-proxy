@@ -2441,6 +2441,102 @@ static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 	return PROXY_NO_DECISION;
 }
 
+/**
+ * handle the events of a idling server connection in the pool 
+ *
+ * make sure we know about connection close from the server side
+ * - wait_timeout
+ */
+static void network_mysqld_con_idle_handle(int event_fd, short events, void *user_data) {
+	network_connection_pool_entry *pool_entry = user_data;
+	network_socket *srv_sock                  = pool_entry->srv_sock;
+	network_connection_pool *pool             = pool_entry->pool;
+
+	if (events == EV_READ) {
+		int b = -1;
+
+		/**
+		 * FIXME: we have to handle the case that the server really sent use something
+		 * up to now we just ignore it
+		 */
+		if (ioctlsocket(event_fd, FIONREAD, &b)) {
+			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, strerror(errno));
+		} else if (b != 0) {
+			g_critical("ioctl(%d, FIONREAD, ...) said there is something to read, oops: %d", event_fd, b);
+		} else {
+			/* the server decided the close the connection (wait_timeout, crash, ... )
+			 *
+			 * remove us from the connection pool and close the connection */
+
+			event_del(&(srv_sock->event));
+			network_socket_free(srv_sock);
+			
+			network_connection_pool_remove(pool, pool_entry);
+		}
+	}
+}
+
+
+/**
+ * swap the server connection with a connection from
+ * the connection pool
+ *
+ * we can only switch backends if we have a authed connection in the pool.
+ *
+ * @return NULL if swapping failed
+ *         the new backend on success
+ */
+static network_socket *proxy_connection_pool_swap(network_mysqld_con *con) {
+	backend_t *backend = NULL;
+	network_socket *send_sock, *pool_sock;
+	plugin_con_state *st = con->plugin_con_state;
+	plugin_srv_state *g = st->global_state;
+	network_mysqld *srv = con->srv;
+	network_connection_pool_entry *pool_entry = NULL;
+
+	/*
+	 * we can only change to another backend if the backend is already
+	 * in the connection pool and connected
+	 */
+
+	if (st->backend_ndx < 0 || 
+	    st->backend_ndx >= g->backend_master_pool->len) {
+		/* backend_ndx is out of range */
+		return NULL;
+	} 
+
+	backend = g->backend_master_pool->pdata[st->backend_ndx];
+
+	if (NULL == (send_sock = network_connection_pool_get(backend->pool))) {
+		/**
+		 * no connections in the pool
+		 */
+		return NULL;
+	}
+
+	/* the backend is up and cool, take and move the current backend into the pool */
+
+	/* the server connection is still authed */
+	con->server->is_authed = 1;
+
+	/* insert the server socket into the connection pool */
+	pool_entry = network_connection_pool_add(st->backend->pool, con->server);
+
+	event_del(&(con->server->event));
+
+	event_set(&(con->server->event), con->server->fd, EV_READ, network_mysqld_con_idle_handle, pool_entry);
+	event_base_set(srv->event_base, &(con->server->event));
+	event_add(&(con->server->event), NULL);
+
+	/* the server connection is now in the pool.
+	 * 
+	 * make sure that no one is using it */
+	con->server = NULL;
+
+	st->backend = backend;
+
+	return send_sock;
+}
 
 /**
  * gets called after a query has been read
@@ -2456,6 +2552,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	network_socket *recv_sock, *send_sock;
 	plugin_con_state *st = con->plugin_con_state;
 	int proxy_query = 1;
+	proxy_stmt_ret ret;
+	gint old_backend_ndx;
 
 	send_sock = con->server;
 	recv_sock = con->client;
@@ -2473,7 +2571,19 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 
 	con->parse.len = recv_sock->packet_len;
 
-	switch (proxy_lua_read_query(con)) {
+	old_backend_ndx = st->backend_ndx;
+	ret = proxy_lua_read_query(con);
+
+	if (old_backend_ndx != st->backend_ndx) {
+		if (NULL == (send_sock = proxy_connection_pool_swap(con))) {
+			st->backend_ndx = old_backend_ndx;
+			send_sock = con->server;
+		} else {
+			con->server = send_sock;
+		}
+	}
+
+	switch (ret) {
 	case PROXY_NO_DECISION:
 	case PROXY_SEND_QUERY:
 		/* no injection, pass on the chunk as is */
@@ -3300,41 +3410,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 }
 
 /**
- * handle the events of a idling server connection in the pool 
- *
- * make sure we know about connection close from the server side
- * - wait_timeout
- */
-static void network_mysqld_con_idle_handle(int event_fd, short events, void *user_data) {
-	network_connection_pool_entry *pool_entry = user_data;
-	network_socket *srv_sock                  = pool_entry->srv_sock;
-	network_connection_pool *pool             = pool_entry->pool;
-
-	if (events == EV_READ) {
-		int b = -1;
-
-		/**
-		 * FIXME: we have to handle the case that the server really sent use something
-		 * up to now we just ignore it
-		 */
-		if (ioctlsocket(event_fd, FIONREAD, &b)) {
-			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, strerror(errno));
-		} else if (b != 0) {
-			g_critical("ioctl(%d, FIONREAD, ...) said there is something to read, oops: %d", event_fd, b);
-		} else {
-			/* the server decided the close the connection (wait_timeout, crash, ... )
-			 *
-			 * remove us from the connection pool and close the connection */
-
-			event_del(&(srv_sock->event));
-			network_socket_free(srv_sock);
-			
-			network_connection_pool_remove(pool, pool_entry);
-		}
-	}
-}
-
-/**
  * cleanup the proxy specific data on the current connection 
  *
  * move the server connection into the connection pool in case it is a 
@@ -3345,11 +3420,11 @@ static void network_mysqld_con_idle_handle(int event_fd, short events, void *use
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_cleanup) {
 	plugin_con_state *st = con->plugin_con_state;
-	network_connection_pool_entry *pool_entry = NULL;
 
 	if (st == NULL) return RET_SUCCESS;
 
 	if (con->state == CON_STATE_CLOSE_CLIENT) {
+		network_connection_pool_entry *pool_entry = NULL;
 		/**
 		 * keep the server connection open 
 		 */

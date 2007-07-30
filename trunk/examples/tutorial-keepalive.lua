@@ -1,6 +1,13 @@
 
 local is_in_transaction = 0
 
+function connect_server() 
+	-- make sure that we connect to each backend at least ones to 
+	-- keep the connections to the servers alive
+	--
+	-- on read_query we can switch the backends again to another backend
+end
+
 function read_query( packet ) 
 	if packet:byte() == proxy.COM_QUIT then
 		proxy.response = {
