@@ -1,5 +1,6 @@
 
 local is_in_transaction = 0
+local is_debug = false
 
 function connect_server() 
 	-- make sure that we connect to each backend at least ones to 
@@ -7,16 +8,21 @@ function connect_server()
 	--
 	-- on read_query we can switch the backends again to another backend
 
-	print()
-	print("[connect_server] ")
+	if is_debug then
+		print()
+		print("[connect_server] ")
+	end
 
 	for i = 1, #proxy.servers do
 		local s = proxy.servers[i]
-		print("  [".. i .."].connected_clients = " .. s.connected_clients)
-		print("  [".. i .."].idling_connections = " .. s.idling_connections)
-		print("  [".. i .."].type = " .. s.type)
+		if is_debug then
+			print("  [".. i .."].connected_clients = " .. s.connected_clients)
+			print("  [".. i .."].idling_connections = " .. s.idling_connections)
+			print("  [".. i .."].type = " .. s.type)
+			print("  [".. i .."].state = " .. s.state)
+		end
 
-		if s.idling_connections == 0 then
+		if s.idling_connections == 0 and s.state ~= 2 then
 			proxy.connection.backend_ndx = i
 			break
 		end
@@ -24,8 +30,11 @@ function connect_server()
 end
 
 function read_query( packet ) 
-	print("[read_query]")
-	print("  authed backend = " .. proxy.connection.backend_ndx)
+	if is_debug then
+		print("[read_query]")
+		print("  authed backend = " .. proxy.connection.backend_ndx)
+		print("  used db = " .. proxy.connection.default_db)
+	end
 
 	if packet:byte() == proxy.COM_QUIT then
 		proxy.response = {
@@ -41,19 +50,31 @@ function read_query( packet )
 	if is_in_transaction == 0 and
 	   packet:byte() == proxy.COM_QUERY and
 	   packet:sub(2, 7) == "SELECT" then
+		local max_conns = -1
+		local max_conns_ndx = 0
+
 		for i = 1, #proxy.servers do
 			local s = proxy.servers[i]
 
 			if s.type == 2 and s.idling_connections > 0 then
-				proxy.connection.backend_ndx = i
-				break
+				if max_conns == -1 or 
+				   s.connected_clients < max_conns then
+					max_conns = s.connected_clients
+					max_conns_ndx = i
+				end
 			end
 		end
 		-- send to slave
-		print("  sending ".. string.format("%q", packet:sub(2)) .. " to slave: " .. proxy.connection.backend_ndx);
+		if max_conns_ndx > 0 then
+			proxy.connection.backend_ndx = max_conns_ndx
+			proxy.queries:prepend(2, "\002" .. proxy.connection.default_db)
+			print("  sending ".. string.format("%q", packet:sub(2)) .. " to slave: " .. proxy.connection.backend_ndx);
+		end
 	else
 		-- send to master
-		print("  sending to master: " .. proxy.connection.backend_ndx);
+		if is_debug then
+			print("  sending to master: " .. proxy.connection.backend_ndx);
+		end
 	end
 
 	return proxy.PROXY_SEND_QUERY
@@ -63,6 +84,9 @@ function read_query_result( inj )
 	local res      = assert(inj.resultset)
   	local flags    = res.flags
 
+	if inj.id ~= 1 then
+		return proxy.PROXY_IGNORE_RESULT
+	end
 	is_in_transaction = flags.in_trans
 end
 
