@@ -2157,6 +2157,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 			 *
 			 * transform the auth-packet into a COM_CHANGE_USER
 			 */
+
+			g_string_free(com_change_user, TRUE);
 		} else {
 			network_queue_append_chunk(send_sock->send_queue, packet);
 		}
