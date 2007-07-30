@@ -103,39 +103,37 @@ typedef enum {
 } retval_t;
 
 /**
+ * configuration of the sub-modules
+ * 
  * TODO: move sub-structs into the plugins 
  */
 typedef struct {
 	struct {
-		gchar *address;
+		gchar *address;                   /**< listening address of the admin-server */
 	} admin;
 
 	struct {
-		gchar *address;
-		gchar *read_only_address;         /** all connections coming in on this port are read-only (to the slaves) */
+		gchar *address;                   /**< listening address of the proxy */
 
-		gchar **backend_addresses;        /** write master backends */
+		gchar **backend_addresses;        /**<    read-write backends */
+		gchar **read_only_backend_addresses; /**< read-only  backends */
 
-		gint fix_bug_25371;
+		gint fix_bug_25371;               /**< suppress the second ERR packet of bug #25371 */
 
-		gint profiling;
+		gint profiling;                   /**< skips the execution of the read_query() function */
 		
-		gchar *lua_script;
+		gchar *lua_script;                /**< script to load at the start the connection */
 	} proxy;
 
 	enum { NETWORK_TYPE_SERVER, NETWORK_TYPE_PROXY } network_type;
 
-	gchar *pid_file;
+	gchar *pid_file;                          /**< write the PID to this file at startup */
 } network_mysqld_config;
 
 typedef struct {
 	struct event_base *event_base;
 
 	network_mysqld_config config;
-
-	struct {
-		guint64 queries;
-	} stats;
 
 	GPtrArray *cons;
 	GHashTable *tables;

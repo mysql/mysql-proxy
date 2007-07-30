@@ -115,10 +115,11 @@ typedef struct {
  */
 typedef struct {
 	/**
-	 * our connection pool 
+	 * our pool if backends
+	 *
+	 * GPtrArray<backend_t>
 	 */
-	GPtrArray *backend_slave_pool;
-	GPtrArray *backend_master_pool; 
+	GPtrArray *backend_pool; 
 
 	GTimeVal backend_last_check;
 #ifdef HAVE_LUA_H
@@ -361,8 +362,7 @@ static plugin_srv_state *plugin_srv_state_init() {
 
 	g = g_new0(plugin_srv_state, 1);
 
-	g->backend_master_pool = g_ptr_array_new();
-	g->backend_slave_pool = g_ptr_array_new();
+	g->backend_pool = g_ptr_array_new();
 
 #ifdef HAVE_LUA_H
 	g->L = luaL_newstate();
@@ -380,8 +380,7 @@ void plugin_srv_state_free(plugin_srv_state *g) {
 	lua_close(g->L);
 #endif
 
-	g_ptr_array_free(g->backend_master_pool, TRUE);
-	g_ptr_array_free(g->backend_slave_pool, TRUE);
+	g_ptr_array_free(g->backend_pool, TRUE);
 
 	g_free(g);
 }
@@ -536,29 +535,17 @@ static int proxy_server_get(lua_State *L) {
 
 	if (0 == strcmp(key, "connected_clients")) {
 		lua_pushinteger(L, backend->connected_clients);
-		
-		return 1;
-	}
-
-	if (0 == strcmp(key, "address")) {
+	} else if (0 == strcmp(key, "address")) {
 		lua_pushstring(L, backend->addr.str);
-		
-		return 1;
-	}
-
-	if (0 == strcmp(key, "state")) {
+	} else if (0 == strcmp(key, "state")) {
 		lua_pushinteger(L, backend->state);
-		
-		return 1;
-	}
-
-	if (0 == strcmp(key, "type")) {
+	} else if (0 == strcmp(key, "type")) {
 		lua_pushinteger(L, backend->type);
-		
-		return 1;
+	} else if (0 == strcmp(key, "idling_connections")) {
+		lua_pushinteger(L, backend->pool->entries->len);
+	} else {
+		lua_pushnil(L);
 	}
-
-	lua_pushnil(L);
 
 	return 1;
 }
@@ -576,18 +563,18 @@ static int proxy_servers_get(lua_State *L) {
 	backend_t **backend_p;
 
 	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.servers"); 
-	int backend_ndx = luaL_checkinteger(L, 2);
+	int backend_ndx = luaL_checkinteger(L, 2) - 1; /** lua is indexes from 1, C from 0 */
 
 	st = con->plugin_con_state;
 
 	if (backend_ndx < 0 ||
-	    backend_ndx >= st->global_state->backend_master_pool->len) {
+	    backend_ndx >= st->global_state->backend_pool->len) {
 		lua_pushnil(L);
 
 		return 1;
 	}
 
-	backend = st->global_state->backend_master_pool->pdata[backend_ndx];
+	backend = st->global_state->backend_pool->pdata[backend_ndx];
 
 	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneat proxy.servers[ndx] */
 	*backend_p = backend;
@@ -602,6 +589,18 @@ static int proxy_servers_get(lua_State *L) {
 
 	return 1;
 }
+
+static int proxy_servers_len(lua_State *L) {
+	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.servers"); 
+	plugin_con_state *st;
+
+	st = con->plugin_con_state;
+
+        lua_pushinteger(L, st->global_state->backend_pool->len);
+
+        return 1;
+}
+
 
 /**
  * get the connection information
@@ -622,7 +621,7 @@ static int proxy_connection_get(lua_State *L) {
 	} else if (con->server && (0 == strcmp(key, "mysqld_version"))) {
 		lua_pushinteger(L, con->server->mysqld_version);
 	} else if (0 == strcmp(key, "backend_ndx")) {
-		lua_pushinteger(L, st->backend_ndx);
+		lua_pushinteger(L, st->backend_ndx + 1);
 	} else {
 		lua_pushnil(L);
 	}
@@ -643,7 +642,9 @@ static int proxy_connection_set(lua_State *L) {
 	st = con->plugin_con_state;
 
 	if (0 == strcmp(key, "backend_ndx")) {
-		st->backend_ndx = luaL_checkinteger(L, 3);
+		/**
+		 * in lua-land the ndx is based on 1, in C-land on 0 */
+		st->backend_ndx = luaL_checkinteger(L, 3) - 1;
 	} else {
 		return luaL_error(L, "proxy.connection.%s is not writable", key);
 	}
@@ -858,6 +859,8 @@ static int lua_register_callback(network_mysqld_con *con) {
 	if (1 == luaL_newmetatable(L, "proxy.servers")) {
 		lua_pushcfunction(L, proxy_servers_get);                  /* (sp += 1) */
 		lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+		lua_pushcfunction(L, proxy_servers_len);                  /* (sp += 1) */
+		lua_setfield(L, -2, "__len");                             /* (sp -= 1) */
 	}
 	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */
 
@@ -2500,12 +2503,12 @@ static network_socket *proxy_connection_pool_swap(network_mysqld_con *con) {
 	 */
 
 	if (st->backend_ndx < 0 || 
-	    st->backend_ndx >= g->backend_master_pool->len) {
+	    st->backend_ndx >= g->backend_pool->len) {
 		/* backend_ndx is out of range */
 		return NULL;
 	} 
 
-	backend = g->backend_master_pool->pdata[st->backend_ndx];
+	backend = g->backend_pool->pdata[st->backend_ndx];
 
 	if (NULL == (send_sock = network_connection_pool_get(backend->pool))) {
 		/**
@@ -2533,6 +2536,10 @@ static network_socket *proxy_connection_pool_swap(network_mysqld_con *con) {
 	 * make sure that no one is using it */
 	con->server = NULL;
 
+	/** 
+	 * disconnect from the old the backend and connect to the new */
+	st->backend->connected_clients--;
+	backend->connected_clients++;
 	st->backend = backend;
 
 	return send_sock;
@@ -2919,7 +2926,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 				g_assert(con->parse.state.query == PARSE_COM_QUERY_INIT);
 
 				is_finished = 1;
-				srv->stats.queries++;
 				break;
 			case MYSQLD_PACKET_OK: { /* e.g. DELETE FROM tbl */
 				int server_status;
@@ -2936,7 +2942,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 				
 				} else {
 					is_finished = 1;
-					srv->stats.queries++;
 				}
 
 				st->injected.qstat.server_status = server_status;
@@ -3238,8 +3243,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 	if (now.tv_sec - g->backend_last_check.tv_sec > 1) {
 		/* check once a second if we have to wakeup a connection */
-		for (i = 0; i < g->backend_master_pool->len; i++) {
-			backend_t *cur = g->backend_master_pool->pdata[i];
+		for (i = 0; i < g->backend_pool->len; i++) {
+			backend_t *cur = g->backend_pool->pdata[i];
 
 			if (cur->state != BACKEND_STATE_DOWN) continue;
 
@@ -3281,8 +3286,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		 * prefer SQF (shorted queue first) to load all backends equally
 		 */ 
 
-		for (i = 0; i < g->backend_master_pool->len; i++) {
-			backend_t *cur = g->backend_master_pool->pdata[i];
+		for (i = 0; i < g->backend_pool->len; i++) {
+			backend_t *cur = g->backend_pool->pdata[i];
 		
 			if (cur->state == BACKEND_STATE_DOWN) continue;
 	
@@ -3294,8 +3299,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	} 
 	
 	if (st->backend_ndx >= 0 && 
-	    st->backend_ndx < g->backend_master_pool->len) {
-		backend = g->backend_master_pool->pdata[st->backend_ndx];
+	    st->backend_ndx < g->backend_pool->len) {
+		backend = g->backend_pool->pdata[st->backend_ndx];
 	}
 
 	if (NULL == backend) {
@@ -3379,12 +3384,28 @@ plugin_srv_state *plugin_srv_state_get(network_mysqld *srv) {
 		gchar *address = srv->config.proxy.backend_addresses[i];
 
 		backend = backend_init();
+		backend->type = BACKEND_TYPE_RW;
 
 		if (0 != network_mysqld_con_set_address(&backend->addr, address)) {
 			return NULL;
 		}
 
-		g_ptr_array_add(global_state->backend_master_pool, backend);
+		g_ptr_array_add(global_state->backend_pool, backend);
+	}
+
+	/* init the pool */
+	for (i = 0; srv->config.proxy.read_only_backend_addresses[i]; i++) {
+		backend_t *backend;
+		gchar *address = srv->config.proxy.read_only_backend_addresses[i];
+
+		backend = backend_init();
+		backend->type = BACKEND_TYPE_RO;
+
+		if (0 != network_mysqld_con_set_address(&backend->addr, address)) {
+			return NULL;
+		}
+
+		g_ptr_array_add(global_state->backend_pool, backend);
 	}
 
 	return global_state;
