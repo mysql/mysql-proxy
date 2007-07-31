@@ -559,8 +559,6 @@ int proxy_connection_pool_add_connection(network_mysqld_con *con) {
 	/* insert the server socket into the connection pool */
 	pool_entry = network_connection_pool_add(st->backend->pool, con->server);
 
-	event_del(&(con->server->event));
-
 	event_set(&(con->server->event), con->server->fd, EV_READ, network_mysqld_con_idle_handle, pool_entry);
 	event_base_set(srv->event_base, &(con->server->event));
 	event_add(&(con->server->event), NULL);
@@ -3240,6 +3238,7 @@ static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
 
 		switch (ret) {
 		case PROXY_NO_DECISION:
+		case PROXY_IGNORE_RESULT:
 			break;
 		case PROXY_SEND_RESULT:
 			/* answer directly */
@@ -3292,6 +3291,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	guint min_connected_clients = G_MAXUINT;
 	guint i;
 	GTimeVal now;
+	gboolean use_pooled_connection = FALSE;
 
 	st->backend = NULL;
 	st->backend_ndx = -1;
@@ -3328,6 +3328,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		return RET_ERROR;
 	case PROXY_NO_DECISION:
 		/* just go on */
+
+		break;
+	case PROXY_IGNORE_RESULT:
+		use_pooled_connection = TRUE;
 
 		break;
 	default:
@@ -3379,7 +3383,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	 * check if we have a connection in the pool for this backend
 	 */
 
-	if (NULL == (con->server = network_connection_pool_get(backend->pool))) {
+	if (!use_pooled_connection ||
+	    NULL == (con->server = network_connection_pool_get(backend->pool))) {
 		int ioctlvar;
 
 		con->server = network_socket_init();
@@ -3415,6 +3420,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		 * send the old hand-shake packet
 		 */
 
+		/* remove the idle-handler from the socket */
 		network_queue_append(con->client->send_queue, 
 				con->server->auth_handshake_packet->str, 
 				con->server->auth_handshake_packet->len,
@@ -3496,6 +3502,67 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 	return RET_SUCCESS;
 }
 
+static proxy_stmt_ret proxy_lua_disconnect_client(network_mysqld_con *con) {
+	proxy_stmt_ret ret = PROXY_NO_DECISION;
+
+#ifdef HAVE_LUA_H
+	plugin_con_state *st = con->plugin_con_state;
+	lua_State *L;
+
+	/* call the lua script to pick a backend
+	 * */
+	lua_register_callback(con);
+
+	if (!st->injected.L) return 0;
+
+	L = st->injected.L;
+
+	g_assert(lua_isfunction(L, -1));
+	lua_getfenv(L, -1);
+	g_assert(lua_istable(L, -1));
+	
+	lua_getfield(L, -1, "disconnect_client");
+	if (lua_isfunction(L, -1)) {
+		if (lua_pcall(L, 0, 1, 0) != 0) {
+			g_critical("%s.%d: (disconnect_client) %s", 
+					__FILE__, __LINE__,
+					lua_tostring(L, -1));
+
+			lua_pop(L, 1); /* errmsg */
+
+			/* the script failed, but we have a useful default */
+		} else {
+			if (lua_isnumber(L, -1)) {
+				ret = lua_tonumber(L, -1);
+			}
+			lua_pop(L, 1);
+		}
+
+		switch (ret) {
+		case PROXY_NO_DECISION:
+		case PROXY_IGNORE_RESULT:
+			break;
+		default:
+			ret = PROXY_NO_DECISION;
+			break;
+		}
+
+		/* ret should be a index into */
+
+	} else if (lua_isnil(L, -1)) {
+		lua_pop(L, 1); /* pop the nil */
+	} else {
+		g_message("%s.%d: %s", __FILE__, __LINE__, lua_typename(L, lua_type(L, -1)));
+		lua_pop(L, 1); /* pop the ... */
+	}
+	lua_pop(L, 1); /* fenv */
+
+	g_assert(lua_isfunction(L, -1));
+#endif
+	return ret;
+}
+
+
 /**
  * cleanup the proxy specific data on the current connection 
  *
@@ -3505,15 +3572,48 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
  * @return RET_SUCCESS
  * @see plugin_call_cleanup
  */
-NETWORK_MYSQLD_PLUGIN_PROTO(proxy_cleanup) {
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
 	plugin_con_state *st = con->plugin_con_state;
+	plugin_srv_state *g = st->global_state;
+	gboolean use_pooled_connection = FALSE;
 
 	if (st == NULL) return RET_SUCCESS;
+	
+	/**
+	 * let the lua-level decide if we want to keep the connection in the pool
+	 */
 
-	if (con->state == CON_STATE_CLOSE_CLIENT) {
+	switch (proxy_lua_disconnect_client(con)) {
+	case PROXY_NO_DECISION:
+		/* just go on */
+
+		break;
+	case PROXY_IGNORE_RESULT:
+		use_pooled_connection = TRUE;
+
+		break;
+	default:
+		g_error("%s.%d: ... ", __FILE__, __LINE__);
+		break;
+	}
+
+	if (use_pooled_connection &&
+	    con->state == CON_STATE_CLOSE_CLIENT) {
+		/* move the connection to the connection pool */
 		proxy_connection_pool_add_connection(con);
 	} else if (st->backend) {
+		/* we have backend assigned and want to close the connection to it */
 		st->backend->connected_clients--;
+	} else if (st->backend_ndx >= 0 &&
+		   st->backend_ndx < g->backend_pool->len) {
+		/* the lua-layer asked us to close a pooled connection */
+		backend_t *backend = NULL;
+
+		backend = g->backend_pool->pdata[st->backend_ndx];
+
+		g_assert(con->server == NULL);
+		
+		con->server = network_connection_pool_get(backend->pool);
 	}
 
 	plugin_con_state_free(st);
@@ -3532,7 +3632,7 @@ int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
 	con->plugins.con_read_query                = proxy_read_query;
 	con->plugins.con_read_query_result         = proxy_read_query_result;
 	con->plugins.con_send_query_result         = proxy_send_query_result;
-	con->plugins.con_cleanup                   = proxy_cleanup;
+	con->plugins.con_cleanup                   = proxy_disconnect_client;
 
 	return 0;
 }
