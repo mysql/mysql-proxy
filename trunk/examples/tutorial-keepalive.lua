@@ -29,6 +29,11 @@ function connect_server()
 	end
 end
 
+function read_auth_result(packet) 
+	-- disconnect from the server
+	proxy.connection.backend_ndx = 0
+end
+
 function read_query( packet ) 
 	if is_debug then
 		print("[read_query]")
@@ -43,6 +48,17 @@ function read_query( packet )
 		}
 
 		return proxy.PROXY_SEND_RESULT
+	end
+
+	if proxy.connection.backend_ndx == 0 then
+		-- pick a master
+		for i = 1, #proxy.servers do
+			local s = proxy.servers[i]
+			if s.idling_connections > 0 and s.state ~= 2 and s.type == 1 then
+				proxy.connection.backend_ndx = i
+				break
+			end
+		end
 	end
 
 	proxy.queries:append(1, packet)
@@ -68,7 +84,9 @@ function read_query( packet )
 		if max_conns_ndx > 0 then
 			proxy.connection.backend_ndx = max_conns_ndx
 			proxy.queries:prepend(2, "\002" .. proxy.connection.default_db)
-			print("  sending ".. string.format("%q", packet:sub(2)) .. " to slave: " .. proxy.connection.backend_ndx);
+			if is_debug then
+				print("  sending ".. string.format("%q", packet:sub(2)) .. " to slave: " .. proxy.connection.backend_ndx);
+			end
 		end
 	else
 		-- send to master
@@ -88,5 +106,10 @@ function read_query_result( inj )
 		return proxy.PROXY_IGNORE_RESULT
 	end
 	is_in_transaction = flags.in_trans
+
+	if is_in_transaction == 0 then
+		-- release the backend
+		proxy.connection.backend_ndx = 0
+	end
 end
 
