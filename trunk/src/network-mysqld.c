@@ -1152,7 +1152,9 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			case RET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: ...", __FILE__, __LINE__);
+				g_critical("%s.%d: plugin_call(CON_STATE_READ_QUERY) failed", __FILE__, __LINE__);
+
+				con->state = CON_STATE_ERROR;
 				break;
 			}
 
