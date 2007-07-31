@@ -150,6 +150,11 @@ void network_mysqld_init_libevent(network_mysqld *m) {
 	m->event_base  = event_init();
 }
 
+/**
+ * free the global scope
+ *
+ * closes all open connections
+ */
 void network_mysqld_free(network_mysqld *m) {
 	guint i;
 
@@ -173,8 +178,14 @@ void network_mysqld_free(network_mysqld *m) {
 		g_free(m->config.proxy.backend_addresses);
 	}
 
-	if (m->config.proxy.address) g_free(m->config.proxy.address);
-	if (m->config.admin.address) g_free(m->config.admin.address);
+	if (m->config.proxy.address) {
+		network_mysqld_proxy_free(NULL);
+
+		g_free(m->config.proxy.address);
+	}
+	if (m->config.admin.address) {
+		g_free(m->config.admin.address);
+	}
 #ifdef HAVE_EVENT_BASE_FREE
 	/* only recent versions have this call */
 	event_base_free(m->event_base);
@@ -1478,8 +1489,8 @@ void *network_mysqld_thread(void *_srv) {
 	 * between all connections incl. the addr buffers. We can only free them once.
 	 */
 	if (proxy_con) {
-		network_mysqld_proxy_free(proxy_con);
-
+		/**
+		 * we still might have connections pointing to the close scope */
 		g_free(proxy_con->server->addr.str);
 
 		event_del(&(proxy_con->server->event));
