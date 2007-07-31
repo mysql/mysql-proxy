@@ -357,6 +357,24 @@ static void proxy_lua_init_global_fenv(lua_State *L) {
 }
 #endif
 
+static backend_t *backend_init() {
+	backend_t *b;
+
+	b = g_new0(backend_t, 1);
+
+	b->pool = network_connection_pool_init();
+
+	return b;
+}
+
+void backend_free(backend_t *b) {
+	if (!b) return;
+
+	network_connection_pool_free(b->pool);
+
+	g_free(b);
+}
+
 static plugin_srv_state *plugin_srv_state_init() {
 	plugin_srv_state *g;
 
@@ -374,25 +392,22 @@ static plugin_srv_state *plugin_srv_state_init() {
 }
 
 void plugin_srv_state_free(plugin_srv_state *g) {
+	gsize i;
+
 	if (!g) return;
 
 #ifdef HAVE_LUA_H
 	lua_close(g->L);
 #endif
+	for (i = 0; i < g->backend_pool->len; i++) {
+		backend_t *backend = g->backend_pool->pdata[i];
+		
+		backend_free(backend);
+	}
 
 	g_ptr_array_free(g->backend_pool, TRUE);
 
 	g_free(g);
-}
-
-static backend_t *backend_init() {
-	backend_t *b;
-
-	b = g_new0(backend_t, 1);
-
-	b->pool = network_connection_pool_init();
-
-	return b;
 }
 
 /**
@@ -1537,7 +1552,6 @@ static int proxy_injection_get(lua_State *L) {
 static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 #ifdef HAVE_LUA_H
 	network_socket *send_sock = con->client;
-	network_socket *recv_sock = con->server;
 #endif
 	injection *inj = NULL;
 	plugin_con_state *st = con->plugin_con_state;
@@ -2493,7 +2507,7 @@ static void network_mysqld_con_idle_handle(int event_fd, short events, void *use
  */
 static network_socket *proxy_connection_pool_swap(network_mysqld_con *con) {
 	backend_t *backend = NULL;
-	network_socket *send_sock, *pool_sock;
+	network_socket *send_sock;
 	plugin_con_state *st = con->plugin_con_state;
 	plugin_srv_state *g = st->global_state;
 	network_mysqld *srv = con->srv;
@@ -3151,7 +3165,6 @@ static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
 	plugin_con_state *st = con->plugin_con_state;
 	network_socket *recv_sock = con->server;
 	GList *chunk = recv_sock->recv_queue->chunks->tail;
-	GString *packet = chunk->data;
 	lua_State *L;
 
 	/* call the lua script to pick a backend
@@ -3520,9 +3533,14 @@ int network_mysqld_proxy_init(network_mysqld_con *con) {
 	return 0;
 }
 
-
+/**
+ * free the global scope which is shared between all connections
+ *
+ * make sure that is called after all connections are closed
+ */
 void network_mysqld_proxy_free(network_mysqld_con *con) {
 	plugin_srv_state *g = plugin_srv_state_get(NULL);
 
 	plugin_srv_state_free(g);
 }
+
