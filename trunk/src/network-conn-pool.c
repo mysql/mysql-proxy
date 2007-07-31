@@ -43,11 +43,12 @@ network_socket *network_connection_pool_get(network_connection_pool *pool) {
 
 	if (arr->len == 0) return NULL;
 
-	entry = arr->pdata[0];
-
+	entry = g_ptr_array_remove_index_fast(pool->entries, 0);
 	sock = entry->srv_sock;
-			
-	g_ptr_array_remove_index_fast(pool->entries, 0);
+	g_free(entry);
+
+	/* remove the idle handler from the socket */	
+	event_del(&(sock->event));
 
 	return sock;
 }
