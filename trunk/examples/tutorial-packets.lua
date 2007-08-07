@@ -230,7 +230,9 @@ function read_query_result( inj )
   print("| response_time = " .. inj.response_time .. "us")
 
   if res.query_status == proxy.MYSQLD_PACKET_ERR then
-    print("| result.err.msg = " .. string.format("%q", res.raw:sub(2)))
+    print("| result.err.code = " .. res.raw:byte(2) + (res.raw:byte(3) * 256))
+    print("| result.err.sql_state = " .. string.format("%q", res.raw:sub(5, 9)))
+    print("| result.err.msg = " .. string.format("%q", res.raw:sub(10)))
   else
     print("| .--- result-set")
     print("| | command = " .. command_names[string.byte(packet) + 1])
