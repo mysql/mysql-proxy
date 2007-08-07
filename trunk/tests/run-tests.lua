@@ -187,7 +187,7 @@ assert(os.execute(PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
 		["proxy-address"]           = PROXY_HOST .. ":" .. PROXY_PORT,
 		["pid-file"]                = PROXY_PIDFILE,
 		["proxy-lua-script"]        = PROXY_TMP_LUASCRIPT,
-	}) .. " --no-daemon &"
+	}) .. " &"
 ))
 
 --
