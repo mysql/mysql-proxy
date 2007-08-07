@@ -734,6 +734,19 @@ retval_t plugin_call(network_mysqld *srv, network_mysqld_con *con, int state) {
 		recv_sock = con->client;
 		send_sock = con->server;
 
+		if (NULL == con->server) {
+			/**
+			 * we have to auth against same backend as we did before
+			 * but the user changed it
+			 */
+
+			g_message("%s.%d: (lua) read-auth-old-password failed as backend_ndx got reset.", __FILE__, __LINE__);
+
+			network_mysqld_con_send_error(con->client, C("(lua) read-auth-old-password failed as backend_ndx got reset."));
+			con->state = CON_STATE_SEND_ERROR;
+			break;
+		}
+
 		chunk = recv_sock->recv_queue->chunks->head;
 		packet = chunk->data;
 

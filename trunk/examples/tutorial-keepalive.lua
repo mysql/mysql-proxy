@@ -111,10 +111,24 @@ function connect_server()
 end
 
 --- 
--- put the authed connection into the connection pool
-function read_auth_result(packet) 
-	-- disconnect from the server
-	proxy.connection.backend_ndx = 0
+-- put the successfully authed connection into the connection pool
+--
+-- @param auth the context information for the auth
+--
+-- auth.packet is the packet
+function read_auth_result( auth )
+	if auth.packet:byte() == proxy.MYSQLD_PACKET_OK then
+		-- auth was fine, disconnect from the server
+		proxy.connection.backend_ndx = 0
+	elseif auth.packet:byte() == proxy.MYSQLD_PACKET_EOF then
+		-- we received either a 
+		-- 
+		-- * MYSQLD_PACKET_ERR and the auth failed or
+		-- * MYSQLD_PACKET_EOF which means a OLD PASSWORD (4.0) was sent
+		print("(read_auth_result) ... not ok yet");
+	elseif auth.packet:byte() == proxy.MYSQLD_PACKET_ERR then
+		-- auth failed
+	end
 end
 
 
