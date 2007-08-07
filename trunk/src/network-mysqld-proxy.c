@@ -1366,6 +1366,14 @@ static int proxy_resultset_fields_get(lua_State *L) {
 	if (!(cond)) g_error("%s.%d: assertion (%s) failed: " fmt, __FILE__, __LINE__, #cond, __VA_ARGS__); 
 #endif
 
+/**
+ * get the next row from the resultset
+ *
+ * returns a lua-table with the fields (starting at 1)
+ *
+ * @return 0 on error, 1 on success
+ *
+ */
 static int proxy_resultset_rows_iter(lua_State *L) {
 	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, lua_upvalueindex(1));
 	guint32 off = NET_HEADER_SIZE; /* skip the packet-len and sequence-number */
@@ -1423,7 +1431,8 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 			off += field_len;
 		}
 
-		lua_rawseti(L, -2, i);
+		/* lua starts its tables at 1 */
+		lua_rawseti(L, -2, i + 1);
 	}
 
 	res->row = res->row->next;
