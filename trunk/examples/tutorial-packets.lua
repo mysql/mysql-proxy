@@ -225,39 +225,46 @@ function read_query_result( inj )
   if res.query_status then
     print("| result.query_status = " .. res.query_status)
   end
+
   print("| query_time = " .. inj.query_time .. "us")
-  print("| .--- result-set")
-  print("| | command = " .. command_names[string.byte(packet) + 1])
+  print("| response_time = " .. inj.response_time .. "us")
 
-  if string.byte(packet) == proxy.COM_STMT_PREPARE then
-    assert(string.byte(res.raw, 1) == 0, string.format("packet[0] should be 0, is %02x", string.byte(res.raw, 1)))
-    local stmt_handler_id = string.byte(res.raw, 2) + (string.byte(res.raw, 3) * 256) + (string.byte(res.raw, 4) * 256 * 256) + (string.byte(res.raw, 5) * 256 * 256 * 256)
-    local num_cols = string.byte(res.raw, 6) + (string.byte(res.raw, 7) * 256)
-    local num_params = string.byte(res.raw, 8) + (string.byte(res.raw, 9) * 256)
-
-    print("| | stmt-id = " .. stmt_handler_id )
-    print("| | num-cols = " .. num_cols )
-    print("| | num-params = " .. num_params )
-
-    if raw_len >= 12 then
-      local num_params = string.byte(res.raw, 11) + (string.byte(res.raw, 12) * 256)
-      print("| | (5.0) warning-count = " .. num_params )
-    end
-
-    -- track the prepared query
-
-    prepared_queries[stmt_handler_id] = string.sub(packet, 2)
-  elseif string.byte(packet) == proxy.COM_STMT_EXECUTE or 
-         string.byte(packet) == proxy.COM_QUERY then
-    local num_cols = string.byte(res.raw, 1)
-    print("| | num-cols = " .. num_cols)
-    if num_cols > 0 and num_cols < 255 then
-      dump_query_result(inj)
-    end
+  if res.query_status == proxy.MYSQLD_PACKET_ERR then
+    print("| result.err.msg = " .. string.format("%q", res.raw:sub(2)))
   else
-    print("| | client-packet =" .. str2hex(res.raw))
+    print("| .--- result-set")
+    print("| | command = " .. command_names[string.byte(packet) + 1])
+  
+    if string.byte(packet) == proxy.COM_STMT_PREPARE then
+      assert(string.byte(res.raw, 1) == 0, string.format("packet[0] should be 0, is %02x", string.byte(res.raw, 1)))
+      local stmt_handler_id = string.byte(res.raw, 2) + (string.byte(res.raw, 3) * 256) + (string.byte(res.raw, 4) * 256 * 256) + (string.byte(res.raw, 5) * 256 * 256 * 256)
+      local num_cols = string.byte(res.raw, 6) + (string.byte(res.raw, 7) * 256)
+      local num_params = string.byte(res.raw, 8) + (string.byte(res.raw, 9) * 256)
+  
+      print("| | stmt-id = " .. stmt_handler_id )
+      print("| | num-cols = " .. num_cols )
+      print("| | num-params = " .. num_params )
+  
+      if raw_len >= 12 then
+        local num_params = string.byte(res.raw, 11) + (string.byte(res.raw, 12) * 256)
+        print("| | (5.0) warning-count = " .. num_params )
+      end
+  
+      -- track the prepared query
+  
+      prepared_queries[stmt_handler_id] = string.sub(packet, 2)
+    elseif string.byte(packet) == proxy.COM_STMT_EXECUTE or 
+           string.byte(packet) == proxy.COM_QUERY then
+      local num_cols = string.byte(res.raw, 1)
+      print("| | num-cols = " .. num_cols)
+      if num_cols > 0 and num_cols < 255 then
+        dump_query_result(inj)
+      end
+    else
+      print("| | client-packet =" .. str2hex(res.raw))
+    end
+    print("| '---")
   end
-  print("| '---")
   print("'---")
   -- end
 end
