@@ -228,7 +228,7 @@ int main(int argc, char **argv) {
 	int i;
 	int exit_code = 0;
 	int print_version = 0;
-	int daemon_mode = 1;
+	int daemon_mode = 0;
 	int start_proxy = 1;
 
 	GOptionEntry admin_entries[] = 
@@ -258,7 +258,7 @@ int main(int argc, char **argv) {
 	GOptionEntry main_entries[] = 
 	{
 		{ "version",                 'V', 0, G_OPTION_ARG_NONE, NULL, "Show version", NULL },
-		{ "no-daemon",               'D', G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "Don't start in daemon-mode", NULL },
+		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
 		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
