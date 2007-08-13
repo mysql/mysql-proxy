@@ -13,6 +13,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */ 
 
+#define SVN_REVISION "$Rev$"
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -313,7 +315,7 @@ int main(int argc, char **argv) {
 	g_option_context_free(option_ctx);
 
 	if (print_version) {
-		printf("%s\n", PACKAGE_STRING);
+		printf("%s (%s)\n", PACKAGE_STRING, SVN_REVISION);
 		return 0;
 	}
 
