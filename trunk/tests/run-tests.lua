@@ -155,6 +155,7 @@ function run_test(filename)
 		options_tostring({
 			user     = MYSQL_USER,
 			password = MYSQL_PASSWORD,
+			database = MYSQL_DB,
 			host     = PROXY_HOST,
 			port     = PROXY_PORT,
 			["test-file"] = srcdir .. "/t/" .. testname .. ".test",
