@@ -53,7 +53,7 @@ local function dump_query_result( inj )
   for row in inj.resultset.rows do
     local cols = {}
     local o
-    for i = 0, field_count - 1 do
+    for i = 1, field_count do
       if not o then
         o = ""
       else 
