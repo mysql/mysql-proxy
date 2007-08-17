@@ -1842,6 +1842,10 @@ static proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
 		case PROXY_NO_DECISION:
 			break;
 		case PROXY_SEND_QUERY:
+			g_warning("%s.%d: (read_handshake) return proxy.PROXY_SEND_QUERY is deprecated, use PROXY_SEND_RESULT instead");
+
+			ret = PROXY_SEND_RESULT;
+		case PROXY_SEND_RESULT:
 			/**
 			 * proxy.response.type = ERR, RAW, ...
 			 */

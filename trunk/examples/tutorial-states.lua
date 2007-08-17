@@ -18,7 +18,7 @@ function read_handshake( auth )
 
 		print("we don't like this client");
 
-		return proxy.PROXY_SEND_QUERY
+		return proxy.PROXY_SEND_RESULT
 	end
 end
 
