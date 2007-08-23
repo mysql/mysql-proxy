@@ -143,9 +143,11 @@ end
 --
 -- @param testname name of the test
 -- @return exit-code of mysql-test
-function run_test(filename)
-	local testname = filename:match("t/(.+)\.test")
-	local testfilename = srcdir .. "/t/" .. testname .. ".lua"
+function run_test(filename, basedir)
+	if not basedir then basedir = srcdir end
+
+	local testname = assert(filename:match("t/(.+)\.test"))
+	local testfilename = basedir .. "/t/" .. testname .. ".lua"
 	if file_exists(testfilename) then
 		file_copy(PROXY_TMP_LUASCRIPT, testfilename)
 	else
@@ -159,8 +161,8 @@ function run_test(filename)
 			database = MYSQL_DB,
 			host     = PROXY_HOST,
 			port     = PROXY_PORT,
-			["test-file"] = srcdir .. "/t/" .. testname .. ".test",
-			["result-file"] = srcdir .. "/r/" .. testname .. ".result"
+			["test-file"] = basedir .. "/t/" .. testname .. ".test",
+			["result-file"] = basedir .. "/r/" .. testname .. ".result"
 		})
 	)
 	
@@ -198,7 +200,27 @@ assert(os.execute(PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
 -- otherwise execute all tests we can find
 if #arg then
 	for i, a in ipairs(arg) do
-		exitcode = run_test(a)
+		local stat = lfs.attributes(a)
+
+		if stat.mode == "directory" then
+			for file in lfs.dir(a .. "/t/") do
+				local testname = file:match("(.+\.test)$")
+		
+				if testname then
+					print("# >> " .. testname .. " started")
+		
+					local r = run_test("t/" .. testname, a)
+					
+					print("# << (exitcode = " .. r .. ")" )
+		
+					if r ~= 0 and exitcode == 0 then
+						exitcode = r
+					end
+				end
+			end
+		else 
+			exitcode = run_test(a)
+		end
 	end
 else
 	for file in lfs.dir(srcdir .. "/t/") do
