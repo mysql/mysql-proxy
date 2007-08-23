@@ -183,9 +183,12 @@ if COVERAGE_LCOV then
 	--	" --zerocounters --directory ".. srcdir .. "/../src/" )
 end
 
+-- setting the include path
+local INCLUDE_PATH = arg[1]  .. '/t/?.lua' 
 
 -- start the proxy
-assert(os.execute(PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
+assert(os.execute( 'LUA_PATH="' .. INCLUDE_PATH  .. '"  ' ..
+    PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
 	options_tostring({
 		["proxy-backend-addresses"] = MYSQL_HOST .. ":" .. MYSQL_PORT,
 		["proxy-address"]           = PROXY_HOST .. ":" .. PROXY_PORT,

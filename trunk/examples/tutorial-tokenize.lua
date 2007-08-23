@@ -27,9 +27,15 @@ function read_query(packet)
 		-- just for debug
 		for i, token in ipairs(tokens) do
 			-- print the token and what we know about it
-			print(i .. ": " .. " { " .. token["token_name"] .. ", " .. token["text"] .. " }" )
+            local txt = token["text"]
+            if token["token_name"] == 'TK_STRING' then
+                txt = string.format("%q", txt)
+            end
+			-- print(i .. ": " .. " { " .. token["token_name"] .. ", " .. token["text"] .. " }" )
+			print(i .. ": " .. " { " .. token["token_name"] .. ", " .. txt .. " }" )
 		end
 
 		print("normalized query: " .. normalize_query(tokens))
+        print("")
 	end
 end
