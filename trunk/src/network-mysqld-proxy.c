@@ -57,6 +57,8 @@
 #include "network-conn-pool.h"
 #include "sys-pedantic.h"
 
+#include "sql-tokenizer.h"
+
 #define TIME_DIFF_US(t2, t1) \
 	        ((t2.tv_sec - t1.tv_sec) * 1000000.0 + (t2.tv_usec - t1.tv_usec))
 
@@ -784,6 +786,43 @@ static int proxy_queue_len(lua_State *L) {
 }
 
 /**
+ * split the SQL query into a stream of tokens
+ */
+static int proxy_tokenize(lua_State *L) {
+	size_t str_len;
+	const char *str = luaL_checklstring(L, 1, &str_len);
+	GPtrArray *tokens = g_ptr_array_new();
+	gsize i;
+
+	sql_tokenizer(tokens, str, str_len);
+
+	/**
+	 * export the data into a table 
+	 */
+
+	lua_newtable(L);
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+		lua_newtable(L);
+
+		lua_pushlstring(L, token->text->str, token->text->len);
+		lua_setfield(L, -2, "text");
+		
+		lua_pushinteger(L, token->token_id);
+		lua_setfield(L, -2, "token_id");
+
+		lua_rawseti(L, -2, i + 1);
+
+		sql_token_free(token);
+	}
+
+	g_ptr_array_free(tokens, TRUE);
+
+	return 1;
+}
+/**
  * setup the script before we hook function is executed 
  *
  * has to be called before any lua_pcall() is called to start a hook function
@@ -906,6 +945,9 @@ static int lua_register_callback(network_mysqld_con *con) {
 	lua_setmetatable(L, -2);
 
 	lua_setfield(L, -2, "queries");
+		
+	lua_pushcfunction(L, proxy_tokenize);
+	lua_setfield(L, -2, "tokenize");
 
 	/**
 	 * proxy.connection is read-only
@@ -1842,7 +1884,8 @@ static proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
 		case PROXY_NO_DECISION:
 			break;
 		case PROXY_SEND_QUERY:
-			g_warning("%s.%d: (read_handshake) return proxy.PROXY_SEND_QUERY is deprecated, use PROXY_SEND_RESULT instead");
+			g_warning("%s.%d: (read_handshake) return proxy.PROXY_SEND_QUERY is deprecated, use PROXY_SEND_RESULT instead",
+					__FILE__, __LINE__);
 
 			ret = PROXY_SEND_RESULT;
 		case PROXY_SEND_RESULT:
