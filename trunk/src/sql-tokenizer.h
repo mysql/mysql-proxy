@@ -276,6 +276,7 @@ typedef struct {
 
 sql_token *sql_token_new(void);
 void sql_token_free(sql_token *token);
+const gchar *sql_token_get_name(sql_token_id token_id);
 
 int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len);
 

@@ -812,6 +812,9 @@ static int proxy_tokenize(lua_State *L) {
 		
 		lua_pushinteger(L, token->token_id);
 		lua_setfield(L, -2, "token_id");
+		
+		lua_pushstring(L, sql_token_get_name(token->token_id));
+		lua_setfield(L, -2, "token_name");
 
 		lua_rawseti(L, -2, i + 1);
 
