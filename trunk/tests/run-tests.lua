@@ -56,7 +56,8 @@ local MYSQL_DB       = os.getenv("MYSQL_DB")       or "test"
 local MYSQL_TEST_BIN = os.getenv("MYSQL_TEST_BIN") or "mysqltest"
 
 local PROXY_HOST     = os.getenv("PROXY_HOST")     or "127.0.0.1"
-local PROXY_PORT     = os.getenv("PROXY_PORT")     or "4040"
+local PROXY_PORT     = os.getenv("PROXY_PORT")     or "14040"
+local ADMIN_PORT     = os.getenv("ADMIN_PORT")     or "14041"
 local PROXY_TMP_LUASCRIPT = os.getenv("PROXY_TMP_LUASCRIPT") or "/tmp/proxy.tmp.lua"
 
 local srcdir         = os.getenv("srcdir")         or testdir .. "/"
@@ -186,6 +187,7 @@ assert(os.execute(PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
 	options_tostring({
 		["proxy-backend-addresses"] = MYSQL_HOST .. ":" .. MYSQL_PORT,
 		["proxy-address"]           = PROXY_HOST .. ":" .. PROXY_PORT,
+		["admin-address"]           = PROXY_HOST .. ":" .. ADMIN_PORT,
 		["pid-file"]                = PROXY_PIDFILE,
 		["proxy-lua-script"]        = PROXY_TMP_LUASCRIPT,
 	}) .. " &"
