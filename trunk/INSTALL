@@ -77,6 +77,16 @@ On Debian and Ubuntu you need to tell the configure script that it has to use
 
   $ ./configure --with-lua=lua5.1
 
+
+MacOSX
+------
+
+If you are using darwin-ports pkg-config might not be able to see the glib-2.0.pc in 
+/opt/local/lib/pkgconfig.
+
+  $ PKG_CONFIG_PATH="/opt/local/lib/pkgconfig" \
+      ./configure
+
 openSUSE
 --------
 
