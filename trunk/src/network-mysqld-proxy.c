@@ -1095,87 +1095,117 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 
 	switch(resp_type) {
 	case MYSQLD_PACKET_OK: {
-		GPtrArray *fields;
-		GPtrArray *rows;
+		GPtrArray *fields = NULL;
+		GPtrArray *rows = NULL;
 		gsize field_count = 0;
 
 		lua_getfield(L, -1, "resultset"); /* proxy.response.resultset */
-		g_assert(lua_istable(L, -1));
+		if (lua_istable(L, -1)) {
+			lua_getfield(L, -1, "fields"); /* proxy.response.resultset.fields */
+			g_assert(lua_istable(L, -1));
 
-		lua_getfield(L, -1, "fields"); /* proxy.response.resultset.fields */
-		g_assert(lua_istable(L, -1));
-
-		fields = g_ptr_array_new();
+			fields = g_ptr_array_new();
 		
-		for (i = 1, field_count = 0; ; i++, field_count++) {
-			lua_rawgeti(L, -1, i);
-			
-			if (lua_istable(L, -1)) { /** proxy.response.resultset.fields[i] */
-				MYSQL_FIELD *field;
-
-				field = network_mysqld_proto_field_init();
-
-				lua_getfield(L, -1, "name"); /* proxy.response.resultset.fields[].name */
-				g_assert(lua_isstring(L, -1));
-				field->name = g_strdup(lua_tostring(L, -1));
-				lua_pop(L, 1);
-				lua_getfield(L, -1, "type"); /* proxy.response.resultset.fields[].type */
-				g_assert(lua_isnumber(L, -1));
-				field->type = lua_tonumber(L, -1);
-				lua_pop(L, 1);
-				field->flags = PRI_KEY_FLAG;
-				field->length = 32;
-				g_ptr_array_add(fields, field);
+			for (i = 1, field_count = 0; ; i++, field_count++) {
+				lua_rawgeti(L, -1, i);
 				
-				lua_pop(L, 1); /* pop key + value */
-			} else if (lua_isnil(L, -1)) {
-				lua_pop(L, 1); /* pop the nil and leave the loop */
-				break;
-			} else {
-				g_error("(boom)");
-			}
-		}
-		lua_pop(L, 1);
-
-		rows = g_ptr_array_new();
-		lua_getfield(L, -1, "rows"); /* proxy.response.resultset.rows */
-		g_assert(lua_istable(L, -1));
-		for (i = 1; ; i++) {
-			lua_rawgeti(L, -1, i);
-
-			if (lua_istable(L, -1)) { /** proxy.response.resultset.rows[i] */
-				GPtrArray *row;
-				gsize j;
-
-				row = g_ptr_array_new();
-
-				/* we should have as many columns as we had fields */
+				if (lua_istable(L, -1)) { /** proxy.response.resultset.fields[i] */
+					MYSQL_FIELD *field;
 	
-				for (j = 1; j < field_count + 1; j++) {
-					lua_rawgeti(L, -1, j);
-
-					if (lua_isnil(L, -1)) {
-						g_ptr_array_add(row, NULL);
+					field = network_mysqld_proto_field_init();
+	
+					lua_getfield(L, -1, "name"); /* proxy.response.resultset.fields[].name */
+	
+					if (!lua_isstring(L, -1)) {
+						field->name = g_strdup("no-field-name");
+	
+						g_warning("%s.%d: proxy.response.type = OK, "
+								"but proxy.response.resultset.fields[" F_SIZE_T "].name is not a string (is %s), "
+								"using default", 
+								__FILE__, __LINE__,
+								i,
+								lua_typename(L, lua_type(L, -1)));
 					} else {
-						g_ptr_array_add(row, g_strdup(lua_tostring(L, -1)));
+						field->name = g_strdup(lua_tostring(L, -1));
 					}
-
 					lua_pop(L, 1);
+	
+					lua_getfield(L, -1, "type"); /* proxy.response.resultset.fields[].type */
+					if (!lua_isnumber(L, -1)) {
+						g_warning("%s.%d: proxy.response.type = OK, "
+								"but proxy.response.resultset.fields[" F_SIZE_T "].type is not a integer (is %s), "
+								"using MYSQL_TYPE_STRING", 
+								__FILE__, __LINE__,
+								i,
+								lua_typename(L, lua_type(L, -1)));
+	
+						field->type = MYSQL_TYPE_STRING;
+					} else {
+						field->type = lua_tonumber(L, -1);
+					}
+					lua_pop(L, 1);
+					field->flags = PRI_KEY_FLAG;
+					field->length = 32;
+					g_ptr_array_add(fields, field);
+					
+					lua_pop(L, 1); /* pop key + value */
+				} else if (lua_isnil(L, -1)) {
+					lua_pop(L, 1); /* pop the nil and leave the loop */
+					break;
+				} else {
+					g_error("(boom)");
 				}
-
-				g_ptr_array_add(rows, row);
-
-				lua_pop(L, 1); /* pop value */
-			} else if (lua_isnil(L, -1)) {
-				lua_pop(L, 1); /* pop the nil and leave the loop */
-				break;
-			} else {
-				g_error("(boom)");
 			}
-		}
-		lua_pop(L, 1);
+			lua_pop(L, 1);
+	
+			rows = g_ptr_array_new();
+			lua_getfield(L, -1, "rows"); /* proxy.response.resultset.rows */
+			g_assert(lua_istable(L, -1));
+			for (i = 1; ; i++) {
+				lua_rawgeti(L, -1, i);
+	
+				if (lua_istable(L, -1)) { /** proxy.response.resultset.rows[i] */
+					GPtrArray *row;
+					gsize j;
+	
+					row = g_ptr_array_new();
+	
+					/* we should have as many columns as we had fields */
+		
+					for (j = 1; j < field_count + 1; j++) {
+						lua_rawgeti(L, -1, j);
+	
+						if (lua_isnil(L, -1)) {
+							g_ptr_array_add(row, NULL);
+						} else {
+							g_ptr_array_add(row, g_strdup(lua_tostring(L, -1)));
+						}
+	
+						lua_pop(L, 1);
+					}
+	
+					g_ptr_array_add(rows, row);
+	
+					lua_pop(L, 1); /* pop value */
+				} else if (lua_isnil(L, -1)) {
+					lua_pop(L, 1); /* pop the nil and leave the loop */
+					break;
+				} else {
+					g_error("(boom)");
+				}
+			}
+			lua_pop(L, 1);
 
-		network_mysqld_con_send_resultset(con->client, fields, rows);
+			network_mysqld_con_send_resultset(con->client, fields, rows);
+		} else {
+			lua_getfield(L, -2, "affected_rows"); /* proxy.response.affected_rows */
+
+			if (lua_isnumber(L, -1)) {
+			}
+			lua_pop(L, 1);
+
+			network_mysqld_con_send_ok(con->client);
+		}
 
 		/**
 		 * someone should cleanup 
