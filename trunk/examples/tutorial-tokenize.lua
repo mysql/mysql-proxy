@@ -8,7 +8,7 @@ function normalize_query(tokens)
 			n_q = n_q .. "`" .. token.text .. "` "
 		elseif token["token_name"] == "TK_STRING" then
 			n_q = n_q .. "? "
-		elseif token["token_name"] == "TK_NUMBER" then
+		elseif token["token_name"] == "TK_INTEGER" then
 			n_q = n_q .. "? "
 		elseif token["token_name"] == "TK_FLOAT" then
 			n_q = n_q .. "? "
