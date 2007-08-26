@@ -208,36 +208,47 @@ function read_query( packet )
 		tokens     = tokens or assert(tokenizer.tokenize(cmd.query))
 
 		local stmt = tokenizer.first_stmt_token(tokens)
-		print("stmt.token_name: " .. stmt.token_name)
 
 		if stmt.token_name == "TK_SQL_SELECT" then
 			is_in_select_calc_found_rows = false
+			local is_insert_id = false
 
 			for i, token in ipairs(tokens) do
-				if token.type_name == "TK_SQL_SQL_CALC_FOUND_ROWS" then
+				-- SQL_CALC_FOUND_ROWS + FOUND_ROWS() have to be executed 
+				-- on the same connection
+				-- print("token: " .. token.token_name)
+				-- print("  val: " .. token.text)
+				
+				if not is_in_select_calc_found_rows and token.token_name == "TK_SQL_SQL_CALC_FOUND_ROWS" then
 					is_in_select_calc_found_rows = true
+				elseif not is_insert_id and token.token_name == "TK_LITERAL" then
+					local utext = token.text:upper()
 
-					break
+					if utext == "LAST_INSERT_ID" or
+					   utext == "@@INSERT_ID" then
+						is_insert_id = true
+					end
 				end
 
-				-- if we haven't found the special tokens in the first 8
-				-- give up
-				if i > 8 then
+				-- we found the two special token, we can't find more
+				if is_insert_id and is_in_select_calc_found_rows then
 					break
 				end
 			end
 
-			local backend_ndx = lb.idle_ro()
+			-- if we ask for the last-insert-id we have to ask it on the original 
+			-- connection
+			if not is_insert_id then
+				local backend_ndx = lb.idle_ro()
 
-			print("ro-backend: " .. backend_ndx)
-
-			if backend_ndx > 0 then
-				proxy.connection.backend_ndx = backend_ndx
+				if backend_ndx > 0 then
+					proxy.connection.backend_ndx = backend_ndx
+				end
+			else
+				print("   found a SELECT LAST_INSERT_ID(), staying on the same backend")
 			end
 		end
 	end
-
-	print("current backend: " .. proxy.connection.backend_ndx)
 
 	-- no backend selected yet, pick a master
 	if proxy.connection.backend_ndx == 0 then
@@ -246,7 +257,6 @@ function read_query( packet )
 		-- let's pick a master as a good default
 		--
 		proxy.connection.backend_ndx = lb.idle_failsafe_rw()
-		print("rw-backend: " .. proxy.connection.backend_ndx)
 	end
 
 	-- by now we should have a backend
@@ -279,9 +289,9 @@ function read_query( packet )
 			print("    server default db: " .. s.default_db)
 			print("    server username  : " .. s.username)
 		end
-		print("    in_trans        : " .. tostring(is_in_transaction));
-		print("    in_calc_found   : " .. tostring(is_in_select_calc_found_rows));
-		print("    COM_QUERY       : " .. tostring(cmd.type == proxy.COM_QUERY));
+		print("    in_trans        : " .. tostring(is_in_transaction))
+		print("    in_calc_found   : " .. tostring(is_in_select_calc_found_rows))
+		print("    COM_QUERY       : " .. tostring(cmd.type == proxy.COM_QUERY))
 	end
 
 	return proxy.PROXY_SEND_QUERY
@@ -315,12 +325,20 @@ function read_query_result( inj )
 		end
 		return proxy.PROXY_IGNORE_RESULT
 	end
+
 	is_in_transaction = flags.in_trans
+	local have_last_insert_id = (res.insert_id and (res.insert_id > 0))
 
 	if not is_in_transaction and 
-	   not is_in_select_calc_found_rows then
+	   not is_in_select_calc_found_rows and
+	   not have_last_insert_id then
 		-- release the backend
 		proxy.connection.backend_ndx = 0
+	elseif is_debug then
+		print("(read_query_result) staying on the same backend")
+		print("    in_trans        : " .. tostring(is_in_transaction))
+		print("    in_calc_found   : " .. tostring(is_in_select_calc_found_rows))
+		print("    have_insert_id  : " .. tostring(have_last_insert_id))
 	end
 end
 
