@@ -52,11 +52,9 @@ network_socket *network_connection_pool_get(network_connection_pool *pool,
 
 	if (arr->len == 0) return NULL;
 
-	if (username) {
+	if (username && username->len > 0) {
 		gsize i = 0;
 
-		g_message("%s.%d: username: %s", __FILE__, __LINE__, username->str);
-		
 		for (i = 0; i < pool->entries->len; i++) {
 			entry = pool->entries->pdata[i];
 			sock = entry->srv_sock;
