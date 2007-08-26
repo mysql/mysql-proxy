@@ -92,18 +92,29 @@ typedef struct {
 	off_t to_read;
 	
 	/**
-	 * data extracted from the handshake packet 
+	 * data extracted from the handshake  
 	 *
-	 * - mysqld_version and 
-	 * - thread_id 
-	 * are copied the client socket
+	 * all server-side only
 	 */
 	guint32 mysqld_version;  /**< numberic version of the version string */
-	guint32 thread_id;       /**< connection-id, set in the handshake packet */ 
+	guint32 thread_id;       /**< connection-id, set in the handshake packet */
 	GString *scramble_buf;   /**< the 21byte scramble-buf */
+	GString *username;       /**< username of the authed connection */
+	GString *scrambled_password;  /**< scrambled_pass used to auth */
 
+	/**
+	 * store the auth-handshake packet to simulate a login
+	 */
 	GString *auth_handshake_packet;
 	int is_authed;           /** did a client already authed this connection */
+
+	/**
+	 * store the default-db of the socket
+	 *
+	 * the client might have a different default-db than the server-side due to
+	 * statement balancing
+	 */	
+	GString *default_db;     /** default-db of this side of the connection */
 } network_socket;
 
 

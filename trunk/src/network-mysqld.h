@@ -197,6 +197,12 @@ struct network_mysqld_con {
 		CON_STATE_ERROR
        	} state;
 
+	/**
+	 * the client and server side of the connection
+	 *
+	 * each connection has a internal state
+	 * - default_db
+	 */
 	network_socket *server, *client;
 
 	int is_overlong_packet;
@@ -206,10 +212,6 @@ struct network_mysqld_con {
 	network_mysqld *srv; /* our srv object */
 
 	int is_listen_socket;
-
-	GString *default_db;
-	GString *username;
-	GString *scrambled_password;
 
 	struct {
 		guint32 len;
@@ -240,6 +242,11 @@ struct network_mysqld_con {
 			struct {
 				char state; /** OK, EOF, ERR */
 			} auth_result;
+
+			/** track the db in the COM_INIT_DB */
+			struct {
+				GString *db_name;
+			} init_db;
 		} state;
 	} parse;
 

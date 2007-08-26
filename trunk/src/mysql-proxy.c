@@ -178,7 +178,7 @@ int connections_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 		}
 
 		g_ptr_array_add(row, g_strdup_printf("%d", rcon->state));
-		g_ptr_array_add(row, g_strdup(rcon->default_db->len ? rcon->default_db->str : ""));
+		g_ptr_array_add(row, g_strdup(rcon && rcon->server && rcon->server->default_db->len ? rcon->server->default_db->str : ""));
 	
 		g_ptr_array_add(rows, row);
 	}

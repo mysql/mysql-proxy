@@ -35,16 +35,55 @@ void network_connection_pool_free(network_connection_pool *pool) {
 	g_free(pool);
 }
 
-network_socket *network_connection_pool_get(network_connection_pool *pool) {
+/**
+ * get a connection from the pool
+ *
+ * the connection is removed from the pool of idle connections
+ *
+ */
+network_socket *network_connection_pool_get(network_connection_pool *pool,
+		GString *username,
+		GString *default_db) {
+
 	GPtrArray *arr = pool->entries;
 
-	network_connection_pool_entry *entry;
-	network_socket *sock;
+	network_connection_pool_entry *entry = NULL;
+	network_socket *sock = NULL;
 
 	if (arr->len == 0) return NULL;
 
-	entry = g_ptr_array_remove_index_fast(pool->entries, 0);
-	sock = entry->srv_sock;
+	if (username) {
+		gsize i = 0;
+
+		g_message("%s.%d: username: %s", __FILE__, __LINE__, username->str);
+		
+		for (i = 0; i < pool->entries->len; i++) {
+			entry = pool->entries->pdata[i];
+			sock = entry->srv_sock;
+
+			if (g_string_equal(sock->username, username)) {
+				/* a good candidate */
+
+				break;
+			}
+		}
+
+		if (i == pool->entries->len) {
+			/**
+			 * not found 
+			 *
+			 * username is a requirement
+			 */
+			g_message("%s.%d: no pool-entry for %s found", __FILE__, __LINE__, username->str);
+			return NULL;
+		}
+
+		entry = g_ptr_array_remove_index_fast(pool->entries, i);
+		sock = entry->srv_sock;
+	} else {
+		entry = g_ptr_array_remove_index_fast(pool->entries, 0);
+		sock = entry->srv_sock;
+	}
 	g_free(entry);
 
 	/* remove the idle handler from the socket */	

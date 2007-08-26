@@ -351,7 +351,14 @@ static void proxy_lua_init_global_fenv(lua_State *L) {
 	DEF(PROXY_VERSION);
 #undef DEF
 
+	/**
+	 * create 
+	 * - proxy.global 
+	 * - proxy.global.config
+	 */
 	lua_newtable(L);
+	lua_newtable(L);
+	lua_setfield(L, -2, "config");
 	lua_setfield(L, -2, "global");
 
 	lua_setglobal(L, "proxy");
@@ -547,7 +554,7 @@ static void network_mysqld_con_idle_handle(int event_fd, short events, void *use
  * move the con->server into connection pool and disconnect the 
  * proxy from its backend 
  */
-int proxy_connection_pool_add_connection(network_mysqld_con *con) {
+static int proxy_connection_pool_add_connection(network_mysqld_con *con) {
 	network_mysqld *srv = con->srv;
 	network_connection_pool_entry *pool_entry = NULL;
 	plugin_con_state *st = con->plugin_con_state;
@@ -567,11 +574,67 @@ int proxy_connection_pool_add_connection(network_mysqld_con *con) {
 	
 	st->backend->connected_clients--;
 	st->backend = NULL;
+	st->backend_ndx = -1;
 	
 	con->server = NULL;
 
 	return 0;
 }
+
+/**
+ * swap the server connection with a connection from
+ * the connection pool
+ *
+ * we can only switch backends if we have a authed connection in the pool.
+ *
+ * @return NULL if swapping failed
+ *         the new backend on success
+ */
+static network_socket *proxy_connection_pool_swap(network_mysqld_con *con, int backend_ndx) {
+	backend_t *backend = NULL;
+	network_socket *send_sock;
+	plugin_con_state *st = con->plugin_con_state;
+	plugin_srv_state *g = st->global_state;
+
+	/*
+	 * we can only change to another backend if the backend is already
+	 * in the connection pool and connected
+	 */
+
+	if (backend_ndx < 0 || 
+	    backend_ndx >= g->backend_pool->len) {
+		/* backend_ndx is out of range */
+		return NULL;
+	} 
+
+	backend = g->backend_pool->pdata[backend_ndx];
+
+	/**
+	 * get a connection from the pool which matches our basic requirements
+	 * - username has to match
+	 * - default_db should match
+	 */
+	if (NULL == (send_sock = network_connection_pool_get(backend->pool, 
+					con->client->username,
+					con->client->default_db))) {
+		/**
+		 * no connections in the pool
+		 */
+		st->backend_ndx = -1;
+		return NULL;
+	}
+
+	/* the backend is up and cool, take and move the current backend into the pool */
+	proxy_connection_pool_add_connection(con);
+
+	/* connect to the new backend */
+	st->backend = backend;
+	st->backend->connected_clients++;
+	st->backend_ndx = backend_ndx;
+
+	return send_sock;
+}
+
 
 
 #ifdef HAVE_LUA_H
@@ -604,7 +667,7 @@ lua_State *lua_load_script(lua_State *L, const gchar *name) {
 /**
  * get the info about a backend
  *
- * proxy.server[0].
+ * proxy.backend[0].
  *   connected_clients => clients using this backend
  *   address           => ip:port or unix-path of to the backend
  *   state             => int(BACKEND_STATE_UP|BACKEND_STATE_DOWN) 
@@ -613,7 +676,7 @@ lua_State *lua_load_script(lua_State *L, const gchar *name) {
  * @return nil or requested information
  * @see backend_state_t backend_type_t
  */
-static int proxy_server_get(lua_State *L) {
+static int proxy_backend_get(lua_State *L) {
 	backend_t *backend = *(backend_t **)luaL_checkudata(L, 1, "proxy.backend"); 
 	const char *key = luaL_checkstring(L, 2);
 
@@ -634,19 +697,19 @@ static int proxy_server_get(lua_State *L) {
 	return 1;
 }
 /**
- * get proxy.servers[ndx]
+ * get proxy.backends[ndx]
  *
  * get the backend from the array of mysql backends. 
  *
  * @return nil or the backend
- * @see proxy_server_get
+ * @see proxy_backend_get
  */
-static int proxy_servers_get(lua_State *L) {
+static int proxy_backends_get(lua_State *L) {
 	plugin_con_state *st;
 	backend_t *backend; 
 	backend_t **backend_p;
 
-	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.servers"); 
+	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.backends"); 
 	int backend_ndx = luaL_checkinteger(L, 2) - 1; /** lua is indexes from 1, C from 0 */
 
 	st = con->plugin_con_state;
@@ -660,12 +723,12 @@ static int proxy_servers_get(lua_State *L) {
 
 	backend = st->global_state->backend_pool->pdata[backend_ndx];
 
-	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneat proxy.servers[ndx] */
+	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneat proxy.backends[ndx] */
 	*backend_p = backend;
 
 	/* if the meta-table is new, add __index to it */
 	if (1 == luaL_newmetatable(L, "proxy.backend")) {
-		lua_pushcfunction(L, proxy_server_get);                   /* (sp += 1) */
+		lua_pushcfunction(L, proxy_backend_get);                   /* (sp += 1) */
 		lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
 	}
 
@@ -674,8 +737,8 @@ static int proxy_servers_get(lua_State *L) {
 	return 1;
 }
 
-static int proxy_servers_len(lua_State *L) {
-	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.servers"); 
+static int proxy_backends_len(lua_State *L) {
+	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.backends"); 
 	plugin_con_state *st;
 
 	st = con->plugin_con_state;
@@ -685,6 +748,36 @@ static int proxy_servers_len(lua_State *L) {
         return 1;
 }
 
+static int proxy_socket_get(lua_State *L) {
+	network_socket *sock = *(network_socket **)luaL_checkudata(L, 1, "proxy.socket"); 
+	const char *key = luaL_checkstring(L, 2);
+
+	/**
+	 * we to split it in .client and .server here
+	 */
+
+	if (0 == strcmp(key, "default_db")) {
+		lua_pushlstring(L, sock->default_db->str, sock->default_db->len);
+	} else if (0 == strcmp(key, "username")) {
+		lua_pushlstring(L, sock->username->str, sock->username->len);
+	} else if (0 == strcmp(key, "scrambled_password")) {
+		lua_pushlstring(L, sock->scrambled_password->str, sock->scrambled_password->len);
+	} else if (sock->mysqld_version) { /* only the server-side has mysqld_version set */
+		if (0 == strcmp(key, "mysqld_version")) {
+			lua_pushinteger(L, sock->mysqld_version);
+		} else if (0 == strcmp(key, "thread_id")) {
+			lua_pushinteger(L, sock->thread_id);
+		} else if (0 == strcmp(key, "scramble_buffer")) {
+			lua_pushlstring(L, sock->scramble_buf->str, sock->scramble_buf->len);
+		} else {
+			lua_pushnil(L);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+
+	return 1;
+}
 
 /**
  * get the connection information
@@ -698,14 +791,37 @@ static int proxy_connection_get(lua_State *L) {
 
 	st = con->plugin_con_state;
 
+	/**
+	 * we to split it in .client and .server here
+	 */
+
 	if (0 == strcmp(key, "default_db")) {
-		lua_pushlstring(L, con->default_db->str, con->default_db->len);
+		return luaL_error(L, "proxy.connection.default_db is deprecated, use proxy.connection.client.default_db or proxy.connection.server.default_db instead");
 	} else if (0 == strcmp(key, "thread_id")) {
-		lua_pushinteger(L, con->client->thread_id);
-	} else if (con->server && (0 == strcmp(key, "mysqld_version"))) {
-		lua_pushinteger(L, con->server->mysqld_version);
+		return luaL_error(L, "proxy.connection.thread_id is deprecated, use proxy.connection.server.thread_id instead");
+	} else if (0 == strcmp(key, "mysqld_version")) {
+		return luaL_error(L, "proxy.connection.mysqld_version is deprecated, use proxy.connection.server.mysqld_version instead");
 	} else if (0 == strcmp(key, "backend_ndx")) {
 		lua_pushinteger(L, st->backend_ndx + 1);
+	} else if ((con->server && (0 == strcmp(key, "server"))) ||
+	           (con->client && (0 == strcmp(key, "client")))) {
+		network_socket **socket_p;
+
+		socket_p = lua_newuserdata(L, sizeof(network_socket)); /* the table underneat proxy.socket */
+
+		if (key[0] == 's') {
+			*socket_p = con->server;
+		} else {
+			*socket_p = con->client;
+		}
+
+		/* if the meta-table is new, add __index to it */
+		if (1 == luaL_newmetatable(L, "proxy.socket")) {
+			lua_pushcfunction(L, proxy_socket_get);                   /* (sp += 1) */
+			lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
+		}
+
+		lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
 	} else {
 		lua_pushnil(L);
 	}
@@ -728,7 +844,18 @@ static int proxy_connection_set(lua_State *L) {
 	if (0 == strcmp(key, "backend_ndx")) {
 		/**
 		 * in lua-land the ndx is based on 1, in C-land on 0 */
-		st->backend_ndx = luaL_checkinteger(L, 3) - 1;
+		int backend_ndx = luaL_checkinteger(L, 3) - 1;
+		network_socket *send_sock;
+			
+		if (backend_ndx == -1) {
+			/** drop the backend for now
+			 */
+			proxy_connection_pool_add_connection(con);
+		} else if (NULL != (send_sock = proxy_connection_pool_swap(con, backend_ndx))) {
+			con->server = send_sock;
+		} else {
+			st->backend_ndx = backend_ndx;
+		}
 	} else {
 		return luaL_error(L, "proxy.connection.%s is not writable", key);
 	}
@@ -948,15 +1075,20 @@ static int lua_register_callback(network_mysqld_con *con) {
 	lua_setmetatable(L, -2);
 
 	lua_setfield(L, -2, "queries");
-		
+	
+	/**
+	 * export internal functions 
+	 *
+	 * @note: might be moved into a lua-c-lib instead
+	 */
 	lua_pushcfunction(L, proxy_tokenize);
 	lua_setfield(L, -2, "tokenize");
 
 	/**
-	 * proxy.connection is read-only
+	 * proxy.connection is (mostly) read-only
 	 *
-	 * .thread_id = ... thread-id against this server
-	 * .server_id = ... index into proxy.servers[ndx]
+	 * .thread_id  = ... thread-id against this server
+	 * .backend_id = ... index into proxy.backends[ndx]
 	 *
 	 */
 	
@@ -975,23 +1107,23 @@ static int lua_register_callback(network_mysqld_con *con) {
 	lua_setfield(L, -2, "connection");
 
 	/**
-	 * register proxy.servers[]
+	 * register proxy.backends[]
 	 *
-	 * @see proxy_servers_get()
+	 * @see proxy_backends_get()
 	 */
 
 	con_p = lua_newuserdata(L, sizeof(con));
 	*con_p = con;
 	/* if the meta-table is new, add __index to it */
-	if (1 == luaL_newmetatable(L, "proxy.servers")) {
-		lua_pushcfunction(L, proxy_servers_get);                  /* (sp += 1) */
+	if (1 == luaL_newmetatable(L, "proxy.backends")) {
+		lua_pushcfunction(L, proxy_backends_get);                  /* (sp += 1) */
 		lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-		lua_pushcfunction(L, proxy_servers_len);                  /* (sp += 1) */
+		lua_pushcfunction(L, proxy_backends_len);                  /* (sp += 1) */
 		lua_setfield(L, -2, "__len");                             /* (sp -= 1) */
 	}
 	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */
 
-	lua_setfield(L, -2, "servers");
+	lua_setfield(L, -2, "backends");
 
 	/**
 	 * proxy.response knows 3 fields with strict types:
@@ -1613,16 +1745,16 @@ static int proxy_resultset_get(lua_State *L) {
 		lua_pushlstring(L, s->str + 4, s->len - 4);
 	} else if (0 == strcmp(key, "flags")) {
 		lua_newtable(L);
-		lua_pushinteger(L, (res->qstat.server_status & SERVER_STATUS_IN_TRANS) != 0);
+		lua_pushboolean(L, (res->qstat.server_status & SERVER_STATUS_IN_TRANS) != 0);
 		lua_setfield(L, -2, "in_trans");
 
-		lua_pushinteger(L, (res->qstat.server_status & SERVER_STATUS_AUTOCOMMIT) != 0);
+		lua_pushboolean(L, (res->qstat.server_status & SERVER_STATUS_AUTOCOMMIT) != 0);
 		lua_setfield(L, -2, "auto_commit");
 		
-		lua_pushinteger(L, (res->qstat.server_status & SERVER_QUERY_NO_GOOD_INDEX_USED) != 0);
+		lua_pushboolean(L, (res->qstat.server_status & SERVER_QUERY_NO_GOOD_INDEX_USED) != 0);
 		lua_setfield(L, -2, "no_good_index_used");
 		
-		lua_pushinteger(L, (res->qstat.server_status & SERVER_QUERY_NO_INDEX_USED) != 0);
+		lua_pushboolean(L, (res->qstat.server_status & SERVER_QUERY_NO_INDEX_USED) != 0);
 		lua_setfield(L, -2, "no_index_used");
 	} else if (0 == strcmp(key, "warning_count")) {
 		lua_pushinteger(L, res->qstat.warning_count);
@@ -2169,11 +2301,11 @@ static proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
 
 		lua_newtable(L);
 
-		lua_pushlstring(L, con->username->str, con->username->len);
+		lua_pushlstring(L, con->client->username->str, con->client->username->len);
 		lua_setfield(L, -2, "username");
-		lua_pushlstring(L, con->scrambled_password->str, con->scrambled_password->len);
+		lua_pushlstring(L, con->client->scrambled_password->str, con->client->scrambled_password->len);
 		lua_setfield(L, -2, "password");
-		lua_pushlstring(L, con->default_db->str, con->default_db->len);
+		lua_pushlstring(L, con->client->default_db->str, con->client->default_db->len);
 		lua_setfield(L, -2, "default_db");
 
 		if (lua_pcall(L, 1, 1, 0) != 0) {
@@ -2284,11 +2416,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 	network_mysqld_proto_skip(packet, &off, 23);
 	
-	network_mysqld_proto_get_gstring(packet, &off, con->username);
-	network_mysqld_proto_get_lenenc_gstring(packet, &off, con->scrambled_password);
+	network_mysqld_proto_get_gstring(packet, &off, con->client->username);
+	network_mysqld_proto_get_lenenc_gstring(packet, &off, con->client->scrambled_password);
 
 	if (off != packet->len) {
-		network_mysqld_proto_get_gstring(packet, &off, con->default_db);
+		network_mysqld_proto_get_gstring(packet, &off, con->client->default_db);
 	}
 
 	/**
@@ -2308,14 +2440,14 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 			GString *com_change_user = g_string_new(NULL);
 			/* copy incl. the nul */
 			g_string_append_c(com_change_user, COM_CHANGE_USER);
-			g_string_append_len(com_change_user, con->username->str, con->username->len + 1);
+			g_string_append_len(com_change_user, con->client->username->str, con->client->username->len + 1);
 
-			g_assert(con->scrambled_password->len < 250);
+			g_assert(con->client->scrambled_password->len < 250);
 
-			g_string_append_c(com_change_user, (con->scrambled_password->len & 0xff));
-			g_string_append_len(com_change_user, con->scrambled_password->str, con->scrambled_password->len);
+			g_string_append_c(com_change_user, (con->client->scrambled_password->len & 0xff));
+			g_string_append_len(com_change_user, con->client->scrambled_password->str, con->client->scrambled_password->len);
 
-			g_string_append_len(com_change_user, con->default_db->str, con->default_db->len + 1);
+			g_string_append_len(com_change_user, con->client->default_db->str, con->client->default_db->len + 1);
 			
 			network_queue_append(send_sock->send_queue, 
 					com_change_user->str, 
@@ -2455,7 +2587,29 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 		 */
 		packet->str[3] = 2;
 	}
-	
+
+	/**
+	 * copy the 
+	 * - default-db, 
+	 * - username, 
+	 * - scrambed_password
+	 *
+	 * to the server-side 
+	 */
+	g_string_truncate(recv_sock->username, 0);
+	g_string_append_len(recv_sock->username, send_sock->username->str, send_sock->username->len);
+	g_string_truncate(recv_sock->default_db, 0);
+	g_string_append_len(recv_sock->default_db, send_sock->default_db->str, send_sock->default_db->len);
+	g_string_truncate(recv_sock->scrambled_password, 0);
+	g_string_append_len(recv_sock->scrambled_password, send_sock->scrambled_password->str, send_sock->scrambled_password->len);
+
+	/**
+	 * recv_sock still points to the old backend that
+	 * we received the packet from. 
+	 *
+	 * backend_ndx = 0 might have reset con->server
+	 */
+
 	switch (proxy_lua_read_auth_result(con)) {
 	case PROXY_SEND_RESULT:
 		recv_sock->packet_len = PACKET_LEN_UNSET;
@@ -2474,14 +2628,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 	
-	/**
-	 * we got asked to stop from this backend and move the connection into the 
-	 * connection pool */
-	if (st->backend_ndx == -1) {
-		proxy_connection_pool_add_connection(con);
-	}
-
-
 	con->state = CON_STATE_SEND_AUTH_RESULT;
 
 	return RET_SUCCESS;
@@ -2626,55 +2772,9 @@ static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 }
 
 /**
- * swap the server connection with a connection from
- * the connection pool
- *
- * we can only switch backends if we have a authed connection in the pool.
- *
- * @return NULL if swapping failed
- *         the new backend on success
- */
-static network_socket *proxy_connection_pool_swap(network_mysqld_con *con) {
-	backend_t *backend = NULL;
-	network_socket *send_sock;
-	plugin_con_state *st = con->plugin_con_state;
-	plugin_srv_state *g = st->global_state;
-
-	/*
-	 * we can only change to another backend if the backend is already
-	 * in the connection pool and connected
-	 */
-
-	if (st->backend_ndx < 0 || 
-	    st->backend_ndx >= g->backend_pool->len) {
-		/* backend_ndx is out of range */
-		return NULL;
-	} 
-
-	backend = g->backend_pool->pdata[st->backend_ndx];
-
-	if (NULL == (send_sock = network_connection_pool_get(backend->pool))) {
-		/**
-		 * no connections in the pool
-		 */
-		return NULL;
-	}
-
-	/* the backend is up and cool, take and move the current backend into the pool */
-	proxy_connection_pool_add_connection(con);
-
-	/* connect to the new backend */
-	st->backend = backend;
-	st->backend->connected_clients++;
-
-	return send_sock;
-}
-
-/**
  * gets called after a query has been read
  *
  * - calls the lua script via network_mysqld_con_handle_proxy_stmt()
- * - extracts con->default_db if INIT_DB is called
  *
  * @see network_mysqld_con_handle_proxy_stmt
  */
@@ -2685,7 +2785,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	plugin_con_state *st = con->plugin_con_state;
 	int proxy_query = 1;
 	proxy_stmt_ret ret;
-	gint old_backend_ndx;
 
 	send_sock = NULL;
 	recv_sock = con->client;
@@ -2703,20 +2802,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 
 	con->parse.len = recv_sock->packet_len;
 
-	old_backend_ndx = st->backend_ndx;
 	ret = proxy_lua_read_query(con);
-	
-	if (old_backend_ndx != st->backend_ndx) {
-		/* the lua script asked us to use another backend */
-		if (NULL == (send_sock = proxy_connection_pool_swap(con))) {
-			st->backend_ndx = old_backend_ndx;
-			send_sock = con->server;
-		} else {
-			con->server = send_sock;
-		}
-	} else {
-		send_sock = con->server;
-	}
 
 	/**
 	 * if we disconnected in read_query_result() we have no connection open
@@ -2729,6 +2815,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		g_critical("%s.%d: I have no server backend, closing connection", __FILE__, __LINE__);
 		return RET_ERROR;
 	}
+	
+	send_sock = con->server;
 
 	switch (ret) {
 	case PROXY_NO_DECISION:
@@ -2738,25 +2826,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 
 		network_queue_append_chunk(send_sock->send_queue, packet);
 
-		/**
-		 * FIXME: check that packet->str points to the 
-		 * packet we really send. It might have gotten rewritten.
-		 */
-
-		if (packet->str[NET_HEADER_SIZE] == COM_INIT_DB) {
-			/**
-			 * \4\0\0\0
-			 *   \2
-			 *   foo
-			 *
-			 * we have to get the used the DB to guess the default-db in the EXPLAIN mapping 
-			 */
-	
-			g_string_truncate(con->default_db, 0);
-			g_string_append_len(con->default_db,
-					packet->str + (NET_HEADER_SIZE + 1), 
-					packet->len - (NET_HEADER_SIZE + 1));
-		}
 		break;
 	case PROXY_SEND_RESULT: 
 		proxy_query = 0;
@@ -2927,6 +2996,46 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		}
 		break;
 	case COM_INIT_DB:
+		/**
+		 * in case we have a init-db statement we track the db-change on the server-side
+		 * connection
+		 */
+		switch (packet->str[NET_HEADER_SIZE + 0]) {
+		case MYSQLD_PACKET_ERR:
+			is_finished = 1;
+			break;
+		case MYSQLD_PACKET_OK:
+			/**
+			 * track the change of the init_db */
+			g_string_truncate(con->server->default_db, 0);
+			g_string_truncate(con->client->default_db, 0);
+			if (con->parse.state.init_db.db_name->len) {
+				g_string_append_len(con->server->default_db, 
+						con->parse.state.init_db.db_name->str,
+						con->parse.state.init_db.db_name->len);
+				
+				g_string_append_len(con->client->default_db, 
+						con->parse.state.init_db.db_name->str,
+						con->parse.state.init_db.db_name->len);
+			}
+			 
+			g_message("%s.%d: (parse) COM_INIT_DB: server-default_db = %s", 
+					__FILE__, __LINE__, 
+					con->server->default_db->str);
+			is_finished = 1;
+			break;
+		default:
+			g_error("%s.%d: COM_(0x%02x) should be (ERR|OK), got %02x",
+					__FILE__, __LINE__,
+					con->parse.command, packet->str[0 + NET_HEADER_SIZE]);
+			break;
+		}
+
+		g_message("%s.%d: (parse) COM_INIT_DB: p=%08x", 
+					__FILE__, __LINE__, 
+					con->parse.state.init_db.db_name);
+
+		break;
 	case COM_STMT_RESET:
 	case COM_PING:
 	case COM_PROCESS_KILL:
@@ -3237,12 +3346,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 
 		proxy_lua_read_query_result(con);
 
-		/**
-		 * we got asked to stop from this backend and move the connection into the 
-		 * connection pool */
-		if (st->backend_ndx == -1) {
-			proxy_connection_pool_add_connection(con);
-		}
+		/** recv_sock might be != con->server now */
 
 		/**
 		 * if the send-queue is empty, we have nothing to send
@@ -3473,7 +3577,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	 */
 
 	if (!use_pooled_connection ||
-	    NULL == (con->server = network_connection_pool_get(backend->pool))) {
+	    NULL == (con->server = network_connection_pool_get(backend->pool, NULL, NULL))) {
 		int ioctlvar;
 
 		con->server = network_socket_init();
@@ -3693,16 +3797,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
 	} else if (st->backend) {
 		/* we have backend assigned and want to close the connection to it */
 		st->backend->connected_clients--;
-	} else if (st->backend_ndx >= 0 &&
-		   st->backend_ndx < g->backend_pool->len) {
-		/* the lua-layer asked us to close a pooled connection */
-		backend_t *backend = NULL;
-
-		backend = g->backend_pool->pdata[st->backend_ndx];
-
-		g_assert(con->server == NULL);
-		
-		con->server = network_connection_pool_get(backend->pool);
 	}
 
 	plugin_con_state_free(st);

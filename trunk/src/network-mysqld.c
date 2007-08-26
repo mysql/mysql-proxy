@@ -90,9 +90,6 @@ network_mysqld_con *network_mysqld_con_init(network_mysqld *srv) {
 
 	con = g_new0(network_mysqld_con, 1);
 
-	con->default_db = g_string_new(NULL);
-	con->username   = g_string_new(NULL);
-	con->scrambled_password = g_string_new(NULL);
 	con->srv = srv;
 
 	g_ptr_array_add(srv->cons, con);
@@ -102,10 +99,6 @@ network_mysqld_con *network_mysqld_con_init(network_mysqld *srv) {
 
 void network_mysqld_con_free(network_mysqld_con *con) {
 	if (!con) return;
-
-	g_string_free(con->username,   TRUE);
-	g_string_free(con->default_db, TRUE);
-	g_string_free(con->scrambled_password, TRUE);
 
 	if (con->server) network_socket_free(con->server);
 	if (con->client) network_socket_free(con->client);
@@ -1215,6 +1208,24 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					case COM_STMT_PREPARE:
 						con->parse.state.prepare.first_packet = 1;
 						break;
+					case COM_INIT_DB:
+						if (s->str[NET_HEADER_SIZE] == COM_INIT_DB && 
+						    (s->len > NET_HEADER_SIZE + 1)) {
+							con->parse.state.init_db.db_name = g_string_new(NULL);
+				
+							g_string_truncate(con->parse.state.init_db.db_name, 0);
+							g_string_append_len(con->parse.state.init_db.db_name, 
+									s->str + NET_HEADER_SIZE + 1, 
+									s->len - NET_HEADER_SIZE - 1);
+				
+							g_message("%s.%d: (store init-db) COM_INIT_DB: %s", 
+									__FILE__, __LINE__, 
+									con->parse.state.init_db.db_name->str);
+						} else {
+							con->parse.state.init_db.db_name = NULL;
+						}
+
+						break;
 					default:
 						break;
 					}
@@ -1286,6 +1297,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				}
 
 			} while (con->state == CON_STATE_READ_QUERY_RESULT);
+
+			if (con->parse.command == COM_INIT_DB) {
+				if (con->parse.state.init_db.db_name) {
+					g_string_free(con->parse.state.init_db.db_name, TRUE);
+					con->parse.state.init_db.db_name = NULL;
+				}
+			}
 	
 			break; 
 		case CON_STATE_SEND_QUERY_RESULT:

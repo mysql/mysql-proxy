@@ -30,7 +30,9 @@ typedef struct {
 	network_connection_pool *pool;
 } network_connection_pool_entry;
 
-network_socket *network_connection_pool_get(network_connection_pool *pool);
+network_socket *network_connection_pool_get(network_connection_pool *pool,
+		GString *username,
+		GString *default_db);
 network_connection_pool_entry *network_connection_pool_add(network_connection_pool *pool, network_socket *sock);
 void network_connection_pool_remove(network_connection_pool *pool, network_connection_pool_entry *entry);
 

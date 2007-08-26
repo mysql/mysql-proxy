@@ -80,6 +80,9 @@ network_socket *network_socket_init() {
 
 	s->packet_len = PACKET_LEN_UNSET;
 
+	s->default_db = g_string_new(NULL);
+	s->username   = g_string_new(NULL);
+	s->scrambled_password = g_string_new(NULL);
 	s->scramble_buf = g_string_new(NULL);
 	s->auth_handshake_packet = g_string_new(NULL);
 	
@@ -103,8 +106,12 @@ void network_socket_free(network_socket *s) {
 		closesocket(s->fd);
 	}
 
-	g_string_free(s->scramble_buf, 1);
-	g_string_free(s->auth_handshake_packet, 1);
+	g_string_free(s->scramble_buf, TRUE);
+	g_string_free(s->auth_handshake_packet, TRUE);
+	g_string_free(s->username,   TRUE);
+	g_string_free(s->default_db, TRUE);
+	g_string_free(s->scrambled_password, TRUE);
+
 
 	g_free(s);
 }
