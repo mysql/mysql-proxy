@@ -28,6 +28,7 @@ if not proxy.global.max_active_trx then
 	proxy.global.max_active_trx = 0
 end
 
+proxy.global.config.show_idle_connections = false
 
 -- the connection-id is local to the script
 local connection_id
@@ -45,11 +46,13 @@ function dump_global_state()
 	local active_conns = 0
 
 	for k, v in pairs(proxy.global.active_queries) do
-		local cmd_query = ""
-		if v.cmd then
-			cmd_query = string.format("(%s) %q", v.cmd.type_name, v.cmd.query or "")
+		if v.state ~= "idle" or proxy.global.config.show_idle_connections then
+			local cmd_query = ""
+			if v.cmd then
+				cmd_query = string.format("(%s) %q", v.cmd.type_name, v.cmd.query or "")
+			end
+			o = o .."  ["..k.."] (".. v.username .."@".. v.db ..") " .. cmd_query .." (state=" .. v.state .. ")\n"
 		end
-		o = o .."  ["..k.."] (".. v.username .."@".. v.db ..") " .. cmd_query .." (state=" .. v.state .. ")\n"
 		num_conns = num_conns + 1
 
 		if v.state ~= "idle" then
