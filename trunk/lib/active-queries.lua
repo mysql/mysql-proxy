@@ -24,6 +24,11 @@ if not proxy.global.active_queries then
 	proxy.global.active_queries = {}
 end
 
+if not proxy.global.max_active_trx then
+	proxy.global.max_active_trx = 0
+end
+
+
 -- the connection-id is local to the script
 local connection_id
 
@@ -52,10 +57,16 @@ function dump_global_state()
 		end
 	end
 
+	if active_conns > proxy.global.max_active_trx then
+		proxy.global.max_active_trx = active_conns
+	end
+
 	-- prepend the data and the stats about the number of connections and trx
 	o = os.date("%Y-%m-%d %H:%M:%S") .. "\n" ..
-		"  #connections: " .. num_conns .. ", #active trx: " .. active_conns .. "\n" ..
-		o
+		"  #connections: " .. num_conns .. 
+		", #active trx: " .. active_conns .. 
+		", max(active trx): ".. proxy.global.max_active_trx .. 
+		"\n" .. o
 
 	print(o)
 end
