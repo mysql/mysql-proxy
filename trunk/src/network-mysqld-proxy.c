@@ -3550,8 +3550,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 		for (i = 0; i < g->backend_pool->len; i++) {
 			backend_t *cur = g->backend_pool->pdata[i];
-		
-			if (cur->state == BACKEND_STATE_DOWN) continue;
+	
+			/**
+			 * skip backends which are down or not writable
+			 */	
+			if (cur->state == BACKEND_STATE_DOWN ||
+			    cur->type != BACKEND_TYPE_RW) continue;
 	
 			if (cur->connected_clients < min_connected_clients) {
 				st->backend_ndx = i;
