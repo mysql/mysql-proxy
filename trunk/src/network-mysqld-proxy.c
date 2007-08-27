@@ -3019,9 +3019,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 						con->parse.state.init_db.db_name->len);
 			}
 			 
-			g_message("%s.%d: (parse) COM_INIT_DB: server-default_db = %s", 
-					__FILE__, __LINE__, 
-					con->server->default_db->str);
 			is_finished = 1;
 			break;
 		default:
@@ -3030,10 +3027,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 					con->parse.command, packet->str[0 + NET_HEADER_SIZE]);
 			break;
 		}
-
-		g_message("%s.%d: (parse) COM_INIT_DB: p=%08x", 
-					__FILE__, __LINE__, 
-					con->parse.state.init_db.db_name);
 
 		break;
 	case COM_STMT_RESET:
