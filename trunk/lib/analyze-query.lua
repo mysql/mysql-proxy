@@ -17,12 +17,29 @@
 
 --]]
 
-local commands  = require("proxy.commands")
+local commands     = require("proxy.commands")
+local tokenizer    = require("proxy.tokenizer")
+local auto_config  = require("proxy.auto-config")
+
+if not proxy.global.config.analyze_query then
+	proxy.global.config.analyze_query = {
+		analyze_queries = true,
+	}
+end
 
 baseline = {}
 
 function read_query(packet) 
 	local cmd = commands.parse(packet)
+
+	local r = auto_config.handle(cmd)
+	if r then return r end
+
+	-- analyzing queries is disabled, just pass them on
+	if not proxy.global.config.analyze_query then
+		return
+	end
+
 	-- we only handle normal queries
 	if cmd.type ~= proxy.COM_QUERY then
 		return
@@ -48,8 +65,16 @@ function read_query_result(inj)
 			proxy.queries:reset()
 		end
 
-		print("Query: " .. inj.query:sub(2))
-		print("Exec_time: " .. inj.query_time .. " us")
+		local tokens = tokenizer.tokenize(inj.query:sub(2))
+		local norm_query = tokenizer.normalize(tokens)
+
+		o = "# " .. os.date("%Y-%m-%d %H:%M:%S") .. 
+			" [".. proxy.connection.server.thread_id .. 
+			"] user: " .. proxy.connection.client.username .. 
+			", db: " .. proxy.connection.client.default_db .. "\n" ..
+			"Query: " .. string.format("%q", inj.query:sub(2)) .. "\n" ..
+			"Norm_Query: " .. string.format("%q", norm_query) .. "\n" ..
+			"Exec_time: " .. inj.query_time .. " us" .. "\n"
 
 		return
 	elseif inj.id == 2 then
@@ -71,15 +96,17 @@ function read_query_result(inj)
 					num2 = num2 - 1
 				elseif row[1] == "Questions" then
 					num2 = num2 - 1
+				elseif row[1] == "Last_query_cost" then
+					num1 = 0
 				end
 				
 				if num1 and num2 and num2 - num1 > 0 then
-					print(".. " .. row[1] .. " = " .. num2 - num1)
+					o = o .. ".. " .. row[1] .. " = " .. (num2 - num1) .. "\n"
 				end
 			end
 		end
 		-- add a newline
-		print()
+		print(o)
 	end
 
 	return proxy.PROXY_IGNORE_RESULT
