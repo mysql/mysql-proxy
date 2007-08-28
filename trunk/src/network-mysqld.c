@@ -1217,10 +1217,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 							g_string_append_len(con->parse.state.init_db.db_name, 
 									s->str + NET_HEADER_SIZE + 1, 
 									s->len - NET_HEADER_SIZE - 1);
-				
-							g_message("%s.%d: (store init-db) COM_INIT_DB: %s", 
-									__FILE__, __LINE__, 
-									con->parse.state.init_db.db_name->str);
 						} else {
 							con->parse.state.init_db.db_name = NULL;
 						}
