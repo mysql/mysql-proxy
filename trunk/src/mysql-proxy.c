@@ -67,6 +67,45 @@ static void log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags UNUSE
 	write(STDERR_FILENO, "\n", 1);
 }
 
+int help_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
+	/**
+	 * show the available commands 
+	 */
+	network_mysqld *srv = user_data;
+	MYSQL_FIELD *field;
+	GPtrArray *row;
+	gsize i;
+
+	field = network_mysqld_proto_field_init();
+	field->name = g_strdup("command");
+	field->org_name = g_strdup("command");
+	field->type = FIELD_TYPE_STRING;
+	field->flags = PRI_KEY_FLAG;
+	field->length = 50;
+
+	g_ptr_array_add(fields, field);
+
+	field = network_mysqld_proto_field_init();
+	field->name = g_strdup("description");
+	field->org_name = g_strdup("description");
+	field->type = FIELD_TYPE_STRING;
+	field->length = 80;
+
+	g_ptr_array_add(fields, field);
+
+	row = g_ptr_array_new(); 
+	g_ptr_array_add(row, g_strdup("select * from proxy_connections")); 
+	g_ptr_array_add(row, g_strdup("show information about proxy connections")); 
+	g_ptr_array_add(rows, row);
+
+	row = g_ptr_array_new(); 
+	g_ptr_array_add(row, g_strdup("select * from proxy_config")); 
+	g_ptr_array_add(row, g_strdup("show information about proxy configuration")); 
+	g_ptr_array_add(rows, row);
+
+	return 0;
+}
+
 int config_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 	/**
 	 * show the current configuration 
@@ -344,6 +383,11 @@ int main(int argc, char **argv) {
 	table->user_data = srv;
 	g_hash_table_insert(srv->tables, g_strdup("proxy_config"), table);
 	
+	table = network_mysqld_table_init();
+	table->select    = help_select;
+	table->user_data = srv;
+	g_hash_table_insert(srv->tables, g_strdup("help"), table);
+
 #ifndef _WIN32	
 	signal(SIGINT,  signal_handler);
 	signal(SIGTERM, signal_handler);
