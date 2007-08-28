@@ -20,10 +20,9 @@
 ---
 -- a flexible statement based load balancer with connection pooling
 --
--- * build a connection pool of min_idle_connections for each backend and maintain
---   its size
--- * 
--- 
+-- * build a connection pool of min_idle_connections for each backend and 
+--   maintain its size
+-- * reusing a server-side connection when it is idling
 -- 
 
 --- config
@@ -33,7 +32,7 @@ local min_idle_connections = 4
 local max_idle_connections = 8
 
 -- debug
-local is_debug = false
+local is_debug = true
 
 --- end of config
 
@@ -62,9 +61,9 @@ function connect_server()
 	local least_idle_conns_ndx = 0
 	local least_idle_conns = 0
 
-	for i = 1, #proxy.servers do
-		local s = proxy.servers[i]
-		if 1 or is_debug then
+	for i = 1, #proxy.backends do
+		local s = proxy.backends[i]
+		if is_debug then
 			print("  [".. i .."].connected_clients = " .. s.connected_clients)
 			print("  [".. i .."].idling_connections = " .. s.idling_connections)
 			print("  [".. i .."].type = " .. s.type)
@@ -94,7 +93,7 @@ function connect_server()
 	end
 
 	if proxy.connection.backend_ndx > 0 and 
-	   proxy.servers[proxy.connection.backend_ndx].idling_connections >= min_idle_connections then
+	   proxy.backends[proxy.connection.backend_ndx].idling_connections >= min_idle_connections then
 		-- we have 4 idling connections in the pool, that's good enough
 		if is_debug then
 			print("  using pooled connection from: " .. proxy.connection.backend_ndx)
@@ -138,33 +137,25 @@ function read_query( packet )
 	if is_debug then
 		print("[read_query]")
 		print("  authed backend = " .. proxy.connection.backend_ndx)
-		print("  used db = " .. proxy.connection.default_db)
+		print("  used db = " .. proxy.connection.client.default_db)
 	end
 
 	if packet:byte() == proxy.COM_QUIT then
 		-- don't send COM_QUIT to the backend. We manage the connection
 		-- in all aspects.
 		proxy.response = {
-			type = proxy.MYSQLD_PACKET_ERR,
-			errmsg = "ignored the COM_QUIT"
+			type = proxy.MYSQLD_PACKET_OK,
 		}
 
 		return proxy.PROXY_SEND_RESULT
-	end
-
-	-- as we switch between different connenctions we have to make sure that
-	-- we use always the same DB
-	if packet:byte() == proxy.COM_INIT_DB then
-		-- default_db is connection global
-		default_db = packet:sub(2)
 	end
 
 	if proxy.connection.backend_ndx == 0 then
 		-- we don't have a backend right now
 		-- 
 		-- let's pick a master as a good default
-		for i = 1, #proxy.servers do
-			local s = proxy.servers[i]
+		for i = 1, #proxy.backends do
+			local s = proxy.backends[i]
 			
 			if s.idling_connections > 0 and 
 			   s.state ~= proxy.BACKEND_STATE_DOWN and 
@@ -175,48 +166,11 @@ function read_query( packet )
 		end
 	end
 
-	if packet:byte() == proxy.COM_QUERY and default_db then
-		-- how can I know the db of the server connection ? 
+	if proxy.connection.client.default_db and proxy.connection.client.default_db ~= proxy.connection.server.default_db then
+		-- sync the client-side default_db with the server-side default_db
 		proxy.queries:append(2, string.char(proxy.COM_INIT_DB) .. default_db)
 	end
 	proxy.queries:append(1, packet)
-
-	-- read/write splitting 
-	--
-	-- send all non-transactional SELECTs to a slave
-	if is_in_transaction == 0 and
-	   packet:byte() == proxy.COM_QUERY and
-	   packet:sub(2, 7) == "SELECT" then
-		local max_conns = -1
-		local max_conns_ndx = 0
-
-		for i = 1, #proxy.servers do
-			local s = proxy.servers[i]
-
-			-- pick a slave which has some idling connections
-			if s.type == proxy.BACKEND_TYPE_RO and 
-			   s.idling_connections > 0 then
-				if max_conns == -1 or 
-				   s.connected_clients < max_conns then
-					max_conns = s.connected_clients
-					max_conns_ndx = i
-				end
-			end
-		end
-
-		-- we found a slave which has a idling connection
-		if max_conns_ndx > 0 then
-			proxy.connection.backend_ndx = max_conns_ndx
-			if is_debug then
-				print("  sending ".. string.format("%q", packet:sub(2)) .. " to slave: " .. proxy.connection.backend_ndx);
-			end
-		end
-	else
-		-- send to master
-		if is_debug then
-			print("  sending to master: " .. proxy.connection.backend_ndx);
-		end
-	end
 
 	return proxy.PROXY_SEND_QUERY
 end
@@ -254,15 +208,15 @@ function disconnect_client()
 		-- currently we don't have a server backend assigned
 		--
 		-- pick a server which has too many idling connections and close one
-		for i = 1, #proxy.servers do
-			local s = proxy.servers[i]
+		for i = 1, #proxy.backends do
+			local s = proxy.backends[i]
 
 			if s.state ~= proxy.BACKEND_STATE_DOWN and
 			   s.idling_connections > max_idle_connections then
 				-- try to disconnect a backend
 				proxy.connection.backend_ndx = i
 				if is_debug then
-					print("  [".. i .."] closing connection, idling: " .. proxy.servers[i].idling_connections)
+					print("  [".. i .."] closing connection, idling: " .. proxy.backends[i].idling_connections)
 				end
 				return
 			end
