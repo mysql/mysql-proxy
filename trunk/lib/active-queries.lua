@@ -17,7 +17,9 @@
 
 --]]
 
+-- proxy.auto-config will pick them up
 local commands = require("proxy.commands")
+local auto_config = require("proxy.auto-config")
 
 --- init the global scope
 if not proxy.global.active_queries then
@@ -28,7 +30,13 @@ if not proxy.global.max_active_trx then
 	proxy.global.max_active_trx = 0
 end
 
-proxy.global.config.show_idle_connections = false
+-- default config for this script
+if not proxy.global.config.active_queries then
+	proxy.global.config.active_queries = {
+		show_idle_connections = false
+	}
+end
+
 
 -- the connection-id is local to the script
 local connection_id
@@ -46,7 +54,7 @@ function dump_global_state()
 	local active_conns = 0
 
 	for k, v in pairs(proxy.global.active_queries) do
-		if v.state ~= "idle" or proxy.global.config.show_idle_connections then
+		if v.state ~= "idle" or proxy.global.config.active_queries.show_idle_connections then
 			local cmd_query = ""
 			if v.cmd then
 				cmd_query = string.format("(%s) %q", v.cmd.type_name, v.cmd.query or "")
@@ -77,6 +85,10 @@ end
 --- 
 -- enable tracking the packets
 function read_query(packet) 
+	local cmd = commands.parse(packet)
+	local r = auto_config.handle(cmd)
+	if r then return r end
+	
 	proxy.queries:append(1, packet)
 
 	-- add the query to the global scope
@@ -86,7 +98,7 @@ function read_query(packet)
 
 	proxy.global.active_queries[connection_id] = { 
 		state = "started",
-		cmd = commands.parse(packet),
+		cmd = cmd,
 		db = proxy.connection.client.default_db or "",
 		username = proxy.connection.client.username or ""
 	}
