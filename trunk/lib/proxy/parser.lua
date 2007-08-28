@@ -20,8 +20,8 @@
 module("proxy.parser", package.seeall)
 
 function tablename_expand(tblname)
-	if proxy.connection.default_db then
-		tblname = proxy.connection.default_db .. "." .. tblname
+	if proxy.connection.client.default_db then
+		tblname = proxy.connection.client.default_db .. "." .. tblname
 	end
 
 	return tblname
