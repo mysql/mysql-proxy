@@ -26,20 +26,22 @@
 -- 
 -- 
 
-local commands  = require("proxy.commands")
-local tokenizer = require("proxy.tokenizer")
-local lb        = require("proxy.balance")
+local commands    = require("proxy.commands")
+local tokenizer   = require("proxy.tokenizer")
+local lb          = require("proxy.balance")
+local auto_config = require("proxy.auto-config")
 
 --- config
 --
 -- connection pool
-proxy.global.config.min_idle_connections = 4
-proxy.global.config.max_idle_connections = 8
+if not proxy.global.config.rwsplit then
+	proxy.global.config.rwsplit = {
+		min_idle_connections = 4,
+		max_idle_connections = 8,
 
--- debug
-proxy.global.config.is_debug = true
-
---- end of config
+		is_debug = true
+	}
+end
 
 ---
 -- read/write splitting sends all non-transactional SELECTs to the slaves
@@ -56,7 +58,7 @@ local is_in_select_calc_found_rows = false
 -- as long as we don't have enough connections in the pool, create new connections
 --
 function connect_server() 
-	local is_debug = proxy.global.config.is_debug
+	local is_debug = proxy.global.config.rwsplit.is_debug
 	-- make sure that we connect to each backend at least ones to 
 	-- keep the connections to the servers alive
 	--
@@ -89,7 +91,7 @@ function connect_server()
 
 			-- try to open at least min_idle_connections
 			if least_idle_conns_ndx == 0 or
-			   ( s.idling_connections < proxy.global.config.min_idle_connections and 
+			   ( s.idling_connections < proxy.global.config.rwsplit.min_idle_connections and 
 			     s.idling_connections < least_idle_conns ) then
 				least_idle_conns_ndx = i
 				least_idle_conns = s.idling_connections
@@ -102,7 +104,7 @@ function connect_server()
 	end
 
 	if proxy.connection.backend_ndx > 0 and 
-	   proxy.backends[proxy.connection.backend_ndx].idling_connections >= proxy.global.config.min_idle_connections then
+	   proxy.backends[proxy.connection.backend_ndx].idling_connections >= proxy.global.config.rwsplit.min_idle_connections then
 		-- we have 4 idling connections in the pool, that's good enough
 		if is_debug then
 			print("  using pooled connection from: " .. proxy.connection.backend_ndx)
@@ -143,39 +145,15 @@ end
 --- 
 -- read/write splitting
 function read_query( packet )
-	local is_debug = proxy.global.config.is_debug
+	local is_debug = proxy.global.config.rwsplit.is_debug
 	local cmd      = commands.parse(packet)
 	local c        = proxy.connection.client
 
+	local r = auto_config.handle(cmd)
+	if r then return r end
+
 	local tokens
 	local norm_query
-
-	-- handle script-options first
-	if cmd.type == proxy.COM_QUERY and 
-	   cmd.query:sub(1, 3):upper() == "SET" and 
-	   #cmd.query < 32 then
-		tokens     = tokens or assert(tokenizer.tokenize(cmd.query))
-		norm_query = norm_query or tokenizer.normalize(tokens)
-	
-		if norm_query == "SET `GLOBAL` `rwsplit` . `debug` = ? " then
-			if tokens[#tokens].token_name == "TK_INTEGER" then
-				proxy.global.config.is_debug = (tokens[#tokens].text ~= "0")
-
-				proxy.response = {
-					type = proxy.MYSQLD_PACKET_OK,
-				}
-			else
-				proxy.response = {
-					type = proxy.MYSQLD_PACKET_ERR,
-					errmsg = "SET GLOBAL rwsplit.debug = <int>, got " .. tokens[#tokens].token_name
-				}
-			end
-			if is_debug then
-				print("set rwsplit.debug: " .. tostring(proxy.global.config.is_debug))
-			end
-			return proxy.PROXY_SEND_RESULT
-		end
-	end
 
 	-- looks like we have to forward this statement to a backend
 	if is_debug then
@@ -301,6 +279,7 @@ end
 -- as long as we are in a transaction keep the connection
 -- otherwise release it so another client can use it
 function read_query_result( inj ) 
+	local is_debug = proxy.global.config.rwsplit.is_debug
 	local res      = assert(inj.resultset)
   	local flags    = res.flags
 
@@ -348,7 +327,7 @@ end
 -- @return nil - close connection 
 --         IGNORE_RESULT - store connection in the pool
 function disconnect_client()
-	local is_debug = proxy.global.config.is_debug
+	local is_debug = proxy.global.config.rwsplit.is_debug
 	if is_debug then
 		print("[disconnect_client]")
 	end
@@ -361,7 +340,7 @@ function disconnect_client()
 			local s = proxy.backends[i]
 
 			if s.state ~= proxy.BACKEND_STATE_DOWN and
-			   s.idling_connections > proxy.global.config.max_idle_connections then
+			   s.idling_connections > proxy.global.config.rwsplit.max_idle_connections then
 				-- try to disconnect a backend
 				proxy.connection.backend_ndx = i
 				if is_debug then
