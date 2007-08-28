@@ -103,6 +103,16 @@ int help_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 	g_ptr_array_add(row, g_strdup("show information about proxy configuration")); 
 	g_ptr_array_add(rows, row);
 
+    /*
+     * Add new command descriptions above this comment
+     *
+     * */
+
+	row = g_ptr_array_new(); 
+	g_ptr_array_add(row, g_strdup("select * from help")); 
+	g_ptr_array_add(row, g_strdup("show the available commands")); 
+	g_ptr_array_add(rows, row);
+
 	return 0;
 }
 
@@ -373,6 +383,10 @@ int main(int argc, char **argv) {
 
 	if (!srv->config.admin.address) srv->config.admin.address = g_strdup(":4041");
 
+    /*
+     *  If you add a new command, please update help_select() above
+     *
+     */
 	table = network_mysqld_table_init();
 	table->select    = connections_select;
 	table->user_data = srv;
