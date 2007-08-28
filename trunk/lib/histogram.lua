@@ -17,14 +17,19 @@
 
 --]]
 
-local tokenizer = require("proxy.tokenizer")
-local parser    = require("proxy.parser")
-local commands  = require("proxy.commands")
+local tokenizer    = require("proxy.tokenizer")
+local parser       = require("proxy.parser")
+local commands     = require("proxy.commands")
+local auto_config  = require("proxy.auto-config")
 
 -- init global counters
 
-proxy.global.config.collect_queries = true
-proxy.global.config.collect_tables = true
+if not proxy.global.config.histogram then
+	proxy.global.config.histogram = {
+		collect_queries = true,
+		collect_tables = true
+	}
+end
 
 -- init query counters
 if not proxy.global.norm_queries then
@@ -38,6 +43,9 @@ end
 
 function read_query(packet)
 	local cmd = commands.parse(packet)
+
+	local r = auto_config.handle(cmd)
+	if r then return r end
 
 	if cmd.type == proxy.COM_QUERY then
 		local tokens     = assert(tokenizer.tokenize(cmd.query))
@@ -56,7 +64,7 @@ function read_query(packet)
 						  name = "count" },
 						{ type = proxy.MYSQL_TYPE_LONG,
 						  name = "max_query_time" },
-						{ type = proxy.MYSQL_TYPE_LONG,
+						{ type = proxy.MYSQL_TYPE_FLOAT,
 						  name = "avg_query_time" },
 					}
 				}
@@ -83,30 +91,6 @@ function read_query(packet)
 			}
 
 			proxy.global.norm_queries = {}
-			return proxy.PROXY_SEND_RESULT
-		elseif norm_query == "SET `GLOBAL` `histogram` . `queries` = ? " then
-			if tokens[#tokens].token_name == "TK_INTEGER" then
-				proxy.global.config.collect_queries = (tokens[#tokens].text ~= "0" and true or false)
-				-- print("set proxy.global.config.collect_queries: " .. (proxy.global.config.collect_queries and "true" or "false"))
-			else
-				-- print("proxy.global.config.collect_queries: " .. tokens[#tokens].token_name)
-			end
-			proxy.response = {
-				type = proxy.MYSQLD_PACKET_OK,
-			}
-
-			return proxy.PROXY_SEND_RESULT
-		elseif norm_query == "SET `GLOBAL` `histogram` . `tables` = ? " then
-			if tokens[#tokens].token_name == "TK_INTEGER" then
-				proxy.global.config.collect_tables = (tokens[#tokens].text ~= "0" and true or false)
-				-- print("set proxy.global.config.collect_tables: " .. (proxy.global.config.collect_tables and "true" or "false"))
-			else
-				-- print("proxy.global.config.collect_tables: " .. tokens[#tokens].token_name)
-			end
-			proxy.response = {
-				type = proxy.MYSQLD_PACKET_OK,
-			}
-
 			return proxy.PROXY_SEND_RESULT
 		elseif norm_query == "SELECT * FROM `histogram` . `tables` " then
 			proxy.response = {
@@ -146,8 +130,8 @@ function read_query(packet)
 			return proxy.PROXY_SEND_RESULT
 		end
 
-		if proxy.global.config.collect_queries or
-		   proxy.global.config.collect_tables then
+		if proxy.global.config.histogram.collect_queries or
+		   proxy.global.config.histogram.collect_tables then
 			proxy.queries:append(1, packet)
 
 			return proxy.PROXY_SEND_QUERY
@@ -162,7 +146,7 @@ function read_query_result(inj)
 		local tokens     = assert(tokenizer.tokenize(cmd.query))
 		local norm_query = tokenizer.normalize(tokens)
 
-		if proxy.global.config.collect_queries then
+		if proxy.global.config.histogram.collect_queries then
 			if not proxy.global.norm_queries[norm_query] then
 				proxy.global.norm_queries[norm_query] = {
 					count = 0,
@@ -184,7 +168,7 @@ function read_query_result(inj)
 			proxy.global.norm_queries[norm_query].count = proxy.global.norm_queries[norm_query].count + 1
 		end
 	
-		if proxy.global.config.collect_tables then
+		if proxy.global.config.histogram.collect_tables then
 			-- extract the tables from the queries
 			tables = parser.get_tables(tokens)
 	
