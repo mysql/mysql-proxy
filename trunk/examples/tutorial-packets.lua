@@ -81,9 +81,9 @@ local function dump_connection()
   print("| backend[ndx] = "      .. cur_backend_ndx)
   print("| connected_clients = " .. cur_backend["connected_clients"])
   print("| address = "           .. cur_backend["address"])
-  print("| server-version = "    .. proxy.connection["mysqld_version"])
-  print("| default-db = "     .. proxy.connection["default_db"])
-  print("| thread-id = "      .. proxy.connection["thread_id"])
+  print("| server-version = "    .. proxy.connection.server["mysqld_version"])
+  print("| default-db = "     .. proxy.connection.server["default_db"])
+  print("| thread-id = "      .. proxy.connection.server["thread_id"])
   print("'== ")
 end
 
@@ -213,10 +213,10 @@ function read_query_result( inj )
   print("|")
   print("| result.len = " .. raw_len)
   print("| result.packet =" .. str2hex(res.raw))
-  print("| result.flags = { in_trans = " .. flags.in_trans .. ", " ..
-               "auto_commit = " .. flags.auto_commit .. ", " ..
-               "no_good_index_used = " .. flags.no_good_index_used .. ", " ..
-               "no_index_used = " .. flags.no_index_used .. " }")
+  print("| result.flags = { in_trans = " .. tostring(flags.in_trans) .. ", " ..
+               "auto_commit = " .. tostring(flags.auto_commit) .. ", " ..
+               "no_good_index_used = " ..tostring( flags.no_good_index_used ) .. ", " ..
+               "no_index_used = " .. tostring(flags.no_index_used) .. " }")
   print("| result.warning_count = " .. res.warning_count)
   if res.affected_rows then
     print("| result.affected_rows = " .. res.affected_rows)

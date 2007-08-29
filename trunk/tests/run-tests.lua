@@ -184,7 +184,7 @@ if COVERAGE_LCOV then
 end
 
 -- setting the include path
-local INCLUDE_PATH = arg[1]  .. '/t/?.lua' 
+local INCLUDE_PATH = os.getenv('LUA_PATH') or arg[1]  .. '/t/?.lua' 
 
 -- start the proxy
 assert(os.execute( 'LUA_PATH="' .. INCLUDE_PATH  .. '"  ' ..

@@ -81,3 +81,51 @@ function first_stmt_token(tokens)
 
 	return nil
 end
+
+--[[
+
+   returns an array of simple token values
+   without id and name
+   
+   The first parameter is an array of tokens, as produced
+   by the tokenize() function
+
+   if the second parameter is set, the strings will be quoted
+
+--]]
+function bare_tokens (tokens, quote_strings)
+    local simple_tokens = {}
+	for i, token in ipairs(tokens) do
+        if (token['token_name'] == 'TK_STRING') and quote_strings then
+            table.insert(simple_tokens, string.format('%q', token['text'] ))
+        else
+            table.insert(simple_tokens, token['text'])
+        end
+    end
+    return simple_tokens
+end
+
+--[[
+    
+   Returns a query from an array of tokens
+  
+   The first parameter is an array of tokens, as produced
+   by the tokenize() function
+
+   The second and third argument determine the array portion 
+   that should be converted.
+
+--]]
+--[[
+function tokens_to_query ( tokens , start_item, end_item )
+    if not start_item then
+        start_item = 1
+    end
+    if not end_item then
+        end_item = #tokens
+    end
+    local simple_tokens = bare_tokens(tokens, true )
+    return table.concat(simple_tokens, ' ', start_item, end_item)
+end
+--]]
+
