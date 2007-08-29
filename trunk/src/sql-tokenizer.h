@@ -31,6 +31,13 @@ typedef enum {
 	TK_MINUS,
 	TK_DIV,
 
+	TK_BITWISE_AND,
+	TK_BITWISE_OR,
+	TK_BITWISE_XOR,
+
+	TK_LOGICAL_AND,
+	TK_LOGICAL_OR,
+
 	/** a generated list of tokens */
 	TK_SQL_ACCESSIBLE,
 	TK_SQL_ACTION,
