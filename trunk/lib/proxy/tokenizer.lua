@@ -45,6 +45,8 @@ function normalize(tokens)
 			n_q = n_q .. "? "
 		elseif token["token_name"] == "TK_FLOAT" then
 			n_q = n_q .. "? "
+		elseif token["token_name"] == "TK_FUNCTION" then
+			n_q = n_q .. token.text:upper()
 		else
 			n_q = n_q .. token.text:upper() .. " "
 		end

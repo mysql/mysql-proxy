@@ -16,6 +16,8 @@ typedef enum {
 	TK_STRING,
 	TK_COMMENT,
 	TK_LITERAL,
+	TK_FUNCTION,
+
 	TK_INTEGER,
 	TK_FLOAT,
 	TK_DOT,

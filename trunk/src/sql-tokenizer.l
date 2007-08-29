@@ -32,6 +32,8 @@ const gchar *token_names[] = {
 	S(TK_STRING),
 	S(TK_COMMENT),
 	S(TK_LITERAL),
+	S(TK_FUNCTION),
+
 	S(TK_INTEGER),
 	S(TK_FLOAT),
 	S(TK_DOT),
@@ -330,7 +332,9 @@ sql_token_id quote_token_id = TK_UNKNOWN;
 
 	/** strings, quoting, literals */
 [[:space:]]+	/** ignore WS */
+	/** should be a literal */
 [[:alpha:]@][[:alnum:]_@]*	sql_token_append(tokens, sql_token_get_id(yytext), yytext);
+[[:alpha:]@][[:alnum:]_@]*\(	{ yyless(yyleng - 1); sql_token_append(tokens, TK_FUNCTION, yytext); }
 
 [[:digit:]]+	sql_token_append(tokens, TK_INTEGER, yytext);
 [[:digit:]]*"."[[:digit:]]+	sql_token_append(tokens, TK_FLOAT, yytext);
