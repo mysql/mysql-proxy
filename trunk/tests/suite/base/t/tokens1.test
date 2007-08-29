@@ -1,0 +1,6 @@
+# testing proxy.tokenizer
+
+# testing that a tokenized query is rebuilt 
+# as a corresponding query
+select count(*) from information_schema.tables where table_schema='mysql' and table_name like 'user';
+

@@ -118,7 +118,6 @@ end
    that should be converted.
 
 --]]
---[[
 function tokens_to_query ( tokens , start_item, end_item )
     if not start_item then
         start_item = 1
@@ -126,8 +125,21 @@ function tokens_to_query ( tokens , start_item, end_item )
     if not end_item then
         end_item = #tokens
     end
-    local simple_tokens = bare_tokens(tokens, true )
-    return table.concat(simple_tokens, ' ', start_item, end_item)
+    local counter  = 0
+    local new_query = ''
+	for i, token in ipairs(tokens) do
+        counter = counter + 1
+        if (counter >= start_item and counter <= end_item ) then
+            if (token['token_name'] == 'TK_STRING') then
+                new_query = new_query .. string.format('%q', token['text'] )
+            else
+                new_query = new_query .. token['text'] 
+            end
+            if (token['token_name'] ~= 'TK_FUNCTION') then
+                new_query = new_query .. ' '
+            end
+        end
+    end
+    return new_query
 end
---]]
 

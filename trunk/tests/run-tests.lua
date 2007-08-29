@@ -184,7 +184,25 @@ if COVERAGE_LCOV then
 end
 
 -- setting the include path
-local INCLUDE_PATH = os.getenv('LUA_PATH') or arg[1]  .. '/t/?.lua' 
+--
+
+-- this is the path containing the global Lua modules
+local GLOBAL_LUA_PATH = os.getenv('LUA_LDIR')  or '/usr/share/lua/5.1/?.lua'
+
+-- this is the path containing the Proxy libraries 
+local PROXY_LUA_PATH = os.getenv('LUA_PATH')  or '/usr/local/share/?.lua'
+
+-- This is the path with specific libraries for the test suite
+local PRIVATE_LUA_PATH = arg[1]  .. '/t/?.lua'  
+
+-- This is the path with additional libraries that the user needs
+local LUA_USER_PATH = os.getenv('LUA_USER_PATH')  or './?.lua'
+
+-- Building the final include path
+local INCLUDE_PATH = GLOBAL_LUA_PATH .. ';' .. 
+        PROXY_LUA_PATH .. ';' .. 
+        PRIVATE_LUA_PATH .. ';' .. 
+        LUA_USER_PATH  
 
 -- start the proxy
 assert(os.execute( 'LUA_PATH="' .. INCLUDE_PATH  .. '"  ' ..
