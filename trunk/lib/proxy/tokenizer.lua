@@ -84,16 +84,15 @@ function first_stmt_token(tokens)
 	return nil
 end
 
+---
 --[[
 
    returns an array of simple token values
    without id and name
    
-   The first parameter is an array of tokens, as produced
-   by the tokenize() function
-
-   if the second parameter is set, the strings will be quoted
-
+   @param tokens an array of tokens, as produced by the tokenize() function
+   @param quote_strings : if set, the string tokens will be quoted
+   @see tokenize
 --]]
 function bare_tokens (tokens, quote_strings)
     local simple_tokens = {}
@@ -107,16 +106,15 @@ function bare_tokens (tokens, quote_strings)
     return simple_tokens
 end
 
+---
 --[[
     
-   Returns a query from an array of tokens
+   Returns a text query from an array of tokens
   
-   The first parameter is an array of tokens, as produced
-   by the tokenize() function
-
-   The second and third argument determine the array portion 
-   that should be converted.
-
+   @param tokens an array of tokens, as produced by the tokenize() function
+   @param start_item ignores tokens before this one
+   @param end_item ignores token after this one
+   @see tokenize
 --]]
 function tokens_to_query ( tokens , start_item, end_item )
     if not start_item then
