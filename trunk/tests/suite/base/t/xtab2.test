@@ -1,0 +1,42 @@
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+CREATE TABLE t1 (
+  person_id int(10) unsigned NOT NULL default '0',
+  country char(30) NOT NULL default '',
+  loc char(30) NOT NULL default '',
+  department char(30) NOT NULL default '',
+  category varchar(4) NOT NULL default '',
+  name char(20) NOT NULL default '',
+  salary int(11) NOT NULL default 0,
+  gender char(1) NOT NULL default 'f',
+  primary key (person_id)
+);
+
+INSERT INTO t1 
+  (person_id, country, loc, department, category, name, salary, gender) 
+VALUES 
+  (1,'UK','London','pers','cont','John',5000,'m'),
+  (2,'Italy','Rome','pers','empl','Mario',6000,'m'),
+  (3,'Germany','Bonn','sales','empl','Frank',5000,'m'),
+  (4,'Germany','Berlin','dev','empl','Otto',6000,'m'),
+  (5,'Germany','Munich','sales','cons','Susan',5500,'f'),
+  (6,'UK','London','sales','cont','Martin',5500,'m'),
+  (7,'Germany','Berlin','pers','empl','Mary',5500,'f'),
+  (8,'Germany','Munich','pers','empl','Bill',5000,'m'),
+  (9,'Italy','Rome','dev','cons','June',6000,'f');
+
+xtab t1 country gender count salary;
+xtab t1 country gender count salary summary;
+xtab t1 country gender sum salary;
+xtab t1 country gender sum salary summary;
+
+xtab t1 gender country count salary;
+xtab t1 gender country count salary summary;
+xtab t1 gender country sum salary;
+xtab t1 gender country sum salary summary;
+
+xtab query;
+xtab t1 gender country sum salary summary;
+

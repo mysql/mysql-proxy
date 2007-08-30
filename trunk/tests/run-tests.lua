@@ -196,7 +196,7 @@ local PROXY_LUA_PATH = os.getenv('LUA_PATH')  or '/usr/local/share/?.lua'
 local PRIVATE_LUA_PATH = arg[1]  .. '/t/?.lua'  
 
 -- This is the path with additional libraries that the user needs
-local LUA_USER_PATH = os.getenv('LUA_USER_PATH')  or './?.lua'
+local LUA_USER_PATH = os.getenv('LUA_USER_PATH')  or '../lib/?.lua'
 
 -- Building the final include path
 local INCLUDE_PATH = GLOBAL_LUA_PATH .. ';' .. 
