@@ -25,3 +25,13 @@ id	name	text
 9	TK_LITERAL	engine
 5	TK_EQ	=
 9	TK_LITERAL	myisam
+/* comment */select /*! 1 */;
+id	name	text
+8	TK_COMMENT	 comment 
+204	TK_SQL_SELECT	select
+261	TK_COMMENT_MYSQL	 1 
+select /*!50000 1 + */ 1;
+id	name	text
+204	TK_SQL_SELECT	select
+261	TK_COMMENT_MYSQL	50000 1 + 
+11	TK_INTEGER	1

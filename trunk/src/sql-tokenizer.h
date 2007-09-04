@@ -274,6 +274,8 @@ typedef enum {
 	TK_SQL_XOR,
 	TK_SQL_YEAR_MONTH,
 	TK_SQL_ZEROFILL,
+	
+	TK_COMMENT_MYSQL,
 
 	TK_LAST_TOKEN
 } sql_token_id;

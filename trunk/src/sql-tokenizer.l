@@ -286,11 +286,15 @@ const gchar *token_names[] = {
 	S(TK_SQL_XOR),
 	S(TK_SQL_YEAR_MONTH),
 	S(TK_SQL_ZEROFILL),
+	
+	S(TK_COMMENT_MYSQL),
+
 	NULL
 };
 #undef S
 char quote_char = 0;
 sql_token_id quote_token_id = TK_UNKNOWN;
+sql_token_id comment_token_id = TK_UNKNOWN;
 %}
 
 %option case-insensitive
@@ -302,9 +306,10 @@ sql_token_id quote_token_id = TK_UNKNOWN;
 %%
 
 	/** comments */
-"/*"		sql_token_append(tokens, TK_COMMENT,    ""); BEGIN(COMMENT);
-<COMMENT>[^*]*	sql_token_append_last_token(tokens, TK_COMMENT, yytext);
-<COMMENT>"*"+[^*/]*	sql_token_append_last_token(tokens, TK_COMMENT, yytext);
+"/*"		comment_token_id = TK_COMMENT;       sql_token_append(tokens, comment_token_id, ""); BEGIN(COMMENT);
+"/*!"		comment_token_id = TK_COMMENT_MYSQL; sql_token_append(tokens, comment_token_id, ""); BEGIN(COMMENT);
+<COMMENT>[^*]*	sql_token_append_last_token(tokens, comment_token_id, yytext);
+<COMMENT>"*"+[^*/]*	sql_token_append_last_token(tokens, comment_token_id, yytext);
 <COMMENT>"*"+"/"	BEGIN(INITIAL);
 
 	/** start of a quote string */
