@@ -13,6 +13,7 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */ 
 
+#include <string.h>
 #include "network-mysqld-proto.h"
 
 #include "sys-pedantic.h"
@@ -284,6 +285,86 @@ int network_mysqld_proto_set_header(unsigned char *header, size_t len, unsigned 
 
 size_t network_mysqld_proto_get_header(unsigned char *header) {
 	return header[0] | header[1] << 8 | header[2] << 16;
+}
+
+int network_mysqld_proto_append_lenenc_int(GString *dest, guint64 len) {
+	if (len < 251) {
+		g_string_append_c(dest, len);
+	} else if (len < 65536) {
+		g_string_append_c(dest, (gchar)252);
+		g_string_append_c(dest, (len >> 0) & 0xff);
+		g_string_append_c(dest, (len >> 8) & 0xff);
+	} else if (len < 16777216) {
+		g_string_append_c(dest, (gchar)253);
+		g_string_append_c(dest, (len >> 0) & 0xff);
+		g_string_append_c(dest, (len >> 8) & 0xff);
+		g_string_append_c(dest, (len >> 16) & 0xff);
+	} else {
+		g_string_append_c(dest, (gchar)254);
+
+		g_string_append_c(dest, (len >> 0) & 0xff);
+		g_string_append_c(dest, (len >> 8) & 0xff);
+		g_string_append_c(dest, (len >> 16) & 0xff);
+		g_string_append_c(dest, (len >> 24) & 0xff);
+
+		g_string_append_c(dest, (len >> 32) & 0xff);
+		g_string_append_c(dest, (len >> 40) & 0xff);
+		g_string_append_c(dest, (len >> 48) & 0xff);
+		g_string_append_c(dest, (len >> 56) & 0xff);
+	}
+
+	return 0;
+}
+
+/**
+ * encode a GString in to a MySQL len-encoded string 
+ *
+ * @param destination string
+ * @param string to encode
+ * @param length of the string
+ */
+int network_mysqld_proto_append_lenenc_string_len(GString *dest, const char *s, guint64 len) {
+	if (!s) {
+		g_string_append_c(dest, (gchar)251); /** this is NULL */
+	} else {
+		network_mysqld_proto_append_lenenc_int(dest, len);
+		g_string_append_len(dest, s, len);
+	}
+
+	return 0;
+}
+
+/**
+ * encode a GString in to a MySQL len-encoded string 
+ *
+ * @param destination string
+ * @param string to encode
+ */
+int network_mysqld_proto_append_lenenc_string(GString *dest, const char *s) {
+	return network_mysqld_proto_append_lenenc_string_len(dest, s, s ? strlen(s) : 0);
+}
+
+static int network_mysqld_proto_append_int_len(GString *packet, guint64 num, gsize size) {
+	gsize i;
+
+	for (i = 0; i < size; i++) {
+		g_string_append_c(packet, num & 0xff);
+		num >>= 8;
+	}
+
+	return 0;
+}
+
+int network_mysqld_proto_append_int8(GString *packet, guint8 num) {
+	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
+}
+
+int network_mysqld_proto_append_int16(GString *packet, guint16 num) {
+	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
+}
+
+int network_mysqld_proto_append_int32(GString *packet, guint32 num) {
+	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
 }
 
 

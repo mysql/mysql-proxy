@@ -74,4 +74,12 @@ void network_mysqld_proto_fields_free(GPtrArray *fields);
 size_t network_mysqld_proto_get_header(unsigned char *header);
 int network_mysqld_proto_set_header(unsigned char *header, size_t len, unsigned char id);
 
+int network_mysqld_proto_append_lenenc_int(GString *dest, guint64 len);
+int network_mysqld_proto_append_lenenc_string_len(GString *dest, const char *s, guint64 len);
+int network_mysqld_proto_append_lenenc_string(GString *dest, const char *s);
+
+int network_mysqld_proto_append_int8(GString *packet, guint8 num);
+int network_mysqld_proto_append_int16(GString *packet, guint16 num);
+int network_mysqld_proto_append_int32(GString *packet, guint32 num);
+
 #endif

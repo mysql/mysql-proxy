@@ -271,8 +271,6 @@ void network_mysqld_index_status_free(network_mysqld_index_status *);
 void g_list_string_free(gpointer data, gpointer UNUSED_PARAM(user_data));
 gboolean g_hash_table_true(gpointer UNUSED_PARAM(key), gpointer UNUSED_PARAM(value), gpointer UNUSED_PARAM(u));
 
-int g_string_lenenc_append(GString *dest, const char *s);
-
 int network_mysqld_con_set_address(network_address *addr, gchar *address);
 int network_mysqld_con_connect(network_socket *con);
 int network_mysqld_con_bind(network_socket *con);
@@ -281,7 +279,9 @@ int network_queue_append(network_queue *queue, const char *data, size_t len, int
 int network_queue_append_chunk(network_queue *queue, GString *chunk);
 
 int network_mysqld_con_send_ok(network_socket *con);
+int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings);
 int network_mysqld_con_send_error(network_socket *con, const gchar *errmsg, gsize errmsg_len);
+int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate);
 int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GPtrArray *rows);
 
 retval_t network_mysqld_read(network_mysqld *srv, network_socket *con);

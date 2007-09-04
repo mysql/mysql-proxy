@@ -351,31 +351,35 @@ static void dump_str(const char *msg, const unsigned char *s, size_t len) {
 
 }
 
-int network_mysqld_con_send_ok(network_socket *con) {
-	const unsigned char packet_ok[] = 
-		"\x00" /* field-count */
-		"\x00" /* affected rows */
-		"\x00" /* insert-id */
-		"\x02\x00" /* server-status */
-		"\x00\x00" /* warnings */
-		;
+int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings ) {
+	GString *packet = g_string_new(NULL);
+	
+	network_mysqld_proto_append_int8(packet, 0); /* no fields */
+	network_mysqld_proto_append_lenenc_int(packet, affected_rows);
+	network_mysqld_proto_append_lenenc_int(packet, insert_id);
+	network_mysqld_proto_append_int16(packet, server_status); /* autocommit */
+	network_mysqld_proto_append_int16(packet, warnings); /* no warnings */
 
-	network_queue_append(con->send_queue, (gchar *)packet_ok, (sizeof(packet_ok) - 1), con->packet_id);
+	network_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
+
+	g_string_free(packet, TRUE);
 
 	return 0;
 }
 
-int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize errmsg_len) {
+int network_mysqld_con_send_ok(network_socket *con) {
+	return network_mysqld_con_send_ok_full(con, 0, 0, 0x0002, 0);
+}
+
+int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate) {
 	GString *packet;
 	
 	packet = g_string_sized_new(10 + errmsg_len);
 	
-	g_string_append_len(packet, 
-			C("\xff"     /* type: error */
-			  "\xe8\x03" /* errno: 1000 */
-			  "#"        /* insert-id */
-			  "00S00"    /* SQLSTATE */
-			 ));
+	network_mysqld_proto_append_int8(packet, 0xff); /* ERR */
+	network_mysqld_proto_append_int16(packet, errorcode); /* errorcode */
+	g_string_append_c(packet, '#');
+	g_string_append_len(packet, sqlstate, 5);
 
 	if (errmsg_len < 512) {
 		g_string_append_len(packet, errmsg, errmsg_len);
@@ -391,6 +395,9 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
 	return 0;
 }
 
+int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize errmsg_len) {
+	return network_mysqld_con_send_error_full(con, errmsg, errmsg_len, 1000, "00S00");
+}
 
 retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_socket *con, char *dest, size_t we_want) {
 	GList *chunk;
@@ -590,57 +597,6 @@ retval_t network_mysqld_write(network_mysqld *srv, network_socket *con) {
 #endif
 
 	return ret;
-}
-
-
-/**
- * encode a GString in to a MySQL len-encoded string 
- *
- * @param destination string
- * @param string to encode
- * @param length of the string
- */
-int g_string_lenenc_append_len(GString *dest, const char *s, guint64 len) {
-	if (!s) {
-		g_string_append_c(dest, (gchar)251);
-	} else if (len < 251) {
-		g_string_append_c(dest, len);
-	} else if (len < 65536) {
-		g_string_append_c(dest, (gchar)252);
-		g_string_append_c(dest, (len >> 0) & 0xff);
-		g_string_append_c(dest, (len >> 8) & 0xff);
-	} else if (len < 16777216) {
-		g_string_append_c(dest, (gchar)253);
-		g_string_append_c(dest, (len >> 0) & 0xff);
-		g_string_append_c(dest, (len >> 8) & 0xff);
-		g_string_append_c(dest, (len >> 16) & 0xff);
-	} else {
-		g_string_append_c(dest, (gchar)254);
-
-		g_string_append_c(dest, (len >> 0) & 0xff);
-		g_string_append_c(dest, (len >> 8) & 0xff);
-		g_string_append_c(dest, (len >> 16) & 0xff);
-		g_string_append_c(dest, (len >> 24) & 0xff);
-
-		g_string_append_c(dest, (len >> 32) & 0xff);
-		g_string_append_c(dest, (len >> 40) & 0xff);
-		g_string_append_c(dest, (len >> 48) & 0xff);
-		g_string_append_c(dest, (len >> 56) & 0xff);
-	}
-
-	if (s) g_string_append_len(dest, s, len);
-
-	return 0;
-}
-
-/**
- * encode a GString in to a MySQL len-encoded string 
- *
- * @param destination string
- * @param string to encode
- */
-int g_string_lenenc_append(GString *dest, const char *s) {
-	return g_string_lenenc_append_len(dest, s, s ? strlen(s) : 0);
 }
 
 /**
@@ -1577,12 +1533,12 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 		
 		g_string_truncate(s, 0);
 
-		g_string_lenenc_append(s, field->catalog ? field->catalog : "def");   /* catalog */
-		g_string_lenenc_append(s, field->db ? field->db : "");                /* database */
-		g_string_lenenc_append(s, field->table ? field->table : "");          /* table */
-		g_string_lenenc_append(s, field->org_table ? field->org_table : "");  /* org_table */
-		g_string_lenenc_append(s, field->name ? field->name : "");            /* name */
-		g_string_lenenc_append(s, field->org_name ? field->org_name : "");    /* org_name */
+		network_mysqld_proto_append_lenenc_string(s, field->catalog ? field->catalog : "def");   /* catalog */
+		network_mysqld_proto_append_lenenc_string(s, field->db ? field->db : "");                /* database */
+		network_mysqld_proto_append_lenenc_string(s, field->table ? field->table : "");          /* table */
+		network_mysqld_proto_append_lenenc_string(s, field->org_table ? field->org_table : "");  /* org_table */
+		network_mysqld_proto_append_lenenc_string(s, field->name ? field->name : "");            /* name */
+		network_mysqld_proto_append_lenenc_string(s, field->org_name ? field->org_name : "");    /* org_name */
 
 		g_string_append_c(s, '\x0c');                  /* length of the following block, 12 byte */
 		g_string_append_len(s, "\x08\x00", 2);         /* charset */
@@ -1597,7 +1553,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 		g_string_append_len(s, "\x00\x00", 2);         /* filler */
 #if 0
 		/* this is in the docs, but not on the network */
-		g_string_lenenc_append(s, field->def);         /* default-value */
+		network_mysqld_proto_append_lenenc_string(s, field->def);         /* default-value */
 #endif
 		network_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
 	}
@@ -1617,7 +1573,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 		g_string_truncate(s, 0);
 
 		for (j = 0; j < row->len; j++) {
-			g_string_lenenc_append(s, row->pdata[j]);
+			network_mysqld_proto_append_lenenc_string(s, row->pdata[j]);
 		}
 		network_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
 	}

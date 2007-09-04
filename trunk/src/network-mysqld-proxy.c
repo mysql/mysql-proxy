@@ -1330,13 +1330,22 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 
 			network_mysqld_con_send_resultset(con->client, fields, rows);
 		} else {
-			lua_getfield(L, -2, "affected_rows"); /* proxy.response.affected_rows */
+			guint64 affected_rows = 0;
+			guint64 insert_id = 0;
 
+			lua_getfield(L, -2, "affected_rows"); /* proxy.response.affected_rows */
 			if (lua_isnumber(L, -1)) {
+				affected_rows = lua_tonumber(L, -1);
 			}
 			lua_pop(L, 1);
 
-			network_mysqld_con_send_ok(con->client);
+			lua_getfield(L, -2, "insert_id"); /* proxy.response.affected_rows */
+			if (lua_isnumber(L, -1)) {
+				insert_id = lua_tonumber(L, -1);
+			}
+			lua_pop(L, 1);
+
+			network_mysqld_con_send_ok_full(con->client, affected_rows, insert_id, 0x0002, 0);
 		}
 
 		/**
@@ -1366,18 +1375,33 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		lua_pop(L, 1); /* .resultset */
 		
 		break; }
-	case MYSQLD_PACKET_ERR:
+	case MYSQLD_PACKET_ERR: {
+		gint errorcode = 1000;
+		const gchar *sqlstate = "00S00";
+		
+		lua_getfield(L, -1, "errcode"); /* proxy.response.errcode */
+		if (lua_isnumber(L, -1)) {
+			errorcode = lua_tonumber(L, -1);
+		}
+		lua_pop(L, 1);
+
+		lua_getfield(L, -1, "sqlstate"); /* proxy.response.sqlstate */
+		if (lua_isnumber(L, -1)) {
+			sqlstate = lua_tostring(L, -1);
+		}
+		lua_pop(L, 1);
+
 		lua_getfield(L, -1, "errmsg"); /* proxy.response.errmsg */
 		if (lua_isstring(L, -1)) {
 			str = lua_tolstring(L, -1, &str_len);
 
-			network_mysqld_con_send_error(con->client, str, str_len);
+			network_mysqld_con_send_error_full(con->client, str, str_len, errorcode, sqlstate);
 		} else {
 			network_mysqld_con_send_error(con->client, C("(lua) proxy.response.errmsg is nil"));
 		}
 		lua_pop(L, 1);
 
-		break;
+		break; }
 	case MYSQLD_PACKET_RAW:
 		/**
 		 * iterate over the packet table and add each packet to the send-queue
