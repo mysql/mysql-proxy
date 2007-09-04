@@ -54,7 +54,7 @@ to make sure that the dependencies are in place;
 
 - libevent 1.x or higher (1.3b or later is prefered)
 - lua 5.1.x or higher
-- glib2 2.4.0 or higer
+- glib2 2.6.0 or higer
 - pkg-config 
 - mysql 5.0.x or higer developer files
 
