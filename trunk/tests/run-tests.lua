@@ -199,10 +199,11 @@ local PRIVATE_LUA_PATH = arg[1]  .. '/t/?.lua'
 local LUA_USER_PATH = os.getenv('LUA_USER_PATH')  or '../lib/?.lua'
 
 -- Building the final include path
-local INCLUDE_PATH = GLOBAL_LUA_PATH .. ';' .. 
-        PROXY_LUA_PATH .. ';' .. 
-        PRIVATE_LUA_PATH .. ';' .. 
-        LUA_USER_PATH  
+local INCLUDE_PATH = 
+        LUA_USER_PATH     .. ';' ..
+        PRIVATE_LUA_PATH  .. ';' ..
+        GLOBAL_LUA_PATH   .. ';' .. 
+        PROXY_LUA_PATH 
 
 -- start the proxy
 assert(os.execute( 'LUA_PATH="' .. INCLUDE_PATH  .. '"  ' ..

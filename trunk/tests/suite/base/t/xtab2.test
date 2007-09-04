@@ -40,3 +40,5 @@ xtab t1 gender country sum salary summary;
 xtab query;
 xtab t1 gender country sum salary summary;
 
+drop table t1;
+

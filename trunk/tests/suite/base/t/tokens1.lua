@@ -6,7 +6,8 @@ function read_query( packet )
     end
     local query = packet:sub(2)
     local tokens = tk.tokenize(query)
-    local simple_tokens = tk.bare_tokens(tokens, true )
+    local stripped_tokens = tk.tokens_without_comments(tokens, true )
+    local simple_tokens = tk.bare_tokens(stripped_tokens, true )
     proxy.response.type = proxy.MYSQLD_PACKET_OK
     proxy.response.resultset = {
         fields = {

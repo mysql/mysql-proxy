@@ -88,7 +88,7 @@ end
 --[[
 
    returns an array of simple token values
-   without id and name
+   without id and name, and stripping all comments
    
    @param tokens an array of tokens, as produced by the tokenize() function
    @param quote_strings : if set, the string tokens will be quoted
@@ -99,7 +99,7 @@ function bare_tokens (tokens, quote_strings)
 	for i, token in ipairs(tokens) do
         if (token['token_name'] == 'TK_STRING') and quote_strings then
             table.insert(simple_tokens, string.format('%q', token['text'] ))
-        else
+        elseif (token['token_name'] ~= 'TK_COMMENT') then
             table.insert(simple_tokens, token['text'])
         end
     end
@@ -109,7 +109,7 @@ end
 ---
 --[[
     
-   Returns a text query from an array of tokens
+   Returns a text query from an array of tokens, stripping off comments
   
    @param tokens an array of tokens, as produced by the tokenize() function
    @param start_item ignores tokens before this one
@@ -130,14 +130,34 @@ function tokens_to_query ( tokens , start_item, end_item )
         if (counter >= start_item and counter <= end_item ) then
             if (token['token_name'] == 'TK_STRING') then
                 new_query = new_query .. string.format('%q', token['text'] )
-            else
+            elseif token['token_name'] ~= 'TK_COMMENT' then
                 new_query = new_query .. token['text'] 
             end
-            if (token['token_name'] ~= 'TK_FUNCTION') then
+            if (token['token_name'] ~= 'TK_FUNCTION')
+               and 
+               (token['token_name'] ~= 'TK_COMMENT') 
+            then
                 new_query = new_query .. ' '
             end
         end
     end
     return new_query
+end
+
+---
+--[[
+   returns an array of tokens, stripping off all comments
+
+   @param tokens an array of tokens, as produced by the tokenize() function
+   @see tokenize, simple_tokens
+--]]
+function tokens_without_comments (tokens)
+    local new_tokens = {}
+	for i, token in ipairs(tokens) do
+        if (token['token_name'] ~= 'TK_COMMENT') then
+            table.insert(new_tokens, token['text'])
+        end
+    end
+    return new_tokens
 end
 

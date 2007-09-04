@@ -82,3 +82,4 @@ XTAB query
           FROM t1 
           GROUP BY gender
          WITH ROLLUP 
+drop table t1;
