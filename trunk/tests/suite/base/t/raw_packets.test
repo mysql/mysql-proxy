@@ -1,7 +1,9 @@
 SELECT 1;
---error 1000
+--error 1105
 SELECT errmsg empty;
---error 1000
+--error 1105
 SELECT invalid type;
---error 1000
+--error 1105
 SELECT errmsg;
+--error 1106
+SELECT errcode;

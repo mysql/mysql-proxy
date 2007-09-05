@@ -40,13 +40,20 @@ function read_query(packet)
 			
 			proxy.response.type = proxy.MYSQLD_PACKET_ERR
 			proxy.response.errmsg = "I'm a error"
-			proxy.response.errno  = 1000
 			
 			return proxy.PROXY_SEND_RESULT
 		elseif q == "SELECT errmsg empty" then
 			-- don't set a errmsg
 			
 			proxy.response.type = proxy.MYSQLD_PACKET_ERR
+			
+			return proxy.PROXY_SEND_RESULT
+		elseif q == "SELECT errcode" then
+			-- don't set a errmsg
+			
+			proxy.response.type = proxy.MYSQLD_PACKET_ERR
+			proxy.response.errmsg = "I'm a error"
+			proxy.response.errcode = 1106
 			
 			return proxy.PROXY_SEND_RESULT
 		end

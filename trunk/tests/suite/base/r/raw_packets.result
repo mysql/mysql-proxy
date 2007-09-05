@@ -2,8 +2,10 @@ SELECT 1;
 1
 1
 SELECT errmsg empty;
-ERROR 00S00: (lua) proxy.response.errmsg is nil
+ERROR 07000: (lua) proxy.response.errmsg is nil
 SELECT invalid type;
-ERROR 00S00: (lua) handling proxy.response failed, check error-log
+ERROR 07000: (lua) handling proxy.response failed, check error-log
 SELECT errmsg;
-ERROR 00S00: I'm a error
+ERROR 07000: I'm a error
+SELECT errcode;
+ERROR 07000: I'm a error
