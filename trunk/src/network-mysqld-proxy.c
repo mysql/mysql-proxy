@@ -383,6 +383,8 @@ void backend_free(backend_t *b) {
 
 	network_connection_pool_free(b->pool);
 
+	if (b->addr.str) g_free(b->addr.str);
+
 	g_free(b);
 }
 
@@ -2440,10 +2442,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 	switch (proxy_lua_read_auth(con)) {
 	case PROXY_SEND_RESULT:
-		recv_sock->packet_len = PACKET_LEN_UNSET;
-		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-		
 		con->state = CON_STATE_SEND_AUTH_RESULT;
+
+		g_string_free(packet, TRUE);
+		chunk->data = packet = NULL;
 
 		break;
 	case PROXY_NO_DECISION:
@@ -2472,19 +2474,25 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 			 */
 
 			g_string_free(com_change_user, TRUE);
+
+			/**
+			 * the packet isn't appended anywhere, free it
+			 */
+			g_string_free(packet, TRUE);
+			chunk->data = packet = NULL;
 		} else {
 			network_queue_append_chunk(send_sock->send_queue, packet);
 		}
 
-		recv_sock->packet_len = PACKET_LEN_UNSET;
-		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-	
 		con->state = CON_STATE_SEND_AUTH;
 		break;
 	default:
 		g_error("%s.%d: ... ", __FILE__, __LINE__);
 		break;
 	}
+
+	recv_sock->packet_len = PACKET_LEN_UNSET;
+	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
 	return RET_SUCCESS;
 }
@@ -2622,8 +2630,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 
 	switch (proxy_lua_read_auth_result(con)) {
 	case PROXY_SEND_RESULT:
-		recv_sock->packet_len = PACKET_LEN_UNSET;
-		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+		/**
+		 * we already have content in the send-sock 
+		 *
+		 * chunk->packet is not forwarded, free it
+		 */
+
+		g_string_free(packet, TRUE);
 		
 		break;
 	case PROXY_NO_DECISION:
@@ -2635,6 +2648,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 		break;
 	}
 
+	/**
+	 * we handled the packet on the server side, free it
+	 */
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 	
