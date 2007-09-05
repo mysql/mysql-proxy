@@ -40,6 +40,10 @@
 
 #include <glib.h>
 
+#ifdef HAVE_LUA_H
+#include <lua.h>
+#endif
+
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
 #include "sys-pedantic.h"
@@ -74,7 +78,6 @@ int help_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 	network_mysqld *srv = user_data;
 	MYSQL_FIELD *field;
 	GPtrArray *row;
-	gsize i;
 
 	field = network_mysqld_proto_field_init();
 	field->name = g_strdup("command");
@@ -281,6 +284,7 @@ int main(int argc, char **argv) {
 	int print_version = 0;
 	int daemon_mode = 0;
 	int start_proxy = 1;
+	const gchar *check_str = NULL;
 
 	GOptionEntry admin_entries[] = 
 	{
@@ -315,7 +319,20 @@ int main(int argc, char **argv) {
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 
+	if (!GLIB_CHECK_VERSION(2, 6, 0)) {
+		g_error("the glib header are too old, need at least 2.6.0, got: %d.%d.%d", 
+				GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+	}
 
+	check_str = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+
+	if (check_str) {
+		g_error("%s, got: lib=%d.%d.%d, headers=%d.%d.%d", 
+			check_str,
+			glib_major_version, glib_minor_version, glib_micro_version,
+			GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+	}
+	
 	srv = network_mysqld_init();
 	srv->config.network_type          = NETWORK_TYPE_PROXY;  /* doesn't matter anymore */
 	srv->config.proxy.fix_bug_25371   = 0; /** double ERR packet on AUTH failures */
@@ -363,8 +380,17 @@ int main(int argc, char **argv) {
 
 	g_option_context_free(option_ctx);
 
+#if defined(HAVE_LUA_H) && defined(LIBDIR)
+	/**
+	 * if the LUA_PATH is not set, set a good default 
+	 */
+	if (!getenv("LUA_PATH")) {
+		setenv("LUA_PATH", LUA_PATHSEP LUA_PATHSEP LIBDIR "/?.lua", 1);
+	}
+#endif
+
 	if (print_version) {
-		printf("%s (%s)\n", PACKAGE_STRING, SVN_REVISION);
+		printf("%s\r\n", PACKAGE_STRING);
 		return 0;
 	}
 
