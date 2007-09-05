@@ -91,5 +91,5 @@ run $ACLOCAL $ACLOCAL_FLAGS
 run $AUTOHEADER
 run $AUTOMAKE $AUTOMAKE_FLAGS
 run $AUTOCONF
-test "$ARGS" = "" && echo "Now type './configure ...' and 'make' to compile."
+test "$ARGS" = "" && echo "Now type './configure --enable-maintainer-mode ...' and 'make' to compile."
 
