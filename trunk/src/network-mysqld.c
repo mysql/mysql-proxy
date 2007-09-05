@@ -441,7 +441,8 @@ retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_sock
 
 	if (-1 == (len = recv(con->fd, dest->str + dest->len, we_want - dest->len, 0))) {
 		switch (errno) {
-		case EAGAIN:
+		case ECONNRESET: /** nothing to read, let's let ioctl() handle the close for us */
+		case EAGAIN:     /** the buffers are empty, try again later */
 			return RET_WAIT_FOR_EVENT;
 		default:
 			g_debug("%s: recv() failed: %s (errno=%d)", G_STRLOC, strerror(errno), errno);
