@@ -52,6 +52,8 @@
 #include <lualib.h>
 #endif
 
+#include <mysqld_error.h> /** for ER_UNKNOWN_ERROR */
+
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
 #include "network-conn-pool.h"
@@ -1376,8 +1378,8 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		
 		break; }
 	case MYSQLD_PACKET_ERR: {
-		gint errorcode = 1000;
-		const gchar *sqlstate = "00S00";
+		gint errorcode = ER_UNKNOWN_ERROR;
+		const gchar *sqlstate = "07000"; /** let's call ourself Dynamic SQL ... 07000 is "dynamic SQL error" */
 		
 		lua_getfield(L, -1, "errcode"); /* proxy.response.errcode */
 		if (lua_isnumber(L, -1)) {
@@ -2592,7 +2594,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	GString *packet;
 	GList *chunk;
 	network_socket *recv_sock, *send_sock;
-	plugin_con_state *st = con->plugin_con_state;
 
 	recv_sock = con->server;
 	send_sock = con->client;
@@ -3788,7 +3789,6 @@ static proxy_stmt_ret proxy_lua_disconnect_client(network_mysqld_con *con) {
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
 	plugin_con_state *st = con->plugin_con_state;
-	plugin_srv_state *g = st->global_state;
 	gboolean use_pooled_connection = FALSE;
 
 	if (st == NULL) return RET_SUCCESS;

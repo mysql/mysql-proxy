@@ -53,6 +53,7 @@
 #include <glib.h>
 
 #include <mysql.h>
+#include <mysqld_error.h>
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
@@ -371,6 +372,19 @@ int network_mysqld_con_send_ok(network_socket *con) {
 	return network_mysqld_con_send_ok_full(con, 0, 0, 0x0002, 0);
 }
 
+/**
+ * send a error packet to the client connection
+ *
+ * @note the sqlstate has to match the SQL standard. If no matching SQL state is known, leave it at NULL
+ *
+ * @param con         the client connection
+ * @param errmsg      the error message
+ * @param errmsg_len  byte-len of the error-message
+ * @param errorcode   mysql error-code we want to send
+ * @param sqlstate    if none-NULL, 5-char SQL state to send, if NULL, default SQL state is used
+ *
+ * @return 0 on success
+ */
 int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate) {
 	GString *packet;
 	
@@ -379,7 +393,11 @@ int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, 
 	network_mysqld_proto_append_int8(packet, 0xff); /* ERR */
 	network_mysqld_proto_append_int16(packet, errorcode); /* errorcode */
 	g_string_append_c(packet, '#');
-	g_string_append_len(packet, sqlstate, 5);
+	if (!sqlstate) {
+		g_string_append_len(packet, C("07000"));
+	} else {
+		g_string_append_len(packet, sqlstate, 5);
+	}
 
 	if (errmsg_len < 512) {
 		g_string_append_len(packet, errmsg, errmsg_len);
@@ -395,8 +413,19 @@ int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, 
 	return 0;
 }
 
+/**
+ * send a error-packet to the client connection
+ *
+ * errorcode is 1000, sqlstate is NULL
+ *
+ * @param con         the client connection
+ * @param errmsg      the error message
+ * @param errmsg_len  byte-len of the error-message
+ *
+ * @see network_mysqld_con_send_error_full
+ */
 int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize errmsg_len) {
-	return network_mysqld_con_send_error_full(con, errmsg, errmsg_len, 1000, "00S00");
+	return network_mysqld_con_send_error_full(con, errmsg, errmsg_len, ER_UNKNOWN_ERROR, NULL);
 }
 
 retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_socket *con, char *dest, size_t we_want) {
