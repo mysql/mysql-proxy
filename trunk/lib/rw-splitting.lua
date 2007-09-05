@@ -356,6 +356,18 @@ function disconnect_client()
 				return
 			end
 		end
+	else
+		local s = proxy.backends[proxy.connection.backend_ndx]
+
+		-- we are still bound to a backend 
+		--
+		-- if we don't have a enough connections in the pool yet,
+		-- add this one 
+
+		if s.idling_connections <= proxy.global.config.rwsplit.max_idle_connections then
+			-- move this connection into the pool
+			proxy.connection.backend_ndx = 0
+		end
 	end
 end
 
