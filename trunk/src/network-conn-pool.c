@@ -28,7 +28,24 @@ network_connection_pool *network_connection_pool_init(void) {
 }
 
 void network_connection_pool_free(network_connection_pool *pool) {
+	gsize i;
+
 	if (!pool) return;
+
+	for (i = 0; i < pool->entries->len; i++) {
+		network_connection_pool_entry *entry = pool->entries->pdata[i];
+		network_socket *sock = entry->srv_sock;
+
+		if (sock) {
+			/**
+			 * the idle-handler wants to take care of it
+			 */
+			event_del(&(sock->event));
+			network_socket_free(sock);
+		}
+		
+		g_free(entry);
+	}
 
 	g_ptr_array_free(pool->entries, TRUE);
 
