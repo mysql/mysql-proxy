@@ -54,3 +54,4 @@ failover; query analysis; query filtering and modification; and many more.
 %doc AUTHORS COPYING INSTALL NEWS README README.TESTS
 %doc examples/
 %{_sbindir}/%{name}
+%{_datadir}/%{name}/
