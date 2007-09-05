@@ -171,6 +171,7 @@ function read_query( packet )
        behavior on read_query_result
     --]]
     xtab_params = {}
+    xtab_error_status = 0
 
     local query = packet:sub(2)
     --
