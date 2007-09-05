@@ -19,6 +19,7 @@ As you built from SVN none of the configure scripts is prepared. You need:
 
 - autoconf 2.56 or higer
 - automake 1.9 or higher
+- flex 
 
 to generate the configure script. Use the provided autogen.sh to rebuild 
 the config-scripts:
