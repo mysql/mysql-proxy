@@ -429,102 +429,46 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
 	return network_mysqld_con_send_error_full(con, errmsg, errmsg_len, ER_UNKNOWN_ERROR, NULL);
 }
 
-retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_socket *con, char *dest, size_t we_want) {
-	GList *chunk;
+retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_socket *con, GString *dest, size_t we_want) {
 	gssize len;
-	network_queue *queue = con->recv_raw_queue;
-	gsize we_have;
 
-	/**
-	 * 1. we read all we can get into a local buffer,
-	 * 2. we split it into header + data
-	 * 
-	 * */
-
-	if (con->to_read) {
-		GString *s;
-
-		s = g_string_sized_new(con->to_read + 1);
-
-		if (-1 == (len = recv(con->fd, s->str, s->allocated_len - 1, 0))) {
-			g_string_free(s, TRUE);
-			switch (errno) {
-			case EAGAIN:
-				return RET_WAIT_FOR_EVENT;
-			default:
-				return RET_ERROR;
-			}
-		} else if (len == 0) {
-			g_string_free(s, TRUE);
+	if (-1 == (len = recv(con->fd, dest->str + dest->len, we_want - dest->len, 0))) {
+		switch (errno) {
+		case EAGAIN:
+			return RET_WAIT_FOR_EVENT;
+		default:
 			return RET_ERROR;
 		}
-
-		s->len = len;
-		s->str[s->len] = '\0';
-		if (len > con->to_read) {
-			/* between ioctl() and read() might be a cap and we might read more than we expected */
-			con->to_read = 0;
-		} else {
-			con->to_read -= len;
-		}
-
-		network_queue_append_chunk(queue, s);
+	} else if (len == 0) {
+		return RET_ERROR;
 	}
 
+	dest->len += len;
+	dest->str[dest->len] = '\0';
 
-	/* check if we have enough data */
-	for (chunk = queue->chunks->head, we_have = 0; chunk; chunk = chunk->next) {
-		GString *s = chunk->data;
-
-		if (chunk == queue->chunks->head) {
-			g_assert(queue->offset < s->len);
-		
-			we_have += (s->len - queue->offset);
-		} else {
-			we_have += s->len;
-		}
-
-		if (we_have >= we_want) break;
-	}
-
-	if (we_have < we_want) {
+	if (dest->len < we_want) {
 		/* we don't have enough */
 
 		return RET_WAIT_FOR_EVENT;
 	}
 
-	for (chunk = queue->chunks->head, we_have = 0; chunk && we_want; ) {
-		GString *s = chunk->data;
-
-		size_t chunk_has = s->len - queue->offset;
-		size_t to_read   = we_want > chunk_has ? chunk_has : we_want;
-				
-		memcpy(dest + we_have, s->str + queue->offset, to_read);
-		we_have += to_read;
-		we_want -= to_read;
-
-		queue->offset += to_read;
-
-		if (queue->offset == s->len) {
-			/* this chunk is empty now */
-			g_string_free(s, TRUE);
-
-			g_queue_delete_link(queue->chunks, chunk);
-			queue->offset = 0;
-
-			chunk = queue->chunks->head;
-		}
-	}
-
 	return RET_SUCCESS;
 }
 
-
+/**
+ * read a MySQL packet from the socket
+ *
+ * the packet is added to the con->recv_queue and contains a full mysql packet
+ * with packet-header and everything 
+ */
 retval_t network_mysqld_read(network_mysqld *srv, network_socket *con) {
 	GString *packet = NULL;
 
+	/** 
+	 * read the packet header (4 bytes)
+	 */
 	if (con->packet_len == PACKET_LEN_UNSET) {
-		switch (network_mysqld_read_raw(srv, con, (gchar *)con->header, NET_HEADER_SIZE)) {
+		switch (network_mysqld_read_raw(srv, con, con->header, NET_HEADER_SIZE)) {
 		case RET_WAIT_FOR_EVENT:
 			return RET_WAIT_FOR_EVENT;
 		case RET_ERROR:
@@ -536,20 +480,21 @@ retval_t network_mysqld_read(network_mysqld *srv, network_socket *con) {
 			break;
 		}
 
-		con->packet_len = network_mysqld_proto_get_header(con->header);
-		con->packet_id  = con->header[3]; /* packet-id if the next packet */
+		con->packet_len = network_mysqld_proto_get_header((unsigned char *)(con->header->str));
+		con->packet_id  = (unsigned char)(con->header->str[3]); /* packet-id if the next packet */
 
-		packet = g_string_sized_new(con->packet_len + NET_HEADER_SIZE);
-		g_string_append_len(packet, (gchar *)con->header, NET_HEADER_SIZE); /* copy the header */
+		packet = g_string_sized_new(con->packet_len + NET_HEADER_SIZE + 1); /** we need some space for the \0 */
+		g_string_append_len(packet, con->header->str, NET_HEADER_SIZE); /* copy the header */
 
 		network_queue_append_chunk(con->recv_queue, packet);
+		g_string_truncate(con->header, 0);
 	} else {
 		packet = con->recv_queue->chunks->tail->data;
 	}
 
 	g_assert(packet->allocated_len >= con->packet_len + NET_HEADER_SIZE);
 
-	switch (network_mysqld_read_raw(srv, con, packet->str + NET_HEADER_SIZE, con->packet_len)) {
+	switch (network_mysqld_read_raw(srv, con, packet, con->packet_len + NET_HEADER_SIZE)) {
 	case RET_WAIT_FOR_EVENT:
 		return RET_WAIT_FOR_EVENT;
 	case RET_ERROR:
@@ -561,8 +506,6 @@ retval_t network_mysqld_read(network_mysqld *srv, network_socket *con) {
 		break;
 
 	}
-
-	packet->len += con->packet_len;
 
 	return RET_SUCCESS;
 }

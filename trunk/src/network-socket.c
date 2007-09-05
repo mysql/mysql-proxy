@@ -76,7 +76,6 @@ network_socket *network_socket_init() {
 
 	s->send_queue = network_queue_init();
 	s->recv_queue = network_queue_init();
-	s->recv_raw_queue = network_queue_init();
 
 	s->packet_len = PACKET_LEN_UNSET;
 
@@ -85,6 +84,7 @@ network_socket *network_socket_init() {
 	s->scrambled_password = g_string_new(NULL);
 	s->scramble_buf = g_string_new(NULL);
 	s->auth_handshake_packet = g_string_new(NULL);
+	s->header       = g_string_sized_new(4);
 	
 	return s;
 }
@@ -94,7 +94,6 @@ void network_socket_free(network_socket *s) {
 
 	network_queue_free(s->send_queue);
 	network_queue_free(s->recv_queue);
-	network_queue_free(s->recv_raw_queue);
 
 	if (s->addr.str) {
 		g_free(s->addr.str);
@@ -109,7 +108,7 @@ void network_socket_free(network_socket *s) {
 	g_string_free(s->username,   TRUE);
 	g_string_free(s->default_db, TRUE);
 	g_string_free(s->scrambled_password, TRUE);
-
+	g_string_free(s->header, TRUE);
 
 	g_free(s);
 }
