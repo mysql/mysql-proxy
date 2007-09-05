@@ -432,15 +432,28 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
 retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_socket *con, GString *dest, size_t we_want) {
 	gssize len;
 
+	/**
+	 * nothing to read, let's get out of here 
+	 */
+	if (we_want - dest->len == 0) {
+		return RET_SUCCESS;
+	}
+
 	if (-1 == (len = recv(con->fd, dest->str + dest->len, we_want - dest->len, 0))) {
 		switch (errno) {
 		case EAGAIN:
 			return RET_WAIT_FOR_EVENT;
 		default:
+			g_debug("%s: recv() failed: %s (errno=%d)", G_STRLOC, strerror(errno), errno);
 			return RET_ERROR;
 		}
 	} else if (len == 0) {
-		return RET_ERROR;
+		/**
+		 * connection close
+		 *
+		 * let's call the ioctl() and let it handle it for use
+		 */
+		return RET_WAIT_FOR_EVENT;
 	}
 
 	dest->len += len;
