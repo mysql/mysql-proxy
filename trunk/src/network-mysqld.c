@@ -30,6 +30,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
+#include <arpa/inet.h> /** inet_ntoa */
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
@@ -1384,6 +1385,23 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	client_con->client->addr.len = addr_len;
 	client_con->client->fd   = fd;
 
+	/* resolve the peer-addr if necessary */
+	if (!client_con->client->addr.str) {
+		switch (client_con->client->addr.addr.common.sa_family) {
+		case AF_INET:
+			client_con->client->addr.str = g_strdup_printf("%s:%d", 
+					inet_ntoa(client_con->client->addr.addr.ipv4.sin_addr),
+					client_con->client->addr.addr.ipv4.sin_port);
+			break;
+		default:
+			g_message("%s.%d: can't convert addr-type %d into a string", 
+					 __FILE__, __LINE__, 
+					 client_con->client->addr.addr.common.sa_family);
+			break;
+		}
+	}
+
+
 	/* copy the config */
 	client_con->config = con->config;
 	client_con->config.network_type = con->config.network_type;
@@ -1499,21 +1517,15 @@ void *network_mysqld_thread(void *_srv) {
 	/**
 	 * cleanup
 	 *
-	 * FIXME: the g_free() should be fixed. Currently the config. struct is shared
-	 * between all connections incl. the addr buffers. We can only free them once.
 	 */
 	if (proxy_con) {
 		/**
 		 * we still might have connections pointing to the close scope */
-		g_free(proxy_con->server->addr.str);
-
 		event_del(&(proxy_con->server->event));
 		network_mysqld_con_free(proxy_con);
 	}
 	
 	if (admin_con) {
-		g_free(admin_con->server->addr.str);
-
 		event_del(&(admin_con->server->event));
 		network_mysqld_con_free(admin_con);
 	}

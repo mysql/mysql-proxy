@@ -95,12 +95,10 @@ void network_socket_free(network_socket *s) {
 	network_queue_free(s->send_queue);
 	network_queue_free(s->recv_queue);
 	network_queue_free(s->recv_raw_queue);
-#if 0
-	/* */
+
 	if (s->addr.str) {
 		g_free(s->addr.str);
 	}
-#endif
 
 	if (s->fd != -1) {
 		closesocket(s->fd);

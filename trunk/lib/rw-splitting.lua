@@ -66,7 +66,7 @@ function connect_server()
 
 	if is_debug then
 		print()
-		print("[connect_server] ")
+		print("[connect_server] " .. proxy.connection.client.address)
 	end
 
 	local least_idle_conns_ndx = 0
@@ -85,7 +85,7 @@ function connect_server()
 			-- try to connect to each backend once at least
 			if s.idling_connections == 0 then
 				proxy.connection.backend_ndx = i
-				print("  [".. i .."] open new connection")
+				print("  [".. i .."] no idle connections, opening one")
 				return
 			end
 
@@ -114,7 +114,7 @@ function connect_server()
 	end
 
 	if is_debug then
-		print("  opening new connection on: " .. proxy.connection.backend_ndx)
+		print("  [" .. proxy.connection.backend_ndx .. "] idle-conns below min-idle")
 	end
 
 	-- open a new connection 
@@ -127,6 +127,9 @@ end
 --
 -- auth.packet is the packet
 function read_auth_result( auth )
+	if is_debug then
+		print("[read_auth_result] " .. proxy.connection.client.address)
+	end
 	if auth.packet:byte() == proxy.MYSQLD_PACKET_OK then
 		-- auth was fine, disconnect from the server
 		proxy.connection.backend_ndx = 0
@@ -157,7 +160,7 @@ function read_query( packet )
 
 	-- looks like we have to forward this statement to a backend
 	if is_debug then
-		print("[read_query]")
+		print("[read_query] " .. proxy.connection.client.address)
 		print("  current backend   = " .. proxy.connection.backend_ndx)
 		print("  client default db = " .. c.default_db)
 		print("  client username   = " .. c.username)
@@ -172,6 +175,10 @@ function read_query( packet )
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_OK,
 		}
+	
+		if is_debug then
+			print("  (QUIT) current backend   = " .. proxy.connection.backend_ndx)
+		end
 
 		return proxy.PROXY_SEND_RESULT
 	end
@@ -329,7 +336,7 @@ end
 function disconnect_client()
 	local is_debug = proxy.global.config.rwsplit.is_debug
 	if is_debug then
-		print("[disconnect_client]")
+		print("[disconnect_client] " .. proxy.connection.client.address)
 	end
 
 	if proxy.connection.backend_ndx == 0 then

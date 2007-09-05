@@ -762,6 +762,8 @@ static int proxy_socket_get(lua_State *L) {
 		lua_pushlstring(L, sock->default_db->str, sock->default_db->len);
 	} else if (0 == strcmp(key, "username")) {
 		lua_pushlstring(L, sock->username->str, sock->username->len);
+	} else if (0 == strcmp(key, "address")) {
+		lua_pushstring(L, sock->addr.str);
 	} else if (0 == strcmp(key, "scrambled_password")) {
 		lua_pushlstring(L, sock->scrambled_password->str, sock->scrambled_password->len);
 	} else if (sock->mysqld_version) { /* only the server-side has mysqld_version set */
@@ -2038,23 +2040,6 @@ static proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
 		lua_setfield(L, -2, "thread_id");
 		lua_pushstring(L, recv_sock->addr.str);
 		lua_setfield(L, -2, "server_addr");
-
-		/* resolve the peer-addr if necessary */
-		if (!send_sock->addr.str) {
-			switch (send_sock->addr.addr.common.sa_family) {
-			case AF_INET:
-				send_sock->addr.str = g_strdup_printf("%s:%d", 
-						inet_ntoa(send_sock->addr.addr.ipv4.sin_addr),
-						send_sock->addr.addr.ipv4.sin_port);
-				break;
-			default:
-				g_message("%s.%d: can't convert addr-type %d into a string", 
-						 __FILE__, __LINE__, 
-						 send_sock->addr.addr.common.sa_family);
-				break;
-			}
-		}
-
 		lua_pushstring(L, send_sock->addr.str);
 		lua_setfield(L, -2, "client_addr");
 
@@ -3498,7 +3483,6 @@ static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	plugin_con_state *st = con->plugin_con_state;
 	plugin_srv_state *g = st->global_state;
-	backend_t *backend = NULL;
 	guint min_connected_clients = G_MAXUINT;
 	guint i;
 	GTimeVal now;
@@ -3580,30 +3564,34 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 				min_connected_clients = cur->connected_clients;
 			}
 		}
-	} 
 	
-	if (st->backend_ndx >= 0 && 
-	    st->backend_ndx < g->backend_pool->len) {
-		backend = g->backend_pool->pdata[st->backend_ndx];
+		if (st->backend_ndx >= 0 && 
+		    st->backend_ndx < g->backend_pool->len) {
+			st->backend = g->backend_pool->pdata[st->backend_ndx];
+		}
+	} else if (NULL == st->backend &&
+		   st->backend_ndx >= 0 && 
+		   st->backend_ndx < g->backend_pool->len) {
+		st->backend = g->backend_pool->pdata[st->backend_ndx];
 	}
 
-	if (NULL == backend) {
+	if (NULL == st->backend) {
 		network_mysqld_con_send_error(con->client, C("(proxy) all backends are down"));
 		return RET_ERROR;
 	}
 
-	st->backend = backend;
 
 	/**
 	 * check if we have a connection in the pool for this backend
 	 */
-
-	if (!use_pooled_connection ||
-	    NULL == (con->server = network_connection_pool_get(backend->pool, NULL, NULL))) {
+	if (NULL == con->server) {
 		int ioctlvar;
 
 		con->server = network_socket_init();
-		con->server->addr = backend->addr;
+		con->server->addr = st->backend->addr;
+		con->server->addr.str = g_strdup(st->backend->addr.str);
+	
+		st->backend->connected_clients++;
 
 		if (0 != network_mysqld_con_connect(con->server)) {
 			g_message("%s.%d: connecting to backend (%s) failed, marking it as down for ...", 
@@ -3642,9 +3630,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 			       	0); /* packet-id */
 		
 		con->state = CON_STATE_SEND_HANDSHAKE;
-	}
 
-	st->backend->connected_clients++;
+		/**
+		 * connect_clients is already incremented 
+		 */
+	}
 
 	return RET_SUCCESS;
 }
