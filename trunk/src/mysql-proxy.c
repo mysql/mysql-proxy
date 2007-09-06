@@ -288,17 +288,17 @@ int main(int argc, char **argv) {
 
 	GOptionEntry admin_entries[] = 
 	{
-		{ "admin-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of internal admin-server (default: :4041)", "<ip:port>" },
+		{ "admin-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of internal admin-server (default: :4041)", "<host:port>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 
 	GOptionEntry proxy_entries[] = 
 	{
-		{ "proxy-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the proxy-server (default: :4040)", "<ip:port>" },
+		{ "proxy-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the proxy-server (default: :4040)", "<host:port>" },
 		{ "proxy-read-only-backend-addresses", 
-					      0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "address:port of the remote slave-server (default: not set)", "<ip:port>" },
-		{ "proxy-backend-addresses",  0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "address:port of the remote backend-servers (default: 127.0.0.1:3306)", "<ip:port>" },
+					      0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "address:port of the remote slave-server (default: not set)", "<host:port>" },
+		{ "proxy-backend-addresses",  0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "address:port of the remote backend-servers (default: 127.0.0.1:3306)", "<host:port>" },
 		
 		{ "proxy-skip-profiling",     0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "disables profiling of queries (default: enabled)", NULL },
 
