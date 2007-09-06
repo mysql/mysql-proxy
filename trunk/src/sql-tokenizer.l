@@ -455,30 +455,3 @@ int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len) {
 	return ret;
 }
 
-#ifdef WITH_MAIN
-int main() {
-	GPtrArray *tokens = NULL;
-	gsize i;
-
-#define C(x) x, sizeof(x) - 1
-
-	tokens = g_ptr_array_new();
-	sql_tokenizer(tokens, C("SELEcT \"qq-end\"\"\", \"\"\"qq-start\", \"'\"`qq-mixed''\" FROM a AS `b`, `ABC``FOO` "));
-
-	for (i = 0; i < tokens->len; i++) {
-		sql_token *token = tokens->pdata[i];
-
-		printf("[%"G_GSIZE_FORMAT"] token=%s (%d) (%s)\n", i, sql_token_get_name(token->token_id), token->token_id, token->text->str);
-	}
-
-	for (i = 0; i < tokens->len; i++) {
-		sql_token *token = tokens->pdata[i];
-
-		sql_token_free(token);
-	}
-	g_ptr_array_free(tokens, TRUE);
-
-	/* cleanup */
-	return 0;
-}
-#endif
