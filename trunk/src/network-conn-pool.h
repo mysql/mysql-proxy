@@ -21,13 +21,18 @@
 #include "network-socket.h"
 
 typedef struct {
-	GPtrArray *entries;
+	GHashTable *users; /** GHashTable<GString, GQueue<network_connection_pool_entry>> */
+	
+	guint max_idle_connections;
+	guint min_idle_connections;
 } network_connection_pool;
 
 typedef struct {
-	network_socket *srv_sock;
+	network_socket *sock;          /** the idling socket */
 	
-	network_connection_pool *pool;
+	network_connection_pool *pool; /** a pointer back to the pool */
+
+	GTimeVal added_ts;             /** added at ... we want to make sure we don't hit wait_timeout */
 } network_connection_pool_entry;
 
 network_socket *network_connection_pool_get(network_connection_pool *pool,
@@ -35,6 +40,7 @@ network_socket *network_connection_pool_get(network_connection_pool *pool,
 		GString *default_db);
 network_connection_pool_entry *network_connection_pool_add(network_connection_pool *pool, network_socket *sock);
 void network_connection_pool_remove(network_connection_pool *pool, network_connection_pool_entry *entry);
+GQueue *network_connection_pool_get_conns(network_connection_pool *pool, GString *username, GString *);
 
 network_connection_pool *network_connection_pool_init(void);
 void network_connection_pool_free(network_connection_pool *pool);

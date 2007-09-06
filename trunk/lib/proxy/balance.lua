@@ -24,8 +24,9 @@ function idle_failsafe_rw()
 
 	for i = 1, #proxy.backends do
 		local s = proxy.backends[i]
+		local conns = s.pool.users[proxy.connection.client.username]
 		
-		if s.idling_connections > 0 and 
+		if conns.cur_idle_connections > 0 and 
 		   s.state ~= proxy.BACKEND_STATE_DOWN and 
 		   s.type == proxy.BACKEND_TYPE_RW then
 			backend_ndx = i
@@ -42,11 +43,12 @@ function idle_ro()
 
 	for i = 1, #proxy.backends do
 		local s = proxy.backends[i]
+		local conns = s.pool.users[proxy.connection.client.username]
 
 		-- pick a slave which has some idling connections
 		if s.type == proxy.BACKEND_TYPE_RO and 
 		   s.state ~= proxy.BACKEND_STATE_DOWN and 
-		   s.idling_connections > 0 then
+		   conns.cur_idle_connections > 0 then
 			if max_conns == -1 or 
 			   s.connected_clients < max_conns then
 				max_conns = s.connected_clients

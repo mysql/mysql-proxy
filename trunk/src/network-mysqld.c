@@ -68,14 +68,6 @@ extern volatile sig_atomic_t agent_shutdown;
 
 #define C(x) x, sizeof(x) - 1
 
-gboolean g_hash_table_true(gpointer UNUSED_PARAM(key), gpointer UNUSED_PARAM(value), gpointer UNUSED_PARAM(u)) {
-	return TRUE;
-}	
-
-void g_list_string_free(gpointer data, gpointer UNUSED_PARAM(user_data)) {
-	g_string_free(data, TRUE);
-}
-
 retval_t plugin_call_cleanup(network_mysqld *srv, network_mysqld_con *con) {
 	NETWORK_MYSQLD_PLUGIN_FUNC(func) = NULL;
 

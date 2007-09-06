@@ -39,7 +39,7 @@ if not proxy.global.config.rwsplit then
 		min_idle_connections = 4,
 		max_idle_connections = 8,
 
-		is_debug = true
+		is_debug = false
 	}
 end
 
@@ -69,47 +69,63 @@ function connect_server()
 		print("[connect_server] " .. proxy.connection.client.address)
 	end
 
-	local least_idle_conns_ndx = 0
-	local least_idle_conns = 0
+	local rw_ndx = 0
 
+	-- init all backends 
 	for i = 1, #proxy.backends do
-		local s = proxy.backends[i]
+		local s        = proxy.backends[i]
+		local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
+		local cur_idle = pool.users[""].cur_idle_connections
+
+		pool.min_idle_connections = proxy.global.config.rwsplit.min_idle_connections
+		pool.max_idle_connections = proxy.global.config.rwsplit.max_idle_connections
+		
 		if is_debug then
 			print("  [".. i .."].connected_clients = " .. s.connected_clients)
-			print("  [".. i .."].idling_connections = " .. s.idling_connections)
+			print("  [".. i .."].pool.cur_idle     = " .. cur_idle)
+			print("  [".. i .."].pool.max_idle     = " .. pool.max_idle_connections)
+			print("  [".. i .."].pool.min_idle     = " .. pool.min_idle_connections)
 			print("  [".. i .."].type = " .. s.type)
 			print("  [".. i .."].state = " .. s.state)
 		end
 
-		if s.state ~= proxy.BACKEND_STATE_DOWN then
-			-- try to connect to each backend once at least
-			if s.idling_connections == 0 then
-				proxy.connection.backend_ndx = i
-				print("  [".. i .."] no idle connections, opening one")
-				return
-			end
-
-			-- try to open at least min_idle_connections
-			if least_idle_conns_ndx == 0 or
-			   ( s.idling_connections < proxy.global.config.rwsplit.min_idle_connections and 
-			     s.idling_connections < least_idle_conns ) then
-				least_idle_conns_ndx = i
-				least_idle_conns = s.idling_connections
-			end
+		-- prefer connections to the master 
+		if s.type == proxy.BACKEND_TYPE_RW and
+		   s.state ~= proxy.BACKEND_STATE_DOWN and
+		   cur_idle < pool.min_idle_connections then
+			proxy.connection.backend_ndx = i
+			break
+		elseif s.type == proxy.BACKEND_TYPE_RO and
+		       s.state ~= proxy.BACKEND_STATE_DOWN and
+		       cur_idle < pool.min_idle_connections then
+			proxy.connection.backend_ndx = i
+			break
+		elseif s.type == proxy.BACKEND_TYPE_RW and
+		       s.state ~= proxy.BACKEND_STATE_DOWN and
+		       rw_ndx == 0 then
+			rw_ndx = i
 		end
 	end
 
-	if least_idle_conns_ndx > 0 then
-		proxy.connection.backend_ndx = least_idle_conns_ndx
+	if proxy.connection.backend_ndx == 0 then
+		if is_debug then
+			print("  [" .. rw_ndx .. "] taking master as default")
+		end
+		proxy.connection.backend_ndx = rw_ndx
 	end
 
-	if proxy.connection.backend_ndx > 0 and 
-	   proxy.backends[proxy.connection.backend_ndx].idling_connections >= proxy.global.config.rwsplit.min_idle_connections then
-		-- we have 4 idling connections in the pool, that's good enough
+	-- pick a random backend
+	--
+	-- we someone have to skip DOWN backends
+
+	-- ok, did we got a backend ?
+
+	if proxy.connection.server then 
 		if is_debug then
 			print("  using pooled connection from: " .. proxy.connection.backend_ndx)
 		end
-	
+
+		-- stay with it
 		return proxy.PROXY_IGNORE_RESULT
 	end
 
@@ -339,35 +355,8 @@ function disconnect_client()
 		print("[disconnect_client] " .. proxy.connection.client.address)
 	end
 
-	if proxy.connection.backend_ndx == 0 then
-		-- currently we don't have a server backend assigned
-		--
-		-- pick a server which has too many idling connections and close one
-		for i = 1, #proxy.backends do
-			local s = proxy.backends[i]
-
-			if s.state ~= proxy.BACKEND_STATE_DOWN and
-			   s.idling_connections > proxy.global.config.rwsplit.max_idle_connections then
-				-- try to disconnect a backend
-				proxy.connection.backend_ndx = i
-				if is_debug then
-					print("  [".. i .."] closing connection, idling: " .. proxy.backends[i].idling_connections)
-				end
-				return
-			end
-		end
-	else
-		local s = proxy.backends[proxy.connection.backend_ndx]
-
-		-- we are still bound to a backend 
-		--
-		-- if we don't have a enough connections in the pool yet,
-		-- add this one 
-
-		if s.idling_connections <= proxy.global.config.rwsplit.max_idle_connections then
-			-- move this connection into the pool
-			proxy.connection.backend_ndx = 0
-		end
-	end
+	-- make sure we are disconnection from the connection
+	-- to move the connection into the pool
+	proxy.connection.backend_ndx = 0
 end
 
