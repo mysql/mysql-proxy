@@ -92,7 +92,9 @@ int test_prep_stmt(MYSQL *mysql) {
 		result[0].buffer = (char *)&two;
 		result[0].is_null = &is_null;
 		result[0].length = &length;
+#if MYSQL_VERSION_ID >= 50000
 		result[0].error = &error;
+#endif
 	
 		START_TIMING("%s:%d", mysql->host, mysql->port);
 		if (mysql_stmt_bind_result(stmt, result)) {
@@ -167,7 +169,9 @@ int test_prep_stmt_noparam(MYSQL *mysql) {
 		result[0].buffer = (char *)&two;
 		result[0].is_null = &is_null;
 		result[0].length = &length;
+#if MYSQL_VERSION_ID >= 50000
 		result[0].error = &error;
+#endif
 	
 		START_TIMING("%s:%d", mysql->host, mysql->port);
 		if (mysql_stmt_bind_result(stmt, result)) {
