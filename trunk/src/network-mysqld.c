@@ -66,6 +66,12 @@ extern volatile int agent_shutdown;
 extern volatile sig_atomic_t agent_shutdown;
 #endif
 
+#ifdef _WIN32
+#define E_NET_CONNRESET WSAECONNRESET
+#else
+#define E_NET_CONNRESET ECONNRESET
+#endif
+
 #define C(x) x, sizeof(x) - 1
 
 retval_t plugin_call_cleanup(network_mysqld *srv, network_mysqld_con *con) {
@@ -433,7 +439,7 @@ retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_sock
 
 	if (-1 == (len = recv(con->fd, dest->str + dest->len, we_want - dest->len, 0))) {
 		switch (errno) {
-		case ECONNRESET: /** nothing to read, let's let ioctl() handle the close for us */
+		case E_NET_CONNRESET: /** nothing to read, let's let ioctl() handle the close for us */
 		case EAGAIN:     /** the buffers are empty, try again later */
 			return RET_WAIT_FOR_EVENT;
 		default:
