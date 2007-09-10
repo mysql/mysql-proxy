@@ -1695,16 +1695,6 @@ static int proxy_resultset_fields_get(lua_State *L) {
 }
 
 /**
- * VC++ doesn't like my __VA_ARGS__ up to now 
- *
- * if someone finds the switch for C99 compat ...
- */
-#ifndef _WIN32
-#define PROXY_ASSERT(cond, fmt, ...) \
-	if (!(cond)) g_error("%s.%d: assertion (%s) failed: " fmt, __FILE__, __LINE__, #cond, __VA_ARGS__); 
-#endif
-
-/**
  * get the next row from the resultset
  *
  * returns a lua-table with the fields (starting at 1)
@@ -1757,12 +1747,7 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 			 * FIXME: we only support fields in the row-iterator < 16M (packet-len)
 			 */
 			g_assert(field_len <= packet->len + NET_HEADER_SIZE);
-#ifdef _WIN32
 			g_assert(off + field_len <= packet->len + NET_HEADER_SIZE);
-#else
-			PROXY_ASSERT(off + field_len <= packet->len + NET_HEADER_SIZE, 
-					"%u + "F_U64" <= "F_SIZE_T, off, field_len, packet->len + NET_HEADER_SIZE);
-#endif
 
 			lua_pushlstring(L, packet->str + off, field_len);
 
