@@ -438,6 +438,9 @@ retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_sock
 	}
 
 	if (-1 == (len = recv(con->fd, dest->str + dest->len, we_want - dest->len, 0))) {
+#ifdef _WIN32
+		errno = WSAGetLastError();
+#endif
 		switch (errno) {
 		case E_NET_CONNRESET: /** nothing to read, let's let ioctl() handle the close for us */
 		case EAGAIN:     /** the buffers are empty, try again later */
@@ -535,6 +538,9 @@ retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_soc
 		g_assert(con->send_queue->offset < s->len);
 
 		if (-1 == (len = send(con->fd, s->str + con->send_queue->offset, s->len - con->send_queue->offset, 0))) {
+#ifdef _WIN32
+			errno = WSAGetLastError();
+#endif
 			switch (errno) {
 			case EAGAIN:
 				return RET_WAIT_FOR_EVENT;
