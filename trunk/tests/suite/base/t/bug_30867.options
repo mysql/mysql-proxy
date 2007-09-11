@@ -1,0 +1,33 @@
+--[[
+    The following SQL statements need to be executed
+    directly to the backend server, otherwise they will affect the
+    outcome of the test
+--]]
+sql_execute(
+    {
+    'grant select,insert,update,delete on test.* to user1 identified by "user"',
+    'grant select,insert,update,delete on test.* to user2 identified by "user"',
+    'drop table if exists test.t1',
+    'create table test.t1 (id int)'
+    })
+
+--
+-- starts a fake replication system
+--
+simulate_replication()
+
+
+local rw_splitting_options =    {
+    ["proxy-backend-addresses"] = PROXY_HOST .. ':' .. PROXY_MASTER_PORT ,
+    ["proxy-read-only-backend-addresses"] = PROXY_HOST .. ':' .. PROXY_SLAVE_PORT ,
+    ["proxy-address"]           = PROXY_HOST .. ':' .. PROXY_PORT ,
+    ["admin-address"]           = PROXY_HOST .. ':' .. ADMIN_PORT ,
+    ["pid-file"]                = PROXY_PIDFILE,
+    ["proxy-lua-script"]        = 'bug_30867.lua',
+    }
+
+--
+-- starts a Proxy with r/w splitting
+--
+start_proxy('bug_30867', rw_splitting_options)
+
