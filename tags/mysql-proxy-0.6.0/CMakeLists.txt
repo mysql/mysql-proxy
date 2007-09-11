@@ -1,0 +1,5 @@
+PROJECT(mysql-proxy C)
+
+SET(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+
+ADD_SUBDIRECTORY(src build)
