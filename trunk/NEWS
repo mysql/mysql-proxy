@@ -1,5 +1,7 @@
 
-0.6.0 -
+0.6.1 - 
+
+0.6.0 - 2007-09-11
 
   * added --no-daemon and --pid-file
   * added --no-proxy to disable the proxy 
