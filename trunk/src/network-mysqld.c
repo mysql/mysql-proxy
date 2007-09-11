@@ -68,8 +68,20 @@ extern volatile sig_atomic_t agent_shutdown;
 
 #ifdef _WIN32
 #define E_NET_CONNRESET WSAECONNRESET
+#define E_NET_WOULDBLOCK WSAEWOULDBLOCK
 #else
 #define E_NET_CONNRESET ECONNRESET
+#if EWOULDBLOCK == EAGAIN
+/**
+ * some system make EAGAIN == EWOULDBLOCK which would lead to a 
+ * error in the case handling
+ *
+ * set it to -1 as this error should never happen
+ */
+#define E_NET_WOULDBLOCK -1
+#else
+#define E_NET_WOULDBLOCK EWOULDBLOCK
+#endif
 #endif
 
 #define C(x) x, sizeof(x) - 1
@@ -443,7 +455,8 @@ retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_sock
 #endif
 		switch (errno) {
 		case E_NET_CONNRESET: /** nothing to read, let's let ioctl() handle the close for us */
-		case EAGAIN:     /** the buffers are empty, try again later */
+		case E_NET_WOULDBLOCK: /** the buffers are empty, try again later */
+		case EAGAIN:     
 			return RET_WAIT_FOR_EVENT;
 		default:
 			g_debug("%s: recv() failed: %s (errno=%d)", G_STRLOC, strerror(errno), errno);
@@ -542,6 +555,7 @@ retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_soc
 			errno = WSAGetLastError();
 #endif
 			switch (errno) {
+			case E_NET_WOULDBLOCK:
 			case EAGAIN:
 				return RET_WAIT_FOR_EVENT;
 			default:
