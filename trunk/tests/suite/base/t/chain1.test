@@ -1,0 +1,7 @@
+# chain1.test
+# -----------
+# Testing chained proxies
+
+--echo # this should return "1 ADDITION SECOND ADDITION"
+SELECT 1;
+
