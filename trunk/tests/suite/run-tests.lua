@@ -48,6 +48,8 @@ end
 
 local testdir = dirname(arg[0])
 
+local USE_POPEN		=	os.getenv('USE_POPEN') 
+
 local VERBOSE		= 	os.getenv('TEST_VERBOSE') or 
 						os.getenv('VERBOSE') or 
 						os.getenv('DEBUG') or 0
@@ -321,6 +323,27 @@ function after_test()
 	stop_proxy()
 end
 
+function alternative_execute (cmd)
+	local fh = io.popen(cmd)
+	assert(fh, 'error executing '.. cmd)
+	local result = ''
+	local line = fh:read()
+	while line do
+		result = result .. line
+		line = fh:read()
+	end
+	fh:close()
+	return result
+end
+
+function conditional_execute (cmd)
+	if USE_POPEN then
+		return alternative_execute(cmd)
+	else
+		return os_execute(cmd)
+	end
+end
+
 --- 
 -- run a test
 --
@@ -331,11 +354,15 @@ function run_test(filename, basedir)
 
 	local testname = assert(filename:match("t/(.+)\.test"))
 	if tests_to_skip[testname] then
-		print(testname , 'skipped: ', tests_to_skip[testname] or 'no reason given' )
+		print('skip ' .. testname ..' '.. (tests_to_skip[testname] or 'no reason given') )
 		return 0, 1
 	end
 	before_test(basedir, testname)
-	local ret = os_execute(
+	if VERBOSE > 1 then		
+		os.execute('echo -n "' .. testname  .. ' " ; ' )
+	end
+	local result = 0
+	local ret = conditional_execute(
 		env_options_tostring({
 			['MYSQL_USER']  = MYSQL_USER,
 			['MYSQL_PASSWORD']  = MYSQL_PASSWORD,
@@ -343,7 +370,6 @@ function run_test(filename, basedir)
 			['MASTER_PORT'] = PROXY_MASTER_PORT,
 			['SLAVE_PORT'] = PROXY_SLAVE_PORT,
 		}) .. ' ' ..
-		'echo -n "' .. testname  .. ' " ; ' ..
 		MYSQL_TEST_BIN .. " " ..
 		options_tostring({
 			user	 = MYSQL_USER,
@@ -355,8 +381,19 @@ function run_test(filename, basedir)
 			["result-file"] = basedir .. "/r/" .. testname .. ".result"
 		})
 	)
+	if USE_POPEN then
+		assert(ret == 'ok' or ret =='not ok', 'unexpected result <' .. ret .. '>')
+		if (ret == 'ok') then
+			result = 0
+		elseif ret == 'not ok'then
+			result = 1
+		end
+		print(ret .. ' ' .. testname)  
+	else
+		result = ret
+	end
 	after_test()	
-	return ret, 0
+	return result, 0
 end
 
 ---
@@ -636,7 +673,7 @@ end
 
 --
 -- prints test suite statistics
-print (string.format('tests: %d - skipped: %d (%4.1f%%) - passed: %d (%4.1f%%) - failed: %d (%4.1f%%)',
+print_verbose (string.format('tests: %d - skipped: %d (%4.1f%%) - passed: %d (%4.1f%%) - failed: %d (%4.1f%%)',
 			num_tests,
 			num_skipped,
 			num_skipped / num_tests * 100,
