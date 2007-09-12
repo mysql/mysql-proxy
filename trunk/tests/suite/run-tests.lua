@@ -230,6 +230,15 @@ function os_execute(cmdline)
 	return os.execute(cmdline)
 end
 
+function get_pid(pid_file_name)
+	local fh = assert(io.open(pid_file_name, 'r'),
+		"error opening " .. pid_file_name)
+	local pid = assert(fh:read() ,
+		"PID not found in " .. pid_file_name)
+	fh:close()
+	return pid
+end
+
 function stop_proxy()
 	-- shut dowm the proxy
 	--
@@ -240,8 +249,8 @@ function stop_proxy()
 	for proxy_name, proxy_options in pairs(proxy_list) do
 		pid_file = proxy_options['pid-file']
 		print_verbose ('stopping proxy ' .. proxy_name)
-		if 0 == os.execute("kill -TERM `cat ".. pid_file .." `") then
-			while 0 == os.execute("kill -0 `cat ".. pid_file .." ` 2> /dev/null") do
+		if 0 == os.execute("kill -TERM  ".. get_pid(pid_file) ) then
+			while 0 == os.execute("kill -0 ".. get_pid(pid_file) .."  2> /dev/null") do
 				os.execute("sleep 1")
 			end
 		end
@@ -588,9 +597,7 @@ local num_fails	 	= 0
 local all_ok		= true
 local failed_test   = {}
 
-if file_exists(DEFAULT_SCRIPT_FILENAME) then
-	file_empty(DEFAULT_SCRIPT_FILENAME)
-end
+file_empty(DEFAULT_SCRIPT_FILENAME)
 
 --
 -- if we have a argument, exectute the named test
