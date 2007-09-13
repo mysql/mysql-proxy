@@ -418,25 +418,50 @@ const gchar *sql_token_get_name(sql_token_id token_id) {
 	return token_names[token_id];
 }
 
+guint g_istr_hash(gconstpointer v) {
+	/* djb2 */
+	const unsigned char *p = v;
+	unsigned char c;
+	guint32 h = 5381;
+	
+	while ((c = *p++)) {
+		h = ((h << 5) + h) + g_ascii_toupper(*p);
+	}
+	
+	return h;
+}
+
+gboolean g_istr_equal(gconstpointer _a, gconstpointer _b) {
+	const gchar *a = _a;
+	const gchar *b = _b;
+
+	return (g_ascii_strcasecmp(a, b) == 0);
+}
+
+
 /**
  * get the token_id for a literal 
  */
 sql_token_id sql_token_get_id(const gchar *name) {
 	gsize i;
+	static GHashTable *cache = NULL;
 
-	/** 
-	 * iterating the list all the time is slooooow,
-	 * build a hash at startup instead 
-	 */
-	for (i = 0; token_names[i]; i++) {
-		if (0 != g_ascii_strncasecmp(token_names[i], "TK_SQL_", sizeof("TK_SQL_") - 1)) continue;
+	if (!cache) {
+		cache = g_hash_table_new(g_istr_hash, g_istr_equal);
 
-		if (0 == g_ascii_strcasecmp(token_names[i] + sizeof("TK_SQL_") - 1, name)) {
-			return i;
+		for (i = 0; token_names[i]; i++) {
+			/** only tokens with TK_SQL_* are keyworks */
+			if (0 != strncmp(token_names[i], "TK_SQL_", sizeof("TK_SQL_") - 1)) continue;
+
+			g_hash_table_insert(cache, (gpointer)(token_names[i] + sizeof("TK_SQL_") - 1), (gpointer)i);
 		}
 	}
 
-	return TK_LITERAL;
+	i = (gsize)g_hash_table_lookup(cache, name);
+
+	/** i == 0 -> TK_UNKNOWN */
+
+	return i ? i : TK_LITERAL;
 }
 
 int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len) {
