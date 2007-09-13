@@ -83,7 +83,7 @@ function read_query(packet)
 	if r then return r end
 
 	-- analyzing queries is disabled, just pass them on
-	if not proxy.global.config.analyze_query then
+	if not proxy.global.config.analyze_query.analyze_queries then
 		return
 	end
 
@@ -114,7 +114,9 @@ function read_query(packet)
 
 
 	if queries[norm_query].do_analyze then
-		-- cover the query in SHOW SESSION STATUS
+		-- wrap the query in SHOW SESSION STATUS
+		--
+		-- note: not used yet
 		proxy.queries:append(2, string.char(proxy.COM_QUERY) .. "SHOW SESSION STATUS")
 		proxy.queries:append(1, packet)
 		proxy.queries:append(3, string.char(proxy.COM_QUERY) .. "SHOW SESSION STATUS")
