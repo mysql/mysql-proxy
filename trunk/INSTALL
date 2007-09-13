@@ -17,7 +17,7 @@ Later you can update the tree by running
 
 As you built from SVN none of the configure scripts is prepared. You need:
 
-- autoconf 2.56 or higer
+- autoconf 2.56 or higher
 - automake 1.9 or higher
 - flex 
 
@@ -55,9 +55,10 @@ to make sure that the dependencies are in place;
 
 - libevent 1.x or higher (1.3b or later is prefered)
 - lua 5.1.x or higher
-- glib2 2.6.0 or higer
+- glib2 2.6.0 or higher
 - pkg-config 
-- mysql 5.0.x or higer developer files
+- mysql 5.0.x or higher developer files
+- Ensure $MYSQL_HOME/bin is in the PATH  (mysql_config required)
 
 Ubuntu/Debian
 -------------
