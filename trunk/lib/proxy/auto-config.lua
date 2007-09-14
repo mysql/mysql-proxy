@@ -8,7 +8,17 @@ local function parse_value(fld, token)
 	if t == "boolean" then
 		if token.token_name == "TK_INTEGER" then
 			return (token.text ~= "0")
+		else
+			print("(auto-config) expected a number, got " .. token.token_name)
 		end
+	elseif t == "number" then
+		if token.token_name == "TK_INTEGER" then
+			return tonumber(token.text)
+		else
+			print("(auto-config) expected a number, got " .. token.token_name)
+		end
+	else
+		print("(auto-config) type: " .. t .. " isn't handled yet" )
 	end
 	
 	return
@@ -42,15 +52,6 @@ function handle(cmd)
 						is_ok = true
 					end
 				end
-			end
-		elseif tokens[4].token_name == "TK_EQ" then
-			-- SET GLOBAL <key> = <value>
-			local r = parse_value(proxy.global.config[tokens[3].text], tokens[5])
-
-			if r ~= nil then
-				proxy.global.config[tokens[3].text] = r
-
-				is_ok = true
 			end
 		end
 	end
