@@ -21,15 +21,68 @@ local commands     = require("proxy.commands")
 local tokenizer    = require("proxy.tokenizer")
 local auto_config  = require("proxy.auto-config")
 
+---
+-- configuration
+--
+-- SET GLOBAL analyze_query.auto_filter = 0
 if not proxy.global.config.analyze_query then
 	proxy.global.config.analyze_query = {
-		analyze_queries = true,
-		auto_filter = true,
-		auto_explain = false,
-		auto_processlist = false,
-		min_queries = 100
+		analyze_queries  = true,   -- track all queries
+		auto_explain     = false,  -- execute a EXPLAIN on SELECT queries after we logged
+		auto_processlist = false,  -- execute a SHOW FULL PROCESSLIST after we logged
+		min_queries      = 1000,   -- start logging after evaluating 1000 queries
+		min_query_time   = 1000,   -- don't log queries less then 1ms
+		query_cutoff     = 160,    -- only show the first 160 chars of the query
+		log_slower_queries = false -- log the query if it is slower than the queries of the same kind
 	}
 end
+
+--- dump the result-set to stdout
+--
+-- @param inj "packet.injection"
+function resultset_to_string( res )
+	local s = ""
+	local field_count = 0
+	local fields = res.fields
+
+	if not fields then return "" end
+	
+	while fields[field_count] do
+		local field = fields[field_count]
+		field_count = field_count + 1
+	end
+	
+	local row_count = 0
+	for row in res.rows do
+		local o
+		local cols = {}
+
+		for i = 1, field_count do
+			if not o then
+				o = ""
+			else 
+				o = o .. ", "
+			end
+
+			if not row[i] then
+				o = o .. "NULL"
+			elseif fields[i - 1].type == proxy.MYSQL_TYPE_STRING or 
+				fields[i - 1].type == proxy.MYSQL_TYPE_VAR_STRING or 
+				fields[i - 1].type == proxy.MYSQL_TYPE_LONG_BLOB or 
+				fields[i - 1].type == proxy.MYSQL_TYPE_MEDIUM_BLOB then
+				o = o .. string.format("%q", row[i])
+			else
+				-- print("  [".. i .."] field-type: " .. fields[i - 1].type)
+				o = o .. row[i]
+			end
+		end
+		s = s .. ("  ["..row_count.."]{ " .. o .. " }\n")
+		row_count = row_count + 1
+	end
+
+	return s
+end
+
 
 function math.rolling_avg_init()
 	return { count = 0, value = 0 }
@@ -92,11 +145,62 @@ function read_query(packet)
 		return
 	end
 
+	tokens = tokenizer.tokenize(cmd.query)
+	norm_query = tokenizer.normalize(tokens)
+
+	-- handle the internal data
+	if norm_query == "SELECT * FROM `histogram` . `queries` " then
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = {
+				fields = { 
+					{ type = proxy.MYSQL_TYPE_STRING,
+					  name = "query" },
+					{ type = proxy.MYSQL_TYPE_LONG,
+					  name = "COUNT(*)" },
+					{ type = proxy.MYSQL_TYPE_DOUBLE,
+					  name = "AVG(qtime)" },
+					{ type = proxy.MYSQL_TYPE_DOUBLE,
+					  name = "STDDEV(qtime)" },
+				}
+			}
+		}
+
+		local rows = {}
+		if proxy.global.queries then
+			local cutoff = proxy.global.config.analyze_query.query_cutoff
+
+			for k, v in pairs(proxy.global.queries) do
+				local q = k
+
+				if cutoff and cutoff < #k then
+					q = k:sub(1, cutoff) .. "..."
+				end
+
+				rows[#rows + 1] = { 
+					q,
+					v.avg.count,
+					string.format("%.2f", v.avg.value),
+					v.stddev.count > 1 and string.format("%.2f", v.stddev.value) or nil
+				}
+			end
+		end
+		
+		proxy.response.resultset.rows = rows
+
+		return proxy.PROXY_SEND_RESULT
+	elseif norm_query == "DELETE FROM `histogram` . `queries` " then
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+		}
+
+		proxy.global.norm_queries = {}
+		return proxy.PROXY_SEND_RESULT
+	end
+
 	-- we are connection-global
 	baseline = nil
 	log_query = false
-	tokens = tokenizer.tokenize(cmd.query)
-	norm_query = tokenizer.normalize(tokens)
 
 	---
 	-- do we want to analyse this query ?
@@ -149,7 +253,7 @@ end
 
 function read_query_result(inj)
 	local res = assert(inj.resultset)
-	local auto_filter = proxy.global.config.analyze_query.auto_filter
+	local config = proxy.global.config.analyze_query
 
 	if inj.id == 1 then
 		log_query = false
@@ -183,37 +287,34 @@ function read_query_result(inj)
 			"  query(count):              " .. st.avg.count .. "\n" 
 
 
-		-- this query is slower than 95% of the average
-		if bl.avg.count > proxy.global.config.analyze_query.min_queries and
-		   inj.query_time > avg_query_time + 2 * stddev_query_time then
-			log_query = true
-		end
+		-- we need a min-query-time to filter out
+		if inj.query_time >= config.min_query_time then
+			-- this query is slower than 95% of the average
+			if bl.avg.count > config.min_queries and
+			   inj.query_time > avg_query_time + 5 * stddev_query_time then
+				o = o .. "  (qtime > global-threshold)\n"
+				log_query = true
+			end
 	
-		-- this query was slower than 95% of its kind
-		if st.avg.count > proxy.global.config.analyze_query.min_queries and 
-		   inj.query_time > q_avg_query_time + 2 * q_stddev_query_time then
-			log_query = true
-		end
-
-		if log_query and proxy.global.config.analyze_query.auto_processlist then
-			proxy.queries:append(4, string.char(proxy.COM_QUERY) .. "SHOW FULL PROCESSLIST")
-		end
-		
-		if log_query and proxy.global.config.analyze_query.auto_explain then
-			if tokens[0].token_name == "TK_SQL_SELECT" then
-				proxy.queries:append(4, string.char(proxy.COM_QUERY) .. "EXPLAIN " .. inj.query)
+			-- this query was slower than 95% of its kind
+			if config.log_slower_queries and
+			   st.avg.count > config.min_queries and 
+			   inj.query_time > q_avg_query_time + 5 * q_stddev_query_time then
+				o = o .. "  (qtime > query-threshold)\n"
+				log_query = true
 			end
 		end
 
-		-- there is nothing in the queue, we are the last query 
-		-- print everything to the log
-		if log_query and proxy.queries:len() == 0 then
-			print(o)
-			o = nil
-			log_query = false
+		if log_query and config.auto_processlist then
+			proxy.queries:append(4, string.char(proxy.COM_QUERY) .. "SHOW FULL PROCESSLIST")
+		end
+	
+		if log_query and config.auto_explain then
+			if tokens[1] and tokens[1].token_name == "TK_SQL_SELECT" then
+				proxy.queries:append(5, string.char(proxy.COM_QUERY) .. "EXPLAIN " .. inj.query:sub(2))
+			end
 		end
 
-		return
 	elseif inj.id == 2 then
 		-- the first SHOW SESSION STATUS
 		baseline = {}
@@ -260,10 +361,23 @@ function read_query_result(inj)
 			for k, v in pairs(delta_counters) do
 				o = o .. ".. " .. row[1] .. " = " .. (num2 - num1) .. "\n"
 			end
-			-- add a newline
-			print(o)
 		end
+	elseif inj.id == 4 then
+		-- dump the full result-set to stdout
+		o = o .. "SHOW FULL PROCESSLIST\n"
+		o = o .. resultset_to_string(inj.resultset)
+	elseif inj.id == 5 then
+		-- dump the full result-set to stdout
+		o = o .. "EXPLAIN <query>\n"
+		o = o .. resultset_to_string(inj.resultset)
 	end
 
-	return proxy.PROXY_IGNORE_RESULT
+	if log_query and proxy.queries:len() == 0 then
+		print(o)
+		o = nil
+		log_query = false
+	end
+
+	-- drop all resultsets but the original one
+	if inj.id ~= 1 then return proxy.PROXY_IGNORE_RESULT end
 end
