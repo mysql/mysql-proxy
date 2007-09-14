@@ -293,8 +293,6 @@ int network_mysqld_con_connect(network_socket * con) {
 		return -1;
 	}
 
-	setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val) );
-
 	if (-1 == connect(con->fd, (struct sockaddr *) &(con->addr.addr), con->addr.len)) {
 		g_critical("%s.%d: connect(%s) failed: %s", 
 				__FILE__, __LINE__,
@@ -302,6 +300,16 @@ int network_mysqld_con_connect(network_socket * con) {
 				strerror(errno));
 		return -1;
 	}
+
+	/**
+	 * set the same options as the mysql client 
+	 */
+	val = 8;
+	setsockopt(con->fd, SOL_IP,     IP_TOS, &val, sizeof(val));
+	val = 1;
+	setsockopt(con->fd, SOL_TCP,    TCP_NODELAY, &val, sizeof(val) );
+	val = 1;
+	setsockopt(con->fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val) );
 
 	return 0;
 }
@@ -589,17 +597,8 @@ retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_soc
 
 retval_t network_mysqld_write(network_mysqld *srv, network_socket *con) {
 	retval_t ret;
-	int corked;
 
-#ifdef TCP_CORK
-	corked = 1;
-	setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
-#endif
 	ret = network_mysqld_write_len(srv, con, -1);
-#ifdef TCP_CORK
-	corked = 0;
-	setsockopt(con->fd, IPPROTO_TCP, TCP_CORK, &corked, sizeof(corked));
-#endif
 
 	return ret;
 }
