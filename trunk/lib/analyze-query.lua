@@ -135,12 +135,12 @@ end
 function normalize_time(ts)
 	local suffix = "us"
 	if ts > 10000 then
-		ts = ts / 10000
+		ts = ts / 1000
 		suffix = "ms"
 	end
 	
 	if ts > 10000 then
-		ts = ts / 10000
+		ts = ts / 1000
 		suffix = "s"
 	end
 
