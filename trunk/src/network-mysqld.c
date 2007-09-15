@@ -305,9 +305,9 @@ int network_mysqld_con_connect(network_socket * con) {
 	 * set the same options as the mysql client 
 	 */
 	val = 8;
-	setsockopt(con->fd, SOL_IP,     IP_TOS, &val, sizeof(val));
+	setsockopt(con->fd, IPPROTO_IP,     IP_TOS, &val, sizeof(val));
 	val = 1;
-	setsockopt(con->fd, SOL_TCP,    TCP_NODELAY, &val, sizeof(val) );
+	setsockopt(con->fd, IPPROTO_TCP,    TCP_NODELAY, &val, sizeof(val) );
 	val = 1;
 	setsockopt(con->fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val) );
 
