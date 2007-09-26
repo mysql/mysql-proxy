@@ -71,6 +71,56 @@ static void log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags UNUSE
 	write(STDERR_FILENO, "\n", 1);
 }
 
+struct authors_st {
+	const char *name;
+	const char *location;
+	const char *role;
+};
+
+static struct authors_st table_authors[]= {
+	{"Jan Kneschke", 	"Kiel, Germany", 	"Design, development, applications, articles"},
+	{"Giuseppe Maxia", 	"Cagliari, Italy", 	"Testing, applications, articles"},
+	{"Lenz Grimmer", 	"Hamburg, Germany", "RPM packaging, openSUSE packages"},
+	{"Martin MC Brown", "Grantham, UK",     "Documentation"},
+    /* Add new authors here */
+    NULL
+};
+
+int authors_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
+	/**
+	 * show the authors
+	 */
+	network_mysqld *srv = user_data;
+	MYSQL_FIELD *field;
+	GPtrArray *row;
+    int counter;
+    char *field_descr[] = {
+			"name", 
+			"location", 
+			"role", 
+			NULL
+	};
+   
+    for (counter = 0; field_descr[counter] != NULL ; counter++) {
+    	field = network_mysqld_proto_field_init();
+	    field->name = g_strdup(field_descr[counter]);
+	    field->org_name = g_strdup(field_descr[counter]);
+	    field->type = FIELD_TYPE_STRING;
+	    field->flags = PRI_KEY_FLAG;
+	    field->length = 60;
+	    g_ptr_array_add(fields, field);
+    } 
+
+	for (counter = 0; table_authors[counter].name != NULL ; counter++) {
+		row = g_ptr_array_new(); 
+		g_ptr_array_add(row, g_strdup(table_authors[counter].name)); 
+		g_ptr_array_add(row, g_strdup(table_authors[counter].location)); 
+		g_ptr_array_add(row, g_strdup(table_authors[counter].role)); 
+		g_ptr_array_add(rows, row);
+	}
+	return 0;
+}
+
 int help_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 	/**
 	 * show the available commands 
@@ -105,6 +155,12 @@ int help_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 	g_ptr_array_add(row, g_strdup("select * from proxy_config")); 
 	g_ptr_array_add(row, g_strdup("show information about proxy configuration")); 
 	g_ptr_array_add(rows, row);
+
+	row = g_ptr_array_new(); 
+	g_ptr_array_add(row, g_strdup("select * from authors")); 
+	g_ptr_array_add(row, g_strdup("show information about the authors")); 
+	g_ptr_array_add(rows, row);
+
 
     /*
      * Add new command descriptions above this comment
@@ -427,6 +483,12 @@ int main(int argc, char **argv) {
 	table->select    = help_select;
 	table->user_data = srv;
 	g_hash_table_insert(srv->tables, g_strdup("help"), table);
+
+	table = network_mysqld_table_init();
+	table->select    = authors_select;
+	table->user_data = srv;
+	g_hash_table_insert(srv->tables, g_strdup("authors"), table);
+
 
 #ifndef _WIN32	
 	signal(SIGINT,  signal_handler);
