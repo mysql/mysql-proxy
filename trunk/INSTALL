@@ -60,6 +60,48 @@ to make sure that the dependencies are in place;
 - mysql 5.0.x or higher developer files
 - Ensure $MYSQL_HOME/bin is in the PATH  (mysql_config required)
 
+CentOS release 4.3 (Final)
+--------------------------
+
+CentOS 4.3 does not have lua 5.1 (it is on 5.0) and it has a version of
+glib-2.0 that is too old to build.
+
+If you can afford to upgrade lua and glib-2, just obtain newer versions of
+LUA and Glib-2 source rpms and run "rpmbuild --rebuild <source rpm name>",
+for example out of Fedora Core 7, and install the resulting newer packages.
+
+libevent and libevent-devel have been gathered from Dag Wieers
+<dag@wieers.com> repository.
+
+$ yum install \
+    lua \
+    lua-devel \
+    libevent \
+    libevent-devel \
+    glib2 \
+    glib2-devel \
+    pkg-config \
+    mysqlclient14-devel
+
+If you cannot upgrade the glib2 to the required minimum version, you'll have
+to hack up the glib2 package to install to /usr/local and compile the proxy with
+
+----
+  %build
+  export PKG_CONFIG_PATH="/usr/local/lib64/pkgconfig"
+  export GLIB_CFLAGS="-I/usr/local/include/glib-2.0 -I/usr/local/lib64/glib-2.0/include"
+  export GLIB_LIBS="-L/usr/local/lib64 -Wl,-rpath /usr/local/lib64 -lglib-2.0"
+  %configure \
+    --datadir=%{_datadir}/%{name} \
+  %if 0%{?with_lua}
+    --with-lua
+  %else
+    --without-lua
+  %endif
+  %{__make}
+----
+
+
 Ubuntu/Debian
 -------------
 
