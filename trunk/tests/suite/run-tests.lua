@@ -48,7 +48,7 @@ end
 
 local testdir = dirname(arg[0])
 
-local USE_POPEN		=	os.getenv('USE_POPEN') 
+local USE_POPEN		=	os.getenv('USE_POPEN') or 1
 
 local VERBOSE		= 	os.getenv('TEST_VERBOSE') or 
 						os.getenv('VERBOSE') or 

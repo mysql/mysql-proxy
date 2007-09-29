@@ -1493,9 +1493,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		lua_pop(L, 1);
 
 		lua_getfield(L, -1, "sqlstate"); /* proxy.response.sqlstate */
-		if (lua_isnumber(L, -1)) {
-			sqlstate = lua_tostring(L, -1);
-		}
+		sqlstate = lua_tostring(L, -1);
 		lua_pop(L, 1);
 
 		lua_getfield(L, -1, "errmsg"); /* proxy.response.errmsg */
