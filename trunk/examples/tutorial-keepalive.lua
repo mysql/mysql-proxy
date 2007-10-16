@@ -32,7 +32,7 @@ local min_idle_connections = 4
 local max_idle_connections = 8
 
 -- debug
-local is_debug = true
+local is_debug = false
 
 --- end of config
 
@@ -63,25 +63,30 @@ function connect_server()
 
 	for i = 1, #proxy.backends do
 		local s = proxy.backends[i]
+		local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
+		local cur_idle = pool.users[""].cur_idle_connections
+
 		if is_debug then
 			print("  [".. i .."].connected_clients = " .. s.connected_clients)
-			print("  [".. i .."].idling_connections = " .. s.idling_connections)
+			print("  [".. i .."].idling_connections = " .. cur_idle)
 			print("  [".. i .."].type = " .. s.type)
 			print("  [".. i .."].state = " .. s.state)
 		end
 
 		if s.state ~= proxy.BACKEND_STATE_DOWN then
 			-- try to connect to each backend once at least
-			if s.idling_connections == 0 then
+			if cur_idle == 0 then
 				proxy.connection.backend_ndx = i
-				print("  [".. i .."] open new connection")
+				if is_debug then
+					print("  [".. i .."] open new connection")
+				end
 				return
 			end
 
 			-- try to open at least min_idle_connections
 			if least_idle_conns_ndx == 0 or
-			   ( s.idling_connections < min_idle_connections and 
-			     s.idling_connections < least_idle_conns ) then
+			   ( cur_idle < min_idle_connections and 
+			     cur_idle < least_idle_conns ) then
 				least_idle_conns_ndx = i
 				least_idle_conns = s.idling_connections
 			end
@@ -92,14 +97,19 @@ function connect_server()
 		proxy.connection.backend_ndx = least_idle_conns_ndx
 	end
 
-	if proxy.connection.backend_ndx > 0 and 
-	   proxy.backends[proxy.connection.backend_ndx].idling_connections >= min_idle_connections then
-		-- we have 4 idling connections in the pool, that's good enough
-		if is_debug then
-			print("  using pooled connection from: " .. proxy.connection.backend_ndx)
-		end
+	if proxy.connection.backend_ndx > 0 then 
+		local s = proxy.backends[proxy.connection.backend_ndx]
+		local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
+		local cur_idle = pool.users[""].cur_idle_connections
+
+		if cur_idle >= min_idle_connections then
+			-- we have 4 idling connections in the pool, that's good enough
+			if true or is_debug then
+				print("  using pooled connection from: " .. proxy.connection.backend_ndx)
+			end
 	
-		return proxy.PROXY_IGNORE_RESULT
+			return proxy.PROXY_IGNORE_RESULT
+		end
 	end
 
 	if is_debug then
@@ -156,8 +166,10 @@ function read_query( packet )
 		-- let's pick a master as a good default
 		for i = 1, #proxy.backends do
 			local s = proxy.backends[i]
+			local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
+			local cur_idle = pool.users[proxy.connection.client.username].cur_idle_connections
 			
-			if s.idling_connections > 0 and 
+			if cur_idle > 0 and 
 			   s.state ~= proxy.BACKEND_STATE_DOWN and 
 			   s.type == proxy.BACKEND_TYPE_RW then
 				proxy.connection.backend_ndx = i
@@ -166,9 +178,9 @@ function read_query( packet )
 		end
 	end
 
-	if proxy.connection.client.default_db and proxy.connection.client.default_db ~= proxy.connection.server.default_db then
+	if true or proxy.connection.client.default_db and proxy.connection.client.default_db ~= proxy.connection.server.default_db then
 		-- sync the client-side default_db with the server-side default_db
-		proxy.queries:append(2, string.char(proxy.COM_INIT_DB) .. default_db)
+		proxy.queries:append(2, string.char(proxy.COM_INIT_DB) .. proxy.connection.client.default_db)
 	end
 	proxy.queries:append(1, packet)
 
@@ -188,7 +200,7 @@ function read_query_result( inj )
 	end
 	is_in_transaction = flags.in_trans
 
-	if is_in_transaction == 0 then
+	if not is_in_transaction then
 		-- release the backend
 		proxy.connection.backend_ndx = 0
 	end
@@ -210,13 +222,15 @@ function disconnect_client()
 		-- pick a server which has too many idling connections and close one
 		for i = 1, #proxy.backends do
 			local s = proxy.backends[i]
+			local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
+			local cur_idle = pool.users[proxy.connection.client.username].cur_idle_connections
 
 			if s.state ~= proxy.BACKEND_STATE_DOWN and
-			   s.idling_connections > max_idle_connections then
+			   cur_idle > max_idle_connections then
 				-- try to disconnect a backend
 				proxy.connection.backend_ndx = i
 				if is_debug then
-					print("  [".. i .."] closing connection, idling: " .. proxy.backends[i].idling_connections)
+					print("  [".. i .."] closing connection, idling: " .. cur_idle)
 				end
 				return
 			end
