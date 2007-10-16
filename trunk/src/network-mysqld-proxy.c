@@ -3588,6 +3588,41 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	GTimeVal now;
 	gboolean use_pooled_connection = FALSE;
 
+	if (con->server) {
+		int so_error = 0;
+		size_t so_error_len = sizeof(so_error);
+
+		/**
+		 * we might get called a 2nd time after a connect() == EINPROGRESS
+		 */
+		if (getsockopt(con->server->fd, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len)) {
+			/* getsockopt failed */
+			g_critical("%s.%d: getsockopt(%s) failed: %s", 
+					__FILE__, __LINE__,
+					con->server->addr.str, strerror(errno));
+			return RET_ERROR;
+		}
+
+		switch (so_error) {
+		case 0:
+			break;
+		default:
+			g_critical("%s.%d: connect(%s) failed: %s", 
+					__FILE__, __LINE__,
+					con->server->addr.str, strerror(so_error));
+			return RET_ERROR;
+		}
+
+		if (st->backend->state != BACKEND_STATE_UP) {
+			st->backend->state = BACKEND_STATE_UP;
+			g_get_current_time(&(st->backend->state_since));
+		}
+
+		con->state = CON_STATE_READ_HANDSHAKE;
+
+		return RET_SUCCESS;
+	}
+
 	st->backend = NULL;
 	st->backend_ndx = -1;
 
@@ -3707,6 +3742,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		st->backend->connected_clients++;
 
 		if (0 != network_mysqld_con_connect(con->server)) {
+			if (errno == EINPROGRESS) {
+				return RET_ERROR_RETRY;
+			}
+
 			g_message("%s.%d: connecting to backend (%s) failed, marking it as down for ...", 
 					__FILE__, __LINE__, con->server->addr.str);
 
@@ -3724,12 +3763,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 			g_get_current_time(&(st->backend->state_since));
 		}
 
-#ifdef _WIN32
-		ioctlvar = 1;
-		ioctlsocket(con->server->fd, FIONBIO, &ioctlvar);
-#else
-		fcntl(con->server->fd, F_SETFL, O_NONBLOCK | O_RDWR);
-#endif
 		con->state = CON_STATE_READ_HANDSHAKE;
 	} else {
 		/**

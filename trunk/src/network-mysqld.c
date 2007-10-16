@@ -276,6 +276,8 @@ int network_mysqld_con_set_address(network_address *addr, gchar *address) {
  * connect to the address defined in con->addr
  *
  * @see network_mysqld_set_address 
+ *
+ * @return 0 on connected, -1 on error, -2 for try again
  */
 int network_mysqld_con_connect(network_socket * con) {
 	int val = 1;
@@ -293,12 +295,27 @@ int network_mysqld_con_connect(network_socket * con) {
 		return -1;
 	}
 
+	/**
+	 * make the connect() call non-blocking
+	 *
+	 */
+	network_mysqld_con_set_non_blocking(con->fd);
+
 	if (-1 == connect(con->fd, (struct sockaddr *) &(con->addr.addr), con->addr.len)) {
-		g_critical("%s.%d: connect(%s) failed: %s", 
-				__FILE__, __LINE__,
-				con->addr.str,
-				strerror(errno));
-		return -1;
+		/**
+		 * in most TCP cases we connect() will return with 
+		 * EINPROGRESS ... 3-way handshake
+		 */
+		switch (errno) {
+		case EINPROGRESS:
+			return -2;
+		default:
+			g_critical("%s.%d: connect(%s) failed: %s", 
+					__FILE__, __LINE__,
+					con->addr.str,
+					strerror(errno));
+			return -1;
+		}
 	}
 
 	/**
@@ -627,7 +644,6 @@ retval_t plugin_call(network_mysqld *srv, network_mysqld_con *con, int state) {
 		}
 
 		break;
-
 	case CON_STATE_SEND_HANDSHAKE:
 		func = con->plugins.con_send_handshake;
 
@@ -833,8 +849,19 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 				break;
 			case RET_ERROR_RETRY:
-				/* hack to force a retry */
-				ostate = CON_STATE_INIT;
+				if (con->server) {
+					/**
+					 * we have a server connection waiting to begin writable
+					 */
+					WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
+					return;
+				} else {
+					/* try to get a connection to another backend,
+					 *
+					 * setting ostate = CON_STATE_INIT is a hack to make sure
+					 * the loop is coming back to this function again */
+					ostate = CON_STATE_INIT;
+				}
 
 				break;
 			case RET_ERROR:
@@ -1324,6 +1351,18 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	return;
 }
 
+int network_mysqld_con_set_non_blocking(int fd) {
+	int ioctlvar;
+
+#ifdef _WIN32
+	ioctlvar = 1;
+	ioctlsocket(fd, FIONBIO, &ioctlvar);
+#else
+	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
+#endif
+	return 0;
+}
+
 /**
  * we will be called by the event handler 
  *
@@ -1335,7 +1374,6 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	socklen_t addr_len;
 	struct sockaddr_in ipv4;
 	int fd;
-	int ioctlvar;
 
 	g_assert(events == EV_READ);
 	g_assert(con->server);
@@ -1345,12 +1383,8 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	if (-1 == (fd = accept(event_fd, (struct sockaddr *)&ipv4, &addr_len))) {
 		return ;
 	}
-#ifdef _WIN32
-	ioctlvar = 1;
-	ioctlsocket(fd, FIONBIO, &ioctlvar);
-#else
-	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
-#endif
+
+	network_mysqld_con_set_non_blocking(fd);
 
 	/* looks like we open a client connection */
 	client_con = network_mysqld_con_init(con->srv);
