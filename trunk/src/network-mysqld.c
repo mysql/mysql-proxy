@@ -583,9 +583,15 @@ retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_soc
 			case E_NET_WOULDBLOCK:
 			case EAGAIN:
 				return RET_WAIT_FOR_EVENT;
+			case EPIPE:
+			case ECONNRESET:
+				/** remote side closed the connection */
+				return RET_ERROR;
 			default:
-				g_message("%s.%d: write() failed: %s", 
+				g_message("%s.%d: send(%s, %ld) failed: %s", 
 						__FILE__, __LINE__, 
+						con->addr.str, 
+						s->len - con->send_queue->offset, 
 						strerror(errno));
 				return RET_ERROR;
 			}
@@ -1301,8 +1307,11 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case RET_ERROR_RETRY:
 			case RET_ERROR:
-				g_critical("%s.%d: network_mysqld_write(CON_STATE_SEND_QUERY_RESULT) returned an error", __FILE__, __LINE__);
-
+				/**
+				 * client is gone away
+				 *
+				 * close the connection and clean up
+				 */
 				con->state = CON_STATE_ERROR;
 				break;
 			}
