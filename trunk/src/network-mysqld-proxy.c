@@ -1392,7 +1392,9 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 					lua_pop(L, 1); /* pop the nil and leave the loop */
 					break;
 				} else {
-					g_error("(boom)");
+					g_error("proxy.response.resultset.fields[%d] should be a table, but is a %s", 
+							i,
+							lua_typename(L, lua_type(L, -1)));
 				}
 			}
 			lua_pop(L, 1);
@@ -1430,7 +1432,9 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 					lua_pop(L, 1); /* pop the nil and leave the loop */
 					break;
 				} else {
-					g_error("(boom)");
+					g_error("proxy.response.resultset.rows[%d] should be a table, but is a %s", 
+							i,
+							lua_typename(L, lua_type(L, -1)));
 				}
 			}
 			lua_pop(L, 1);
