@@ -1668,19 +1668,23 @@ static int proxy_resultset_field_get(lua_State *L) {
 	return 1;
 }
 
+/**
+ * get a field from the result-set
+ *
+ */
 static int proxy_resultset_fields_get(lua_State *L) {
 	GPtrArray *fields = *(GPtrArray **)luaL_checkudata(L, 1, "proxy.resultset.fields");
 	MYSQL_FIELD *field;
 	MYSQL_FIELD **field_p;
 	int ndx = luaL_checkinteger(L, 2);
 
-	if (ndx < 0 || ndx >= fields->len) {
+	if (ndx < 1 || ndx > fields->len) {
 		lua_pushnil(L);
 
 		return 1;
 	}
 
-	field = fields->pdata[ndx];
+	field = fields->pdata[ndx - 1]; /** lua starts at 1, C at 0 */
 
 	field_p = lua_newuserdata(L, sizeof(field));
 	*field_p = field;
