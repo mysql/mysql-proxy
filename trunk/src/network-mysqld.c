@@ -68,9 +68,11 @@ extern volatile sig_atomic_t agent_shutdown;
 
 #ifdef _WIN32
 #define E_NET_CONNRESET WSAECONNRESET
+#define E_NET_CONNABORTED WSAECONNABORTED
 #define E_NET_WOULDBLOCK WSAEWOULDBLOCK
 #else
 #define E_NET_CONNRESET ECONNRESET
+#define E_NET_CONNABORTED ECONNABORTED
 #if EWOULDBLOCK == EAGAIN
 /**
  * some system make EAGAIN == EWOULDBLOCK which would lead to a 
@@ -479,6 +481,7 @@ retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_sock
 		errno = WSAGetLastError();
 #endif
 		switch (errno) {
+		case E_NET_CONNABORTED:
 		case E_NET_CONNRESET: /** nothing to read, let's let ioctl() handle the close for us */
 		case E_NET_WOULDBLOCK: /** the buffers are empty, try again later */
 		case EAGAIN:     
