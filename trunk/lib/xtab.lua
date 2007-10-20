@@ -416,7 +416,7 @@ function read_query_result(inj)
                 end
                 table.insert(updated_rows , row)
             end
-            local field_count = 0
+            local field_count = 1
             local fields = inj.resultset.fields
 
             while fields[field_count] do
