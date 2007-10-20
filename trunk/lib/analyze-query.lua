@@ -42,11 +42,12 @@ end
 -- @param inj "packet.injection"
 function resultset_to_string( res )
 	local s = ""
-	local field_count = 0
+	-- TODO - check boundaries. Probably buggy after changes in rev 262
+	local field_count = 0      
 	local fields = res.fields
 
 	if not fields then return "" end
-	
+	print (fields[field_count])	
 	while fields[field_count] do
 		local field = fields[field_count]
 		field_count = field_count + 1
@@ -66,7 +67,8 @@ function resultset_to_string( res )
 
 			if not row[i] then
 				o = o .. "NULL"
-			elseif fields[i - 1].type == proxy.MYSQL_TYPE_STRING or 
+			-- TODO check if the indexes are in range 
+			elseif fields[i - 1].type == proxy.MYSQL_TYPE_STRING or  
 				fields[i - 1].type == proxy.MYSQL_TYPE_VAR_STRING or 
 				fields[i - 1].type == proxy.MYSQL_TYPE_LONG_BLOB or 
 				fields[i - 1].type == proxy.MYSQL_TYPE_MEDIUM_BLOB then
@@ -193,8 +195,7 @@ function read_query(packet)
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_OK,
 		}
-
-		proxy.global.norm_queries = {}
+		proxy.global.queries = {}
 		return proxy.PROXY_SEND_RESULT
 	end
 
