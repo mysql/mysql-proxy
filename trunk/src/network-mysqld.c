@@ -587,7 +587,8 @@ retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_soc
 			case EAGAIN:
 				return RET_WAIT_FOR_EVENT;
 			case EPIPE:
-			case ECONNRESET:
+			case E_NET_CONNRESET:
+			case E_NET_CONNABORTED:
 				/** remote side closed the connection */
 				return RET_ERROR;
 			default:
