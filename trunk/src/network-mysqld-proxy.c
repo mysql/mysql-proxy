@@ -3663,7 +3663,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		 * for sure we have something in the send-queue 
 		 *  */
 		
-		return RET_ERROR;
+		return RET_SUCCESS;
 	case PROXY_NO_DECISION:
 		/* just go on */
 

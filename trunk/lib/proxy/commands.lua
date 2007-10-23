@@ -85,4 +85,21 @@ function parse(packet)
 	return cmd
 end
 
+function pretty_print(cmd)
+	if cmd.type == proxy.COM_QUERY or
+	   cmd.type == proxy.COM_STMT_PREPARE then
+		return ("[%s] %s"):format(cmd.type_name, cmd.query)
+	elseif cmd.type == proxy.COM_INIT_DB then
+		return ("[%s] %s"):format(cmd.type_name, cmd.schema)
+	elseif cmd.type == proxy.COM_QUIT or
+	       cmd.type == proxy.COM_PING or
+	       cmd.type == proxy.COM_SHUTDOWN then
+		return ("[%s]"):format(cmd.type_name)
+	elseif cmd.type == proxy.COM_FIELD_LIST then
+		-- should have a table-name
+		return ("[%s]"):format(cmd.type_name)
+	end
+
+	return ("[%s] ... no idea"):format(cmd.type_name)
+end
 

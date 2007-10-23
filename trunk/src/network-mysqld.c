@@ -855,7 +855,18 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_CONNECT_SERVER:
 			switch (plugin_call(srv, con, con->state)) {
 			case RET_SUCCESS:
-				g_assert(con->server);
+
+				/**
+				 * hmm, if this is success and we have something in the clients send-queue
+				 * we just send it out ... who needs a server ? */
+
+				if (con->client->send_queue->chunks->length > 0 && con->server == NULL) {
+					/* we want to send something to the client */
+
+					con->state = CON_STATE_SEND_HANDSHAKE;
+				} else {
+					g_assert(con->server);
+				}
 
 				break;
 			case RET_ERROR_RETRY:
