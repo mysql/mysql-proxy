@@ -443,6 +443,7 @@ function sql_execute(queries, proxy_name)
 				execute  = query
 			})
 		)
+        assert(ret == 0, 'error using mysql client ')
 	else
 		--
 		-- No proxy name was passed.
