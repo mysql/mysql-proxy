@@ -167,11 +167,12 @@ end
 -- @param dst filename of the destination
 -- @param src filename of the source
 function file_copy(dst, src)
+	-- print_verbose("copying ".. src .. " to " .. dst)
 	local src_fd = assert(io.open(src, "rb"))
 	local content = src_fd:read("*a")
 	src_fd:close();
 
-	local dst_fd = assert(io.open(dst, "wb"))
+	local dst_fd = assert(io.open(dst, "wb+"))
 	dst_fd:write(content);
 	dst_fd:close();
 end
@@ -183,7 +184,8 @@ end
 --
 -- @param dst filename to create and truncate
 function file_empty(dst)
-	local dst_fd = assert(io.open(dst, "wb"))
+	-- print_verbose("emptying " .. dst)
+	local dst_fd = assert(io.open(dst, "wb+"))
 	dst_fd:close();
 end
 
@@ -206,6 +208,7 @@ function options_tostring(tbl, sep)
 		local enc_value = v:gsub("\\", "\\\\"):gsub("\"", "\\\"")
 		s = s .. "--" .. k .. "=\"" .. enc_value .. "\" "
 	end
+	-- print_verbose(" option: " .. s)
 
 	return s
 end
@@ -239,6 +242,30 @@ function get_pid(pid_file_name)
 	return pid
 end
 
+function wait_proc_up(pid_file) 
+	local rounds = 0
+	os.execute("sleep 1") -- wait until the pid-file is created
+
+	local pid = get_pid(pid_file)
+
+	while 0 ~= os.execute("kill -0 ".. pid .."  2> /dev/null") do
+		os.execute("sleep 1")
+		rounds = rounds + 1
+		print_verbose(("(wait_proc_up) kill-wait: %d rounds, pid=%d (%s)"):format(rounds, pid, pid_file))
+	end
+end
+
+function wait_proc_down(pid_file) 
+	local rounds = 0
+	local pid = get_pid(pid_file)
+
+	while 0 == os.execute("kill -0 ".. pid .."  2> /dev/null") do
+		os.execute("sleep 1")
+		rounds = rounds + 1
+		print_verbose(("(wait_proc_down) kill-wait: %d rounds, pid=%d (%s)"):format(rounds, pid, pid_file))
+	end
+end
+
 function stop_proxy()
 	-- shut dowm the proxy
 	--
@@ -250,9 +277,9 @@ function stop_proxy()
 		pid_file = proxy_options['pid-file']
 		print_verbose ('stopping proxy ' .. proxy_name)
 		if 0 == os.execute("kill -TERM  ".. get_pid(pid_file) ) then
-			while 0 == os.execute("kill -0 ".. get_pid(pid_file) .."  2> /dev/null") do
-				os.execute("sleep 1")
-			end
+			wait_proc_down(pid_file)
+		else
+			-- hmm, if it failed ... not good, perhaps it already crashed
 		end
 		os.remove(pid_file)
 	end
@@ -289,6 +316,7 @@ function before_test(basedir, test_name)
 		if has_option_file then 
 			default_proxy_options['proxy-lua-script'] = script_filename
 			print_verbose('using lua script directly ' .. script_filename)
+			file_empty(DEFAULT_SCRIPT_FILENAME)
 		else
 			default_proxy_options['proxy-lua-script'] = DEFAULT_SCRIPT_FILENAME
 			file_copy(DEFAULT_SCRIPT_FILENAME, script_filename)
@@ -518,10 +546,16 @@ function start_proxy(proxy_name, proxy_options)
 			global_basedir .. 
 			'/t/' ..  proxy_options['proxy-lua-script'] 
 	end
+	-- print_verbose("starting " .. proxy_name)
+	-- os.execute("head " .. proxy_options['proxy-lua-script'])
 	assert(os.execute( 'LUA_PATH="' .. INCLUDE_PATH  .. '"  ' ..
 		PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
 		options_tostring( proxy_options) .. " &"
 	))
+
+	-- wait until the proxy is up
+	wait_proc_up(proxy_options['pid-file'])
+
 	proxy_list[proxy_name] = proxy_options 
 end
 
