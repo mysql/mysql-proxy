@@ -19,7 +19,7 @@
 #include "glib-ext.h"
 #include "sys-pedantic.h"
 
-/**
+/** @file
  * connection pools
  *
  * in the pool we manage idle connections
@@ -66,7 +66,10 @@ void network_connection_pool_entry_free(network_connection_pool_entry *e, gboole
  *
  * used as GDestroyFunc in the user-hash of the pool
  *
+ * @param q a GQueue to free
+ *
  * @see network_connection_pool_init
+ * @see GDestroyFunc
  */
 static void g_queue_free_all(gpointer q) {
 	GQueue *queue = q;
@@ -151,6 +154,7 @@ GQueue *network_connection_pool_get_conns(network_connection_pool *pool, GString
  * make sure we have at lease <min-conns> for each user
  * if we have more, reuse a connect to reauth it to another user
  *
+ * @param pool connection pool to get the connection from
  * @param username (optional) name of the auth connection
  */
 network_socket *network_connection_pool_get(network_connection_pool *pool,

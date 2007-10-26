@@ -13,6 +13,94 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */ 
 
+/**
+ * \mainpage
+ *
+ * \section a walk through the code
+ *
+ * - mysql-proxy.c
+ *   - main()
+ *     -# command-line handling
+ *     -# command-line handling
+ *     -# command-line handling
+ *   - internal SQL help for the admin interface (will be moved into a lua script)
+ *     -# select * from proxy_connections
+ *     -# select * from proxy_config
+ *     -# select * from authors
+ *     -# select * from help  
+ * - network-mysqld.c
+ *   - network_mysqld_thread() (supposed be called as thread)
+ *     -# registers event-halders (event_set(..., network_mysqld_con_accept, ...))
+ *     -# calls event_base_dispatch() [libevent] in the mainloop 
+ *   - network_mysqld_con_accept()
+ *     -# is called when the listen()ing socket gets a incoming connection
+ *     -# sets the event-handler for the established connection (e.g. network_mysqld_proxy_connection_init())
+ *     -# calls network_mysqld_con_handle() on the connection 
+ *   - network_mysqld_con_handle() is the state-machine
+ *     -# \image html http://forge.mysql.com/w/images/6/6e/Mysql-proto-state.png
+ *     -# implements the states of the MySQL Protocol
+ *       -# connect, handshake, old-password, query, result 
+ *     -# calls plugin functions (registered by e.g. network_mysqld_proxy_connection_init()) 
+ *
+ * - network-mysqld-proxy.c
+ *   - network_mysqld_proxy_connection_init()
+ *     -# registers the callbacks 
+ *   - proxy_connect_server() (CON_STATE_CONNECT_SERVER)
+ *     -# calls the connect_server() function in the lua script which might decide to
+ *       -# send a handshake packet without contacting the backend server (CON_STATE_SEND_HANDSHAKE)
+ *       -# closing the connection (CON_STATE_ERROR)
+ *       -# picking a active connection from the connection pool
+ *       -# pick a backend to authenticate against
+ *       -# do nothing 
+ *     -# by default, pick a backend from the backend list on the backend with the least active connctions
+ *     -# opens the connection to the backend with connect()
+ *     -# when done CON_STATE_READ_HANDSHAKE 
+ *   - proxy_read_handshake() (CON_STATE_READ_HANDSHAKE)
+ *     -# reads the handshake packet from the server 
+ *   - proxy_read_auth() (CON_STATE_READ_AUTH)
+ *     -# reads the auth packet from the client 
+ *   - proxy_read_auth_result() (CON_STATE_READ_AUTH_RESULT)
+ *     -# reads the auth-result packet from the server 
+ *   - proxy_send_auth_result() (CON_STATE_SEND_AUTH_RESULT)
+ *   - proxy_read_query() (CON_STATE_READ_QUERY)
+ *     -# reads the query from the client 
+ *   - proxy_read_query_result() (CON_STATE_READ_QUERY_RESULT)
+ *     -# reads the query-result from the server 
+ *   - proxy_send_query_result() (CON_STATE_SEND_QUERY_RESULT)
+ *     -# called after the data is written to the client
+ *     -# if scripts wants to close connections, goes to CON_STATE_ERROR
+ *     -# if queries are in the injection queue, goes to CON_STATE_SEND_QUERY
+ *     -# otherwise goes to CON_STATE_READ_QUERY
+ *     -# does special handling for COM_BINLOG_DUMP (go to CON_STATE_READ_QUERY_RESULT) 
+ *
+ * The other files only help those based main modules to do their job:
+ *
+ * - network-mysqld-proto.c
+ *   - the byte functions around the MySQL protocol 
+ * - network-socket.c
+ *   - basic socket struct 
+ * - network-mysqld-table.c
+ *   - internal tables to select from on the admin interface (to be removed) 
+ * - sql-tokenizer.y
+ *   - a flex based tokenizer for MySQL's SQL dialect (no parser) 
+ * - network-conn-pool.c
+ *   - a connection pool for server connections 
+ */
+
+
+/** @file
+ * the user-interface for the MySQL Proxy @see main()
+ *
+ *  -  command-line handling 
+ *  -  config-file parsing
+ * 
+ *
+ * network_mysqld_thread() is the real proxy thread 
+ * 
+ * @todo move the SQL based help out into a lua script
+ */
+
+
 #define SVN_REVISION "$Rev$"
 
 #ifdef HAVE_CONFIG_H
@@ -66,6 +154,10 @@ static void signal_handler(int sig) {
 	}
 }
 #endif
+
+/**
+ * log everything to the stdout for now
+ */
 static void log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags UNUSED_PARAM(log_level), const gchar *message, gpointer UNUSED_PARAM(user_data)) {
 	write(STDERR_FILENO, message, strlen(message));
 	write(STDERR_FILENO, "\n", 1);
@@ -77,6 +169,9 @@ struct authors_st {
 	const char *role;
 };
 
+/**
+ * list of contributors 
+ */
 static struct authors_st table_authors[]= {
 	{"Jan Kneschke", 	"Kiel, Germany", 	"Design, development, applications, articles"},
 	{"Giuseppe Maxia", 	"Cagliari, Italy", 	"Testing, applications, articles"},
@@ -231,13 +326,13 @@ int config_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 	return 0;
 }
 
+/**
+ * show the current configuration 
+ *
+ * @todo move to the proxy-module
+ */
 int connections_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
 	network_mysqld *srv = user_data;
-	/**
-	 * show the current configuration 
-	 *
-	 * TODO: move to the proxy-module
-	 */
 	MYSQL_FIELD *field;
 	gsize i;
 

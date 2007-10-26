@@ -62,8 +62,8 @@ gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GSt
 gchar *network_mysqld_proto_get_gstring_len(GString *packet, guint *_off, gsize len, GString *out);
 gchar *network_mysqld_proto_get_gstring(GString *packet, guint *_off, GString *out);
 
-guint64 network_mysqld_proto_decode_lenenc(GString *s, guint *_off);
-int network_mysqld_proto_decode_ok_packet(GString *s, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg);
+guint64 network_mysqld_proto_decode_lenenc(GString *packet, guint *_off);
+int network_mysqld_proto_decode_ok_packet(GString *packet, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg);
 
 MYSQL_FIELD *network_mysqld_proto_field_init(void);
 void network_mysqld_proto_field_free(MYSQL_FIELD *field);
@@ -74,9 +74,9 @@ void network_mysqld_proto_fields_free(GPtrArray *fields);
 size_t network_mysqld_proto_get_header(unsigned char *header);
 int network_mysqld_proto_set_header(unsigned char *header, size_t len, unsigned char id);
 
-int network_mysqld_proto_append_lenenc_int(GString *dest, guint64 len);
-int network_mysqld_proto_append_lenenc_string_len(GString *dest, const char *s, guint64 len);
-int network_mysqld_proto_append_lenenc_string(GString *dest, const char *s);
+int network_mysqld_proto_append_lenenc_int(GString *packet, guint64 len);
+int network_mysqld_proto_append_lenenc_string_len(GString *packet, const char *s, guint64 len);
+int network_mysqld_proto_append_lenenc_string(GString *packet, const char *s);
 
 int network_mysqld_proto_append_int8(GString *packet, guint8 num);
 int network_mysqld_proto_append_int16(GString *packet, guint16 num);

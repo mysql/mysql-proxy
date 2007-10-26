@@ -18,9 +18,34 @@
 
 #include "sys-pedantic.h"
 
-#define CRASHME() do { char *_crashme = NULL; *_crashme = 0; } while(0);
+/** @file
+ *
+ * decoders and encoders for the MySQL packets
+ *
+ * - basic data-types
+ *   - fixed length integers
+ *   - variable length integers
+ *   - variable length strings
+ * - packet types
+ *   - OK packets
+ *   - EOF packets
+ *   - ERR packets
+ *
+ */
+
 /**
- * decode a length-encoded integer
+ * force a crash for gdb and valgrind to get a stacktrace
+ */
+#define CRASHME() do { char *_crashme = NULL; *_crashme = 0; } while(0);
+
+/**
+ * decode a length-encoded integer from a network packet
+ *
+ * _off is incremented on success 
+ *
+ * @param s the MySQL-packet to decode
+ * @param _off offset in into the packet 
+ * @return the decoded number
  */
 guint64 network_mysqld_proto_decode_lenenc(GString *s, guint *_off) {
 	guint off = *_off;
@@ -72,6 +97,9 @@ guint64 network_mysqld_proto_decode_lenenc(GString *s, guint *_off) {
 	return ret;
 }
 
+/**
+ * decode a OK packet from the network packet
+ */
 int network_mysqld_proto_decode_ok_packet(GString *s, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg) {
 	guint off = 0;
 	guint64 dest;
@@ -90,13 +118,30 @@ int network_mysqld_proto_decode_ok_packet(GString *s, guint64 *affected, guint64
 	return 0;
 }
 
-
+/**
+ * skip bytes in the network packet
+ *
+ * a assertion makes sure that we can't skip over the end of the packet 
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @param size   bytes to skip
+ *
+ */
 void network_mysqld_proto_skip(GString *packet, guint *_off, gsize size) {
 	g_assert(*_off + size <= packet->len);
 	
 	*_off += size;
 }
 
+/**
+ * get a fixed-length integer from the network packet 
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @param size   byte-len of the integer to decode
+ * @return a the decoded integer
+ */
 guint64 network_mysqld_proto_get_int_len(GString *packet, guint *_off, gsize size) {
 	gsize i;
 	int shift;
@@ -118,18 +163,50 @@ guint64 network_mysqld_proto_get_int_len(GString *packet, guint *_off, gsize siz
 	return r;
 }
 
+/**
+ * get a 8-bit integer from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return a the decoded integer
+ * @see network_mysqld_proto_get_int_len()
+ */
 guint8 network_mysqld_proto_get_int8(GString *packet, guint *_off) {
 	return network_mysqld_proto_get_int_len(packet, _off, 1);
 }
 
+/**
+ * get a 16-bit integer from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return a the decoded integer
+ * @see network_mysqld_proto_get_int_len()
+ */
 guint16 network_mysqld_proto_get_int16(GString *packet, guint *_off) {
 	return network_mysqld_proto_get_int_len(packet, _off, 2);
 }
 
+/**
+ * get a 32-bit integer from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return a the decoded integer
+ * @see network_mysqld_proto_get_int_len()
+ */
 guint32 network_mysqld_proto_get_int32(GString *packet, guint *_off) {
 	return network_mysqld_proto_get_int_len(packet, _off, 4);
 }
 
+/**
+ * get a string from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @param len    length of the string
+ * @return the string (allocated) or NULL of len is 0
+ */
 gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize len) {
 	gchar *str;
 
@@ -145,6 +222,16 @@ gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize l
 	return str;
 }
 
+/**
+ * get a variable-length string from the network packet
+ *
+ * variable length strings are prefixed with variable-length integer defining the length of the string
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return the string
+ * @see network_mysqld_proto_get_string_len(), network_mysqld_proto_decode_lenenc()
+ */
 gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off) {
 	guint64 len;
 
@@ -156,6 +243,14 @@ gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off) {
 	return network_mysqld_proto_get_string_len(packet, _off, len);
 }
 
+/**
+ * get a NUL-terminated string from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return       the string
+ * @see network_mysqld_proto_get_string_len(), network_mysqld_proto_decode_lenenc()
+ */
 gchar *network_mysqld_proto_get_string(GString *packet, guint *_off) {
 	guint len;
 	gchar *r = NULL;
@@ -181,12 +276,13 @@ gchar *network_mysqld_proto_get_string(GString *packet, guint *_off) {
 
 
 /**
- * copy a len bytes from the packet into the out 
+ * get a GString from the network packet
  *
- * increments _off by len
- *
- * @param out a GString which cares the string
- * @return a pointer to the string in out
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @param len    bytes to copy
+ * @param out    a GString which carries the string
+ * @return       a pointer to the string in out
  */
 gchar *network_mysqld_proto_get_gstring_len(GString *packet, guint *_off, gsize len, GString *out) {
 	g_string_truncate(out, 0);
@@ -204,6 +300,16 @@ gchar *network_mysqld_proto_get_gstring_len(GString *packet, guint *_off, gsize 
 	return out->str;
 }
 
+/**
+ * get a NUL-terminated GString from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @param out    a GString which carries the string
+ * @return       a pointer to the string in out
+ *
+ * @see network_mysqld_proto_get_gstring_len()
+ */
 gchar *network_mysqld_proto_get_gstring(GString *packet, guint *_off, GString *out) {
 	guint len;
 	gchar *r = NULL;
@@ -225,6 +331,16 @@ gchar *network_mysqld_proto_get_gstring(GString *packet, guint *_off, GString *o
 	return r;
 }
 
+/**
+ * get a variable-length GString from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @param out    a GString which carries the string
+ * @return       a pointer to the string in out
+ *
+ * @see network_mysqld_proto_get_gstring_len(), network_mysqld_proto_decode_lenenc()
+ */
 gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GString *out) {
 	guint64 len;
 
@@ -233,6 +349,11 @@ gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GSt
 	return network_mysqld_proto_get_gstring_len(packet, _off, len, out);
 }
 
+/**
+ * create a empty field for a result-set definition
+ *
+ * @return a empty MYSQL_FIELD
+ */
 MYSQL_FIELD *network_mysqld_proto_field_init() {
 	MYSQL_FIELD *field;
 	
@@ -241,6 +362,11 @@ MYSQL_FIELD *network_mysqld_proto_field_init() {
 	return field;
 }
 
+/**
+ * free a MYSQL_FIELD and its components
+ *
+ * @param field  the MYSQL_FIELD to free
+ */
 void network_mysqld_proto_field_free(MYSQL_FIELD *field) {
 	if (field->catalog) g_free(field->catalog);
 	if (field->db) g_free(field->db);
@@ -252,6 +378,11 @@ void network_mysqld_proto_field_free(MYSQL_FIELD *field) {
 	g_free(field);
 }
 
+/**
+ * create a array of MYSQL_FIELD 
+ *
+ * @return a empty array of MYSQL_FIELD
+ */
 GPtrArray *network_mysqld_proto_fields_init(void) {
 	GPtrArray *fields;
 	
@@ -260,6 +391,12 @@ GPtrArray *network_mysqld_proto_fields_init(void) {
 	return fields;
 }
 
+/**
+ * free a array of MYSQL_FIELD 
+ *
+ * @param fields  array of MYSQL_FIELD to free
+ * @see network_mysqld_proto_field_free()
+ */
 void network_mysqld_proto_fields_free(GPtrArray *fields) {
 	guint i;
 
@@ -272,45 +409,76 @@ void network_mysqld_proto_fields_free(GPtrArray *fields) {
 	g_ptr_array_free(fields, TRUE);
 }
 
-int network_mysqld_proto_set_header(unsigned char *header, size_t len, unsigned char id) {
-	g_assert(len <= PACKET_LEN_MAX);
+/**
+ * set length of the packet in the packet header
+ *
+ * each MySQL packet is 
+ *  - is prefixed by a 4 byte packet header
+ *  - length is max 16Mbyte (3 Byte)
+ *  - sequence-id (1 Byte) 
+ *
+ * To encode a packet of more then 16M clients have to send multiple 16M frames
+ *
+ * the sequence-id is incremented for each related packet and wrapping from 255 to 0
+ *
+ * @param header  string of at least 4 byte to write the packet header to
+ * @param length  length of the packet
+ * @param id      sequence-id of the packet
+ * @return 0
+ */
+int network_mysqld_proto_set_header(unsigned char *header, size_t length, unsigned char id) {
+	g_assert(length <= PACKET_LEN_MAX);
 
-	header[0] = (len >>  0) & 0xFF;
-	header[1] = (len >>  8) & 0xFF;
-	header[2] = (len >> 16) & 0xFF;
+	header[0] = (length >>  0) & 0xFF;
+	header[1] = (length >>  8) & 0xFF;
+	header[2] = (length >> 16) & 0xFF;
 	header[3] = id;
 
 	return 0;
 }
 
+/**
+ * decode the packet length from a packet header
+ *
+ * @param header the first 3 bytes of the network packet
+ * @return the packet length
+ * @see network_mysqld_proto_set_header()
+ */
 size_t network_mysqld_proto_get_header(unsigned char *header) {
 	return header[0] | header[1] << 8 | header[2] << 16;
 }
 
-int network_mysqld_proto_append_lenenc_int(GString *dest, guint64 len) {
-	if (len < 251) {
-		g_string_append_c(dest, len);
-	} else if (len < 65536) {
-		g_string_append_c(dest, (gchar)252);
-		g_string_append_c(dest, (len >> 0) & 0xff);
-		g_string_append_c(dest, (len >> 8) & 0xff);
-	} else if (len < 16777216) {
-		g_string_append_c(dest, (gchar)253);
-		g_string_append_c(dest, (len >> 0) & 0xff);
-		g_string_append_c(dest, (len >> 8) & 0xff);
-		g_string_append_c(dest, (len >> 16) & 0xff);
+/**
+ * append the variable-length integer to the packet
+ *
+ * @param packet  the MySQL network packet
+ * @param length  integer to encode
+ * @return        0
+ */
+int network_mysqld_proto_append_lenenc_int(GString *packet, guint64 length) {
+	if (length < 251) {
+		g_string_append_c(packet, length);
+	} else if (length < 65536) {
+		g_string_append_c(packet, (gchar)252);
+		g_string_append_c(packet, (length >> 0) & 0xff);
+		g_string_append_c(packet, (length >> 8) & 0xff);
+	} else if (length < 16777216) {
+		g_string_append_c(packet, (gchar)253);
+		g_string_append_c(packet, (length >> 0) & 0xff);
+		g_string_append_c(packet, (length >> 8) & 0xff);
+		g_string_append_c(packet, (length >> 16) & 0xff);
 	} else {
-		g_string_append_c(dest, (gchar)254);
+		g_string_append_c(packet, (gchar)254);
 
-		g_string_append_c(dest, (len >> 0) & 0xff);
-		g_string_append_c(dest, (len >> 8) & 0xff);
-		g_string_append_c(dest, (len >> 16) & 0xff);
-		g_string_append_c(dest, (len >> 24) & 0xff);
+		g_string_append_c(packet, (length >> 0) & 0xff);
+		g_string_append_c(packet, (length >> 8) & 0xff);
+		g_string_append_c(packet, (length >> 16) & 0xff);
+		g_string_append_c(packet, (length >> 24) & 0xff);
 
-		g_string_append_c(dest, (len >> 32) & 0xff);
-		g_string_append_c(dest, (len >> 40) & 0xff);
-		g_string_append_c(dest, (len >> 48) & 0xff);
-		g_string_append_c(dest, (len >> 56) & 0xff);
+		g_string_append_c(packet, (length >> 32) & 0xff);
+		g_string_append_c(packet, (length >> 40) & 0xff);
+		g_string_append_c(packet, (length >> 48) & 0xff);
+		g_string_append_c(packet, (length >> 56) & 0xff);
 	}
 
 	return 0;
@@ -319,16 +487,17 @@ int network_mysqld_proto_append_lenenc_int(GString *dest, guint64 len) {
 /**
  * encode a GString in to a MySQL len-encoded string 
  *
- * @param destination string
- * @param string to encode
- * @param length of the string
+ * @param packet  the MySQL network packet
+ * @param s       string to encode
+ * @param length  length of the string to encode
+ * @return 0
  */
-int network_mysqld_proto_append_lenenc_string_len(GString *dest, const char *s, guint64 len) {
+int network_mysqld_proto_append_lenenc_string_len(GString *packet, const char *s, guint64 length) {
 	if (!s) {
-		g_string_append_c(dest, (gchar)251); /** this is NULL */
+		g_string_append_c(packet, (gchar)251); /** this is NULL */
 	} else {
-		network_mysqld_proto_append_lenenc_int(dest, len);
-		g_string_append_len(dest, s, len);
+		network_mysqld_proto_append_lenenc_int(packet, length);
+		g_string_append_len(packet, s, length);
 	}
 
 	return 0;
@@ -337,13 +506,23 @@ int network_mysqld_proto_append_lenenc_string_len(GString *dest, const char *s, 
 /**
  * encode a GString in to a MySQL len-encoded string 
  *
- * @param destination string
- * @param string to encode
+ * @param packet  the MySQL network packet
+ * @param s       string to encode
+ *
+ * @see network_mysqld_proto_append_lenenc_string_len()
  */
-int network_mysqld_proto_append_lenenc_string(GString *dest, const char *s) {
-	return network_mysqld_proto_append_lenenc_string_len(dest, s, s ? strlen(s) : 0);
+int network_mysqld_proto_append_lenenc_string(GString *packet, const char *s) {
+	return network_mysqld_proto_append_lenenc_string_len(packet, s, s ? strlen(s) : 0);
 }
 
+/**
+ * encode fixed length integer in to a network packet
+ *
+ * @param packet  the MySQL network packet
+ * @param num     integer to encode
+ * @param size    byte size of the integer
+ * @return        0
+ */
 static int network_mysqld_proto_append_int_len(GString *packet, guint64 num, gsize size) {
 	gsize i;
 
@@ -355,14 +534,38 @@ static int network_mysqld_proto_append_int_len(GString *packet, guint64 num, gsi
 	return 0;
 }
 
+/**
+ * encode 8-bit integer in to a network packet
+ *
+ * @param packet  the MySQL network packet
+ * @param num     integer to encode
+ *
+ * @see network_mysqld_proto_append_int_len()
+ */
 int network_mysqld_proto_append_int8(GString *packet, guint8 num) {
 	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
 }
 
+/**
+ * encode 16-bit integer in to a network packet
+ *
+ * @param packet  the MySQL network packet
+ * @param num     integer to encode
+ *
+ * @see network_mysqld_proto_append_int_len()
+ */
 int network_mysqld_proto_append_int16(GString *packet, guint16 num) {
 	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
 }
 
+/**
+ * encode 32-bit integer in to a network packet
+ *
+ * @param packet  the MySQL network packet
+ * @param num     integer to encode
+ *
+ * @see network_mysqld_proto_append_int_len()
+ */
 int network_mysqld_proto_append_int32(GString *packet, guint32 num) {
 	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
 }
