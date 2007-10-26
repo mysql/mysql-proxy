@@ -432,7 +432,7 @@ static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields
 	guint8 field_count;
 	guint i;
 
-	/**
+	/*
 	 * read(6, "\1\0\0\1", 4)                  = 4
 	 * read(6, "\2", 1)                        = 1
 	 * read(6, "6\0\0\2", 4)                   = 4
@@ -451,7 +451,7 @@ static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields
 	/* the first chunk is the length
 	 *  */
 	if (packet->len != NET_HEADER_SIZE + 1) {
-		/**
+		/*
 		 * looks like this isn't a result-set
 		 * 
 		 *    read(6, "\1\0\0\1", 4)                  = 4
@@ -2493,7 +2493,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	/* extract the default db from it */
 	network_mysqld_proto_skip(packet, &off, NET_HEADER_SIZE); /* packet-header */
 
-	/**
+	/*
 	 * @\0\0\1
 	 *  \215\246\3\0 - client-flags
 	 *  \0\0\0\1     - max-packet-len

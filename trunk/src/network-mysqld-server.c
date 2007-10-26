@@ -30,17 +30,17 @@
  *
  * we handle the basic statements that the mysql-client sends us
  *
- * TODO: we have to split the queries into a basic SQL syntax:
+ * @todo we have to split the queries into a basic SQL syntax:
  *
  *   SELECT * 
- *     FROM <table>
- *   [WHERE <field> = <value>]
+ *     FROM table
+ *   [WHERE field = value]
  *
  * - no joins
  * - no grouping
  *
  *   DELETE
- *     FROM <table>
+ *     FROM table
  * 
  * - no WHERE clause
  *
