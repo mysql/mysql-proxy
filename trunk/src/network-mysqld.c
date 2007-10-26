@@ -86,8 +86,19 @@ extern volatile sig_atomic_t agent_shutdown;
 #endif
 #endif
 
+/**
+ * a handy marco for constant strings 
+ */
 #define C(x) x, sizeof(x) - 1
 
+/**
+ * call the cleanup callback for the current connection
+ *
+ * @param srv    global context
+ * @param con    connection context
+ *
+ * @return       RET_SUCCESS on success
+ */
 retval_t plugin_call_cleanup(network_mysqld *srv, network_mysqld_con *con) {
 	NETWORK_MYSQLD_PLUGIN_FUNC(func) = NULL;
 
@@ -99,6 +110,12 @@ retval_t plugin_call_cleanup(network_mysqld *srv, network_mysqld_con *con) {
 }
 
 
+/**
+ * create a connection 
+ *
+ * @param srv    global context
+ * @return       a connection context
+ */
 network_mysqld_con *network_mysqld_con_init(network_mysqld *srv) {
 	network_mysqld_con *con;
 
@@ -111,6 +128,13 @@ network_mysqld_con *network_mysqld_con_init(network_mysqld *srv) {
 	return con;
 }
 
+/**
+ * free a connection 
+ *
+ * closes the client and server sockets 
+ *
+ * @param con    connection context
+ */
 void network_mysqld_con_free(network_mysqld_con *con) {
 	if (!con) return;
 
@@ -125,14 +149,21 @@ void network_mysqld_con_free(network_mysqld_con *con) {
 }
 
 
-
 /**
- * the free functions used by g_hash_table_new_full()
+ * type-safe free()-ing of the internal SQL tables
+ *
+ * @param s    a network_mysqld_tables 
+ * @see g_hash_table_new_full()
  */
 static void network_mysqld_tables_free_void(void *s) {
 	network_mysqld_table_free(s);
 }
 
+/**
+ * create a global context
+ *
+ * @see network_mysqld_tables_free_void()
+ */
 network_mysqld *network_mysqld_init() {
 	network_mysqld *m;
 
@@ -152,6 +183,7 @@ network_mysqld *network_mysqld_init() {
  *
  * kqueue has to be called after the fork() of daemonize
  *
+ * @param m      global context
  */
 void network_mysqld_init_libevent(network_mysqld *m) {
 	m->event_base  = event_init();
@@ -160,7 +192,9 @@ void network_mysqld_init_libevent(network_mysqld *m) {
 /**
  * free the global scope
  *
- * closes all open connections
+ * closes all open connections, cleans up all plugins
+ *
+ * @param m      global context
  */
 void network_mysqld_free(network_mysqld *m) {
 	guint i;
@@ -204,7 +238,17 @@ void network_mysqld_free(network_mysqld *m) {
 
 
 /**
- * connect to the proxy backend */
+ * translate a address-string into a network_address structure
+ *
+ * - if the address contains a colon we assume IPv4, 
+ *   - ":3306" -> (tcp) "0.0.0.0:3306"
+ * - if it starts with a / it is a unix-domain socket 
+ *   - "/tmp/socket" -> (unix) "/tmp/socket"
+ *
+ * @param addr     the address-struct
+ * @param address  the address string
+ * @return 0 on success, -1 otherwise
+ */
 int network_mysqld_con_set_address(network_address *addr, gchar *address) {
 	gchar *s;
 	guint port;
@@ -275,11 +319,13 @@ int network_mysqld_con_set_address(network_address *addr, gchar *address) {
 }
 
 /**
- * connect to the address defined in con->addr
+ * connect a socket
  *
- * @see network_mysqld_set_address 
- *
- * @return 0 on connected, -1 on error, -2 for try again
+ * the con->addr has to be set before 
+ * 
+ * @param con    a socket 
+ * @return       0 on connected, -1 on error, -2 for try again
+ * @see network_mysqld_set_address()
  */
 int network_mysqld_con_connect(network_socket * con) {
 	int val = 1;
@@ -333,6 +379,16 @@ int network_mysqld_con_connect(network_socket * con) {
 	return 0;
 }
 
+
+/**
+ * connect a socket
+ *
+ * the con->addr has to be set before 
+ * 
+ * @param con    a socket 
+ * @return       0 on connected, -1 on error, -2 for try again
+ * @see network_mysqld_set_address()
+ */
 int network_mysqld_con_bind(network_socket * con) {
 	int val = 1;
 
@@ -366,7 +422,7 @@ int network_mysqld_con_bind(network_socket * con) {
 	return 0;
 }
 
-
+#if 0 
 static void dump_str(const char *msg, const unsigned char *s, size_t len) {
 	GString *hex;
 	size_t i;
@@ -387,9 +443,20 @@ static void dump_str(const char *msg, const unsigned char *s, size_t len) {
 	g_message("(%s): %s", msg, hex->str);
 
 	g_string_free(hex, TRUE);
-
 }
+#endif
 
+/**
+ * create a OK packet and append it to the send-queue
+ *
+ * @param con             a client socket 
+ * @param affected_rows   affected rows 
+ * @param insert_id       insert_id 
+ * @param server_status   server_status (bitfield of SERVER_STATUS_*) 
+ * @return 0
+ *
+ * @todo move to network_mysqld_proto
+ */
 int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings ) {
 	GString *packet = g_string_new(NULL);
 	
@@ -406,8 +473,18 @@ int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, 
 	return 0;
 }
 
+/**
+ * send a simple OK packet
+ *
+ * - no affected rows
+ * - no insert-id
+ * - AUTOCOMMIT
+ * - no warnings
+ *
+ * @param con             a client socket 
+ */
 int network_mysqld_con_send_ok(network_socket *con) {
-	return network_mysqld_con_send_ok_full(con, 0, 0, 0x0002, 0);
+	return network_mysqld_con_send_ok_full(con, 0, 0, SERVER_STATUS_AUTOCOMMIT, 0);
 }
 
 /**
@@ -466,6 +543,10 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
 	return network_mysqld_con_send_error_full(con, errmsg, errmsg_len, ER_UNKNOWN_ERROR, NULL);
 }
 
+/**
+ * read a data from the socket
+ *
+ */
 retval_t network_mysqld_read_raw(network_mysqld *UNUSED_PARAM(srv), network_socket *con, GString *dest, size_t we_want) {
 	gssize len;
 
@@ -539,7 +620,7 @@ retval_t network_mysqld_read(network_mysqld *srv, network_socket *con) {
 		con->packet_len = network_mysqld_proto_get_header((unsigned char *)(con->header->str));
 		con->packet_id  = (unsigned char)(con->header->str[3]); /* packet-id if the next packet */
 
-		packet = g_string_sized_new(con->packet_len + NET_HEADER_SIZE + 1); /** we need some space for the \0 */
+		packet = g_string_sized_new(con->packet_len + NET_HEADER_SIZE + 1); /* we need some space for the \0 */
 		g_string_append_len(packet, con->header->str, NET_HEADER_SIZE); /* copy the header */
 
 		network_queue_append_chunk(con->recv_queue, packet);
@@ -566,6 +647,10 @@ retval_t network_mysqld_read(network_mysqld *srv, network_socket *con) {
 	return RET_SUCCESS;
 }
 
+/**
+ * write data to the socket
+ *
+ */
 retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_socket *con, int send_chunks) {
 	/* send the whole queue */
 	GList *chunk;
@@ -634,6 +719,11 @@ retval_t network_mysqld_write(network_mysqld *srv, network_socket *con) {
  * call the hooks of the plugins for each state
  *
  * if the plugin doesn't implement a hook, we provide a default operation
+ *
+ * @param srv      the global context
+ * @param con      the connection context
+ * @param state    state to handle
+ * @return         RET_SUCCESS on success
  */
 retval_t plugin_call(network_mysqld *srv, network_mysqld_con *con, int state) {
 	NETWORK_MYSQLD_PLUGIN_FUNC(func) = NULL;
@@ -773,6 +863,10 @@ retval_t plugin_call(network_mysqld *srv, network_mysqld_con *con, int state) {
 
 /**
  * handle the different states of the MySQL protocol
+ *
+ * @param event_fd     fd on which the event was fired
+ * @param events       the event that was fired
+ * @param user_data    the connection handle
  */
 void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	guint ostate;
@@ -813,6 +907,9 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	event_base_set(srv->event_base, &(ev_struct->event));\
 	event_add(&(ev_struct->event), timeout);
 
+	/**
+	 * loop on the same connection as long as we don't end up in a stable state
+	 */
 	do {
 		ostate = con->state;
 		switch (con->state) {
@@ -1379,6 +1476,12 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	return;
 }
 
+/**
+ * portable 'set non-blocking io'
+ *
+ * @param fd      socket-fd
+ * @return        0
+ */
 int network_mysqld_con_set_non_blocking(int fd) {
 	int ioctlvar;
 
@@ -1392,9 +1495,14 @@ int network_mysqld_con_set_non_blocking(int fd) {
 }
 
 /**
- * we will be called by the event handler 
+ * accept a connection
  *
+ * event handler for listening connections
  *
+ * @param event_fd     fd on which the event was fired
+ * @param events       the event that was fired
+ * @param user_data    the listening connection handle
+ * 
  */
 void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	network_mysqld_con *con = user_data;
@@ -1438,7 +1546,11 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	}
 
 
-	/* copy the config */
+	/* copy the config
+	 *
+	 * @todo replace network-type by a function pointer for the init 
+	 *
+	 */
 	client_con->config = con->config;
 	client_con->config.network_type = con->config.network_type;
 
@@ -1460,7 +1572,10 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 }
 
 
-void handle_timeout() {
+/**
+ * timeout handler for the event-loop 
+ */
+static void handle_timeout() {
 	if (!agent_shutdown) return;
 
 	/* we have to shutdown, disable all events to leave the dispatch */
@@ -1532,6 +1647,9 @@ void *network_mysqld_thread(void *_srv) {
 		proxy_con = con;
 	}
 
+	/**
+	 * check once a second if we shall shutdown the proxy
+	 */
 	while (!agent_shutdown) {
 		struct timeval timeout;
 		int r;
@@ -1569,6 +1687,9 @@ void *network_mysqld_thread(void *_srv) {
 	return NULL;
 }
 
+/**
+ * @todo move to network_mysqld_proto
+ */
 int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GPtrArray *rows) {
 	GString *s;
 	gsize i, j;
