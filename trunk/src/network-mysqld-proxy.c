@@ -527,8 +527,8 @@ static void network_mysqld_con_idle_handle(int event_fd, short events, void *use
 		int b = -1;
 
 		/**
-		 * FIXME: we have to handle the case that the server really sent use something
-		 * up to now we just ignore it
+		 * @todo we have to handle the case that the server really sent use something
+		 *        up to now we just ignore it
 		 */
 		if (ioctlsocket(event_fd, FIONREAD, &b)) {
 			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, strerror(errno));
@@ -1744,13 +1744,13 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 
 		field_len = network_mysqld_proto_decode_lenenc(packet, &off);
 
-		if (field_len == 251) { /** FIXME: use constant */
+		if (field_len == 251) { /** @todo use constant */
 			lua_pushnil(L);
 			
 			off += 0;
 		} else {
 			/**
-			 * FIXME: we only support fields in the row-iterator < 16M (packet-len)
+			 * @todo we only support fields in the row-iterator < 16M (packet-len)
 			 */
 			g_assert(field_len <= packet->len + NET_HEADER_SIZE);
 			g_assert(off + field_len <= packet->len + NET_HEADER_SIZE);
@@ -2999,7 +2999,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 		/**
 		 * the binlog dump is different as it doesn't have END packet
 		 *
-		 * FIXME: in 5.0.x a NON_BLOCKING option as added which sends a EOF
+		 * @todo in 5.0.x a NON_BLOCKING option as added which sends a EOF
 		 */
 		con->state = CON_STATE_READ_QUERY_RESULT;
 
