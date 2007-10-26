@@ -52,6 +52,12 @@
 #include <lualib.h>
 #endif
 
+/* for solaris 2.5 and NetBSD 1.3.x */
+#ifndef HAVE_SOCKLEN_T
+typedef int socklen_t;
+#endif
+
+
 #include <mysqld_error.h> /** for ER_UNKNOWN_ERROR */
 
 #include "network-mysqld.h"
@@ -3598,7 +3604,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 	if (con->server) {
 		int so_error = 0;
-		size_t so_error_len = sizeof(so_error);
+		socklen_t so_error_len = sizeof(so_error);
 
 		/**
 		 * we might get called a 2nd time after a connect() == EINPROGRESS
