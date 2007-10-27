@@ -177,8 +177,9 @@ static struct authors_st table_authors[]= {
 	{"Giuseppe Maxia", 	"Cagliari, Italy", 	"Testing, applications, articles"},
 	{"Lenz Grimmer", 	"Hamburg, Germany", "RPM packaging, openSUSE packages"},
 	{"Martin MC Brown", "Grantham, UK",     "Documentation"},
-    /* Add new authors here */
-    NULL
+
+	/* Add new authors here */
+	{ NULL, NULL, NULL }
 };
 
 int authors_select(GPtrArray *fields, GPtrArray *rows, gpointer user_data) {
