@@ -1114,7 +1114,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				/* might be a connection close, we should just close the connection and be happy */
 				con->state = CON_STATE_ERROR;
 
-				return;
+				break;
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
@@ -1182,8 +1182,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case RET_ERROR_RETRY:
 			case RET_ERROR:
-				g_error("%s.%d: network_mysqld_write(CON_STATE_SEND_AUTH_RESULT) returned an error", __FILE__, __LINE__);
-				return;
+				g_debug("%s.%d: network_mysqld_write(CON_STATE_SEND_AUTH_RESULT) returned an error", __FILE__, __LINE__);
+
+				con->state = CON_STATE_ERROR;
+				break;
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
@@ -1232,8 +1234,9 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			case RET_ERROR_RETRY:
 			case RET_ERROR:
 				/* might be a connection close, we should just close the connection and be happy */
-				g_error("%s.%d: network_mysqld_write(CON_STATE_SEND_AUTH_OLD_PASSWORD) returned an error", __FILE__, __LINE__);
-				return;
+				g_debug("%s.%d: network_mysqld_write(CON_STATE_SEND_AUTH_OLD_PASSWORD) returned an error", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
+				break;
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
@@ -1347,8 +1350,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case RET_ERROR_RETRY:
 			case RET_ERROR:
-				g_error("%s.%d: network_mysqld_write(CON_STATE_SEND_QUERY) returned an error", __FILE__, __LINE__);
-				return;
+				g_debug("%s.%d: network_mysqld_write(CON_STATE_SEND_QUERY) returned an error", __FILE__, __LINE__);
+
+				/**
+				 * write() failed, close the connections 
+				 */
+				con->state = CON_STATE_ERROR;
+				break;
 			}
 
 			if (con->is_overlong_packet) {

@@ -3,6 +3,7 @@
   * added new features to run-tests.lua (see README.TESTS)
   * fixed error handling for socket functions on win32
   * fixed sending fake server-greetings in connect_server()
+  * fixed assert()ions on write-errors 
 
 0.6.0 - 2007-09-11
 
