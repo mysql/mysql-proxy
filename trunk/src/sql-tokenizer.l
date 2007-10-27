@@ -496,3 +496,17 @@ int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len) {
 	return ret;
 }
 
+GPtrArray *sql_tokens_new(void) {
+	return g_ptr_array_new();
+}
+
+void sql_tokens_free(GPtrArray *tokens) {
+	gsize i;
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+		sql_token_free(token);
+	}
+	g_ptr_array_free(tokens, TRUE);
+}
+

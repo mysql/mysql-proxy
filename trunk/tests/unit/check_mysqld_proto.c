@@ -11,6 +11,13 @@
 #define C(x) x, sizeof(x) - 1
 
 /**
+ * Tests for the MySQL Protocol Codec functions
+ * @ingroup proto
+ */
+
+/*@{*/
+
+/**
  * @test network_mysqld_proto_set_header() and network_mysqld_proto_get_header()
  *
  * how to handle > 16M ?
@@ -103,6 +110,7 @@ START_TEST(test_mysqld_proto_int) {
 
 	g_string_free(packet, TRUE);
 } END_TEST
+/*@}*/
 
 Suite *mysqld_proto_suite(void) {
 	Suite *s = suite_create("mysqld_proto");

@@ -43,7 +43,12 @@
  */
 #define C(x) x, sizeof(x) - 1
 
-/** @defgroup proto MySQL Protocol */
+/** @defgroup proto MySQL Protocol
+ * 
+ * decoders and encoders for the MySQL packets as described in 
+ * http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol
+ *
+ * */
 /*@{*/
 
 /**

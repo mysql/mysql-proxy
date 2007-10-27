@@ -1031,7 +1031,7 @@ static int proxy_queue_len(lua_State *L) {
 static int proxy_tokenize(lua_State *L) {
 	size_t str_len;
 	const char *str = luaL_checklstring(L, 1, &str_len);
-	GPtrArray *tokens = g_ptr_array_new();
+	GPtrArray *tokens = sql_tokens_new();
 	gsize i;
 
 	sql_tokenizer(tokens, str, str_len);
@@ -1057,11 +1057,9 @@ static int proxy_tokenize(lua_State *L) {
 		lua_setfield(L, -2, "token_name");
 
 		lua_rawseti(L, -2, i + 1);
-
-		sql_token_free(token);
 	}
 
-	g_ptr_array_free(tokens, TRUE);
+	sql_tokens_free(tokens);
 
 	return 1;
 }

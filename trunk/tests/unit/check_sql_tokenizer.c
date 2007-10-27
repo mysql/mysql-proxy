@@ -10,15 +10,21 @@
 
 #define C(x) x, sizeof(x) - 1
 
+/** 
+ * tests for the SQL tokenizer
+ * @ingroup sql test
+ * @{
+ */
+
 /**
  * @test check if SQL tokenizing works
- *   
+ *  
  */
 START_TEST(test_tokenizer) {
 	GPtrArray *tokens = NULL;
 	gsize i;
 
-	tokens = g_ptr_array_new();
+	tokens = sql_tokens_new();
 
 	sql_tokenizer(tokens, C("SELEcT \"qq-end\"\"\", \"\"\"qq-start\", \"'\"`qq-mixed''\" FROM a AS `b`, `ABC``FOO` "));
 
@@ -52,15 +58,54 @@ START_TEST(test_tokenizer) {
 		}
 	}
 
-	for (i = 0; i < tokens->len; i++) {
-		sql_token *token = tokens->pdata[i];
-
-		sql_token_free(token);
-	}
-	g_ptr_array_free(tokens, TRUE);
-
 	/* cleanup */
+	sql_tokens_free(tokens);
 } END_TEST
+
+/**
+ * @test check if we can map all tokens to a name and back again
+ *   
+ */
+START_TEST(test_token2name) {
+	gsize i;
+
+	/* convert tokens to id and back to name */
+	for (i = 0; i < TK_LAST_TOKEN; i++) {
+		const char *name;
+
+		fail_unless(NULL != (name = sql_token_get_name(i)));
+	}
+} END_TEST
+
+/**
+ * @test check if we can map all tokens to a name and back again
+ *   
+ */
+START_TEST(test_keyword2token) {
+	gsize i;
+
+	const struct {
+		const char *token;
+		sql_token_id id;
+	} keywords[] = {
+		{ "SELECT", TK_SQL_SELECT },
+		{ "INSERT", TK_SQL_INSERT },
+
+		{ NULL, TK_UNKNOWN }
+	};
+
+	/* convert tokens to id and back to name */
+	for (i = 0; keywords[i].token; i++) {
+		fail_unless(keywords[i].id == sql_token_get_id(keywords[i].token), 
+				"%d == sql_token_get_id(%s), got = %d", 
+				keywords[i].id, keywords[i].token, 
+				sql_token_get_id(keywords[i].token));
+	}
+
+	/* yeah, COMMIT should be a normal literal */
+	fail_unless(TK_LITERAL == sql_token_get_id("COMMIT"));
+} END_TEST
+/* @} */
 
 Suite *sql_tokenizer_suite(void) {
 	Suite *s = suite_create("sql-tokenizer");
@@ -68,6 +113,8 @@ Suite *sql_tokenizer_suite(void) {
 
 	suite_add_tcase (s, tc_core);
 	tcase_add_test(tc_core, test_tokenizer);
+	tcase_add_test(tc_core, test_token2name);
+	tcase_add_test(tc_core, test_keyword2token);
 
 	return s;
 }

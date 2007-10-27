@@ -3,6 +3,21 @@
 
 #include <glib.h>
 
+/** @file
+ *
+ * a tokenizer for MySQLs SQL dialect
+ *
+ * we understand
+ * - comparators
+ * - strings (double quoted, quoting rules are handled)
+ * - literals (quoting of backticks is handled)
+ * - keywords
+ * - numbers
+ */
+
+/**
+ * known token ids 
+ */
 typedef enum {
 	TK_UNKNOWN,
 
@@ -285,12 +300,29 @@ typedef struct {
 	GString *text;
 } sql_token;
 
-/** @defgroup sql SQL Tokenizer */
+/** @defgroup sql SQL Tokenizer
+ * 
+ * SQL tokenizer
+ *
+ * @code
+ *   #define C(s) s, sizeof(s) - 1
+ *   GPtrArray *tokens = sql_tokens_new();
+ *
+ *   if (0 == sql_tokenizer(tokens, C("SELECT 1 FROM tbl"))) {
+ *      work_with_the_tokens();
+ *   }
+ *
+ *   sql_tokens_free(tokens);
+ * @endcode
+ */
 
-/**{@*/
+/*@{*/
 
 /**
  * create a new sql-token
+ * @internal       only used to drive the test-cases 
+ *
+ * @return         a empty SQL token
  */
 sql_token *sql_token_new(void);
 
@@ -298,10 +330,49 @@ sql_token *sql_token_new(void);
  * free a sql-token
  */
 void sql_token_free(sql_token *token);
+
+/**
+ * get the name for a token-id
+ */
 const gchar *sql_token_get_name(sql_token_id token_id);
 
+/**
+ * get the token_id for a literal
+ *
+ * @internal       only used to drive the test-cases 
+ *
+ * @param name     a SQL keyword
+ * @return         TK_SQL_(keyword) or TK_LITERAL
+ */
+sql_token_id sql_token_get_id(const gchar *name);
+
+/**
+ * scan a string into SQL tokens
+ *
+ * @param tokens   a token list to append the tokens too
+ * @param str      SQL string to tokenize
+ * @param len      length of str
+ * @return 0 on success
+ *
+ */
 int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len);
 
-/**@}*/
+/**
+ * create a empty token list
+ *
+ * @note a token list is a GPtrArray *
+ *
+ * @return a empty token list 
+ */
+GPtrArray * sql_tokens_new(void);
+
+/**
+ * free a token-stream
+ *
+ * @param tokens   a token list to free
+ */
+void sql_tokens_free(GPtrArray *tokens);
+
+/*@}*/
 
 #endif
