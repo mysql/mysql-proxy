@@ -11,7 +11,7 @@ sql_token_id sql_token_get_id(const gchar *name);
 
 #define S(x) #x
 
-/** 
+/**
  * this list has to be kept in sync with the tokens itself 
  *
  * maps token_ids (array-pos) to token-names
@@ -380,6 +380,9 @@ sql_token *sql_token_new(void) {
 	return tk;
 }
 
+/**
+ * free a sql-token
+ */
 void sql_token_free(sql_token *token) {
 	if (!token) return;
 
@@ -387,6 +390,9 @@ void sql_token_free(sql_token *token) {
 	g_free(token);		
 }
 
+/**
+ * append a token to the token-list
+ */
 static void sql_token_append(GPtrArray *tokens, sql_token_id token_id, gchar *text) {
 	sql_token *token;
 
@@ -396,6 +402,9 @@ static void sql_token_append(GPtrArray *tokens, sql_token_id token_id, gchar *te
 	g_ptr_array_add(tokens, token);
 }
 
+/**
+ * append text to the last token in the token-list
+ */
 static void sql_token_append_last_token(GPtrArray *tokens, sql_token_id token_id, gchar *text) {
 	sql_token *token;
 
@@ -408,6 +417,9 @@ static void sql_token_append_last_token(GPtrArray *tokens, sql_token_id token_id
 	g_string_append(token->text, text);
 }
 
+/**
+ * get the name for a token-id
+ */
 const gchar *sql_token_get_name(sql_token_id token_id) {
 	if (token_id >= TK_LAST_TOKEN) return NULL;
 
@@ -418,6 +430,9 @@ const gchar *sql_token_get_name(sql_token_id token_id) {
 	return token_names[token_id];
 }
 
+/**
+ * hash function for case-insensitive strings 
+ */
 guint g_istr_hash(gconstpointer v) {
 	/* djb2 */
 	const unsigned char *p = v;
@@ -431,6 +446,9 @@ guint g_istr_hash(gconstpointer v) {
 	return h;
 }
 
+/**
+ * compare function for case-insensitive strings 
+ */
 gboolean g_istr_equal(gconstpointer _a, gconstpointer _b) {
 	const gchar *a = _a;
 	const gchar *b = _b;
@@ -464,6 +482,9 @@ sql_token_id sql_token_get_id(const gchar *name) {
 	return i ? i : TK_LITERAL;
 }
 
+/**
+ * scan a string into SQL tokens
+ */
 int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len) {
 	YY_BUFFER_STATE state;
 	int ret;

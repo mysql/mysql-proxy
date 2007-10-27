@@ -16,7 +16,7 @@
 #ifndef _SYS_PEDANTIC_H_
 #define _SYS_PEDANTIC_H_
 
-/**
+/** @file
  * a set of macros to make programming C easier 
  */
 

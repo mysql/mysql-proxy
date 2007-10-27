@@ -50,9 +50,15 @@
 void network_mysqld_proto_skip(GString *packet, guint *_off, gsize size);
 
 guint64 network_mysqld_proto_get_int_len(GString *packet, guint *_off, gsize size);
+
 guint8 network_mysqld_proto_get_int8(GString *packet, guint *_off);
 guint16 network_mysqld_proto_get_int16(GString *packet, guint *_off);
 guint32 network_mysqld_proto_get_int32(GString *packet, guint *_off);
+
+int network_mysqld_proto_append_int8(GString *packet, guint8 num);
+int network_mysqld_proto_append_int16(GString *packet, guint16 num);
+int network_mysqld_proto_append_int32(GString *packet, guint32 num);
+
 
 gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off);
 gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize len);
@@ -62,8 +68,11 @@ gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GSt
 gchar *network_mysqld_proto_get_gstring_len(GString *packet, guint *_off, gsize len, GString *out);
 gchar *network_mysqld_proto_get_gstring(GString *packet, guint *_off, GString *out);
 
-guint64 network_mysqld_proto_decode_lenenc(GString *packet, guint *_off);
-int network_mysqld_proto_decode_ok_packet(GString *packet, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg);
+guint64 network_mysqld_proto_get_lenenc_int(GString *packet, guint *_off);
+
+int network_mysqld_proto_get_ok_packet(GString *packet, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg);
+int network_mysqld_proto_append_ok_packet(GString *packet, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings);
+int network_mysqld_proto_append_error_packet(GString *packet, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate);
 
 MYSQL_FIELD *network_mysqld_proto_field_init(void);
 void network_mysqld_proto_field_free(MYSQL_FIELD *field);
@@ -77,9 +86,5 @@ int network_mysqld_proto_set_header(unsigned char *header, size_t len, unsigned 
 int network_mysqld_proto_append_lenenc_int(GString *packet, guint64 len);
 int network_mysqld_proto_append_lenenc_string_len(GString *packet, const char *s, guint64 len);
 int network_mysqld_proto_append_lenenc_string(GString *packet, const char *s);
-
-int network_mysqld_proto_append_int8(GString *packet, guint8 num);
-int network_mysqld_proto_append_int16(GString *packet, guint16 num);
-int network_mysqld_proto_append_int32(GString *packet, guint32 num);
 
 #endif

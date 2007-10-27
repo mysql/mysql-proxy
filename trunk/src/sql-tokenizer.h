@@ -285,10 +285,23 @@ typedef struct {
 	GString *text;
 } sql_token;
 
+/** @defgroup sql SQL Tokenizer */
+
+/**{@*/
+
+/**
+ * create a new sql-token
+ */
 sql_token *sql_token_new(void);
+
+/**
+ * free a sql-token
+ */
 void sql_token_free(sql_token *token);
 const gchar *sql_token_get_name(sql_token_id token_id);
 
 int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len);
+
+/**@}*/
 
 #endif

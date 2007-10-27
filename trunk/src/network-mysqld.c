@@ -319,6 +319,25 @@ int network_mysqld_con_set_address(network_address *addr, gchar *address) {
 }
 
 /**
+ * portable 'set non-blocking io'
+ *
+ * @param fd      socket-fd
+ * @return        0
+ */
+int network_mysqld_con_set_non_blocking(int fd) {
+	int ioctlvar;
+
+#ifdef _WIN32
+	ioctlvar = 1;
+	ioctlsocket(fd, FIONBIO, &ioctlvar);
+#else
+	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
+#endif
+	return 0;
+}
+
+
+/**
  * connect a socket
  *
  * the con->addr has to be set before 
@@ -453,19 +472,16 @@ static void dump_str(const char *msg, const unsigned char *s, size_t len) {
  * @param affected_rows   affected rows 
  * @param insert_id       insert_id 
  * @param server_status   server_status (bitfield of SERVER_STATUS_*) 
+ * @param warnings        number of warnings to fetch with SHOW WARNINGS 
  * @return 0
  *
  * @todo move to network_mysqld_proto
  */
 int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings ) {
 	GString *packet = g_string_new(NULL);
-	
-	network_mysqld_proto_append_int8(packet, 0); /* no fields */
-	network_mysqld_proto_append_lenenc_int(packet, affected_rows);
-	network_mysqld_proto_append_lenenc_int(packet, insert_id);
-	network_mysqld_proto_append_int16(packet, server_status); /* autocommit */
-	network_mysqld_proto_append_int16(packet, warnings); /* no warnings */
 
+	network_mysqld_proto_append_ok_packet(packet, affected_rows, insert_id, server_status, warnings);
+	
 	network_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
 
 	g_string_free(packet, TRUE);
@@ -504,22 +520,8 @@ int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, 
 	GString *packet;
 	
 	packet = g_string_sized_new(10 + errmsg_len);
-	
-	network_mysqld_proto_append_int8(packet, 0xff); /* ERR */
-	network_mysqld_proto_append_int16(packet, errorcode); /* errorcode */
-	g_string_append_c(packet, '#');
-	if (!sqlstate) {
-		g_string_append_len(packet, C("07000"));
-	} else {
-		g_string_append_len(packet, sqlstate, 5);
-	}
 
-	if (errmsg_len < 512) {
-		g_string_append_len(packet, errmsg, errmsg_len);
-	} else {
-		/* truncate the err-msg */
-		g_string_append_len(packet, errmsg, 512);
-	}
+	network_mysqld_proto_append_error_packet(packet, errmsg, errmsg_len, errorcode, sqlstate);
 
 	network_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
 
@@ -1474,24 +1476,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	} while (ostate != con->state);
 
 	return;
-}
-
-/**
- * portable 'set non-blocking io'
- *
- * @param fd      socket-fd
- * @return        0
- */
-int network_mysqld_con_set_non_blocking(int fd) {
-	int ioctlvar;
-
-#ifdef _WIN32
-	ioctlvar = 1;
-	ioctlsocket(fd, FIONBIO, &ioctlvar);
-#else
-	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
-#endif
-	return 0;
 }
 
 /**

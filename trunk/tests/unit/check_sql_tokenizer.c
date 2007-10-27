@@ -10,6 +10,10 @@
 
 #define C(x) x, sizeof(x) - 1
 
+/**
+ * @test check if SQL tokenizing works
+ *   
+ */
 START_TEST(test_tokenizer) {
 	GPtrArray *tokens = NULL;
 	gsize i;

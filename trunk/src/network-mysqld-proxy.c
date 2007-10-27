@@ -1748,7 +1748,7 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 
 		g_assert(off <= packet->len + NET_HEADER_SIZE);
 
-		field_len = network_mysqld_proto_decode_lenenc(packet, &off);
+		field_len = network_mysqld_proto_get_lenenc_int(packet, &off);
 
 		if (field_len == 251) { /** @todo use constant */
 			lua_pushnil(L);
@@ -3303,7 +3303,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 				s.str = packet->str + NET_HEADER_SIZE;
 				s.len = packet->len - NET_HEADER_SIZE;
 
-				network_mysqld_proto_decode_ok_packet(&s, &affected_rows, &insert_id, &server_status, &warning_count, NULL);
+				network_mysqld_proto_get_ok_packet(&s, &affected_rows, &insert_id, &server_status, &warning_count, NULL);
 				if (server_status & SERVER_MORE_RESULTS_EXISTS) {
 				
 				} else {

@@ -39,39 +39,48 @@
 #define CRASHME() do { char *_crashme = NULL; *_crashme = 0; } while(0);
 
 /**
+ * a handy marco for constant strings 
+ */
+#define C(x) x, sizeof(x) - 1
+
+/** @defgroup proto MySQL Protocol */
+/*@{*/
+
+/**
  * decode a length-encoded integer from a network packet
  *
  * _off is incremented on success 
  *
- * @param s the MySQL-packet to decode
- * @param _off offset in into the packet 
+ * @param packet   the MySQL-packet to decode
+ * @param _off     offset in into the packet 
  * @return the decoded number
+ *
  */
-guint64 network_mysqld_proto_decode_lenenc(GString *s, guint *_off) {
+guint64 network_mysqld_proto_get_lenenc_int(GString *packet, guint *_off) {
 	guint off = *_off;
 	guint64 ret = 0;
-	unsigned char *bytestream = (unsigned char *)s->str;
+	unsigned char *bytestream = (unsigned char *)packet->str;
 
-	g_assert(off < s->len);
+	g_assert(off < packet->len);
 	
 	if (bytestream[off] < 251) { /* */
 		ret = bytestream[off];
 	} else if (bytestream[off] == 251) { /* NULL in row-data */
 		ret = bytestream[off];
 	} else if (bytestream[off] == 252) { /* 2 byte length*/
-		g_assert(off + 2 < s->len);
+		g_assert(off + 2 < packet->len);
 		ret = (bytestream[off + 1] << 0) | 
 			(bytestream[off + 2] << 8) ;
 		off += 2;
 	} else if (bytestream[off] == 253) { /* 3 byte */
-		g_assert(off + 3 < s->len);
+		g_assert(off + 3 < packet->len);
 		ret = (bytestream[off + 1]   <<  0) | 
 			(bytestream[off + 2] <<  8) |
 			(bytestream[off + 3] << 16);
 
 		off += 3;
 	} else if (bytestream[off] == 254) { /* 8 byte */
-		g_assert(off + 8 < s->len);
+		g_assert(off + 8 < packet->len);
 		ret = (bytestream[off + 5] << 0) |
 			(bytestream[off + 6] << 8) |
 			(bytestream[off + 7] << 16) |
@@ -100,23 +109,68 @@ guint64 network_mysqld_proto_decode_lenenc(GString *s, guint *_off) {
 /**
  * decode a OK packet from the network packet
  */
-int network_mysqld_proto_decode_ok_packet(GString *s, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg) {
+int network_mysqld_proto_get_ok_packet(GString *packet, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg) {
 	guint off = 0;
 	guint64 dest;
-	g_assert(s->str[0] == 0);
+	guint field_count;
 
-	off++;
+	field_count = network_mysqld_proto_get_int8(packet, &off);
+	g_assert(field_count == 0);
 
-	dest = network_mysqld_proto_decode_lenenc(s, &off); if (affected) *affected = dest;
-	dest = network_mysqld_proto_decode_lenenc(s, &off); if (insert_id) *insert_id = dest;
+	dest = network_mysqld_proto_get_lenenc_int(packet, &off); if (affected) *affected = dest;
+	dest = network_mysqld_proto_get_lenenc_int(packet, &off); if (insert_id) *insert_id = dest;
 
-	dest = network_mysqld_proto_get_int16(s, &off);     if (server_status) *server_status = dest;
-	dest = network_mysqld_proto_get_int16(s, &off);     if (warning_count) *warning_count = dest;
+	dest = network_mysqld_proto_get_int16(packet, &off);      if (server_status) *server_status = dest;
+	dest = network_mysqld_proto_get_int16(packet, &off);      if (warning_count) *warning_count = dest;
 
 	if (msg) *msg = NULL;
 
 	return 0;
 }
+
+int network_mysqld_proto_append_ok_packet(GString *packet, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings) {
+	network_mysqld_proto_append_int8(packet, 0); /* no fields */
+	network_mysqld_proto_append_lenenc_int(packet, affected_rows);
+	network_mysqld_proto_append_lenenc_int(packet, insert_id);
+	network_mysqld_proto_append_int16(packet, server_status); /* autocommit */
+	network_mysqld_proto_append_int16(packet, warnings); /* no warnings */
+
+	return 0;
+}
+
+/**
+ * create a ERR packet
+ *
+ * @note the sqlstate has to match the SQL standard. If no matching SQL state is known, leave it at NULL
+ *
+ * @param packet      network packet
+ * @param errmsg      the error message
+ * @param errmsg_len  byte-len of the error-message
+ * @param errorcode   mysql error-code we want to send
+ * @param sqlstate    if none-NULL, 5-char SQL state to send, if NULL, default SQL state is used
+ *
+ * @return 0 on success
+ */
+int network_mysqld_proto_append_error_packet(GString *packet, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate) {
+	network_mysqld_proto_append_int8(packet, 0xff); /* ERR */
+	network_mysqld_proto_append_int16(packet, errorcode); /* errorcode */
+	g_string_append_c(packet, '#');
+	if (!sqlstate) {
+		g_string_append_len(packet, C("07000"));
+	} else {
+		g_string_append_len(packet, sqlstate, 5);
+	}
+
+	if (errmsg_len < 512) {
+		g_string_append_len(packet, errmsg, errmsg_len);
+	} else {
+		/* truncate the err-msg */
+		g_string_append_len(packet, errmsg, 512);
+	}
+
+	return 0;
+}
+
 
 /**
  * skip bytes in the network packet
@@ -230,12 +284,12 @@ gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize l
  * @param packet the MySQL network packet
  * @param _off   offset into the packet
  * @return the string
- * @see network_mysqld_proto_get_string_len(), network_mysqld_proto_decode_lenenc()
+ * @see network_mysqld_proto_get_string_len(), network_mysqld_proto_get_lenenc_int()
  */
 gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off) {
 	guint64 len;
 
-	len = network_mysqld_proto_decode_lenenc(packet, _off);
+	len = network_mysqld_proto_get_lenenc_int(packet, _off);
 	
 	g_assert(*_off < packet->len);
 	g_assert(*_off + len <= packet->len);
@@ -249,7 +303,7 @@ gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off) {
  * @param packet the MySQL network packet
  * @param _off   offset into the packet
  * @return       the string
- * @see network_mysqld_proto_get_string_len(), network_mysqld_proto_decode_lenenc()
+ * @see network_mysqld_proto_get_string_len()
  */
 gchar *network_mysqld_proto_get_string(GString *packet, guint *_off) {
 	guint len;
@@ -339,12 +393,12 @@ gchar *network_mysqld_proto_get_gstring(GString *packet, guint *_off, GString *o
  * @param out    a GString which carries the string
  * @return       a pointer to the string in out
  *
- * @see network_mysqld_proto_get_gstring_len(), network_mysqld_proto_decode_lenenc()
+ * @see network_mysqld_proto_get_gstring_len(), network_mysqld_proto_get_lenenc_int()
  */
 gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GString *out) {
 	guint64 len;
 
-	len = network_mysqld_proto_decode_lenenc(packet, _off);
+	len = network_mysqld_proto_get_lenenc_int(packet, _off);
 
 	return network_mysqld_proto_get_gstring_len(packet, _off, len, out);
 }
@@ -570,4 +624,4 @@ int network_mysqld_proto_append_int32(GString *packet, guint32 num) {
 	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
 }
 
-
+/*@}*/
