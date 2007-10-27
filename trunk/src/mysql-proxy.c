@@ -16,7 +16,29 @@
 /**
  * \mainpage
  *
+ * \section Architecture
+ *
+ * MySQL Proxy is based around the C10k problem as described by http://kegel.com/c10k.html
+ *
+ * This leads to some basic features
+ * - 10.000 concurrent connections in one program
+ * - spreading the load over several backends
+ * - each backend might be able to only handle 100 connections (max_connections)
+ * 
+ * We can implement 
+ * - reusing idling backend connections 
+ * - splitting client connections into several backend connections
+ *
+ * Most of the magic is happening in the scripting layer provided by lua (http://lua.org/) which
+ * was picked as it:
+ *
+ * - is very easy to embed
+ * - is small (200kb stripped) and efficient (see http://shootout.alioth.debian.org/gp4/benchmark.php?test=all&lang=all)
+ * - is easy to read and write
+ *
  * \section a walk through the code
+ *
+ * To understand the code you basicly only have to know about the three files documented below:
  *
  * - mysql-proxy.c
  *   - main()
@@ -37,11 +59,33 @@
  *     -# sets the event-handler for the established connection (e.g. network_mysqld_proxy_connection_init())
  *     -# calls network_mysqld_con_handle() on the connection 
  *   - network_mysqld_con_handle() is the state-machine
- *     -# \image html http://forge.mysql.com/w/images/6/6e/Mysql-proto-state.png
+ *     -# connect @msc
+ *   client, proxy, backend;
+ *   --- [ label = "connect to backend" ];
+ *   client->proxy  [ label = "INIT" ];
+ *   proxy->backend [ label = "CONNECT_SERVER", URL="\ref proxy_connect_server" ];
+ * @endmsc
+ *     -# auth @msc
+ *   client, proxy, backend;
+ *   --- [ label = "authenticate" ];
+ *   backend->proxy [ label = "READ_HANDSHAKE", URL="\ref proxy_read_handshake" ];
+ *   proxy->client  [ label = "SEND_HANDSHAKE" ];
+ *   client->proxy  [ label = "READ_AUTH", URL="\ref proxy_read_auth" ];
+ *   proxy->backend [ label = "SEND_AUTH" ];
+ *   backend->proxy [ label = "READ_AUTH_RESULT", URL="\ref proxy_read_auth_result" ];
+ *   proxy->client  [ label = "SEND_AUTH_RESULT" ];
+ * @endmsc
+ *     -# query @msc
+ *   client, proxy, backend;
+ *   --- [ label = "query result phase" ];
+ *   client->proxy  [ label = "READ_QUERY", URL="\ref proxy_read_query" ];
+ *   proxy->backend [ label = "SEND_QUERY" ];
+ *   backend->proxy [ label = "READ_QUERY_RESULT", URL="\ref proxy_read_query_result" ];
+ *   proxy->client  [ label = "SEND_QUERY_RESULT", URL="\ref proxy_send_query_result" ];
+ * @endmsc
  *     -# implements the states of the MySQL Protocol
  *       -# connect, handshake, old-password, query, result 
  *     -# calls plugin functions (registered by e.g. network_mysqld_proxy_connection_init()) 
- *
  * - network-mysqld-proxy.c
  *   - network_mysqld_proxy_connection_init()
  *     -# registers the callbacks 
@@ -76,12 +120,12 @@
  * The other files only help those based main modules to do their job:
  *
  * - network-mysqld-proto.c
- *   - the byte functions around the MySQL protocol 
+ *   - the byte functions around the \ref proto "MySQL protocol"
  * - network-socket.c
  *   - basic socket struct 
  * - network-mysqld-table.c
  *   - internal tables to select from on the admin interface (to be removed) 
- * - sql-tokenizer.y
+ * - \ref sql-tokenizer.h "sql-tokenizer.y"
  *   - a flex based tokenizer for MySQL's SQL dialect (no parser) 
  * - network-conn-pool.c
  *   - a connection pool for server connections 
