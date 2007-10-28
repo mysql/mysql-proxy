@@ -61,28 +61,29 @@
  *     edge [ fontcolor=blue, color=blue, fontsize=10, fontname=Helvetica ];
  *
  *     connect->handshake [ label = "connecting server" ];
- *     auth->authres [ label = "capabilities, password, default-db" ]; 
+ *     auth->authres [ label = "capabilities, password, default-db", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Client_Authentication_Packet" ]; 
  *     oldauth->authres [ label = "scrambled password" ] ; 
- *     query->result [ label = "command (COM_*)" ] ;
+ *     query->result [ label = "command (COM_*)", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Command_Packet" ] ;
  *     query->infile [ label = "LOAD DATA INFILE LOCAL" ];
  *     local->result [ label = "file content"];
  *   }
  *
  *   subgraph {
  *     edge [ fontcolor=red, color=red, fontsize=10, fontname=Helvetica ];
- *     handshake->close [ label = "ERR: host denied" ];
- *     handshake->auth [ label = "0x10: handshake" ];
+ *     handshake->close [ label = "ERR: host denied", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
+ *     handshake->auth [ label = "0x10: handshake", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Handshake_Initialization_Packet" ];
  *     authres->oldauth [ label = "EOF: old password reauth" ];
- *     authres->query [ label = "OK: auth done" ];
- *     authres->close [ label = "ERR: auth failed" ];
- *     result->query [ label = "result for COM_*" ] ;
+ *     authres->query [ label = "OK: auth done", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#OK_Packet" ];
+ *     authres->close [ label = "ERR: auth failed", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
+ *     result->query [ label = "result for COM_*", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Result_Set_Header_Packet" ] ;
  *     result->close [ label = "COM_QUIT" ];
  *     result->result [ label = "COM_BINLOG_DUMP" ];
  *     infile->local [ label = "EOF: filename" ];
  *   }
  * }
  * @enddot
- *
+ * 
+ * Unfolded the sequence diagrams of the different use-cases:
  *
  * -# the client connects to the server and waits for data to return @msc
  *   client, backend;
