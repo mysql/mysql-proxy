@@ -17,6 +17,68 @@
 #include "config.h"
 #endif
 
+/** 
+ * @page proxy_states The internal states of the Proxy
+ *
+ * The MySQL Proxy implements the MySQL Protocol in its own way. 
+ *
+ *   -# connect @msc
+ *   client, proxy, backend;
+ *   --- [ label = "connect to backend" ];
+ *   client->proxy  [ label = "INIT" ];
+ *   proxy->backend [ label = "CONNECT_SERVER", URL="\ref proxy_connect_server" ];
+ * @endmsc
+ *   -# auth @msc
+ *   client, proxy, backend;
+ *   --- [ label = "authenticate" ];
+ *   backend->proxy [ label = "READ_HANDSHAKE", URL="\ref proxy_read_handshake" ];
+ *   proxy->client  [ label = "SEND_HANDSHAKE" ];
+ *   client->proxy  [ label = "READ_AUTH", URL="\ref proxy_read_auth" ];
+ *   proxy->backend [ label = "SEND_AUTH" ];
+ *   backend->proxy [ label = "READ_AUTH_RESULT", URL="\ref proxy_read_auth_result" ];
+ *   proxy->client  [ label = "SEND_AUTH_RESULT" ];
+ * @endmsc
+ *   -# query @msc
+ *   client, proxy, backend;
+ *   --- [ label = "query result phase" ];
+ *   client->proxy  [ label = "READ_QUERY", URL="\ref proxy_read_query" ];
+ *   proxy->backend [ label = "SEND_QUERY" ];
+ *   backend->proxy [ label = "READ_QUERY_RESULT", URL="\ref proxy_read_query_result" ];
+ *   proxy->client  [ label = "SEND_QUERY_RESULT", URL="\ref proxy_send_query_result" ];
+ * @endmsc
+ *
+ *   - network_mysqld_proxy_connection_init()
+ *     -# registers the callbacks 
+ *   - proxy_connect_server() (CON_STATE_CONNECT_SERVER)
+ *     -# calls the connect_server() function in the lua script which might decide to
+ *       -# send a handshake packet without contacting the backend server (CON_STATE_SEND_HANDSHAKE)
+ *       -# closing the connection (CON_STATE_ERROR)
+ *       -# picking a active connection from the connection pool
+ *       -# pick a backend to authenticate against
+ *       -# do nothing 
+ *     -# by default, pick a backend from the backend list on the backend with the least active connctions
+ *     -# opens the connection to the backend with connect()
+ *     -# when done CON_STATE_READ_HANDSHAKE 
+ *   - proxy_read_handshake() (CON_STATE_READ_HANDSHAKE)
+ *     -# reads the handshake packet from the server 
+ *   - proxy_read_auth() (CON_STATE_READ_AUTH)
+ *     -# reads the auth packet from the client 
+ *   - proxy_read_auth_result() (CON_STATE_READ_AUTH_RESULT)
+ *     -# reads the auth-result packet from the server 
+ *   - proxy_send_auth_result() (CON_STATE_SEND_AUTH_RESULT)
+ *   - proxy_read_query() (CON_STATE_READ_QUERY)
+ *     -# reads the query from the client 
+ *   - proxy_read_query_result() (CON_STATE_READ_QUERY_RESULT)
+ *     -# reads the query-result from the server 
+ *   - proxy_send_query_result() (CON_STATE_SEND_QUERY_RESULT)
+ *     -# called after the data is written to the client
+ *     -# if scripts wants to close connections, goes to CON_STATE_ERROR
+ *     -# if queries are in the injection queue, goes to CON_STATE_SEND_QUERY
+ *     -# otherwise goes to CON_STATE_READ_QUERY
+ *     -# does special handling for COM_BINLOG_DUMP (go to CON_STATE_READ_QUERY_RESULT) 
+
+ */
+
 #ifdef HAVE_SYS_FILIO_H
 /**
  * required for FIONREAD on solaris

@@ -17,13 +17,122 @@
 #include "config.h"
 #endif
 
+/** 
+ * @page protocol MySQL Protocol
+ *
+ * The MySQL Protocol is spilt up into the four phases
+ *
+ * -# connect
+ * -# auth
+ * -# query
+ * -# and the close state
+ *
+ * @dot
+ * digraph states {
+ *   graph [rankdir=LR];
+ *   node [fontname=Helvetica, fontsize=10];
+ *
+ *   connect [ shape=record ];
+ *   close [ shape=record ];
+ *
+ *   subgraph { 
+ *     label = "client";
+ *     color = black;
+ *     rank = same;
+ *     node [ style=filled, fillcolor=lightblue ];
+ *     connect; 
+ *     auth; 
+ *     oldauth; 
+ *     query; 
+ *     local;
+ *   }
+ *
+ *   subgraph { 
+ *     label = "server";
+ *     rank = same; 
+ *     node [ style=filled, fillcolor=orange ];
+ *     handshake; 
+ *     authres; 
+ *     result; 
+ *     infile;
+ *   }
+ *   
+ *   subgraph { 
+ *     edge [ fontcolor=blue, color=blue, fontsize=10, fontname=Helvetica ];
+ *
+ *     connect->handshake [ label = "connecting server" ];
+ *     auth->authres [ label = "capabilities, password, default-db" ]; 
+ *     oldauth->authres [ label = "scrambled password" ] ; 
+ *     query->result [ label = "command (COM_*)" ] ;
+ *     query->infile [ label = "LOAD DATA INFILE LOCAL" ];
+ *     local->result [ label = "file content"];
+ *   }
+ *
+ *   subgraph {
+ *     edge [ fontcolor=red, color=red, fontsize=10, fontname=Helvetica ];
+ *     handshake->close [ label = "ERR: host denied" ];
+ *     handshake->auth [ label = "0x10: handshake" ];
+ *     authres->oldauth [ label = "EOF: old password reauth" ];
+ *     authres->query [ label = "OK: auth done" ];
+ *     authres->close [ label = "ERR: auth failed" ];
+ *     result->query [ label = "result for COM_*" ] ;
+ *     result->close [ label = "COM_QUIT" ];
+ *     result->result [ label = "COM_BINLOG_DUMP" ];
+ *     infile->local [ label = "EOF: filename" ];
+ *   }
+ * }
+ * @enddot
+ *
+ *
+ * -# the client connects to the server and waits for data to return @msc
+ *   client, backend;
+ *   --- [ label = "connect to backend" ];
+ *   client->backend  [ label = "INIT" ];
+ * @endmsc
+ * -# the auth-phase handles the new SHA1-style passwords and the old scramble() passwords 
+ *   -# 4.1+ passwords @msc
+ *   client, backend;
+ *   --- [ label = "authenticate" ];
+ *   backend->client [ label = "HANDSHAKE" ];
+ *   client->backend [ label = "AUTH" ];
+ *   backend->client [ label = "AUTH_RESULT" ];
+ * @endmsc
+ *   -# pre-4.1 passwords @msc
+ *   client, backend;
+ *   --- [ label = "authenticate" ];
+ *   backend->client [ label = "HANDSHAKE" ];
+ *   client->backend [ label = "AUTH" ];
+ *   backend->client [ label = "OLD_PASSWORD_SCRAMBLE" ];
+ *   client->backend [ label = "OLD_PASSWORD_AUTH" ];
+ *   backend->client [ label = "AUTH_RESULT" ];
+ * @endmsc
+ * -# the query-phase repeats 
+ *   -# COM_QUERY and friends @msc
+ *   client, backend;
+ *   --- [ label = "query result phase" ];
+ *   client->backend [ label = "QUERY" ];
+ *   backend->client [ label = "QUERY_RESULT" ];
+ * @endmsc
+ *   -# COM_QUIT @msc
+ *   client, backend;
+ *   --- [ label = "query result phase" ];
+ *   client->backend [ label = "QUERY" ];
+ *   backend->client [ label = "connection close" ];
+ * @endmsc
+ *   -# COM_BINLOG_DUMP @msc
+ *   client, backend;
+ *   --- [ label = "query result phase" ];
+ *   client->backend [ label = "QUERY" ];
+ *   backend->client [ label = "QUERY_RESULT" ];
+ *   ... [ label = "more binlog entries" ];
+ *   backend->client [ label = "QUERY_RESULT"];
+ * @endmsc
+ */
+
 #include <sys/types.h>
 
 #ifdef HAVE_SYS_FILIO_H
-/**
- * required for FIONREAD on solaris
- */
-#include <sys/filio.h>
+#include <sys/filio.h> /* required for FIONREAD on solaris */
 #endif
 
 #ifndef _WIN32
