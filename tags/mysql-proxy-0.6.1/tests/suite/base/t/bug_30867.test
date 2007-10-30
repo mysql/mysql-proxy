@@ -1,0 +1,12 @@
+connect (conn1,127.0.0.1,user1,user,test,$PROXY_PORT,);
+connect (conn2,127.0.0.1,user2,user,test,$PROXY_PORT,);
+
+connection conn1;
+select count(*) from test.t1;
+connection conn2;
+insert into test.t1 values (1);
+
+connection default;
+drop table test.t1;
+drop user user1@localhost;
+drop user user2@localhost;

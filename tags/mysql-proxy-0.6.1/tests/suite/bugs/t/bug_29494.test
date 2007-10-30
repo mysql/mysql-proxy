@@ -1,0 +1,5 @@
+### 
+## crashes the mysqlclient 
+##
+## the field.db is NULL here
+SELECT 1 /* BUG #29494 */;

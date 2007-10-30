@@ -1,0 +1,10 @@
+select 1;
+select 1, 2; 
+select 1, 2; 
+select 1,2,3; 
+select 1,2,3; 
+select 1,2,3; 
+--replace_column 3 # 4 #
+select * from histogram.queries;
+delete from histogram.queries;
+select * from histogram.queries;

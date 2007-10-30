@@ -1,0 +1,26 @@
+select 1;
+1
+1
+select 1, 2;
+1	2
+1	2
+select 1, 2;
+1	2
+1	2
+select 1,2,3;
+1	2	3
+1	2	3
+select 1,2,3;
+1	2	3
+1	2	3
+select 1,2,3;
+1	2	3
+1	2	3
+select * from histogram.queries;
+query	COUNT(*)	AVG(qtime)	STDDEV(qtime)
+SELECT ? , ? , ? 	3	#	#
+SELECT ? , ? 	2	#	#
+SELECT ? 	1	#	#
+delete from histogram.queries;
+select * from histogram.queries;
+query	COUNT(*)	AVG(qtime)	STDDEV(qtime)
