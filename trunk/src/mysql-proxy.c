@@ -123,21 +123,11 @@
 #include "network-mysqld-proto.h"
 #include "sys-pedantic.h"
 
-/**
- * signal handlers have to be volatile
- */
-#ifdef _WIN32
-volatile int agent_shutdown = 0;
-#define STDERR_FILENO 2
-#else
-volatile sig_atomic_t agent_shutdown = 0;
-#endif
-
 #ifndef _WIN32
 static void signal_handler(int sig) {
 	switch (sig) {
-	case SIGINT: agent_shutdown = 1; break;
-	case SIGTERM: agent_shutdown = 1; break;
+	case SIGINT: network_mysqld_set_shutdown(); break;
+	case SIGTERM: network_mysqld_set_shutdown(); break;
 	}
 }
 #endif

@@ -267,4 +267,7 @@ void network_mysqld_free(network_mysqld *);
  */
 network_socket *network_socket_init(void);
 
+
+void network_mysqld_set_shutdown();
+
 #endif

@@ -171,12 +171,6 @@
 #include "network-conn-pool.h"
 
 #ifdef _WIN32
-extern volatile int agent_shutdown;
-#else
-extern volatile sig_atomic_t agent_shutdown;
-#endif
-
-#ifdef _WIN32
 #define E_NET_CONNRESET WSAECONNRESET
 #define E_NET_CONNABORTED WSAECONNABORTED
 #define E_NET_WOULDBLOCK WSAEWOULDBLOCK
@@ -200,6 +194,20 @@ extern volatile sig_atomic_t agent_shutdown;
  * a handy marco for constant strings 
  */
 #define C(x) x, sizeof(x) - 1
+
+#ifdef _WIN32
+volatile static int signal_shutdown;
+#else
+volatile static sig_atomic_t signal_shutdown;
+#endif
+
+void network_mysqld_set_shutdown() {
+	signal_shutdown = 1;
+}
+
+gboolean network_mysqld_is_shutdown() {
+	return signal_shutdown == 1;
+}
 
 /**
  * call the cleanup callback for the current connection
@@ -1640,16 +1648,6 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	return;
 }
 
-
-/**
- * timeout handler for the event-loop 
- */
-static void handle_timeout() {
-	if (!agent_shutdown) return;
-
-	/* we have to shutdown, disable all events to leave the dispatch */
-}
-
 void *network_mysqld_thread(void *_srv) {
 	network_mysqld *srv = _srv;
 	guint i;
@@ -1684,7 +1682,7 @@ void *network_mysqld_thread(void *_srv) {
 	/**
 	 * check once a second if we shall shutdown the proxy
 	 */
-	while (!agent_shutdown) {
+	while (!network_mysqld_is_shutdown()) {
 		struct timeval timeout;
 		int r;
 
