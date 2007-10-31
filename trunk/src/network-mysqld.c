@@ -260,19 +260,7 @@ void network_mysqld_con_free(network_mysqld_con *con) {
 
 
 /**
- * type-safe free()-ing of the internal SQL tables
- *
- * @param s    a network_mysqld_tables 
- * @see g_hash_table_new_full()
- */
-static void network_mysqld_tables_free_void(void *s) {
-	network_mysqld_table_free(s);
-}
-
-/**
  * create a global context
- *
- * @see network_mysqld_tables_free_void()
  */
 network_mysqld *network_mysqld_init() {
 	network_mysqld *m;
@@ -280,13 +268,12 @@ network_mysqld *network_mysqld_init() {
 	m = g_new0(network_mysqld, 1);
 
 	m->event_base  = NULL;
-
-	m->tables      = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, network_mysqld_tables_free_void);
-	
 	m->cons        = g_ptr_array_new();
+	m->modules     = g_ptr_array_new();
 	
 	return m;
 }
+
 
 /**
  * init libevent
@@ -295,7 +282,7 @@ network_mysqld *network_mysqld_init() {
  *
  * @param m      global context
  */
-void network_mysqld_init_libevent(network_mysqld *m) {
+static void network_mysqld_init_libevent(network_mysqld *m) {
 	m->event_base  = event_init();
 }
 
@@ -320,23 +307,17 @@ void network_mysqld_free(network_mysqld *m) {
 
 	g_ptr_array_free(m->cons, TRUE);
 
-	g_hash_table_destroy(m->tables);
+	/* call the destructor for all plugins */
+	for (i = 0; i < m->modules->len; i++) {
+		cauldron_plugin *p = m->modules->pdata[i];
 
-	if (m->config.proxy.backend_addresses) {
-		for (i = 0; m->config.proxy.backend_addresses[i]; i++) {
-			g_free(m->config.proxy.backend_addresses[i]);
-		}
-		g_free(m->config.proxy.backend_addresses);
+		g_assert(p->destroy);
+		p->destroy(p->config);
+		cauldron_plugin_free(p);
 	}
+	
+	g_ptr_array_free(m->modules, TRUE);
 
-	if (m->config.proxy.address) {
-		network_mysqld_proxy_free(NULL);
-
-		g_free(m->config.proxy.address);
-	}
-	if (m->config.admin.address) {
-		g_free(m->config.admin.address);
-	}
 #ifdef HAVE_EVENT_BASE_FREE
 	/* only recent versions have this call */
 	event_base_free(m->event_base);
@@ -1607,14 +1588,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
  * 
  */
 void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
-	network_mysqld_con *con = user_data;
+	network_mysqld_con *listen_con = user_data;
 	network_mysqld_con *client_con;
 	socklen_t addr_len;
 	struct sockaddr_in ipv4;
 	int fd;
 
 	g_assert(events == EV_READ);
-	g_assert(con->server);
+	g_assert(listen_con->server);
 
 	addr_len = sizeof(struct sockaddr_in);
 
@@ -1625,7 +1606,7 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	network_mysqld_con_set_non_blocking(fd);
 
 	/* looks like we open a client connection */
-	client_con = network_mysqld_con_init(con->srv);
+	client_con = network_mysqld_con_init(listen_con->srv);
 	client_con->client = network_socket_init();
 	client_con->client->addr.addr.ipv4 = ipv4;
 	client_con->client->addr.len = addr_len;
@@ -1647,27 +1628,13 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 		}
 	}
 
-
-	/* copy the config
-	 *
-	 * @todo replace network-type by a function pointer for the init 
-	 *
+	/**
+	 * inherit the config to the new connection 
 	 */
-	client_con->config = con->config;
-	client_con->config.network_type = con->config.network_type;
 
-	switch (con->config.network_type) {
-	case NETWORK_TYPE_SERVER:
-		network_mysqld_server_connection_init(client_con);
-		break;
-	case NETWORK_TYPE_PROXY:
-		network_mysqld_proxy_connection_init(client_con);
-		break;
-	default:
-		g_error("%s.%d", __FILE__, __LINE__);
-		break;
-	}
-
+	client_con->plugins = listen_con->plugins;
+	client_con->config  = listen_con->config;
+	
 	network_mysqld_con_handle(-1, 0, client_con);
 
 	return;
@@ -1685,7 +1652,7 @@ static void handle_timeout() {
 
 void *network_mysqld_thread(void *_srv) {
 	network_mysqld *srv = _srv;
-	network_mysqld_con *proxy_con = NULL, *admin_con = NULL;
+	guint i;
 
 #ifdef _WIN32
 	WORD wVersionRequested;
@@ -1701,52 +1668,17 @@ void *network_mysqld_thread(void *_srv) {
 		return NULL;
 	}
 #endif
+	/* init the event-handlers */
+	network_mysqld_init_libevent(srv);
 
-	/* setup the different handlers */
+	/* setup all plugins all plugins */
+	for (i = 0; i < srv->modules->len; i++) {
+		cauldron_plugin *p = srv->modules->pdata[i];
 
-	if (srv->config.admin.address) {
-		network_mysqld_con *con = NULL;
-
-		con = network_mysqld_con_init(srv);
-		con->config = srv->config;
-		con->config.network_type = NETWORK_TYPE_SERVER;
-		
-		con->server = network_socket_init();
-
-		if (0 != network_mysqld_server_init(con)) {
-			g_critical("%s.%d: network_mysqld_server_init() failed", __FILE__, __LINE__);
-
+		g_assert(p->apply_config);
+		if (0 != p->apply_config(srv, p->config)) {
 			return NULL;
 		}
-
-		/* keep the listen socket alive */
-		event_set(&(con->server->event), con->server->fd, EV_READ|EV_PERSIST, network_mysqld_con_accept, con);
-		event_base_set(srv->event_base, &(con->server->event));
-		event_add(&(con->server->event), NULL);
-		
-		admin_con = con;
-	}
-
-	if (srv->config.proxy.address) {
-		network_mysqld_con *con = NULL;
-
-		con = network_mysqld_con_init(srv);
-		con->config = srv->config;
-		con->config.network_type = NETWORK_TYPE_PROXY;
-		
-		con->server = network_socket_init();
-
-		if (0 != network_mysqld_proxy_init(con)) {
-			g_critical("%s.%d: network_mysqld_server_init() failed", __FILE__, __LINE__);
-			return NULL;
-		}
-	
-		/* keep the listen socket alive */
-		event_set(&(con->server->event), con->server->fd, EV_READ|EV_PERSIST, network_mysqld_con_accept, con);
-		event_base_set(srv->event_base, &(con->server->event));
-		event_add(&(con->server->event), NULL);
-
-		proxy_con = con;
 	}
 
 	/**
@@ -1768,22 +1700,6 @@ void *network_mysqld_thread(void *_srv) {
 
 			break;
 		}
-	}
-
-	/**
-	 * cleanup
-	 *
-	 */
-	if (proxy_con) {
-		/**
-		 * we still might have connections pointing to the close scope */
-		event_del(&(proxy_con->server->event));
-		network_mysqld_con_free(proxy_con);
-	}
-	
-	if (admin_con) {
-		event_del(&(admin_con->server->event));
-		network_mysqld_con_free(admin_con);
 	}
 
 	return NULL;
@@ -1891,5 +1807,4 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 
 	return 0;
 }
-
 

@@ -24,6 +24,7 @@
 
 #include "sys-pedantic.h"
 
+#include <gmodule.h>
 
 /**
  * a simple query handler
@@ -47,6 +48,15 @@
  * - each table has to have a provider for a table 
  * - each plugin should able to provide tables as needed
  */
+
+struct cauldron_plugin_config {
+	gchar *address;                   /**< listening address of the admin interface */
+
+	gchar *lua_script;                /**< script to load at the start the connection */
+
+	network_mysqld_con *listen_con;
+};
+
 int network_mysqld_con_handle_stmt(network_mysqld *srv, network_mysqld_con *con, GString *s) {
 	gsize i, j;
 	GPtrArray *fields;
@@ -96,64 +106,9 @@ int network_mysqld_con_handle_stmt(network_mysqld *srv, network_mysqld_con *con,
 
 			con->client->packet_id++;
 			network_mysqld_con_send_resultset(con->client, fields, rows);
-		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("update proxy_config set value=1 where option=\"proxy.profiling\""))) {
-			srv->config.proxy.profiling = 1;
-
-			con->client->packet_id++;
-			network_mysqld_con_send_ok(con->client);
-		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("update proxy_config set value=0 where option=\"proxy.profiling\""))) {
-			srv->config.proxy.profiling = 0;
-	
-			con->client->packet_id++;
-			network_mysqld_con_send_ok(con->client);
-		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("stop instance"))) {
-			/**
-			 * connect to the server via the admin-connection and try to shut down the server
-			 * with COM_SHUTDOWN
-			 */
-
-			con->client->packet_id++;
-			network_mysqld_con_send_ok(con->client);
-		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("start instance"))) {
-			/**
-			 * start the instance with fork() and monitor it
-			 */
-
-			con->client->packet_id++;
-			network_mysqld_con_send_ok(con->client);
 		} else {
-			int have_sent = 0;
-			/* check if the table is known */
-			if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, "select * from ", sizeof("select * from ") - 1)) {
-				network_mysqld_table *table;
-				GString *table_name = g_string_new(NULL);
-
-				g_string_append_len(table_name, 
-						s->str + (NET_HEADER_SIZE + 1 + sizeof("select * from ") - 1),
-						s->len - (NET_HEADER_SIZE + 1 + sizeof("select * from ") - 1));
-
-				if ((table = g_hash_table_lookup(srv->tables, table_name->str))) {
-					if (table->select) {
-						fields = network_mysqld_proto_fields_init();
-						rows = g_ptr_array_new();
-
-						table->select(fields, rows, table->user_data);
-			
-						con->client->packet_id++;
-						network_mysqld_con_send_resultset(con->client, fields, rows);
-
-						have_sent = 1;
-					} 
-				} else {
-					g_message("table '%s' not found", table_name->str);
-				}
-				g_string_free(table_name, TRUE);
-			} 
-					
-			if (!have_sent) {
-				con->client->packet_id++;
-				network_mysqld_con_send_error(con->client, C("booh"));
-			}
+			con->client->packet_id++;
+			network_mysqld_con_send_error(con->client, C("(admin-server) query not known"));
 		}
 
 		/* clean up */
@@ -244,7 +199,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 	GString *s;
 	GList *chunk;
-	network_socket *recv_sock, *send_sock;
+	network_socket *recv_sock;
 
 	recv_sock = con->client;
 
@@ -267,7 +222,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 	return RET_SUCCESS;
 }
 
-int network_mysqld_server_connection_init(network_mysqld_con *con) {
+static int network_mysqld_server_connection_init(network_mysqld_con *con) {
 	con->plugins.con_init             = server_con_init;
 
 	con->plugins.con_read_auth        = server_read_auth;
@@ -277,20 +232,115 @@ int network_mysqld_server_connection_init(network_mysqld_con *con) {
 	return 0;
 }
 
-int network_mysqld_server_init(network_mysqld_con *con) {
-	gchar *address = con->config.admin.address;
+static cauldron_plugin_config *network_mysqld_admin_plugin_init(void) {
+	cauldron_plugin_config *config;
 
-	if (0 != network_mysqld_con_set_address(&(con->server->addr), address)) {
-		g_critical("%s.%d: network_mysqld_con_set_address(%s) failed", __FILE__, __LINE__, con->server->addr.str);
-		return -1;
+	config = g_new0(cauldron_plugin_config, 1);
+
+	return config;
+}
+
+static void network_mysqld_admin_plugin_free(cauldron_plugin_config *config) {
+	if (config->listen_con) {
+		/* the socket will be freed by network_mysqld_free() */
 	}
-	
-	if (0 != network_mysqld_con_bind(con->server)) {
-		g_critical("%s.%d: network_mysqld_con_bind(%s) failed", __FILE__, __LINE__, con->server->addr.str);
-		return -1;
+
+	if (config->address) {
+		g_free(config->address);
 	}
+
+	g_free(config);
+}
+
+/**
+ * add the proxy specific options to the cmdline interface 
+ */
+static int network_mysqld_admin_plugin_add_options(GOptionContext *option_ctx, cauldron_plugin_config *config) {
+	GOptionGroup *option_grp;
+	guint i;
+
+	GOptionEntry config_entries[] = 
+	{
+		{ "admin-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the admin-server (default: :4040)", "<host:port>" },
+		
+		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
+	};
+
+	i = 0;
+	config_entries[i++].arg_data = &(config->address);
+
+	option_grp = g_option_group_new("admin", "admin-module", "Show options for the admin-module", NULL, NULL);
+	g_option_group_add_entries(option_grp, config_entries);
+	g_option_context_add_group(option_ctx, option_grp);
 
 	return 0;
+}
+
+/**
+ * init the plugin with the parsed config
+ */
+static int network_mysqld_admin_plugin_apply_config(gpointer _srv, cauldron_plugin_config *config) {
+	network_mysqld *srv = _srv;
+	network_mysqld_con *con;
+	network_socket *listen_sock;
+
+	if (!config->address) config->address = g_strdup(":4041");
+
+	/** 
+	 * create a connection handle for the listen socket 
+	 */
+	con = network_mysqld_con_init(srv);
+	con->config = config;
+
+	config->listen_con = con;
+	
+	listen_sock = network_socket_init();
+	con->server = listen_sock;
+
+	/* set the plugin hooks as we want to apply them to the new connections too later */
+	network_mysqld_server_connection_init(con);
+
+	/* FIXME: network_socket_set_address() */
+	if (0 != network_mysqld_con_set_address(&listen_sock->addr, config->address)) {
+		return -1;
+	}
+
+	/* FIXME: network_socket_bind() */
+	if (0 != network_mysqld_con_bind(listen_sock)) {
+		return -1;
+	}
+
+	/**
+	 * call network_mysqld_con_accept() with this connection when we are done
+	 */
+	event_set(&(listen_sock->event), listen_sock->fd, EV_READ|EV_PERSIST, network_mysqld_con_accept, con);
+	event_base_set(srv->event_base, &(listen_sock->event));
+	event_add(&(listen_sock->event), NULL);
+
+	return 0;
+}
+
+int plugin_init(cauldron_plugin *p) {
+	/* append the our init function to the init-hook-list */
+
+	p->init         = network_mysqld_admin_plugin_init;
+	p->add_options  = network_mysqld_admin_plugin_add_options;
+	p->apply_config = network_mysqld_admin_plugin_apply_config;
+	p->destroy      = network_mysqld_admin_plugin_free;
+
+	return 0;
+}
+
+const char *g_module_check_init(GModule *module) {
+	g_debug("loading %s", g_module_name(module));
+
+	return NULL;
+}
+
+const char *g_module_unload(GModule *module) {
+	g_debug("unloading %s", g_module_name(module));
+
+	return NULL;
 }
 
 

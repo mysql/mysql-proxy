@@ -246,6 +246,24 @@ typedef struct {
 	GTimeVal ts_read_query_result_last;     /* when we first finished it */
 } injection;
 
+struct cauldron_plugin_config {
+	gchar *address;                   /**< listening address of the proxy */
+
+	gchar **backend_addresses;        /**<    read-write backends */
+	gchar **read_only_backend_addresses; /**< read-only  backends */
+
+	gint fix_bug_25371;               /**< suppress the second ERR packet of bug #25371 */
+
+	gint profiling;                   /**< skips the execution of the read_query() function */
+	
+	gchar *lua_script;                /**< script to load at the start the connection */
+
+	gint start_proxy;
+
+	network_mysqld_con *listen_con;
+};
+
+
 static injection *injection_init(int id, GString *query) {
 	injection *i;
 
@@ -573,12 +591,6 @@ static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields
 	g_assert(packet->str[NET_HEADER_SIZE] == MYSQLD_PACKET_EOF);
 
 	return chunk;
-}
-
-static void g_hash_table_reset_gstring(gpointer UNUSED_PARAM(_key), gpointer _value, gpointer UNUSED_PARAM(ser_data)) {
-	GString *value = _value;
-
-	g_string_truncate(value, 0);
 }
 
 /**
@@ -1142,8 +1154,9 @@ static int lua_register_callback(network_mysqld_con *con) {
 	plugin_srv_state *g  = st->global_state;
 	GQueue **q_p;
 	network_mysqld_con **con_p;
+	cauldron_plugin_config *config = con->config;
 
-	if (!con->config.proxy.lua_script) return 0;
+	if (!config->lua_script) return 0;
 
 	if (NULL == st->injected.L) {
 		/**
@@ -1158,10 +1171,10 @@ static int lua_register_callback(network_mysqld_con *con) {
 		 */
 		st->injected.L_ref = luaL_ref(g->L, LUA_REGISTRYINDEX);
 
-		lua_load_script(L, con->config.proxy.lua_script);
+		lua_load_script(L, config->lua_script);
 		
 		if (lua_isstring(L, -1)) {
-			g_warning("lua_load_file(%s) failed: %s", con->config.proxy.lua_script, lua_tostring(L, -1));
+			g_warning("lua_load_file(%s) failed: %s", config->lua_script, lua_tostring(L, -1));
 
 			lua_pop(L, 1); /* remove the error-msg from the stack */
 	
@@ -1185,7 +1198,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 
 			/* push the functions on the stack */
 			if (lua_pcall(L, 0, 0, 0) != 0) {
-				g_critical("(lua-error) [%s]\n%s", con->config.proxy.lua_script, lua_tostring(L, -1));
+				g_critical("(lua-error) [%s]\n%s", config->lua_script, lua_tostring(L, -1));
 
 				lua_pop(L, 1); /* errmsg */
 			
@@ -1197,7 +1210,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 		
 			/* on the stack should be the script now, keep it there */
 		} else {
-			g_error("lua_load_file(%s): returned a %s", con->config.proxy.lua_script, lua_typename(L, lua_type(L, -1)));
+			g_error("lua_load_file(%s): returned a %s", config->lua_script, lua_typename(L, lua_type(L, -1)));
 		}
 	} else {
 		L = st->injected.L;
@@ -1346,8 +1359,8 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	int resp_type = 1;
 	const char *str;
 	size_t str_len;
-	gsize i;
 	lua_State *L = st->injected.L;
+	cauldron_plugin_config *config = con->config;
 
 	/**
 	 * on the stack should be the fenv of our function */
@@ -1359,7 +1372,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	lua_getfield(L, -1, "response"); /* proxy.response */
 	if (lua_isnil(L, -1)) {
 		g_message("%s.%d: proxy.response isn't set in %s", __FILE__, __LINE__, 
-				con->config.proxy.lua_script);
+				config->lua_script);
 
 		lua_pop(L, 2); /* proxy + nil */
 
@@ -1367,7 +1380,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	} else if (!lua_istable(L, -1)) {
 		g_message("%s.%d: proxy.response has to be a table, is %s in %s", __FILE__, __LINE__,
 				lua_typename(L, lua_type(L, -1)),
-				con->config.proxy.lua_script);
+				config->lua_script);
 
 		lua_pop(L, 2); /* proxy + response */
 		return -1;
@@ -1379,7 +1392,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		 * nil is fine, we expect to get a raw packet in that case
 		 */
 		g_message("%s.%d: proxy.response.type isn't set in %s", __FILE__, __LINE__, 
-				con->config.proxy.lua_script);
+				config->lua_script);
 
 		lua_pop(L, 3); /* proxy + nil */
 
@@ -1388,7 +1401,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	} else if (!lua_isnumber(L, -1)) {
 		g_message("%s.%d: proxy.response.type has to be a number, is %s in %s", __FILE__, __LINE__,
 				lua_typename(L, lua_type(L, -1)),
-				con->config.proxy.lua_script);
+				config->lua_script);
 		
 		lua_pop(L, 3); /* proxy + response + type */
 
@@ -1406,6 +1419,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 
 		lua_getfield(L, -1, "resultset"); /* proxy.response.resultset */
 		if (lua_istable(L, -1)) {
+			guint i;
 			lua_getfield(L, -1, "fields"); /* proxy.response.resultset.fields */
 			g_assert(lua_istable(L, -1));
 
@@ -1425,7 +1439,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 						field->name = g_strdup("no-field-name");
 	
 						g_warning("%s.%d: proxy.response.type = OK, "
-								"but proxy.response.resultset.fields[" F_SIZE_T "].name is not a string (is %s), "
+								"but proxy.response.resultset.fields[%u].name is not a string (is %s), "
 								"using default", 
 								__FILE__, __LINE__,
 								i,
@@ -1438,7 +1452,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 					lua_getfield(L, -1, "type"); /* proxy.response.resultset.fields[].type */
 					if (!lua_isnumber(L, -1)) {
 						g_warning("%s.%d: proxy.response.type = OK, "
-								"but proxy.response.resultset.fields[" F_SIZE_T "].type is not a integer (is %s), "
+								"but proxy.response.resultset.fields[%u].type is not a integer (is %s), "
 								"using MYSQL_TYPE_STRING", 
 								__FILE__, __LINE__,
 								i,
@@ -1534,9 +1548,10 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		}
 
 		if (rows) {
+			guint i;
 			for (i = 0; i < rows->len; i++) {
 				GPtrArray *row = rows->pdata[i];
-				gsize j;
+				guint j;
 
 				for (j = 0; j < row->len; j++) {
 					if (row->pdata[j]) g_free(row->pdata[j]);
@@ -1577,14 +1592,15 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		lua_pop(L, 1);
 
 		break; }
-	case MYSQLD_PACKET_RAW:
+	case MYSQLD_PACKET_RAW: {
+		guint i;
 		/**
 		 * iterate over the packet table and add each packet to the send-queue
 		 */
 		lua_getfield(L, -1, "packets"); /* proxy.response.packets */
 		if (lua_isnil(L, -1)) {
 			g_message("%s.%d: proxy.response.packets isn't set in %s", __FILE__, __LINE__,
-					con->config.proxy.lua_script);
+					config->lua_script);
 
 			lua_pop(L, 3 + 1); /* fenv + proxy + response + nil */
 
@@ -1592,7 +1608,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		} else if (!lua_istable(L, -1)) {
 			g_message("%s.%d: proxy.response.packets has to be a table, is %s in %s", __FILE__, __LINE__,
 					lua_typename(L, lua_type(L, -1)),
-					con->config.proxy.lua_script);
+					config->lua_script);
 
 			lua_pop(L, 3 + 1); /* fenv + proxy + response + packets */
 			return -1;
@@ -1611,7 +1627,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 				lua_pop(L, 1); /* pop the nil and leave the loop */
 				break;
 			} else {
-				g_error("%s.%d: proxy.response.packets should be array of strings, field "F_SIZE_T" was %s", 
+				g_error("%s.%d: proxy.response.packets should be array of strings, field %u was %s", 
 						__FILE__, __LINE__, 
 						i,
 						lua_typename(L, lua_type(L, -1)));
@@ -1620,7 +1636,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 
 		lua_pop(L, 1); /* .packets */
 
-		break;
+		break; }
 	default:
 		g_message("proxy.response.type is unknown: %d", resp_type);
 
@@ -1634,26 +1650,6 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	return 0;
 }
 #endif
-
-/**
- * turn a GTimeVal into string
- *
- * @return string in ISO notation with micro-seconds
- */
-static gchar * g_timeval_string(GTimeVal *t1, GString *str) {
-	size_t used_len;
-	
-	g_string_set_size(str, 63);
-
-	used_len = strftime(str->str, str->allocated_len, "%Y-%m-%dT%H:%M:%S", gmtime(&t1->tv_sec));
-
-	g_assert(used_len < str->allocated_len);
-	str->len = used_len;
-
-	g_string_append_printf(str, ".%06ld", t1->tv_usec);
-
-	return str->str;
-}
 
 #ifdef HAVE_LUA_H
 /**
@@ -2824,8 +2820,9 @@ static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 	network_socket *recv_sock = con->client;
 	GList   *chunk  = recv_sock->recv_queue->chunks->head;
 	GString *packet = chunk->data;
+	cauldron_plugin_config *config = con->config;
 
-	if (!con->config.proxy.profiling) return PROXY_SEND_QUERY;
+	if (!config->profiling) return PROXY_SEND_QUERY;
 
 	if (packet->len < NET_HEADER_SIZE) return PROXY_SEND_QUERY; /* packet too short */
 
@@ -3107,6 +3104,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	network_socket *recv_sock, *send_sock;
 	plugin_con_state *st = con->plugin_con_state;
 	injection *inj = NULL;
+	cauldron_plugin_config *config = con->config;
 
 	recv_sock = con->server;
 	send_sock = con->client;
@@ -3160,7 +3158,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 				 * Some clients handle this issue and expect a double ERR packet.
 				 */
 				if (recv_sock->packet_id == 2) {
-					if (con->config.proxy.fix_bug_25371) {
+					if (config->fix_bug_25371) {
 						send_packet = 0;
 					}
 					is_finished = 1;
@@ -3807,8 +3805,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	 * check if we have a connection in the pool for this backend
 	 */
 	if (NULL == con->server) {
-		int ioctlvar;
-
 		con->server = network_socket_init();
 		con->server->addr = st->backend->addr;
 		con->server->addr.str = g_strdup(st->backend->addr.str);
@@ -3860,7 +3856,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 }
 
 
-plugin_srv_state *plugin_srv_state_get(network_mysqld *srv) {
+plugin_srv_state *plugin_srv_state_get(cauldron_plugin_config *config) {
 	static plugin_srv_state *global_state = NULL;
 	guint i;
 
@@ -3869,15 +3865,15 @@ plugin_srv_state *plugin_srv_state_get(network_mysqld *srv) {
 	 */
 
 	if (global_state) return global_state;
-	/* if srv is not set, return the old global-state (used at shutdown) */
-	if (!srv) return global_state;
+	/* if config is not set, return the old global-state (used at shutdown) */
+	if (!config) return global_state;
 
 	global_state = plugin_srv_state_init();
 		
 	/* init the pool */
-	for (i = 0; srv->config.proxy.backend_addresses[i]; i++) {
+	for (i = 0; config->backend_addresses[i]; i++) {
 		backend_t *backend;
-		gchar *address = srv->config.proxy.backend_addresses[i];
+		gchar *address = config->backend_addresses[i];
 
 		backend = backend_init();
 		backend->type = BACKEND_TYPE_RW;
@@ -3890,10 +3886,10 @@ plugin_srv_state *plugin_srv_state_get(network_mysqld *srv) {
 	}
 
 	/* init the pool */
-	for (i = 0; srv->config.proxy.read_only_backend_addresses && 
-			srv->config.proxy.read_only_backend_addresses[i]; i++) {
+	for (i = 0; config->read_only_backend_addresses && 
+			config->read_only_backend_addresses[i]; i++) {
 		backend_t *backend;
-		gchar *address = srv->config.proxy.read_only_backend_addresses[i];
+		gchar *address = config->read_only_backend_addresses[i];
 
 		backend = backend_init();
 		backend->type = BACKEND_TYPE_RO;
@@ -3916,7 +3912,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 
 	st = plugin_con_state_init();
 
-	if (NULL == (st->global_state = plugin_srv_state_get(srv))) {
+	if (NULL == (st->global_state = plugin_srv_state_get(con->config))) {
 		return RET_ERROR;
 	}
 
@@ -4062,24 +4058,6 @@ int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
 }
 
 /**
- * bind to the proxy-address to listen for client connections we want
- * to forward to one of the backends
- */
-int network_mysqld_proxy_init(network_mysqld_con *con) {
-	gchar *address = con->config.proxy.address;
-
-	if (0 != network_mysqld_con_set_address(&con->server->addr, address)) {
-		return -1;
-	}
-	
-	if (0 != network_mysqld_con_bind(con->server)) {
-		return -1;
-	}
-
-	return 0;
-}
-
-/**
  * free the global scope which is shared between all connections
  *
  * make sure that is called after all connections are closed
@@ -4089,4 +4067,164 @@ void network_mysqld_proxy_free(network_mysqld_con *con) {
 
 	plugin_srv_state_free(g);
 }
+
+cauldron_plugin_config * network_mysqld_proxy_plugin_init(void) {
+	cauldron_plugin_config *config;
+
+	config = g_new0(cauldron_plugin_config, 1);
+	config->fix_bug_25371   = 0; /** double ERR packet on AUTH failures */
+	config->profiling       = 1;
+	config->start_proxy     = 1;
+
+	return config;
+}
+
+void network_mysqld_proxy_plugin_free(cauldron_plugin_config *config) {
+	gsize i;
+
+	if (config->listen_con) {
+		/**
+		 * the connection will be free()ed by the network_mysqld_free()
+		 */
+#if 0
+		event_del(&(config->listen_con->server->event));
+		network_mysqld_con_free(config->listen_con);
+#endif
+	}
+
+	if (config->backend_addresses) {
+		for (i = 0; config->backend_addresses[i]; i++) {
+			g_free(config->backend_addresses[i]);
+		}
+		g_free(config->backend_addresses);
+	}
+
+	if (config->address) {
+		/* free the global scope */
+		network_mysqld_proxy_free(NULL);
+
+		g_free(config->address);
+	}
+
+	g_free(config);
+}
+
+/**
+ * add the proxy specific options to the cmdline interface 
+ */
+int network_mysqld_proxy_plugin_add_options(GOptionContext *option_ctx, cauldron_plugin_config *config) {
+	GOptionGroup *option_grp;
+	guint i;
+
+	GOptionEntry config_entries[] = 
+	{
+		{ "proxy-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the proxy-server (default: :4040)", "<host:port>" },
+		{ "proxy-read-only-backend-addresses", 
+					      0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "address:port of the remote slave-server (default: not set)", "<host:port>" },
+		{ "proxy-backend-addresses",  0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "address:port of the remote backend-servers (default: 127.0.0.1:3306)", "<host:port>" },
+		
+		{ "proxy-skip-profiling",     0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "disables profiling of queries (default: enabled)", NULL },
+
+		{ "proxy-fix-bug-25371",      0, 0, G_OPTION_ARG_NONE, NULL, "fix bug #25371 (mysqld > 5.1.12) for older libmysql versions", NULL },
+		{ "proxy-lua-script",         0, 0, G_OPTION_ARG_STRING, NULL, "filename of the lua script (default: not set)", "<file>" },
+		
+		{ "no-proxy",                 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "don't start the proxy-module (default: enabled)", NULL },
+		
+		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
+	};
+
+	i = 0;
+	config_entries[i++].arg_data = &(config->address);
+	config_entries[i++].arg_data = &(config->read_only_backend_addresses);
+	config_entries[i++].arg_data = &(config->backend_addresses);
+
+	config_entries[i++].arg_data = &(config->profiling);
+
+	config_entries[i++].arg_data = &(config->fix_bug_25371);
+	config_entries[i++].arg_data = &(config->lua_script);
+	config_entries[i++].arg_data = &(config->start_proxy);
+
+	option_grp = g_option_group_new("proxy", "proxy-module", "Show options for the proxy-module", NULL, NULL);
+	g_option_group_add_entries(option_grp, config_entries);
+	g_option_context_add_group(option_ctx, option_grp);
+	
+	return 0;
+}
+
+/**
+ * init the plugin with the parsed config
+ */
+int network_mysqld_proxy_plugin_apply_config(gpointer _srv, cauldron_plugin_config *config) {
+	network_mysqld *srv = _srv;
+	network_mysqld_con *con;
+	network_socket *listen_sock;
+
+	if (!config->start_proxy) {
+		return 0;
+	}
+
+	if (!config->address) config->address = g_strdup(":4040");
+	if (!config->backend_addresses) {
+		config->backend_addresses = g_new0(char *, 2);
+		config->backend_addresses[0] = g_strdup("127.0.0.1:3306");
+	}
+
+	/** 
+	 * create a connection handle for the listen socket 
+	 */
+	con = network_mysqld_con_init(srv);
+	con->config = config;
+
+	config->listen_con = con;
+	
+	listen_sock = network_socket_init();
+	con->server = listen_sock;
+
+	/* set the plugin hooks as we want to apply them to the new connections too later */
+	network_mysqld_proxy_connection_init(con);
+
+	/* FIXME: network_socket_set_address() */
+	if (0 != network_mysqld_con_set_address(&listen_sock->addr, config->address)) {
+		return -1;
+	}
+
+	/* FIXME: network_socket_bind() */
+	if (0 != network_mysqld_con_bind(listen_sock)) {
+		return -1;
+	}
+
+	/**
+	 * call network_mysqld_con_accept() with this connection when we are done
+	 */
+
+	event_set(&(listen_sock->event), listen_sock->fd, EV_READ|EV_PERSIST, network_mysqld_con_accept, con);
+	event_base_set(srv->event_base, &(listen_sock->event));
+	event_add(&(listen_sock->event), NULL);
+
+	return 0;
+}
+
+int plugin_init(cauldron_plugin *p) {
+	/* append the our init function to the init-hook-list */
+
+	p->init         = network_mysqld_proxy_plugin_init;
+	p->add_options  = network_mysqld_proxy_plugin_add_options;
+	p->apply_config = network_mysqld_proxy_plugin_apply_config;
+	p->destroy      = network_mysqld_proxy_plugin_free;
+
+	return 0;
+}
+
+const char *g_module_check_init(GModule *module) {
+	g_debug("loading %s", g_module_name(module));
+
+	return NULL;
+}
+
+const char *g_module_unload(GModule *module) {
+	g_debug("unloading %s", g_module_name(module));
+
+	return NULL;
+}
+
 
