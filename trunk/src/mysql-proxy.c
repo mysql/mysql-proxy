@@ -158,7 +158,6 @@ static gchar * g_timeval_string(GTimeVal *t1, GString *str) {
  */
 static void log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags UNUSED_PARAM(log_level), const gchar *message, gpointer UNUSED_PARAM(user_data)) {
 	write(STDERR_FILENO, message, strlen(message));
-	write(STDERR_FILENO, message, strlen(message));
 	write(STDERR_FILENO, "\n", 1);
 }
 
