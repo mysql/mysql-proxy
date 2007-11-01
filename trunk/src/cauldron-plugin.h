@@ -9,7 +9,7 @@ typedef struct cauldron_plugin_config cauldron_plugin_config;
 typedef struct {
 	gchar    *name;
 	GModule  *module;
-	gpointer config;
+	cauldron_plugin_config *config;
 
 	cauldron_plugin_config *(*init)(void);
 	void     (*destroy)(cauldron_plugin_config *user_data);
