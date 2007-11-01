@@ -778,7 +778,7 @@ retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_soc
 				/** remote side closed the connection */
 				return RET_ERROR;
 			default:
-				g_message("%s.%d: send(%s, %ld) failed: %s", 
+				g_message("%s.%d: send(%s, "F_SIZE_T") failed: %s", 
 						__FILE__, __LINE__, 
 						con->addr.str, 
 						s->len - con->send_queue->offset, 

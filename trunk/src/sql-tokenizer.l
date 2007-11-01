@@ -10,6 +10,7 @@ static void sql_token_append_last_token(GPtrArray *tokens, sql_token_id token_id
 sql_token_id sql_token_get_id(const gchar *name);
 
 #define S(x) #x
+#define F_SIZE_T "%"G_GSIZE_FORMAT
 
 /**
  * this list has to be kept in sync with the tokens itself 
@@ -424,7 +425,7 @@ const gchar *sql_token_get_name(sql_token_id token_id) {
 	if (token_id >= TK_LAST_TOKEN) return NULL;
 
 	if (sizeof(token_names)/sizeof(char *) != TK_LAST_TOKEN + 1) {
-		g_error("sql_token_get_name() is out of sync [%ld != %d]", sizeof(token_names)/sizeof(char *), TK_LAST_TOKEN + 1);
+		g_error("sql_token_get_name() is out of sync ["F_SIZE_T" != %d]", sizeof(token_names)/sizeof(char *), TK_LAST_TOKEN + 1);
 	}
 
 	return token_names[token_id];
