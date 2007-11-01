@@ -56,6 +56,11 @@ int mock_plugin_add_options(GOptionContext *option_ctx, cauldron_plugin_config *
 	return 0;
 }
 
+static void devnull_log_func(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
+	/* discard the output */
+}
+
+
 /*@{*/
 
 /**
@@ -63,13 +68,16 @@ int mock_plugin_add_options(GOptionContext *option_ctx, cauldron_plugin_config *
  */
 START_TEST(test_plugin_load) {
 	cauldron_plugin *p;
+	GLogFunc old_log_func;
 
 	p = cauldron_plugin_init();
 	fail_unless(p != NULL);
 	cauldron_plugin_free(p);
 
+	old_log_func = g_log_set_default_handler(devnull_log_func, NULL);
 	/** should fail */
 	p = cauldron_plugin_load("non-existing");
+	g_log_set_default_handler(old_log_func, NULL);
 	fail_unless(p == NULL);
 	if (p != NULL) cauldron_plugin_free(p);
 } END_TEST
