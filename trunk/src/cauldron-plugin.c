@@ -30,12 +30,12 @@ cauldron_plugin *cauldron_plugin_load(const gchar *name) {
 	p->module = g_module_open(path, G_MODULE_BIND_LOCAL);
 
 	if (!p->module) {
-		g_critical("loading module '%s' from '%s' failed", p->name, path);
+		g_critical("loading module '%s' from '%s' failed: %s", p->name, path, g_module_error());
 		return NULL;
 	}
 
 	if (!g_module_symbol(p->module, "plugin_init", (gpointer) &plugin_init)) {
-		g_critical("module '%s' doesn't have a init-function", p->name);
+		g_critical("module '%s' doesn't have a init-function: %s", p->name, g_module_error());
 		return NULL;
 	}
 
