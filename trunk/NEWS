@@ -1,4 +1,10 @@
 
+0.7.0 - 
+  * split the code into a command-line interface and a library
+  * moved the proxy and the admin code into modules
+  * added unit-testing for the lua scripts
+  * added a error-msg if trailing options without dashes are specified
+
 0.6.1 - 
   * added new features to run-tests.lua (see README.TESTS)
   * fixed error handling for socket functions on win32
