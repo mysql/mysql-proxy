@@ -201,7 +201,7 @@ int main(int argc, char **argv) {
 	GOptionContext *option_ctx;
 	GError *gerr = NULL;
 	guint i;
-	int exit_code = 0;
+	int exit_code = EXIT_SUCCESS;
 	int print_version = 0;
 	int daemon_mode = 0;
 	const gchar *check_str = NULL;
@@ -353,7 +353,7 @@ int main(int argc, char **argv) {
 	if (network_mysqld_thread(srv)) {
 		/* looks like we failed */
 
-		exit_code = -1;
+		exit_code = EXIT_FAILURE;
 	}
 
 	network_mysqld_free(srv);
