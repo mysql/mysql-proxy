@@ -4216,14 +4216,10 @@ int plugin_init(cauldron_plugin *p) {
 }
 
 const char *g_module_check_init(GModule *module) {
-	g_debug("loading %s", g_module_name(module));
-
 	return NULL;
 }
 
 const char *g_module_unload(GModule *module) {
-	g_debug("unloading %s", g_module_name(module));
-
 	return NULL;
 }
 
