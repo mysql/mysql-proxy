@@ -37,30 +37,15 @@ if not proxy.global.config.active_queries then
 	}
 end
 
-
--- the connection-id is local to the script
-local connection_id
-
 ---
 -- track the active queries and dump all queries at each state-change
 --
 
----
--- dump the state of the current queries
--- 
-function dump_global_state()
-	local o = ""
+function collect_stats()
 	local num_conns = 0
 	local active_conns = 0
 
 	for k, v in pairs(proxy.global.active_queries) do
-		if v.state ~= "idle" or proxy.global.config.active_queries.show_idle_connections then
-			local cmd_query = ""
-			if v.cmd then
-				cmd_query = string.format("(%s) %q", v.cmd.type_name, v.cmd.query or "")
-			end
-			o = o .."  ["..k.."] (".. v.username .."@".. v.db ..") " .. cmd_query .." (state=" .. v.state .. ")\n"
-		end
 		num_conns = num_conns + 1
 
 		if v.state ~= "idle" then
@@ -72,11 +57,34 @@ function dump_global_state()
 		proxy.global.max_active_trx = active_conns
 	end
 
+	return {
+		active_conns = active_conns,
+		num_conns = num_conns,
+		max_active_trx = proxy.global.max_active_trx
+	}
+end
+
+---
+-- dump the state of the current queries
+-- 
+function print_stats(stats)
+	local o = ""
+
+	for k, v in pairs(proxy.global.active_queries) do
+		if v.state ~= "idle" or proxy.global.config.active_queries.show_idle_connections then
+			local cmd_query = ""
+			if v.cmd then
+				cmd_query = string.format("(%s) %q", v.cmd.type_name, v.cmd.query or "")
+			end
+			o = o .."  ["..k.."] (".. v.username .."@".. v.db ..") " .. cmd_query .." (state=" .. v.state .. ")\n"
+		end
+	end
+
 	-- prepend the data and the stats about the number of connections and trx
 	o = os.date("%Y-%m-%d %H:%M:%S") .. "\n" ..
-		"  #connections: " .. num_conns .. 
-		", #active trx: " .. active_conns .. 
-		", max(active trx): ".. proxy.global.max_active_trx .. 
+		"  #connections: " .. stats.num_conns .. 
+		", #active trx: " .. stats.active_conns .. 
+		", max(active trx): ".. stats.max_active_trx .. 
 		"\n" .. o
 
 	print(o)
@@ -92,9 +100,7 @@ function read_query(packet)
 	proxy.queries:append(1, packet)
 
 	-- add the query to the global scope
-	if not connection_id then
-		connection_id = proxy.connection.server.thread_id
-	end
+	local connection_id = proxy.connection.server.thread_id
 
 	proxy.global.active_queries[connection_id] = { 
 		state = "started",
@@ -103,7 +109,7 @@ function read_query(packet)
 		username = proxy.connection.client.username or ""
 	}
 
-	dump_global_state()
+	print_stats(collect_stats())
 
 	return proxy.PROXY_SEND_QUERY
 end
@@ -111,6 +117,8 @@ end
 ---
 -- statement is done, track the change
 function read_query_result(inj)
+	local connection_id = proxy.connection.server.thread_id
+
 	proxy.global.active_queries[connection_id].state = "idle"
 	proxy.global.active_queries[connection_id].cmd = nil
 	
@@ -122,17 +130,18 @@ function read_query_result(inj)
 		end
 	end
 
-	dump_global_state()
+	print_stats(collect_stats())
 end
 
 ---
 -- remove the information about the connection 
 -- 
 function disconnect_client()
+	local connection_id = proxy.connection.server.thread_id
 	if connection_id then
 		proxy.global.active_queries[connection_id] = nil
 	
-		dump_global_state()
+		print_stats(collect_stats())
 	end
 end
 
