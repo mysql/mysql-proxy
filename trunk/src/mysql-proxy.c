@@ -266,6 +266,8 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
+	if (!plugin_dir) plugin_dir = g_strdup(LIBDIR);
+
 	/* load the default plugins */
 	if (NULL == (p = cauldron_plugin_load(plugin_dir, "libadmin.la"))) {
 		return -1;
@@ -297,12 +299,12 @@ int main(int argc, char **argv) {
 
 	g_option_context_free(option_ctx);
 
-#if defined(HAVE_LUA_H) && defined(LIBDIR)
+#if defined(HAVE_LUA_H) && defined(DATADIR)
 	/**
 	 * if the LUA_PATH is not set, set a good default 
 	 */
 	if (!g_getenv("LUA_PATH")) {
-		g_setenv("LUA_PATH", LUA_PATHSEP LUA_PATHSEP LIBDIR "/?.lua", 1);
+		g_setenv("LUA_PATH", LUA_PATHSEP LUA_PATHSEP DATADIR "/?.lua", 1);
 	}
 #endif
 
