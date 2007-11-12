@@ -24,6 +24,7 @@ local rw_splitting_options =    {
     ["admin-address"]           = PROXY_HOST .. ':' .. ADMIN_PORT ,
     ["pid-file"]                = PROXY_PIDFILE,
     ["proxy-lua-script"]        = 'bug_30867.lua',
+    ["plugin-dir"]              = PROXY_LIBPATH,
     }
 
 --

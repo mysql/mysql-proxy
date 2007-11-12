@@ -207,12 +207,14 @@ int main(int argc, char **argv) {
 	const gchar *check_str = NULL;
 	cauldron_plugin *p;
 	gchar *pid_file = NULL;
+	gchar *plugin_dir = NULL;
 
 	GOptionEntry main_entries[] = 
 	{
 		{ "version",                 'V', 0, G_OPTION_ARG_NONE, NULL, "Show version", NULL },
 		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
 		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
+		{ "plugin-dir",               0, 0, G_OPTION_ARG_STRING, NULL, "path to the plugins", "<path>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -241,14 +243,31 @@ int main(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(print_version);
 	main_entries[i++].arg_data  = &(daemon_mode);
 	main_entries[i++].arg_data  = &(pid_file);
+	main_entries[i++].arg_data  = &(plugin_dir);
 
 	g_log_set_default_handler(log_func, NULL);
 
 	option_ctx = g_option_context_new("- MySQL Proxy");
 	g_option_context_add_main_entries(option_ctx, main_entries, GETTEXT_PACKAGE);
+	g_option_context_set_ignore_unknown_options(option_ctx, TRUE);
+
+	/**
+	 * parse once to get the basic options 
+	 *
+	 * leave the unknown options in the list
+	 */
+	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
+		g_critical("%s", gerr->message);
+		
+		g_error_free(gerr);
+		
+		network_mysqld_free(srv);
+
+		return -1;
+	}
 
 	/* load the default plugins */
-	if (NULL == (p = cauldron_plugin_load("admin"))) {
+	if (NULL == (p = cauldron_plugin_load(plugin_dir, "libadmin.la"))) {
 		return -1;
 	}
 	g_ptr_array_add(srv->modules, p);
@@ -256,7 +275,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	if (NULL == (p = cauldron_plugin_load("proxy"))) {
+	if (NULL == (p = cauldron_plugin_load(plugin_dir, "libproxy.la"))) {
 		return -1;
 	}
 	g_ptr_array_add(srv->modules, p);
@@ -265,6 +284,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
+	g_option_context_set_ignore_unknown_options(option_ctx, FALSE);
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 		g_critical("%s", gerr->message);
 		

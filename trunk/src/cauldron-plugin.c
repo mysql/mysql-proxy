@@ -19,14 +19,14 @@ void cauldron_plugin_free(cauldron_plugin *p) {
 	g_free(p);
 }
 
-cauldron_plugin *cauldron_plugin_load(const gchar *name) {
+cauldron_plugin *cauldron_plugin_load(const gchar *moduledir, const gchar *name) {
 	int (*plugin_init)(cauldron_plugin *p);
 	cauldron_plugin *p = cauldron_plugin_init();
 	gchar *path;
 
 	p->name = g_strdup(name);
 
-	path = g_module_build_path(NULL, p->name);
+	path = g_module_build_path(moduledir, p->name);
 	p->module = g_module_open(path, G_MODULE_BIND_LOCAL);
 
 	if (!p->module) {

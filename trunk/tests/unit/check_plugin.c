@@ -76,7 +76,7 @@ START_TEST(test_plugin_load) {
 
 	old_log_func = g_log_set_default_handler(devnull_log_func, NULL);
 	/** should fail */
-	p = cauldron_plugin_load("non-existing");
+	p = cauldron_plugin_load(NULL, "non-existing");
 	g_log_set_default_handler(old_log_func, NULL);
 	fail_unless(p == NULL);
 	if (p != NULL) cauldron_plugin_free(p);

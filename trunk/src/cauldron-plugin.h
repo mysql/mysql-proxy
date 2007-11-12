@@ -18,7 +18,7 @@ typedef struct {
 } cauldron_plugin;
 
 cauldron_plugin *cauldron_plugin_init(void);
-cauldron_plugin *cauldron_plugin_load(const gchar *name);
+cauldron_plugin *cauldron_plugin_load(const gchar *plugin_dir, const gchar *name);
 void cauldron_plugin_free(cauldron_plugin *p);
 int cauldron_plugin_add_options(cauldron_plugin *p, GOptionContext *option_ctx);
 

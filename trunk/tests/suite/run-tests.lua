@@ -85,6 +85,7 @@ local builddir	   = os.getenv("builddir")	   		or testdir .. "/../"
 local PROXY_TRACE	= os.getenv("PROXY_TRACE")		or ""	-- use it to inject strace or valgrind
 local PROXY_PARAMS   = os.getenv("PROXY_PARAMS")   	or ""	-- extra params
 local PROXY_BINPATH  = os.getenv("PROXY_BINPATH")  	or builddir .. "/src/mysql-proxy"
+PROXY_LIBPATH  = os.getenv("PROXY_LIBPATH")  	or builddir .. "/src/"
 
 local COVERAGE_LCOV  = os.getenv("COVERAGE_LCOV")
 
@@ -104,6 +105,7 @@ default_proxy_options = {
 	["admin-address"]		   	= PROXY_HOST .. ":" .. ADMIN_PORT,
 	["pid-file"]				= PROXY_PIDFILE,
 	["proxy-lua-script"]		= DEFAULT_SCRIPT_FILENAME,
+	["plugin-dir"]			= PROXY_LIBPATH,
 	}
 
 default_master_options = {
@@ -112,6 +114,7 @@ default_master_options = {
 	["admin-address"]		   	= PROXY_HOST .. ":" .. ADMIN_MASTER_PORT,
 	["pid-file"]				= PROXY_MASTER_PIDFILE,
 	["proxy-lua-script"]		= DEFAULT_SCRIPT_FILENAME,
+	["plugin-dir"]			= PROXY_LIBPATH,
 	}
 
 default_slave_options = {
@@ -120,6 +123,7 @@ default_slave_options = {
 	["admin-address"]		  	= PROXY_HOST .. ":" .. ADMIN_SLAVE_PORT,
 	["pid-file"]				= PROXY_SLAVE_PIDFILE,
 	["proxy-lua-script"]		= DEFAULT_SCRIPT_FILENAME,
+	["plugin-dir"]			= PROXY_LIBPATH,
 	}
 
 tests_to_skip = {}
@@ -252,6 +256,8 @@ function wait_proc_up(pid_file)
 		os.execute("sleep 1")
 		rounds = rounds + 1
 		print_verbose(("(wait_proc_up) kill-wait: %d rounds, pid=%d (%s)"):format(rounds, pid, pid_file))
+
+		if rounds > 5 then error(("proxy failed to start: no pid-file %s"):format(pid_file)) end
 	end
 end
 
@@ -546,7 +552,7 @@ function start_proxy(proxy_name, proxy_options)
 			global_basedir .. 
 			'/t/' ..  proxy_options['proxy-lua-script'] 
 	end
-	-- print_verbose("starting " .. proxy_name)
+	print_verbose("starting " .. proxy_name .. " with " .. options_tostring(proxy_options))
 	-- os.execute("head " .. proxy_options['proxy-lua-script'])
 	assert(os.execute( 'LUA_PATH="' .. INCLUDE_PATH  .. '"  ' ..
 		PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
@@ -604,6 +610,7 @@ function chain_proxy (first_lua_script, second_lua_script, use_replication)
 			["admin-address"]		   = PROXY_HOST .. ":" .. ADMIN_CHAIN_PORT,
 			["pid-file"]				= PROXY_CHAIN_PIDFILE,
 			["proxy-lua-script"]		= first_lua_script or DEFAULT_SCRIPT_FILENAME,
+			["plugin-dir"]			= PROXY_LIBPATH,
 	}
 	-- 
 	-- if replication was not started, then it is started here
@@ -620,6 +627,7 @@ function chain_proxy (first_lua_script, second_lua_script, use_replication)
 			["admin-address"]		   	= PROXY_HOST .. ":" .. ADMIN_PORT,
 			["pid-file"]				= PROXY_PIDFILE,
 			["proxy-lua-script"]		= second_lua_script or DEFAULT_SCRIPT_FILENAME,
+			["plugin-dir"]			= PROXY_LIBPATH,
 	}
 	start_proxy('first_proxy', first_proxy_options) 
 	start_proxy('second_proxy',second_proxy_options) 
