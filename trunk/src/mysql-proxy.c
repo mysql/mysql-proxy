@@ -264,27 +264,27 @@ int main(int argc, char **argv) {
 		
 		network_mysqld_free(srv);
 
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	if (!plugin_dir) plugin_dir = g_strdup(LIBDIR);
 
 	/* load the default plugins */
 	if (NULL == (p = cauldron_plugin_load(plugin_dir, "libadmin.la"))) {
-		return -1;
+		return EXIT_FAILURE;
 	}
 	g_ptr_array_add(srv->modules, p);
 	if (0 != cauldron_plugin_add_options(p, option_ctx)) {
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	if (NULL == (p = cauldron_plugin_load(plugin_dir, "libproxy.la"))) {
-		return -1;
+		return EXIT_FAILURE;
 	}
 	g_ptr_array_add(srv->modules, p);
 
 	if (0 != cauldron_plugin_add_options(p, option_ctx)) {
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	g_option_context_set_help_enabled(option_ctx, TRUE);
@@ -296,10 +296,18 @@ int main(int argc, char **argv) {
 		
 		network_mysqld_free(srv);
 
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	g_option_context_free(option_ctx);
+
+	/* after parsing the options we should only have the program name left */
+	if (argc > 1) {
+		g_critical("unknown option: %s", argv[1]);
+
+		return EXIT_FAILURE;
+	}
+
 
 #if defined(HAVE_LUA_H) && defined(DATADIR)
 	/**
