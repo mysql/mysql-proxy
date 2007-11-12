@@ -249,6 +249,7 @@ int main(int argc, char **argv) {
 
 	option_ctx = g_option_context_new("- MySQL Proxy");
 	g_option_context_add_main_entries(option_ctx, main_entries, GETTEXT_PACKAGE);
+	g_option_context_set_help_enabled(option_ctx, FALSE);
 	g_option_context_set_ignore_unknown_options(option_ctx, TRUE);
 
 	/**
@@ -286,6 +287,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
+	g_option_context_set_help_enabled(option_ctx, TRUE);
 	g_option_context_set_ignore_unknown_options(option_ctx, FALSE);
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 		g_critical("%s", gerr->message);
