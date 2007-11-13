@@ -67,11 +67,22 @@ function TestUnit:testAssertNotEquals()
 	assertNotEquals(nil, 0)
 end
 
+TestProxyUnit = tests.ProxyBaseTest:new()
+function TestProxyUnit:testDefaultScope()
+	assertEquals(_G.proxy.global, nil)
+	self:setDefaultScope()
+	assertNotEquals(_G.proxy.global, nil)
+end
+
+function TestProxyUnit:tearDown() 
+	_G.proxy.global = nil
+end
+
 
 local suite = tests.Suite:new({
 	result = tests.Result:new()
 })
 
-suite:run({"TestUnit"})
+suite:run({"TestUnit", "TestProxyUnit"})
 suite.result:print()
 suite:exit()
