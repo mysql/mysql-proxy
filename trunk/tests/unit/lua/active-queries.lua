@@ -8,36 +8,11 @@
 --
 -- @todo the local script scope isn't managed yet
 
-
--- the fake script scope
-proxy = {
-	global = {
-		config = {}
-	},
-	queries = {
-		append = function (id, query) 
-			queries[#queries + 1] = { 
-				id = id, 
-				query = query
-			}
-		end
-	},
-	connection = {
-		server = {
-			thread_id = 1,
-		},
-		client = {
-		}
-	},
-	PROXY_SEND_RESULT = 1,
-	PROXY_SEND_QUERY = 2,
-
-	COM_QUERY = 3
-}
+local tests = require("proxy.test")
+tests.ProxyBaseTest:setDefaultScope()
 
 -- file under test
 require("active-queries")
-local tests = require("proxy.test")
 
 ---
 -- overwrite the scripts dump_global_state
@@ -46,15 +21,21 @@ local tests = require("proxy.test")
 function print_stats(stats)
 end
 
-TestScript = tests.BaseTest:new({ 
+
+TestScript = tests.ProxyBaseTest:new({ 
 	active_qs = proxy.global.active_queries
 })
 
 function TestScript:setUp()
 	-- reset the query queue
 	queries = { }
+
+	self:setDefaultScope()
+
 	proxy.global.max_active_trx = 0
 	proxy.global.active_queries = { }
+
+	proxy.connection.server.thread_id = 1
 end
 
 function TestScript:testInit()
@@ -128,7 +109,7 @@ end
 ---
 -- the test suite runner
 
-local suite = proxy.test.Suite:new({ result = proxy.test.Result:new()})
+local suite = tests.Suite:new({ result = tests.Result:new()})
 
 suite:run()
 suite.result:print()
