@@ -63,9 +63,10 @@ function read_query_result(inj)
 	-- inj.id = 2 was assigned above in the  proxy.queries:append()
 	-- 
 	-- drop the resultset when we are done to hide it from the client
+	-- (in lua the first index is 1, not 0)
 	if (inj.id == 2) then
 		for row in inj.resultset.rows do
-			print("injected query returned: " .. row[0])
+			print("injected query returned: " .. row[1])
 		end
 
 		return proxy.PROXY_IGNORE_RESULT
