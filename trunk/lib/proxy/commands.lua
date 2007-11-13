@@ -68,16 +68,18 @@ function parse(packet)
 	
 	if cmd.type == proxy.COM_QUERY then
 		cmd.query = packet:sub(2)
-	elseif cmd.type == proxy.COM_INIT_DB then
-		cmd.schema = packet:sub(2)
-	elseif cmd.type == proxy.COM_QUIT then
-	elseif cmd.type == proxy.COM_PING then
-	elseif cmd.type == proxy.COM_SHUTDOWN then
+	elseif cmd.type == proxy.COM_QUIT or
+	       cmd.type == proxy.COM_PING or
+	       cmd.type == proxy.COM_SHUTDOWN then
 		-- nothing to decode
 	elseif cmd.type == proxy.COM_STMT_PREPARE then
 		cmd.query = packet:sub(2)
 	elseif cmd.type == proxy.COM_FIELD_LIST then
-		-- should have a table-name
+		cmd.table = packet:sub(2)
+	elseif cmd.type == proxy.COM_INIT_DB or
+	       cmd.type == proxy.COM_CREATE_DB or
+	       cmd.type == proxy.COM_DROP_DB then
+		cmd.schema = packet:sub(2)
 	else
 		print("[debug] (command) unhandled type " .. cmd.type_name)
 	end
