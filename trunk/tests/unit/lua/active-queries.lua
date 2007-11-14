@@ -113,4 +113,4 @@ local suite = tests.Suite:new({ result = tests.Result:new()})
 
 suite:run()
 suite.result:print()
-suite:exit()
+return suite:exit_code()

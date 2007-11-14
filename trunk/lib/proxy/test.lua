@@ -1,44 +1,48 @@
 module("proxy.test", package.seeall)
 
-local function boom(cond, msg, usermsg) 
-	if not cond then
-		local trace = debug.traceback()
-		local e = {
-			message = msg, 
-			testmessage = usermsg, 
-		}
+local function boom(msg, usermsg) 
+	local trace = debug.traceback()
+	local e = {
+		message = msg, 
+		testmessage = usermsg, 
+	}
 
-		e.trace = "\n"
-		local after_assert = false
+	e.trace = "\n"
+	local after_assert = false
 
-		for line in trace:gmatch("([^\n]*)\n") do
-			if after_assert then
-				e.trace = e.trace .. line .. "\n"
-			else
-				after_assert = line:find("assert", 1, true)
-			end
+	for line in trace:gmatch("([^\n]*)\n") do
+		if after_assert then
+			e.trace = e.trace .. line .. "\n"
+		else
+			after_assert = line:find("assert", 1, true)
 		end
-
-		error(e)
 	end
+
+	error(e)
 end
 
 function assertEquals(is, expected, msg)
-	boom(type(is) == type(expected), string.format("got type '%s' for <%s>, expected type '%s' for <%s>", 
-		type(is), tostring(is), 
-		type(expected), tostring(expected)),
-		msg)
-	boom(is == expected, string.format("got '%s' <%s>, expected '%s' <%s>", 
-		tostring(is), type(is), 
-		tostring(expected), type(expected)),
-		msg)
+	if type(is) ~= type(expected) then
+		boom(string.format("got type '%s' for <%s>, expected type '%s' for <%s>", 
+			type(is), tostring(is), 
+			type(expected), tostring(expected)),
+			msg)
+	end
+	if is ~= expected then
+		boom(string.format("got '%s' <%s>, expected '%s' <%s>", 
+			tostring(is), type(is), 
+			tostring(expected), type(expected)),
+			msg)
+	end
 end
 
 function assertNotEquals(is, expected, msg)
-	boom(is ~= expected, string.format("got '%s' <%s>, expected all but '%s' <%s>", 
-		tostring(is), type(is), 
-		tostring(expected), type(expected)),
-		msg)
+	if is == expected then
+		boom(string.format("got '%s' <%s>, expected all but '%s' <%s>", 
+			tostring(is), type(is), 
+			tostring(expected), type(expected)),
+			msg)
+	end
 end
 
 ---
@@ -215,11 +219,12 @@ function Suite:run(runclasses)
 	end
 end
 
-function Suite:exit() 
-	os.exit((self.result.failed == 0) and 0 or 1)
+function Suite:exit_code() 
+	return ((self.result.failed == 0) and 0 or 1)
 end
 
 -- export the assert functions globally
 _G.assertEquals    = assertEquals
 _G.assertNotEquals = assertNotEquals
+
 

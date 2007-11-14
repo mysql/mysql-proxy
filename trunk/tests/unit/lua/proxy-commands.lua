@@ -2,7 +2,6 @@
 -- test the proxy.commands module
 --
 -- 
-
 -- file under test
 local cmds  = require("proxy.commands")
 local tests = require("proxy.test")
@@ -88,4 +87,4 @@ local suite = tests.Suite:new({ result = tests.Result:new()})
 
 suite:run()
 suite.result:print()
-suite:exit()
+return suite:exit_code()

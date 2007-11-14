@@ -85,4 +85,4 @@ local suite = tests.Suite:new({
 
 suite:run({"TestUnit", "TestProxyUnit"})
 suite.result:print()
-suite:exit()
+return suite:exit_code()
