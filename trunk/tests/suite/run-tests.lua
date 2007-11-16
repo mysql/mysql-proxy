@@ -9,6 +9,7 @@
 
 -- we require LFS (LuaFileSystem)
 require("lfs")
+require("glib2")
 
 ---
 -- get the directory-name of a path
@@ -248,12 +249,13 @@ end
 
 function wait_proc_up(pid_file) 
 	local rounds = 0
-	os.execute("sleep 1") -- wait until the pid-file is created
+	glib2.usleep(200 * 1000) -- wait until the pid-file is created
 
 	local pid = get_pid(pid_file)
 
+	-- check that the process referenced in the PID-file is still up
 	while 0 ~= os.execute("kill -0 ".. pid .."  2> /dev/null") do
-		os.execute("sleep 1")
+		glib2.usleep(200 * 1000) -- wait until the pid-file is created
 		rounds = rounds + 1
 		print_verbose(("(wait_proc_up) kill-wait: %d rounds, pid=%d (%s)"):format(rounds, pid, pid_file))
 
@@ -265,8 +267,10 @@ function wait_proc_down(pid_file)
 	local rounds = 0
 	local pid = get_pid(pid_file)
 
+	-- wait until the proc in the pid file is dead
+	-- the shutdown takes at about 500ms
 	while 0 == os.execute("kill -0 ".. pid .."  2> /dev/null") do
-		os.execute("sleep 1")
+		glib2.usleep(200 * 1000) -- wait until process is gone
 		rounds = rounds + 1
 		print_verbose(("(wait_proc_down) kill-wait: %d rounds, pid=%d (%s)"):format(rounds, pid, pid_file))
 	end
@@ -276,19 +280,25 @@ function stop_proxy()
 	-- shut dowm the proxy
 	--
 	-- win32 has tasklist and taskkill on the shell
-	-- 
+	 
+	
 	-- shuts down every proxy in the proxy list
 	--
 	for proxy_name, proxy_options in pairs(proxy_list) do
 		pid_file = proxy_options['pid-file']
 		print_verbose ('stopping proxy ' .. proxy_name)
-		if 0 == os.execute("kill -TERM  ".. get_pid(pid_file) ) then
-			wait_proc_down(pid_file)
-		else
-			-- hmm, if it failed ... not good, perhaps it already crashed
-		end
+		os.execute("kill -TERM  ".. get_pid(pid_file) )
+	end
+
+	-- wait until they are all gone
+	for proxy_name, proxy_options in pairs(proxy_list) do
+		pid_file = proxy_options['pid-file']
+
+		wait_proc_down(pid_file)
+
 		os.remove(pid_file)
 	end
+
 	--
 	-- empties the proxy list
 	--
