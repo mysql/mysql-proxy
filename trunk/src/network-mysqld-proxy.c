@@ -307,11 +307,6 @@ static void proxy_lua_free_script(plugin_con_state *st) {
 	g_assert(lua_gettop(L) == 0);
 
 	luaL_unref(g->L, LUA_REGISTRYINDEX, st->injected.L_ref);
-		
-	/**
-	 * clean up our object 
-	 */
-	lua_gc(g->L, LUA_GCCOLLECT, 0);
 
 	st->injected.L = NULL;
 #endif
