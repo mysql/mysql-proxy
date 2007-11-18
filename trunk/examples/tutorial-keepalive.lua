@@ -104,7 +104,7 @@ function connect_server()
 
 		if cur_idle >= min_idle_connections then
 			-- we have 4 idling connections in the pool, that's good enough
-			if true or is_debug then
+			if is_debug then
 				print("  using pooled connection from: " .. proxy.connection.backend_ndx)
 			end
 	
