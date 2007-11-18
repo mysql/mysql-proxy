@@ -95,6 +95,7 @@
 #define ioctlsocket ioctl
 #endif
 
+#include <sys/stat.h>
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -104,6 +105,7 @@
 #include <errno.h>
 
 #include <glib.h>
+#include <glib/gstdio.h> /* got g_stat() */
 
 #ifdef HAVE_LUA_H
 /**
@@ -128,6 +130,7 @@ typedef int socklen_t;
 #include "sys-pedantic.h"
 
 #include "sql-tokenizer.h"
+#include "lua-load-factory.h"
 
 #define TIME_DIFF_US(t2, t1) \
 	        ((t2.tv_sec - t1.tv_sec) * 1000000.0 + (t2.tv_usec - t1.tv_usec))
@@ -725,23 +728,190 @@ static network_socket *proxy_connection_pool_swap(network_mysqld_con *con, int b
  *
  * wraps luaL_loadfile and prints warnings when needed
  *
+ * on success we leave a function on the stack, otherwise a error-msg
+ *
  * @see luaL_loadfile
+ * @returns the lua_State
  */
 lua_State *lua_load_script(lua_State *L, const gchar *name) {
+	int stack_top = lua_gettop(L);
+	/**
+	 * check if the script is in the cache already
+	 *
+	 * if it is and is fresh, duplicate it
+	 * otherwise load it and put it in the cache
+	 */
+#if 1
+	lua_getfield(L, LUA_REGISTRYINDEX, "cachedscripts");         /* sp += 1 */
+	if (lua_isnil(L, -1)) {
+		/** oops, not there yet */
+		lua_pop(L, 1);                                       /* sp -= 1 */
+
+		lua_newtable(L);             /* reg.cachedscripts = { } sp += 1 */
+		lua_setfield(L, LUA_REGISTRYINDEX, "cachedscripts"); /* sp -= 1 */
+	
+		lua_getfield(L, LUA_REGISTRYINDEX, "cachedscripts"); /* sp += 1 */
+	}
+	g_assert(lua_istable(L, -1)); /** the script-cache should be on the stack now */
+
+	g_assert(lua_gettop(L) == stack_top + 1);
+
+	/**
+	 * reg.
+	 *   cachedscripts.  <- on the stack
+	 *     <name>.
+	 *       mtime
+	 *       func
+	 */
+
+	lua_getfield(L, -1, name);
+	if (lua_istable(L, -1)) {
+		struct stat st;
+		time_t cached_mtime;
+		off_t cached_size;
+
+		/** the script cached, check that it is fresh */
+		if (0 != g_stat(name, &st)) {
+			gchar *errmsg;
+			/* stat() failed, ... not good */
+
+			lua_pop(L, 2); /* cachedscripts. + cachedscripts.<name> */
+
+			errmsg = g_strdup_printf("%s: stat(%s) failed: %s (%d)",
+				       G_STRLOC, name, strerror(errno), errno);
+			
+			lua_pushstring(L, errmsg);
+
+			g_free(errmsg);
+
+			g_assert(lua_isstring(L, -1));
+			g_assert(lua_gettop(L) == stack_top + 1);
+
+			return L;
+		}
+
+		/* get the mtime from the table */
+		lua_getfield(L, -1, "mtime");
+		g_assert(lua_isnumber(L, -1));
+		cached_mtime = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		/* get the mtime from the table */
+		lua_getfield(L, -1, "size");
+		g_assert(lua_isnumber(L, -1));
+		cached_size = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		if (st.st_mtime != cached_mtime || 
+		    st.st_size  != cached_size) {
+			lua_pushnil(L);
+			lua_setfield(L, -2, "func"); /* zap the old function on the stack */
+
+			if (0 != luaL_loadfile_factory(L, name)) {
+				/* log a warning and leave the error-msg on the stack */
+				g_warning("%s: reloading '%s' failed", G_STRLOC, name);
+
+				/* cleanup a bit */
+				lua_remove(L, -2); /* remove the cachedscripts.<name> */
+				lua_remove(L, -2); /* remove cachedscripts-table */
+
+				g_assert(lua_isstring(L, -1));
+				g_assert(lua_gettop(L) == stack_top + 1);
+
+				return L;
+			}
+			lua_setfield(L, -2, "func");
+
+			/* not fresh, reload */
+			lua_pushinteger(L, st.st_mtime);
+			lua_setfield(L, -2, "mtime");   /* t.mtime = ... */
+
+			lua_pushinteger(L, st.st_size);
+			lua_setfield(L, -2, "size");    /* t.size = ... */
+		}
+	} else if (lua_isnil(L, -1)) {
+		struct stat st;
+
+		lua_pop(L, 1); /* remove the nil, aka not found */
+
+		/** not known yet */
+		lua_newtable(L);                /* t = { } */
+		
+		if (0 != g_stat(name, &st)) {
+		}
+
+		if (0 != luaL_loadfile_factory(L, name)) {
+			/* log a warning and leave the error-msg on the stack */
+			g_warning("luaL_loadfile(%s) failed", name);
+
+			/* cleanup a bit */
+			lua_remove(L, -2); /* remove the t = { } */
+			lua_remove(L, -2); /* remove cachedscripts-table */
+
+			g_assert(lua_isstring(L, -1));
+			g_assert(lua_gettop(L) == stack_top + 1);
+
+			return L;
+		}
+
+		lua_setfield(L, -2, "func");
+
+		lua_pushinteger(L, st.st_mtime);
+		lua_setfield(L, -2, "mtime");   /* t.mtime = ... */
+
+		lua_pushinteger(L, st.st_size);
+		lua_setfield(L, -2, "size");    /* t.size  = ... */
+
+		lua_setfield(L, -2, name);      /* reg.cachedscripts.<name> = t */
+
+		lua_getfield(L, -1, name);
+	} else {
+		/* not good */
+		lua_pushstring(L, "stack is out of sync");
+
+		g_return_val_if_reached(L);
+	}
+
+	/* -- the cache is fresh now, get the script from it */
+
+	g_assert(lua_istable(L, -1));
+	lua_getfield(L, -1, "func");
+	g_assert(lua_isfunction(L, -1));
+
+	/* cachedscripts and <name> are still on the stack */
+#if 0
+	g_debug("(load) [-3] %s", lua_typename(L, lua_type(L, -3)));
+	g_debug("(load) [-2] %s", lua_typename(L, lua_type(L, -2)));
+	g_debug("(load) [-1] %s", lua_typename(L, lua_type(L, -1)));
+#endif
+	lua_remove(L, -2); /* remove the reg.cachedscripts.<name> */
+	lua_remove(L, -2); /* remove the reg.cachedscripts */
+
+	/* create a copy of the script for us:
+	 *
+	 * f = function () 
+	 *   return function () 
+	 *     <script> 
+	 *   end 
+	 * end
+	 * f()
+	 *
+	 * */
+	if (0 != lua_pcall(L, 0, 1, 0)) {
+		g_warning("lua_pcall(factory<%s>) failed", name);
+
+		return L;
+	}
+#else
 	if (0 != luaL_loadfile(L, name)) {
-		/* oops, an error, return it */
+		/* log a warning and leave the error-msg on the stack */
 		g_warning("luaL_loadfile(%s) failed", name);
 
 		return L;
 	}
-
-	/**
-	 * pcall() needs the function on the stack
-	 *
-	 * as pcall() will pop the script from the stack when done, we have to
-	 * duplicate it here
-	 */
+#endif
 	g_assert(lua_isfunction(L, -1));
+	g_assert(lua_gettop(L) == stack_top + 1);
 
 	return L;
 }
@@ -1147,6 +1317,10 @@ static int proxy_tokenize(lua_State *L) {
  * - on connection close we call luaL_unref() to hand the thread to the GC
  *
  * @see proxy_lua_free_script
+ *
+ *
+ * if the script is cached we have to point the global proxy object to do all l
+ *
  */
 static int lua_register_callback(network_mysqld_con *con) {
 	lua_State *L = NULL;
@@ -1155,80 +1329,85 @@ static int lua_register_callback(network_mysqld_con *con) {
 	GQueue **q_p;
 	network_mysqld_con **con_p;
 	cauldron_plugin_config *config = con->config;
+	int stack_top;
 
 	if (!config->lua_script) return 0;
 
-	if (NULL == st->injected.L) {
-		/**
-		 * create a side thread for this connection
-		 *
-		 * (this is not pre-emptive, it is just a new stack in the global env)
-		 */
-		L = lua_newthread(g->L);
-
-		/**
-		 * move the thread into the registry to clean up the global stack 
-		 */
-		st->injected.L_ref = luaL_ref(g->L, LUA_REGISTRYINDEX);
-
-		lua_load_script(L, config->lua_script);
-		
-		if (lua_isstring(L, -1)) {
-			g_warning("lua_load_file(%s) failed: %s", config->lua_script, lua_tostring(L, -1));
-
-			lua_pop(L, 1); /* remove the error-msg from the stack */
-	
-			proxy_lua_free_script(st);
-
-			L = NULL;
-		} else if (lua_isfunction(L, -1)) {
-			/**
-			 * set the function env */
-			lua_newtable(L); /* my empty environment aka {}              (sp += 1) */
-			lua_newtable(L); /* the meta-table for the new env           (sp += 1) */
-
-			lua_pushvalue(L, LUA_GLOBALSINDEX);                       /* (sp += 1) */
-			lua_setfield(L, -2, "__index"); /* { __index = _G }          (sp -= 1) */
-			lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 1) */
-			lua_setfenv(L, -2); /* on the stack should be a modified env (sp -= 1) */
-			
-			/* cache the script */
-			g_assert(lua_isfunction(L, -1));
-			lua_pushvalue(L, -1);
-
-			/* push the functions on the stack */
-			if (lua_pcall(L, 0, 0, 0) != 0) {
-				g_critical("(lua-error) [%s]\n%s", config->lua_script, lua_tostring(L, -1));
-
-				lua_pop(L, 1); /* errmsg */
-			
-				proxy_lua_free_script(st);
-
-				L = NULL;
-			}
-			st->injected.L = L;
-		
-			/* on the stack should be the script now, keep it there */
-		} else {
-			g_error("lua_load_file(%s): returned a %s", config->lua_script, lua_typename(L, lua_type(L, -1)));
-		}
-	} else {
+	if (st->injected.L) {
+		/* we have to rewrite _G.proxy to point to the local proxy */
 		L = st->injected.L;
-	}
 
-	if (!L) return 0;
+		g_assert(lua_isfunction(L, -1));
 
-	g_assert(lua_isfunction(L, -1));
-	lua_getfenv(L, -1);
-	g_assert(lua_istable(L, -1));
+		lua_getfenv(L, -1);
+		g_assert(lua_istable(L, -1));
+
+		lua_getglobal(L, "proxy");
+		lua_getmetatable(L, -1); /* meta(_G.proxy) */
+
+		lua_getfield(L, -3, "__proxy"); /* fenv.__proxy */
+		lua_setfield(L, -2, "__index"); /* meta[_G.proxy].__index = fenv.__proxy */
+
+		lua_getfield(L, -3, "__proxy"); /* fenv.__proxy */
+		lua_setfield(L, -2, "__newindex"); /* meta[_G.proxy].__newindex = fenv.__proxy */
+
+		lua_pop(L, 3);
 		
-	lua_getfield(L, -1, "proxy");
-	if (!lua_istable(L, -1)) {
-		g_error("fenv.proxy should be a table, but is %s", lua_typename(L, lua_type(L, -1)));
+		g_assert(lua_isfunction(L, -1));
+
+		return 0; /* the script-env already setup, get out of here */
 	}
+
+	/* a script cache
+	 *
+	 * we cache the scripts globally in the registry and move a copy of it 
+	 * to the new script scope on success.
+	 */
+	lua_load_script(g->L, config->lua_script);
+
+	if (lua_isstring(g->L, -1)) {
+		g_warning("lua_load_file(%s) failed: %s", config->lua_script, lua_tostring(g->L, -1));
+
+		lua_pop(g->L, 1); /* remove the error-msg from the stack */
+
+		proxy_lua_free_script(st);
+
+		return 0;
+	} else if (!lua_isfunction(g->L, -1)) {
+		g_error("luaL_loadfile(%s): returned a %s", config->lua_script, lua_typename(g->L, lua_type(g->L, -1)));
+	}
+
+	/**
+	 * create a side thread for this connection
+	 *
+	 * (this is not pre-emptive, it is just a new stack in the global env)
+	 */
+	L = lua_newthread(g->L);
+
+	/**
+	 * move the thread into the registry to clean up the global stack 
+	 */
+	st->injected.L_ref = luaL_ref(g->L, LUA_REGISTRYINDEX);
+
+	stack_top = lua_gettop(L);
+
+	/* get the script from the global stack */
+	lua_xmove(g->L, L, 1);
+	g_assert(lua_isfunction(L, -1));
+
+	lua_newtable(L); /* my empty environment aka {}              (sp += 1) 1 */
+
+	lua_newtable(L); /* the meta-table for the new env           (sp += 1) 2 */
+
+	lua_pushvalue(L, LUA_GLOBALSINDEX);                       /* (sp += 1) 3 */
+	lua_setfield(L, -2, "__index"); /* { __index = _G }          (sp -= 1) 2 */
+	lua_setmetatable(L, -2); /* setmetatable({}, {__index = _G}) (sp -= 1) 1 */
+
+	lua_newtable(L); /* __proxy = { }                            (sp += 1) 2 */
+
 	g_assert(lua_istable(L, -1));
 
-	q_p = lua_newuserdata(L, sizeof(GQueue *));
+	q_p = lua_newuserdata(L, sizeof(GQueue *));               /* (sp += 1) 3 */
 	*q_p = st->injected.queries;
 
 	/**
@@ -1260,7 +1439,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 
 	lua_setmetatable(L, -2);
 
-	lua_setfield(L, -2, "queries");
+	lua_setfield(L, -2, "queries"); /* proxy.queries = <userdata> */
 	
 	/**
 	 * export internal functions 
@@ -1278,19 +1457,19 @@ static int lua_register_callback(network_mysqld_con *con) {
 	 *
 	 */
 	
-	con_p = lua_newuserdata(L, sizeof(con));
+	con_p = lua_newuserdata(L, sizeof(con));                          /* (sp += 1) */
 	*con_p = con;
 
 	/* if the meta-table is new, add __index to it */
-	if (1 == luaL_newmetatable(L, "proxy.connection")) {
+	if (1 == luaL_newmetatable(L, "proxy.connection")) {              /* (sp += 1) */
 		lua_pushcfunction(L, proxy_connection_get);               /* (sp += 1) */
 		lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
 		lua_pushcfunction(L, proxy_connection_set);               /* (sp += 1) */
 		lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
 	}
 
-	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */
-	lua_setfield(L, -2, "connection");
+	lua_setmetatable(L, -2);          /* tie the metatable to the udata   (sp -= 1) */
+	lua_setfield(L, -2, "connection"); /* proxy.connection = <udata>     (sp -= 1) */
 
 	/**
 	 * register proxy.backends[]
@@ -1335,9 +1514,55 @@ static int lua_register_callback(network_mysqld_con *con) {
 	lua_setmetatable(L, -2); /* tie the metatable to response    (sp -= 1) */
 #endif
 	lua_setfield(L, -2, "response");
+	
+	lua_setfield(L, -2, "__proxy");
 
+	/* patch the _G.proxy to point here */
+	lua_getglobal(L, "proxy");
+	g_assert(lua_istable(L, -1));
 
-	lua_pop(L, 2); /* fenv + proxy */
+	if (0 == lua_getmetatable(L, -1)) { /* meta(_G.proxy) */
+		/* no metatable yet */
+
+		lua_newtable(L);
+	}
+	g_assert(lua_istable(L, -1));
+
+	lua_getfield(L, -3, "__proxy"); /* fenv.__proxy */
+	g_assert(lua_istable(L, -1));
+	lua_setfield(L, -2, "__index"); /* meta[_G.proxy].__index = fenv.__proxy */
+
+	lua_getfield(L, -3, "__proxy"); /* fenv.__proxy */
+	lua_setfield(L, -2, "__newindex"); /* meta[_G.proxy].__newindex = fenv.__proxy */
+
+	lua_setmetatable(L, -2);
+
+	lua_pop(L, 1);  /* _G.proxy */
+	
+	g_assert(lua_isfunction(L, -2));
+	g_assert(lua_istable(L, -1));
+
+	lua_setfenv(L, -2); /* on the stack should be a modified env (sp -= 1) */
+
+	/* cache the script in this connection */
+	g_assert(lua_isfunction(L, -1));
+	lua_pushvalue(L, -1);
+
+	/* run the script once to get the functions set in the global scope */
+	if (lua_pcall(L, 0, 0, 0) != 0) {
+		g_critical("(lua-error) [%s]\n%s", config->lua_script, lua_tostring(L, -1));
+
+		lua_pop(L, 1); /* errmsg */
+	
+		proxy_lua_free_script(st);
+
+		return 0;
+	}
+
+	st->injected.L = L;
+	
+	g_assert(lua_isfunction(L, -1));
+	g_assert(lua_gettop(L) - stack_top == 1);
 
 	return 0;
 }
