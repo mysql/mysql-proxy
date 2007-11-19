@@ -191,6 +191,81 @@ static void daemonize(void) {
 }
 #endif
 
+int cauldron_keyfile_to_options(GKeyFile *keyfile, GOptionEntry *config_entries) {
+	const gchar *ini_group_name = "mysql-proxy";
+	GError *gerr = NULL;
+	int ret = 0;
+	int i;
+	
+	/* all the options are in the group for "mysql-proxy" */
+
+	if (!keyfile) return -1;
+	if (!g_key_file_has_group(keyfile, ini_group_name)) return 0;
+
+	/* set the defaults */
+	for (i = 0; config_entries[i].long_name; i++) {
+		GOptionEntry *entry = &(config_entries[i]);
+		gchar *arg_string;
+		gchar **arg_string_array;
+		gboolean arg_bool = 0;
+		gint arg_int = 0;
+		gdouble arg_double = 0;
+		gsize len = 0;
+
+		switch (entry->arg) {
+		case G_OPTION_ARG_STRING: 
+			/* is this option set already */
+			if (NULL == entry->arg_data || NULL != *(gchar **)(entry->arg_data)) break;
+
+			arg_string = g_key_file_get_string(keyfile, ini_group_name, entry->long_name, &gerr);
+			if (!gerr) {
+				*(gchar **)(entry->arg_data) = arg_string;
+			}
+			break;
+		case G_OPTION_ARG_STRING_ARRAY: 
+			/* is this option set already */
+			if (NULL == entry->arg_data || NULL != *(gchar ***)(entry->arg_data)) break;
+
+			arg_string_array = g_key_file_get_string_list(keyfile, ini_group_name, entry->long_name, &len, &gerr);
+			if (!gerr) {
+				*(gchar ***)(entry->arg_data) = arg_string_array;
+			}
+			break;
+		case G_OPTION_ARG_NONE: 
+			arg_bool = g_key_file_get_boolean(keyfile, ini_group_name, entry->long_name, &gerr);
+			if (!gerr) {
+				*(int *)(entry->arg_data) = arg_bool;
+			}
+			break;
+		case G_OPTION_ARG_INT: 
+			arg_int = g_key_file_get_integer(keyfile, ini_group_name, entry->long_name, &gerr);
+			if (!gerr) {
+				*(gint *)(entry->arg_data) = arg_int;
+			}
+			break;
+		case G_OPTION_ARG_DOUBLE: 
+			arg_double = g_key_file_get_double(keyfile, ini_group_name, entry->long_name, &gerr);
+			if (!gerr) {
+				*(gint *)(entry->arg_data) = arg_double;
+			}
+			break;
+
+		}
+
+		if (gerr) {
+			if (gerr->code != G_KEY_FILE_ERROR_KEY_NOT_FOUND) {
+				g_message("%s", gerr->message);
+				ret = -1;
+			}
+
+			g_error_free(gerr);
+			gerr = NULL;
+		}
+	}
+
+	return ret;
+}
+
 
 #define GETTEXT_PACKAGE "mysql-proxy"
 
@@ -214,14 +289,21 @@ int main(int argc, char **argv) {
 
 	GKeyFile *keyfile = NULL;
 
-	GOptionEntry main_entries[] = 
+	/* can't appear in the configfile */
+	GOptionEntry base_main_entries[] = 
 	{
 		{ "version",                 'V', 0, G_OPTION_ARG_NONE, NULL, "Show version", NULL },
+		{ "defaults-file",            0, 0, G_OPTION_ARG_STRING, NULL, "configuration file", "<file>" },
+		
+		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
+	};
+
+	GOptionEntry main_entries[] = 
+	{
 		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
 		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
 		{ "plugin-dir",               0, 0, G_OPTION_ARG_STRING, NULL, "path to the plugins", "<path>" },
-		{ "defaults-file",            0, 0, G_OPTION_ARG_STRING, NULL, "configuration file", "<file>" },
-		{ "plugins",                  0, 0, G_OPTION_ARG_STRING, NULL, "plugins to load", "<name>[,<name>]" },
+		{ "plugins",                  0, 0, G_OPTION_ARG_STRING, NULL, "plugins to load", "<name>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -247,22 +329,24 @@ int main(int argc, char **argv) {
 	srv = network_mysqld_init();
 
 	i = 0;
-	main_entries[i++].arg_data  = &(print_version);
+	base_main_entries[i++].arg_data  = &(print_version);
+	base_main_entries[i++].arg_data  = &(default_file);
+
+	i = 0;
 	main_entries[i++].arg_data  = &(daemon_mode);
 	main_entries[i++].arg_data  = &(pid_file);
 	main_entries[i++].arg_data  = &(plugin_dir);
-	main_entries[i++].arg_data  = &(default_file);
 	main_entries[i++].arg_data  = &(plugin_names);
 
 	g_log_set_default_handler(log_func, NULL);
 
 	option_ctx = g_option_context_new("- MySQL Proxy");
-	g_option_context_add_main_entries(option_ctx, main_entries, GETTEXT_PACKAGE);
+	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
 	g_option_context_set_help_enabled(option_ctx, FALSE);
 	g_option_context_set_ignore_unknown_options(option_ctx, TRUE);
 
 	/**
-	 * parse once to get the basic options 
+	 * parse once to get the basic options like --defaults-file and --version
 	 *
 	 * leave the unknown options in the list
 	 */
@@ -274,15 +358,6 @@ int main(int argc, char **argv) {
 		network_mysqld_free(srv);
 
 		return EXIT_FAILURE;
-	}
-
-	if (!plugin_dir) plugin_dir = g_strdup(LIBDIR);
-
-	/* if not plugins are specified, load admin and proxy */
-	if (!plugin_names) {
-		plugin_names = g_new(char *, 3);
-		plugin_names[0] = g_strdup("admin");
-		plugin_names[1] = g_strdup("proxy");
 	}
 
 	if (default_file) {
@@ -301,8 +376,43 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	/* add the other options which can also appear in the configfile */
+	g_option_context_add_main_entries(option_ctx, main_entries, GETTEXT_PACKAGE);
+
+	/**
+	 * parse once to get the basic options 
+	 *
+	 * leave the unknown options in the list
+	 */
+	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
+		g_critical("%s", gerr->message);
+		
+		g_error_free(gerr);
+		
+		network_mysqld_free(srv);
+
+		return EXIT_FAILURE;
+	}
+
+	if (keyfile) {
+		if (cauldron_keyfile_to_options(keyfile, main_entries)) {
+			return EXIT_FAILURE;
+		}
+	}
+
+	if (!plugin_dir) plugin_dir = g_strdup(LIBDIR);
+
+	/* if not plugins are specified, load admin and proxy */
+	if (!plugin_names) {
+		plugin_names = g_new0(char *, 3);
+		plugin_names[0] = g_strdup("admin");
+		plugin_names[1] = g_strdup("proxy");
+		plugin_names[2] = NULL;
+	}
+
+
 	/* load the plugins */
-	for (i = 0; plugin_names[i]; i++) {
+	for (i = 0; plugin_names && plugin_names[i]; i++) {
 		char *plugin_filename = g_strdup_printf("lib%s.la", plugin_names[i]);
 
 		if (NULL == (p = cauldron_plugin_load(plugin_dir, plugin_filename))) {
@@ -316,7 +426,6 @@ int main(int argc, char **argv) {
 			gchar *group_desc = g_strdup_printf("%s-module", plugin_names[i]);
 			gchar *help_msg = g_strdup_printf("Show options for the %s-module", plugin_names[i]);
 			const gchar *group_name = plugin_names[i];
-			const gchar *ini_group_name = "mysql-proxy";
 
 			GOptionGroup *option_grp = g_option_group_new(group_name, group_desc, help_msg, NULL, NULL);
 			g_option_group_add_entries(option_grp, config_entries);
@@ -333,69 +442,10 @@ int main(int argc, char **argv) {
 
 				return EXIT_FAILURE;
 			}
-
-			/* all the options are in the group for "mysql-proxy" */
-			if (keyfile && g_key_file_has_group(keyfile, ini_group_name)) {
-				int j;
-
-				/* set the defaults */
-				for (j = 0; config_entries[j].long_name; j++) {
-					GOptionEntry *entry = &(config_entries[j]);
-					gchar *arg_string;
-					gchar **arg_string_array;
-					gboolean arg_bool = 0;
-					gint arg_int = 0;
-					gdouble arg_double = 0;
-					gsize len = 0;
-
-					switch (entry->arg) {
-					case G_OPTION_ARG_STRING: 
-						/* is this option set already */
-						if (NULL == entry->arg_data || NULL != *(gchar **)(entry->arg_data)) break;
-
-						arg_string = g_key_file_get_string(keyfile, ini_group_name, entry->long_name, &gerr);
-						if (!gerr) {
-							*(gchar **)(entry->arg_data) = arg_string;
-						}
-						break;
-					case G_OPTION_ARG_STRING_ARRAY: 
-						/* is this option set already */
-						if (NULL == entry->arg_data || NULL != *(gchar ***)(entry->arg_data)) break;
-
-						arg_string_array = g_key_file_get_string_list(keyfile, ini_group_name, entry->long_name, &len, &gerr);
-						if (!gerr) {
-							*(gchar ***)(entry->arg_data) = arg_string_array;
-						}
-						break;
-					case G_OPTION_ARG_NONE: 
-						arg_bool = g_key_file_get_boolean(keyfile, ini_group_name, entry->long_name, &gerr);
-						if (!gerr) {
-							*(int *)(entry->arg_data) = arg_bool;
-						}
-						break;
-					case G_OPTION_ARG_INT: 
-						arg_int = g_key_file_get_integer(keyfile, ini_group_name, entry->long_name, &gerr);
-						if (!gerr) {
-							*(gint *)(entry->arg_data) = arg_int;
-						}
-						break;
-					case G_OPTION_ARG_DOUBLE: 
-						arg_double = g_key_file_get_double(keyfile, ini_group_name, entry->long_name, &gerr);
-						if (!gerr) {
-							*(gint *)(entry->arg_data) = arg_double;
-						}
-						break;
-
-					}
-
-					if (gerr) {
-						if (gerr->code != G_KEY_FILE_ERROR_KEY_NOT_FOUND) {
-							g_message("%s", gerr->message);
-						}
-
-						g_error_free(gerr);
-						gerr = NULL;
-					}
+	
+			if (keyfile) {
+				if (cauldron_keyfile_to_options(keyfile, config_entries)) {
+					return EXIT_FAILURE;
 				}
 			}
 		}
