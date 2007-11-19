@@ -316,6 +316,7 @@ int main(int argc, char **argv) {
 			gchar *group_desc = g_strdup_printf("%s-module", plugin_names[i]);
 			gchar *help_msg = g_strdup_printf("Show options for the %s-module", plugin_names[i]);
 			const gchar *group_name = plugin_names[i];
+			const gchar *ini_group_name = "mysql-proxy";
 
 			GOptionGroup *option_grp = g_option_group_new(group_name, group_desc, help_msg, NULL, NULL);
 			g_option_group_add_entries(option_grp, config_entries);
@@ -333,7 +334,8 @@ int main(int argc, char **argv) {
 				return EXIT_FAILURE;
 			}
 
-			if (keyfile && g_key_file_has_group(keyfile, group_name)) {
+			/* all the options are in the group for "mysql-proxy" */
+			if (keyfile && g_key_file_has_group(keyfile, ini_group_name)) {
 				int j;
 
 				/* set the defaults */
@@ -351,7 +353,7 @@ int main(int argc, char **argv) {
 						/* is this option set already */
 						if (NULL == entry->arg_data || NULL != *(gchar **)(entry->arg_data)) break;
 
-						arg_string = g_key_file_get_string(keyfile, group_name, entry->long_name, &gerr);
+						arg_string = g_key_file_get_string(keyfile, ini_group_name, entry->long_name, &gerr);
 						if (!gerr) {
 							*(gchar **)(entry->arg_data) = arg_string;
 						}
@@ -360,25 +362,25 @@ int main(int argc, char **argv) {
 						/* is this option set already */
 						if (NULL == entry->arg_data || NULL != *(gchar ***)(entry->arg_data)) break;
 
-						arg_string_array = g_key_file_get_string_list(keyfile, group_name, entry->long_name, &len, &gerr);
+						arg_string_array = g_key_file_get_string_list(keyfile, ini_group_name, entry->long_name, &len, &gerr);
 						if (!gerr) {
 							*(gchar ***)(entry->arg_data) = arg_string_array;
 						}
 						break;
 					case G_OPTION_ARG_NONE: 
-						arg_bool = g_key_file_get_boolean(keyfile, group_name, entry->long_name, &gerr);
+						arg_bool = g_key_file_get_boolean(keyfile, ini_group_name, entry->long_name, &gerr);
 						if (!gerr) {
 							*(int *)(entry->arg_data) = arg_bool;
 						}
 						break;
 					case G_OPTION_ARG_INT: 
-						arg_int = g_key_file_get_integer(keyfile, group_name, entry->long_name, &gerr);
+						arg_int = g_key_file_get_integer(keyfile, ini_group_name, entry->long_name, &gerr);
 						if (!gerr) {
 							*(gint *)(entry->arg_data) = arg_int;
 						}
 						break;
 					case G_OPTION_ARG_DOUBLE: 
-						arg_double = g_key_file_get_double(keyfile, group_name, entry->long_name, &gerr);
+						arg_double = g_key_file_get_double(keyfile, ini_group_name, entry->long_name, &gerr);
 						if (!gerr) {
 							*(gint *)(entry->arg_data) = arg_double;
 						}
@@ -387,8 +389,7 @@ int main(int argc, char **argv) {
 					}
 
 					if (gerr) {
-						if (gerr->code != G_KEY_FILE_ERROR_KEY_NOT_FOUND &&
-						    gerr->code != G_KEY_FILE_ERROR_GROUP_NOT_FOUND) {
+						if (gerr->code != G_KEY_FILE_ERROR_KEY_NOT_FOUND) {
 							g_message("%s", gerr->message);
 						}
 
