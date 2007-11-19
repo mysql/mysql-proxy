@@ -18,4 +18,8 @@ select pload status;
 connection default;
 disconnect conn1;
 disconnect conn2;
+pload /tmp/lm3.lua;
+select 1000;
+punload /tmp/lm3.lua;
+select 1000;
 

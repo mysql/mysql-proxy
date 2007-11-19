@@ -37,3 +37,15 @@ read_auth_result1	2
 read_handshake1	2
 read_query2	8
 connect_server1	2
+pload /tmp/lm3.lua;
+info
+module "/tmp/lm3.lua" loaded
+select 1000;
+result
+one thousand
+punload /tmp/lm3.lua;
+/tmp/lm3.lua
+unloaded
+select 1000;
+1000
+1000

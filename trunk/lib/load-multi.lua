@@ -140,7 +140,7 @@ end
 	parameter,
 	id, id, proxy.global.handled_functions[id], parameter
 )
-	proxy.global.print_debug (proxy.global.handled_functions[id])
+	proxy.global.print_debug ('creating function ' .. proxy.global.handled_functions[id])
 	assert(loadstring(fstr))()
 end
 
@@ -342,19 +342,28 @@ local pload_help_dataset    = {
 --
 function remove_module (module_name)
 	local found_module = false
+    local to_delete = { loaded = {}, status = {} }
 	for i,lmodule in pairs(proxy.global.handler_status) do
 		if i == module_name then
 			found_module = true
+            local counter = 0
 			for j,h in pairs(lmodule) do
-				table.remove(proxy.global.loaded_handlers[h.id], h.ndx)
-				table.remove(lmodule,j)
+                -- proxy.global.print_debug('removing '.. module_name .. ' (' .. i ..') ' .. h.id .. ' -> ' .. h.ndx )
+                to_delete['loaded'][h.id] = h.ndx
+                counter = counter + 1
+                to_delete['status'][i] = counter
 			end
 		end
 	end
+    for i,v in pairs (to_delete['loaded']) do
+        table.remove(proxy.global.loaded_handlers[i], v)
+    end
+    for i,v in pairs (to_delete['status']) do
+        table.remove(proxy.global.handler_status[i], v)
+    end
 	if found_module == false then
 		return proxy.global.simple_dataset(module_name, 'NOT FOUND')
 	end
-	package.loaded[module_name] = nil
 	return proxy.global.simple_dataset(module_name, 'unloaded')
 end
 

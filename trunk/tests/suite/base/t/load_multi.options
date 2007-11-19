@@ -2,7 +2,7 @@ local my_options = default_proxy_options
 
 my_options['proxy-lua-script'] = 'load_multi.lua'
 
-os.execute('cp ' ..  os.getenv('builddir') .. '/tests/suite/base/t/lm[12].lua /tmp/' )
+os.execute('cp ' ..  os.getenv('builddir') .. '/tests/suite/base/t/lm[123].lua /tmp/' )
 
 start_proxy('load_multi', my_options) 
 
