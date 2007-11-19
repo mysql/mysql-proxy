@@ -1,0 +1,21 @@
+pload /tmp/lm2.lua;
+connect (conn1,127.0.0.1,$MYSQL_USER,$MYSQL_PASSWORD,test,$PROXY_PORT,);
+select pload status;
+pload /tmp/lm1.lua;
+connection conn1;
+select 'first' as info;
+select pload status;
+connect (conn2,127.0.0.1,$MYSQL_USER,$MYSQL_PASSWORD,test,$PROXY_PORT,);
+connection conn2;
+select 'second' as info;
+select pload status;
+disconnect conn2;
+connect (conn2,127.0.0.1,$MYSQL_USER,$MYSQL_PASSWORD,test,$PROXY_PORT,);
+connection conn2;
+select sleep(0.2);
+select 'third' as info;
+select pload status;
+connection default;
+disconnect conn1;
+disconnect conn2;
+
