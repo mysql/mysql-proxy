@@ -42,17 +42,12 @@ end
 -- @param inj "packet.injection"
 function resultset_to_string( res )
 	local s = ""
-	-- TODO - check boundaries. Probably buggy after changes in rev 262
-	local field_count = 0      
 	local fields = res.fields
 
 	if not fields then return "" end
-	print (fields[field_count])	
-	while fields[field_count] do
-		local field = fields[field_count]
-		field_count = field_count + 1
-	end
-	
+
+	local field_count = #fields
+
 	local row_count = 0
 	for row in res.rows do
 		local o
@@ -68,13 +63,13 @@ function resultset_to_string( res )
 			if not row[i] then
 				o = o .. "NULL"
 			-- TODO check if the indexes are in range 
-			elseif fields[i - 1].type == proxy.MYSQL_TYPE_STRING or  
-				fields[i - 1].type == proxy.MYSQL_TYPE_VAR_STRING or 
-				fields[i - 1].type == proxy.MYSQL_TYPE_LONG_BLOB or 
-				fields[i - 1].type == proxy.MYSQL_TYPE_MEDIUM_BLOB then
+			elseif fields[i].type == proxy.MYSQL_TYPE_STRING or  
+				fields[i].type == proxy.MYSQL_TYPE_VAR_STRING or 
+				fields[i].type == proxy.MYSQL_TYPE_LONG_BLOB or 
+				fields[i].type == proxy.MYSQL_TYPE_MEDIUM_BLOB then
 				o = o .. string.format("%q", row[i])
 			else
-				-- print("  [".. i .."] field-type: " .. fields[i - 1].type)
+				-- print("  [".. i .."] field-type: " .. fields[i].type)
 				o = o .. row[i]
 			end
 		end
