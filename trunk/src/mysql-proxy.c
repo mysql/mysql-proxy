@@ -220,7 +220,7 @@ int main(int argc, char **argv) {
 		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
 		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
 		{ "plugin-dir",               0, 0, G_OPTION_ARG_STRING, NULL, "path to the plugins", "<path>" },
-		{ "default-file",             0, 0, G_OPTION_ARG_STRING, NULL, "configuration file", "<file>" },
+		{ "defaults-file",            0, 0, G_OPTION_ARG_STRING, NULL, "configuration file", "<file>" },
 		{ "plugins",                  0, 0, G_OPTION_ARG_STRING, NULL, "plugins to load", "<name>[,<name>]" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
