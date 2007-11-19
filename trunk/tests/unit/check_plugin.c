@@ -35,11 +35,10 @@ void mock_plugin_destroy(cauldron_plugin_config *config) {
 	g_free(config);
 }
 
-int mock_plugin_add_options(GOptionContext *option_ctx, cauldron_plugin_config *config) {
-	GOptionGroup *option_grp;
+GOptionEntry * mock_plugin_get_options(cauldron_plugin_config *config) {
 	guint i;
 
-	GOptionEntry config_entries[] = 
+	static GOptionEntry config_entries[] = 
 	{
 		{ "foo", 0, 0, G_OPTION_ARG_STRING, NULL, "foo", "foo" },
 		
@@ -49,11 +48,7 @@ int mock_plugin_add_options(GOptionContext *option_ctx, cauldron_plugin_config *
 	i = 0;
 	config_entries[i++].arg_data = &(config->foo);
 
-	option_grp = g_option_group_new("foo", "foo-module", "Show options for the foo-module", NULL, NULL);
-	g_option_group_add_entries(option_grp, config_entries);
-	g_option_context_add_group(option_ctx, option_grp);
-
-	return 0;
+	return config_entries;
 }
 
 static void devnull_log_func(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
@@ -85,6 +80,8 @@ START_TEST(test_plugin_load) {
 START_TEST(test_plugin_config) {
 	cauldron_plugin *p;
 	GOptionContext *option_ctx;
+	GOptionEntry   *config_entries;
+	GOptionGroup *option_grp;
 	gchar **_argv;
 	int _argc = 2;
 	GError *gerr = NULL;
@@ -92,7 +89,7 @@ START_TEST(test_plugin_config) {
 	p = cauldron_plugin_init();
 	p->init = mock_plugin_init;
 	p->destroy = mock_plugin_destroy;
-	p->add_options = mock_plugin_add_options;
+	p->get_options = mock_plugin_get_options;
 
 	p->config = p->init();
 	fail_unless(p->config != NULL);
@@ -103,7 +100,13 @@ START_TEST(test_plugin_config) {
 
 	/* set some config variables */
 	option_ctx = g_option_context_new("- MySQL Proxy");
-	fail_unless(0 == p->add_options(option_ctx, p->config));
+
+	fail_unless(NULL != (config_entries = p->get_options(p->config)));
+	
+	option_grp = g_option_group_new("foo", "foo-module", "Show options for the foo-module", NULL, NULL);
+	g_option_group_add_entries(option_grp, config_entries);
+	g_option_context_add_group(option_ctx, option_grp);
+
 	fail_unless(FALSE != g_option_context_parse(option_ctx, &_argc, &_argv, &gerr));
 	g_option_context_free(option_ctx);
 
@@ -116,7 +119,12 @@ START_TEST(test_plugin_config) {
 	_argc = 2;
 
 	option_ctx = g_option_context_new("- MySQL Proxy");
-	fail_unless(0 == p->add_options(option_ctx, p->config));
+	fail_unless(NULL != (config_entries = p->get_options(p->config)));
+	
+	option_grp = g_option_group_new("foo", "foo-module", "Show options for the foo-module", NULL, NULL);
+	g_option_group_add_entries(option_grp, config_entries);
+	g_option_context_add_group(option_ctx, option_grp);
+
 	fail_unless(FALSE == g_option_context_parse(option_ctx, &_argc, &_argv, &gerr));
 	fail_unless(gerr->domain == G_OPTION_ERROR);
 	g_error_free(gerr); gerr = NULL;

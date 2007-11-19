@@ -52,16 +52,16 @@ cauldron_plugin *cauldron_plugin_load(const gchar *moduledir, const gchar *name)
 	return p;
 }
 
-int cauldron_plugin_add_options(cauldron_plugin *p, GOptionContext *option_ctx) {
-	if (!p->add_options) return 0;
+GOptionEntry *cauldron_plugin_get_options(cauldron_plugin *p) {
+	GOptionEntry * options;
 
-	if (0 != p->add_options(option_ctx, p->config)) {
+	if (!p->get_options) return NULL;
+
+	if (NULL == (options = p->get_options(p->config))) {
 		g_critical("adding config options for module '%s' failed", p->name);
-
-		return -1;
 	}
 
-	return 0;
+	return options;
 }
 
 

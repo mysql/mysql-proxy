@@ -208,6 +208,11 @@ int main(int argc, char **argv) {
 	cauldron_plugin *p;
 	gchar *pid_file = NULL;
 	gchar *plugin_dir = NULL;
+	gchar *default_file = NULL;
+	GOptionEntry *config_entries;
+	gchar **plugin_names = NULL;
+
+	GKeyFile *keyfile = NULL;
 
 	GOptionEntry main_entries[] = 
 	{
@@ -215,6 +220,8 @@ int main(int argc, char **argv) {
 		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
 		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
 		{ "plugin-dir",               0, 0, G_OPTION_ARG_STRING, NULL, "path to the plugins", "<path>" },
+		{ "default-file",             0, 0, G_OPTION_ARG_STRING, NULL, "configuration file", "<file>" },
+		{ "plugins",                  0, 0, G_OPTION_ARG_STRING, NULL, "plugins to load", "<name>[,<name>]" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -244,6 +251,8 @@ int main(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(daemon_mode);
 	main_entries[i++].arg_data  = &(pid_file);
 	main_entries[i++].arg_data  = &(plugin_dir);
+	main_entries[i++].arg_data  = &(default_file);
+	main_entries[i++].arg_data  = &(plugin_names);
 
 	g_log_set_default_handler(log_func, NULL);
 
@@ -269,24 +278,132 @@ int main(int argc, char **argv) {
 
 	if (!plugin_dir) plugin_dir = g_strdup(LIBDIR);
 
-	/* load the default plugins */
-	if (NULL == (p = cauldron_plugin_load(plugin_dir, "libadmin.la"))) {
-		return EXIT_FAILURE;
-	}
-	g_ptr_array_add(srv->modules, p);
-	if (0 != cauldron_plugin_add_options(p, option_ctx)) {
-		return EXIT_FAILURE;
+	/* if not plugins are specified, load admin and proxy */
+	if (!plugin_names) {
+		plugin_names = g_new(char *, 3);
+		plugin_names[0] = g_strdup("admin");
+		plugin_names[1] = g_strdup("proxy");
 	}
 
-	if (NULL == (p = cauldron_plugin_load(plugin_dir, "libproxy.la"))) {
-		return EXIT_FAILURE;
-	}
-	g_ptr_array_add(srv->modules, p);
+	if (default_file) {
+		keyfile = g_key_file_new();
+		g_key_file_set_list_separator(keyfile, ',');
 
-	if (0 != cauldron_plugin_add_options(p, option_ctx)) {
-		return EXIT_FAILURE;
+		if (FALSE == g_key_file_load_from_file(keyfile, default_file, G_KEY_FILE_NONE, &gerr)) {
+			g_critical("loading configuration from %s failed: %s", 
+					default_file,
+					gerr->message);
+
+			g_error_free(gerr);
+			gerr = NULL;
+
+			return -1;
+		}
 	}
 
+	/* load the plugins */
+	for (i = 0; plugin_names[i]; i++) {
+		char *plugin_filename = g_strdup_printf("lib%s.la", plugin_names[i]);
+
+		if (NULL == (p = cauldron_plugin_load(plugin_dir, plugin_filename))) {
+			return EXIT_FAILURE;
+		}
+		g_free(plugin_filename);
+
+		g_ptr_array_add(srv->modules, p);
+
+		if (NULL != (config_entries = cauldron_plugin_get_options(p))) {
+			gchar *group_desc = g_strdup_printf("%s-module", plugin_names[i]);
+			gchar *help_msg = g_strdup_printf("Show options for the %s-module", plugin_names[i]);
+			const gchar *group_name = plugin_names[i];
+
+			GOptionGroup *option_grp = g_option_group_new(group_name, group_desc, help_msg, NULL, NULL);
+			g_option_group_add_entries(option_grp, config_entries);
+			g_option_context_add_group(option_ctx, option_grp);
+
+			g_free(help_msg);
+			g_free(group_desc);
+
+			/* parse the new options */
+			if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
+				g_critical("%s", gerr->message);
+		
+				g_error_free(gerr);
+
+				return EXIT_FAILURE;
+			}
+
+			if (keyfile && g_key_file_has_group(keyfile, group_name)) {
+				int j;
+
+				/* set the defaults */
+				for (j = 0; config_entries[j].long_name; j++) {
+					GOptionEntry *entry = &(config_entries[j]);
+					gchar *arg_string;
+					gchar **arg_string_array;
+					gboolean arg_bool = 0;
+					gint arg_int = 0;
+					gdouble arg_double = 0;
+					gsize len = 0;
+
+					switch (entry->arg) {
+					case G_OPTION_ARG_STRING: 
+						/* is this option set already */
+						if (NULL == entry->arg_data || NULL != *(gchar **)(entry->arg_data)) break;
+
+						arg_string = g_key_file_get_string(keyfile, group_name, entry->long_name, &gerr);
+						if (!gerr) {
+							*(gchar **)(entry->arg_data) = arg_string;
+						}
+						break;
+					case G_OPTION_ARG_STRING_ARRAY: 
+						/* is this option set already */
+						if (NULL == entry->arg_data || NULL != *(gchar ***)(entry->arg_data)) break;
+
+						arg_string_array = g_key_file_get_string_list(keyfile, group_name, entry->long_name, &len, &gerr);
+						if (!gerr) {
+							*(gchar ***)(entry->arg_data) = arg_string_array;
+						}
+						break;
+					case G_OPTION_ARG_NONE: 
+						arg_bool = g_key_file_get_boolean(keyfile, group_name, entry->long_name, &gerr);
+						if (!gerr) {
+							*(int *)(entry->arg_data) = arg_bool;
+						}
+						break;
+					case G_OPTION_ARG_INT: 
+						arg_int = g_key_file_get_integer(keyfile, group_name, entry->long_name, &gerr);
+						if (!gerr) {
+							*(gint *)(entry->arg_data) = arg_int;
+						}
+						break;
+					case G_OPTION_ARG_DOUBLE: 
+						arg_double = g_key_file_get_double(keyfile, group_name, entry->long_name, &gerr);
+						if (!gerr) {
+							*(gint *)(entry->arg_data) = arg_double;
+						}
+						break;
+
+					}
+
+					if (gerr) {
+						if (gerr->code != G_KEY_FILE_ERROR_KEY_NOT_FOUND &&
+						    gerr->code != G_KEY_FILE_ERROR_GROUP_NOT_FOUND) {
+							g_message("%s", gerr->message);
+						}
+
+						g_error_free(gerr);
+						gerr = NULL;
+					}
+				}
+			}
+		}
+	}
+
+	if (keyfile) g_key_file_free(keyfile);
+	if (default_file) g_free(default_file);
+
+	/* we know about the options now, lets parse them */
 	g_option_context_set_help_enabled(option_ctx, TRUE);
 	g_option_context_set_ignore_unknown_options(option_ctx, FALSE);
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {

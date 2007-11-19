@@ -4330,13 +4330,13 @@ void network_mysqld_proxy_plugin_free(cauldron_plugin_config *config) {
 }
 
 /**
- * add the proxy specific options to the cmdline interface 
+ * plugin options 
  */
-int network_mysqld_proxy_plugin_add_options(GOptionContext *option_ctx, cauldron_plugin_config *config) {
-	GOptionGroup *option_grp;
+static GOptionEntry * network_mysqld_proxy_plugin_get_options(cauldron_plugin_config *config) {
 	guint i;
 
-	GOptionEntry config_entries[] = 
+	/* make sure it isn't collected */
+	static GOptionEntry config_entries[] = 
 	{
 		{ "proxy-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the proxy-server (default: :4040)", "<host:port>" },
 		{ "proxy-read-only-backend-addresses", 
@@ -4364,11 +4364,7 @@ int network_mysqld_proxy_plugin_add_options(GOptionContext *option_ctx, cauldron
 	config_entries[i++].arg_data = &(config->lua_script);
 	config_entries[i++].arg_data = &(config->start_proxy);
 
-	option_grp = g_option_group_new("proxy", "proxy-module", "Show options for the proxy-module", NULL, NULL);
-	g_option_group_add_entries(option_grp, config_entries);
-	g_option_context_add_group(option_ctx, option_grp);
-	
-	return 0;
+	return config_entries;
 }
 
 /**
@@ -4428,19 +4424,10 @@ int plugin_init(cauldron_plugin *p) {
 	/* append the our init function to the init-hook-list */
 
 	p->init         = network_mysqld_proxy_plugin_init;
-	p->add_options  = network_mysqld_proxy_plugin_add_options;
+	p->get_options  = network_mysqld_proxy_plugin_get_options;
 	p->apply_config = network_mysqld_proxy_plugin_apply_config;
 	p->destroy      = network_mysqld_proxy_plugin_free;
 
 	return 0;
 }
-
-const char *g_module_check_init(GModule *module) {
-	return NULL;
-}
-
-const char *g_module_unload(GModule *module) {
-	return NULL;
-}
-
 

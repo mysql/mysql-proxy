@@ -5,6 +5,7 @@
   * added unit-testing for the lua scripts
   * added a error-msg if trailing options without dashes are specified
   * added a script-cache with automatic reload on change
+  * added config-file support
   * removed explicit lua_gc() in favour of automatic lua_step()
   * fixed tutorial-inject.lua to start indexing at 1 (#32088)
 
