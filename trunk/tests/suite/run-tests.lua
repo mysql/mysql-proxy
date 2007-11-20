@@ -239,8 +239,7 @@ function os_execute(cmdline)
 end
 
 function get_pid(pid_file_name)
-	local fh = assert(io.open(pid_file_name, 'r'),
-		"error opening " .. pid_file_name)
+	local fh = assert(io.open(pid_file_name, 'r'))
 	local pid = assert(fh:read() ,
 		"PID not found in " .. pid_file_name)
 	fh:close()
@@ -249,17 +248,26 @@ end
 
 function wait_proc_up(pid_file) 
 	local rounds = 0
-	glib2.usleep(200 * 1000) -- wait until the pid-file is created
+
+	while not file_exists(pid_file) do
+		glib2.usleep(200 * 1000) -- wait until the pid-file is created
+
+		rounds = rounds + 1
+		print_verbose(("(wait_proc_up) pid-wait: %d rounds, (%s)"):format(rounds, pid_file))
+
+		if rounds > 5 then error(("proxy failed to start: no pid-file %s"):format(pid_file)) end
+	end
 
 	local pid = get_pid(pid_file)
 
+	rounds = 0
 	-- check that the process referenced in the PID-file is still up
 	while 0 ~= os.execute("kill -0 ".. pid .."  2> /dev/null") do
 		glib2.usleep(200 * 1000) -- wait until the pid-file is created
 		rounds = rounds + 1
 		print_verbose(("(wait_proc_up) kill-wait: %d rounds, pid=%d (%s)"):format(rounds, pid, pid_file))
 
-		if rounds > 5 then error(("proxy failed to start: no pid-file %s"):format(pid_file)) end
+		if rounds > 5 then error(("proxy seems to have crashed: pid=%d (%s)"):format(pid, pid_file)) end
 	end
 end
 
@@ -563,6 +571,10 @@ function start_proxy(proxy_name, proxy_options)
 			'/t/' ..  proxy_options['proxy-lua-script'] 
 	end
 	print_verbose("starting " .. proxy_name .. " with " .. options_tostring(proxy_options))
+
+	-- remove the old pid-file if it exists
+	os.remove(proxy_options['pid-file'])
+
 	-- os.execute("head " .. proxy_options['proxy-lua-script'])
 	assert(os.execute( 'LUA_PATH="' .. INCLUDE_PATH  .. '"  ' ..
 		PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..
