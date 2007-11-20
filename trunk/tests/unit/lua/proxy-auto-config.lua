@@ -12,8 +12,24 @@ local autoconfig = require("proxy.auto-config")
 
 TestScript = tests.ProxyBaseTest:new()
 
+function mock_tokenize(query)
+	-- parsing a query
+	if query == "SELECT 1" then
+		return {
+			{ token_name = "TK_SQL_SELECT", text = "SELECT" },
+			{ token_name = "TK_NUMBER",     text = "1" }
+		}
+	else 
+		error("(mock_tokenize) for "..query)
+	end
+end
+
+
 function TestScript:setUp()
+	self:setDefaultScope()
+
 	proxy.global.config.test = { }
+	proxy.tokenize = mock_tokenize
 end
 
 function TestScript:testUnknownOption()
@@ -59,11 +75,12 @@ function TestScript:testKnownModule()
 end
 
 function TestScript:testKnownModule()
-	local cmd = command.parse(string.char(proxy.COM_QUERY) .. "SET GLOBAL test.option = 1")
+	local cmd = command.parse(string.char(proxy.COM_QUERY) .. "PROXY SET GLOBAL test.option = 1")
 
 	-- mock the proxy.tokenize function
 	proxy.tokenize = function (str) 
 		return { 
+			{ token_name = "TK_LITERAL", text = "PROXY" },
 			{ token_name = "TK_SQL_SET", text = "SET" },
 			{ token_name = "TK_LITERAL", text = "GLOBAL" },
 			{ token_name = "TK_LITERAL", text = "test" },

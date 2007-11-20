@@ -21,6 +21,17 @@ require("active-queries")
 function print_stats(stats)
 end
 
+function mock_tokenize(query)
+	-- parsing a query
+	if query == "SELECT 1" then
+		return {
+			{ token_name = "TK_SQL_SELECT", text = "SELECT" },
+			{ token_name = "TK_NUMBER",     text = "1" }
+		}
+	else 
+		error("(mock_tokenize) for "..query)
+	end
+end
 
 TestScript = tests.ProxyBaseTest:new({ 
 	active_qs = proxy.global.active_queries
@@ -31,6 +42,8 @@ function TestScript:setUp()
 	queries = { }
 
 	self:setDefaultScope()
+
+	proxy.tokenize = mock_tokenize
 
 	proxy.global.max_active_trx = 0
 	proxy.global.active_queries = { }
