@@ -233,6 +233,8 @@ typedef struct {
 	plugin_srv_state *global_state;
 	backend_t *backend;
 	int backend_ndx;
+
+	int connection_close;          /** the script wants to close the client connection */
 } plugin_con_state;
 
 typedef struct {
@@ -1208,6 +1210,10 @@ static int proxy_connection_set(lua_State *L) {
 		} else {
 			st->backend_ndx = backend_ndx;
 		}
+	} else if (0 == strcmp(key, "connection_close")) {
+		luaL_checktype(L, 3, LUA_TBOOLEAN);
+
+		st->connection_close = lua_toboolean(L, 3);
 	} else {
 		return luaL_error(L, "proxy.connection.%s is not writable", key);
 	}
@@ -3277,6 +3283,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 
 	send_sock = con->server;
 	recv_sock = con->client;
+
+	if (st->connection_close) {
+		con->state = CON_STATE_ERROR;
+
+		return RET_SUCCESS;
+	}
 
 	if (con->parse.command == COM_BINLOG_DUMP) {
 		/**
