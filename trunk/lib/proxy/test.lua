@@ -117,6 +117,12 @@ function ProxyBaseTest:setDefaultScope()
 		COM_DAEMON = 29,
 
 		MYSQLD_PACKET_OK = 0,
+
+		tokenize = function ()
+			error("proxy.tokenize() is only fake, you need to implement it")
+		end,
+
+		response = { }
 	}
 	
 	-- make access to the proxy.* strict
