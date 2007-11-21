@@ -86,7 +86,7 @@ local builddir	   = os.getenv("builddir")	   		or testdir .. "/../"
 local PROXY_TRACE	= os.getenv("PROXY_TRACE")		or ""	-- use it to inject strace or valgrind
 local PROXY_PARAMS   = os.getenv("PROXY_PARAMS")   	or ""	-- extra params
 local PROXY_BINPATH  = os.getenv("PROXY_BINPATH")  	or builddir .. "/src/mysql-proxy"
-PROXY_LIBPATH  = os.getenv("PROXY_LIBPATH")  	or builddir .. "/src/"
+PROXY_LIBPATH  = os.getenv("PROXY_LIBPATH")  	or builddir .. "/plugins/"
 
 local COVERAGE_LCOV  = os.getenv("COVERAGE_LCOV")
 

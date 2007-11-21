@@ -234,7 +234,7 @@ typedef struct {
 	backend_t *backend;
 	int backend_ndx;
 
-	int connection_close;          /** the script wants to close the client connection */
+	int connection_close;
 } plugin_con_state;
 
 typedef struct {
