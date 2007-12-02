@@ -6,7 +6,7 @@
 
 #include <check.h>
 
-#include "cauldron-plugin.h"
+#include "chassis-plugin.h"
 
 #define C(x) x, sizeof(x) - 1
 
@@ -17,25 +17,25 @@
 
 /* create a dummy plugin */
 
-struct cauldron_plugin_config {
+struct chassis_plugin_config {
 	gchar *foo;
 };
 
-cauldron_plugin_config *mock_plugin_init(void) {
-	cauldron_plugin_config *config;
+chassis_plugin_config *mock_plugin_init(void) {
+	chassis_plugin_config *config;
 
-	config = g_new0(cauldron_plugin_config, 1);
+	config = g_new0(chassis_plugin_config, 1);
 
 	return config;
 }
 
-void mock_plugin_destroy(cauldron_plugin_config *config) {
+void mock_plugin_destroy(chassis_plugin_config *config) {
 	if (config->foo) g_free(config->foo);
 
 	g_free(config);
 }
 
-GOptionEntry * mock_plugin_get_options(cauldron_plugin_config *config) {
+GOptionEntry * mock_plugin_get_options(chassis_plugin_config *config) {
 	guint i;
 
 	static GOptionEntry config_entries[] = 
@@ -62,23 +62,23 @@ static void devnull_log_func(const gchar *log_domain, GLogLevelFlags log_level, 
  * load 
  */
 START_TEST(test_plugin_load) {
-	cauldron_plugin *p;
+	chassis_plugin *p;
 	GLogFunc old_log_func;
 
-	p = cauldron_plugin_init();
+	p = chassis_plugin_init();
 	fail_unless(p != NULL);
-	cauldron_plugin_free(p);
+	chassis_plugin_free(p);
 
 	old_log_func = g_log_set_default_handler(devnull_log_func, NULL);
 	/** should fail */
-	p = cauldron_plugin_load(NULL, "non-existing");
+	p = chassis_plugin_load(NULL, "non-existing");
 	g_log_set_default_handler(old_log_func, NULL);
 	fail_unless(p == NULL);
-	if (p != NULL) cauldron_plugin_free(p);
+	if (p != NULL) chassis_plugin_free(p);
 } END_TEST
 
 START_TEST(test_plugin_config) {
-	cauldron_plugin *p;
+	chassis_plugin *p;
 	GOptionContext *option_ctx;
 	GOptionEntry   *config_entries;
 	GOptionGroup *option_grp;
@@ -86,7 +86,7 @@ START_TEST(test_plugin_config) {
 	int _argc = 2;
 	GError *gerr = NULL;
 	
-	p = cauldron_plugin_init();
+	p = chassis_plugin_init();
 	p->init = mock_plugin_init;
 	p->destroy = mock_plugin_destroy;
 	p->get_options = mock_plugin_get_options;
@@ -132,7 +132,7 @@ START_TEST(test_plugin_config) {
 	g_option_context_free(option_ctx);
 
 	p->destroy(p->config);
-	cauldron_plugin_free(p);
+	chassis_plugin_free(p);
 
 
 	/* let's try again, just let it fail */

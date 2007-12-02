@@ -84,6 +84,7 @@ typedef struct {
 	
 
 	network_queue *recv_queue;
+	network_queue *recv_queue_raw;
 	network_queue *send_queue;
 
 	GString *header; /** raw buffer for the packet_len and packet_id */

@@ -115,22 +115,15 @@
 #include <glib.h>
 #include <gmodule.h>
 
-#ifdef HAVE_LUA_H
 #include <lua.h>
-#endif
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
 #include "sys-pedantic.h"
 
-#ifndef _WIN32
-static void signal_handler(int sig) {
-	switch (sig) {
-	case SIGINT: network_mysqld_set_shutdown(); break;
-	case SIGTERM: network_mysqld_set_shutdown(); break;
-	}
-}
-#endif
+#include "chassis-log.h"
+#include "chassis-keyfile.h"
+#include "chassis-mainloop.h"
 
 /**
  * turn a GTimeVal into string
@@ -153,17 +146,10 @@ static gchar * g_timeval_string(GTimeVal *t1, GString *str) {
 }
 
 
-/**
- * log everything to the stdout for now
- */
-static void log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags UNUSED_PARAM(log_level), const gchar *message, gpointer UNUSED_PARAM(user_data)) {
-	write(STDERR_FILENO, message, strlen(message));
-	write(STDERR_FILENO, "\n", 1);
-}
 
 #ifndef _WIN32
 /**
- * start the agent in the background 
+ * start the app in the background 
  * 
  * UNIX-version
  */
@@ -191,86 +177,11 @@ static void daemonize(void) {
 }
 #endif
 
-int cauldron_keyfile_to_options(GKeyFile *keyfile, GOptionEntry *config_entries) {
-	const gchar *ini_group_name = "mysql-proxy";
-	GError *gerr = NULL;
-	int ret = 0;
-	int i;
-	
-	/* all the options are in the group for "mysql-proxy" */
-
-	if (!keyfile) return -1;
-	if (!g_key_file_has_group(keyfile, ini_group_name)) return 0;
-
-	/* set the defaults */
-	for (i = 0; config_entries[i].long_name; i++) {
-		GOptionEntry *entry = &(config_entries[i]);
-		gchar *arg_string;
-		gchar **arg_string_array;
-		gboolean arg_bool = 0;
-		gint arg_int = 0;
-		gdouble arg_double = 0;
-		gsize len = 0;
-
-		switch (entry->arg) {
-		case G_OPTION_ARG_STRING: 
-			/* is this option set already */
-			if (NULL == entry->arg_data || NULL != *(gchar **)(entry->arg_data)) break;
-
-			arg_string = g_key_file_get_string(keyfile, ini_group_name, entry->long_name, &gerr);
-			if (!gerr) {
-				*(gchar **)(entry->arg_data) = arg_string;
-			}
-			break;
-		case G_OPTION_ARG_STRING_ARRAY: 
-			/* is this option set already */
-			if (NULL == entry->arg_data || NULL != *(gchar ***)(entry->arg_data)) break;
-
-			arg_string_array = g_key_file_get_string_list(keyfile, ini_group_name, entry->long_name, &len, &gerr);
-			if (!gerr) {
-				*(gchar ***)(entry->arg_data) = arg_string_array;
-			}
-			break;
-		case G_OPTION_ARG_NONE: 
-			arg_bool = g_key_file_get_boolean(keyfile, ini_group_name, entry->long_name, &gerr);
-			if (!gerr) {
-				*(int *)(entry->arg_data) = arg_bool;
-			}
-			break;
-		case G_OPTION_ARG_INT: 
-			arg_int = g_key_file_get_integer(keyfile, ini_group_name, entry->long_name, &gerr);
-			if (!gerr) {
-				*(gint *)(entry->arg_data) = arg_int;
-			}
-			break;
-		case G_OPTION_ARG_DOUBLE: 
-			arg_double = g_key_file_get_double(keyfile, ini_group_name, entry->long_name, &gerr);
-			if (!gerr) {
-				*(gint *)(entry->arg_data) = arg_double;
-			}
-			break;
-
-		}
-
-		if (gerr) {
-			if (gerr->code != G_KEY_FILE_ERROR_KEY_NOT_FOUND) {
-				g_message("%s", gerr->message);
-				ret = -1;
-			}
-
-			g_error_free(gerr);
-			gerr = NULL;
-		}
-	}
-
-	return ret;
-}
-
 
 #define GETTEXT_PACKAGE "mysql-proxy"
 
 int main(int argc, char **argv) {
-	network_mysqld *srv;
+	chassis *srv;
 	
 	/* read the command-line options */
 	GOptionContext *option_ctx;
@@ -280,14 +191,17 @@ int main(int argc, char **argv) {
 	int print_version = 0;
 	int daemon_mode = 0;
 	const gchar *check_str = NULL;
-	cauldron_plugin *p;
+	chassis_plugin *p;
 	gchar *pid_file = NULL;
 	gchar *plugin_dir = NULL;
 	gchar *default_file = NULL;
 	GOptionEntry *config_entries;
 	gchar **plugin_names = NULL;
 
+	gchar *log_level = NULL;
+
 	GKeyFile *keyfile = NULL;
+	chassis_log *log;
 
 	/* can't appear in the configfile */
 	GOptionEntry base_main_entries[] = 
@@ -303,7 +217,10 @@ int main(int argc, char **argv) {
 		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
 		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
 		{ "plugin-dir",               0, 0, G_OPTION_ARG_STRING, NULL, "path to the plugins", "<path>" },
-		{ "plugins",                  0, 0, G_OPTION_ARG_STRING, NULL, "plugins to load", "<name>" },
+		{ "plugins",                  0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "plugins to load", "<name>" },
+		{ "log-level",                0, 0, G_OPTION_ARG_STRING, NULL, "log all messages of level ... or higer", "(error|warning|info|message|debug)" },
+		{ "log-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "log all messages in a file", "<file>" },
+		{ "log-use-syslog",           0, 0, G_OPTION_ARG_NONE, NULL, "send all log-messages to syslog", NULL },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -325,8 +242,18 @@ int main(int argc, char **argv) {
 	if (!g_module_supported()) {
 		g_error("loading modules is not supported on this platform");
 	}
+
+#ifdef HAVE_GTHREAD	
+	g_thread_init(NULL);
+#endif
+
+	log = chassis_log_init();
 	
-	srv = network_mysqld_init();
+	g_log_set_default_handler(chassis_log_func, log);
+
+	srv = chassis_init();
+	/* assign the mysqld part to the */
+	network_mysqld_init(srv);
 
 	i = 0;
 	base_main_entries[i++].arg_data  = &(print_version);
@@ -338,9 +265,11 @@ int main(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(plugin_dir);
 	main_entries[i++].arg_data  = &(plugin_names);
 
-	g_log_set_default_handler(log_func, NULL);
+	main_entries[i++].arg_data  = &(log_level);
+	main_entries[i++].arg_data  = &(log->log_filename);
+	main_entries[i++].arg_data  = &(log->use_syslog);
 
-	option_ctx = g_option_context_new("- MySQL Proxy");
+	option_ctx = g_option_context_new("- MySQL App Shell");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
 	g_option_context_set_help_enabled(option_ctx, FALSE);
 	g_option_context_set_ignore_unknown_options(option_ctx, TRUE);
@@ -353,11 +282,8 @@ int main(int argc, char **argv) {
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 		g_critical("%s", gerr->message);
 		
-		g_error_free(gerr);
-		
-		network_mysqld_free(srv);
-
-		return EXIT_FAILURE;
+		exit_code = EXIT_FAILURE;
+		goto exit_nicely;
 	}
 
 	if (default_file) {
@@ -369,10 +295,8 @@ int main(int argc, char **argv) {
 					default_file,
 					gerr->message);
 
-			g_error_free(gerr);
-			gerr = NULL;
-
-			return -1;
+			exit_code = EXIT_FAILURE;
+			goto exit_nicely;
 		}
 	}
 
@@ -386,17 +310,33 @@ int main(int argc, char **argv) {
 	 */
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 		g_critical("%s", gerr->message);
-		
-		g_error_free(gerr);
-		
-		network_mysqld_free(srv);
 
-		return EXIT_FAILURE;
+		exit_code = EXIT_FAILURE;
+		goto exit_nicely;
+	}
+
+	if (log->log_filename) {
+		if (0 != chassis_log_open(log)) {
+			g_critical("can't open log-file '%s': %s", log->log_filename, g_strerror(errno));
+
+			exit_code = EXIT_FAILURE;
+			goto exit_nicely;
+		}
+	}
+
+	if (log_level) {
+		if (0 != chassis_log_set_level(log, log_level)) {
+			g_critical("--log-level=... failed, level '%s' is unknown ", log_level);
+
+			exit_code = EXIT_FAILURE;
+			goto exit_nicely;
+		}
 	}
 
 	if (keyfile) {
-		if (cauldron_keyfile_to_options(keyfile, main_entries)) {
-			return EXIT_FAILURE;
+		if (chassis_keyfile_to_options(keyfile, "mysql-proxy", main_entries)) {
+			exit_code = EXIT_FAILURE;
+			goto exit_nicely;
 		}
 	}
 
@@ -405,24 +345,35 @@ int main(int argc, char **argv) {
 	/* if not plugins are specified, load admin and proxy */
 	if (!plugin_names) {
 		plugin_names = g_new0(char *, 3);
-		plugin_names[0] = g_strdup("admin");
-		plugin_names[1] = g_strdup("proxy");
-		plugin_names[2] = NULL;
-	}
 
+#define IS_PNAME(pname) \
+		((strlen(argv[0]) > sizeof(pname) - 1) && \
+		 0 == strcmp(argv[0] + strlen(argv[0]) - (sizeof(pname) - 1), pname) \
+		)
+
+		/* check what we are called as */
+		if (IS_PNAME("mysql-proxy")) {
+			plugin_names[0] = g_strdup("admin");
+			plugin_names[1] = g_strdup("proxy");
+			plugin_names[2] = NULL;
+		}
+	}
 
 	/* load the plugins */
 	for (i = 0; plugin_names && plugin_names[i]; i++) {
 		char *plugin_filename = g_strdup_printf("lib%s.la", plugin_names[i]);
 
-		if (NULL == (p = cauldron_plugin_load(plugin_dir, plugin_filename))) {
-			return EXIT_FAILURE;
-		}
+		p = chassis_plugin_load(plugin_dir, plugin_filename);
 		g_free(plugin_filename);
+		
+		if (NULL == p) {
+			exit_code = EXIT_FAILURE;
+			goto exit_nicely;
+		}
 
 		g_ptr_array_add(srv->modules, p);
 
-		if (NULL != (config_entries = cauldron_plugin_get_options(p))) {
+		if (NULL != (config_entries = chassis_plugin_get_options(p))) {
 			gchar *group_desc = g_strdup_printf("%s-module", plugin_names[i]);
 			gchar *help_msg = g_strdup_printf("Show options for the %s-module", plugin_names[i]);
 			const gchar *group_name = plugin_names[i];
@@ -438,42 +389,40 @@ int main(int argc, char **argv) {
 			if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 				g_critical("%s", gerr->message);
 		
-				g_error_free(gerr);
-
-				return EXIT_FAILURE;
+				exit_code = EXIT_FAILURE;
+				goto exit_nicely;
 			}
 	
 			if (keyfile) {
-				if (cauldron_keyfile_to_options(keyfile, config_entries)) {
-					return EXIT_FAILURE;
+				if (chassis_keyfile_to_options(keyfile, "mysql-proxy", config_entries)) {
+					exit_code = EXIT_FAILURE;
+					goto exit_nicely;
 				}
 			}
 		}
 	}
 
-	if (keyfile) g_key_file_free(keyfile);
-	if (default_file) g_free(default_file);
-
 	/* we know about the options now, lets parse them */
 	g_option_context_set_help_enabled(option_ctx, TRUE);
 	g_option_context_set_ignore_unknown_options(option_ctx, FALSE);
+
+	/* handle unknown options */
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 		g_critical("%s", gerr->message);
 		
-		g_error_free(gerr);
-		
-		network_mysqld_free(srv);
-
-		return EXIT_FAILURE;
+		exit_code = EXIT_FAILURE;
+		goto exit_nicely;
 	}
 
 	g_option_context_free(option_ctx);
+	option_ctx = NULL;
 
 	/* after parsing the options we should only have the program name left */
 	if (argc > 1) {
 		g_critical("unknown option: %s", argv[1]);
 
-		return EXIT_FAILURE;
+		exit_code = EXIT_FAILURE;
+		goto exit_nicely;
 	}
 
 
@@ -489,13 +438,11 @@ int main(int argc, char **argv) {
 	if (print_version) {
 		printf("%s\r\n", PACKAGE_STRING);
 
-		network_mysqld_free(srv);
-		return 0;
+		exit_code = EXIT_SUCCESS;
+		goto exit_nicely;
 	}
 
 #ifndef _WIN32	
-	signal(SIGINT,  signal_handler);
-	signal(SIGTERM, signal_handler);
 	signal(SIGPIPE, SIG_IGN);
 
 	if (daemon_mode) {
@@ -515,7 +462,9 @@ int main(int argc, char **argv) {
 					__FILE__, __LINE__,
 					pid_file,
 					strerror(errno));
-			return -1;
+
+			exit_code = EXIT_FAILURE;
+			goto exit_nicely;
 		}
 
 		pid_str = g_strdup_printf("%d", getpid());
@@ -526,13 +475,33 @@ int main(int argc, char **argv) {
 		close(fd);
 	}
 
-	if (network_mysqld_thread(srv)) {
+	if (chassis_mainloop(srv)) {
 		/* looks like we failed */
 
 		exit_code = EXIT_FAILURE;
+		goto exit_nicely;
 	}
 
-	network_mysqld_free(srv);
+exit_nicely:
+	if (keyfile) g_key_file_free(keyfile);
+	if (default_file) g_free(default_file);
+
+	if (gerr) g_error_free(gerr);
+	if (option_ctx) g_option_context_free(option_ctx);
+	if (srv) chassis_free(srv);
+
+	if (pid_file) g_free(pid_file);
+	if (log_level) g_free(log_level);
+	if (plugin_dir) g_free(plugin_dir);
+
+	if (plugin_names) {
+		for (i = 0; plugin_names[i]; i++) {
+			g_free(plugin_names[i]);
+		}
+		g_free(plugin_names);
+	}
+
+	chassis_log_free(log);
 
 	return exit_code;
 }

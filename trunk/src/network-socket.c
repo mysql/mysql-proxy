@@ -76,6 +76,7 @@ network_socket *network_socket_init() {
 
 	s->send_queue = network_queue_init();
 	s->recv_queue = network_queue_init();
+	s->recv_queue_raw = network_queue_init();
 
 	s->packet_len = PACKET_LEN_UNSET;
 
@@ -94,6 +95,7 @@ void network_socket_free(network_socket *s) {
 
 	network_queue_free(s->send_queue);
 	network_queue_free(s->recv_queue);
+	network_queue_free(s->recv_queue_raw);
 
 	if (s->addr.str) {
 		g_free(s->addr.str);

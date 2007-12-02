@@ -251,7 +251,7 @@ typedef struct {
 	GTimeVal ts_read_query_result_last;     /* when we first finished it */
 } injection;
 
-struct cauldron_plugin_config {
+struct chassis_plugin_config {
 	gchar *address;                   /**< listening address of the proxy */
 
 	gchar **backend_addresses;        /**<    read-write backends */
@@ -267,6 +267,15 @@ struct cauldron_plugin_config {
 
 	network_mysqld_con *listen_con;
 };
+
+/**
+ * compare two strings for equality 
+ */
+gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
+	if (a_len != b_len) return FALSE;
+	return (0 == strcmp(a, b));
+}
+
 
 
 static injection *injection_init(int id, GString *query) {
@@ -630,7 +639,7 @@ static void network_mysqld_con_idle_handle(int event_fd, short events, void *use
  * proxy from its backend 
  */
 static int proxy_connection_pool_add_connection(network_mysqld_con *con) {
-	network_mysqld *srv = con->srv;
+	chassis *srv = con->srv;
 	network_connection_pool_entry *pool_entry = NULL;
 	plugin_con_state *st = con->plugin_con_state;
 
@@ -914,15 +923,60 @@ lua_State *lua_load_script(lua_State *L, const gchar *name) {
 }
 
 /**
+ * taken from lapi.c 
+ */
+/* convert a stack index to positive */
+#define abs_index(L, i)         ((i) > 0 || (i) <= LUA_REGISTRYINDEX ? (i) : \
+		                                        lua_gettop(L) + (i) + 1)
+void lua_getfield_literal (lua_State *L, int idx, const char *k, size_t k_len) {
+	idx = abs_index(L, idx);
+
+	lua_pushlstring(L, k, k_len);
+
+	lua_gettable(L, idx);
+}
+
+/**
+ * check pass through the userdata as is 
+ */
+static void *luaL_checkself (lua_State *L) {
+	return lua_touserdata(L, 1);
+}
+
+/**
+ * emulate luaL_newmetatable() with lightuserdata instead of strings 
+ */
+void proxy_getmetatable(lua_State *L, const luaL_reg *methods) {
+	/* check if the */
+
+	lua_pushlightuserdata(L, methods);
+	lua_gettable(L, LUA_REGISTRYINDEX);
+
+	if (lua_isnil(L, -1)) {
+		/* not found */
+		lua_pop(L, 1);
+
+		lua_newtable(L);
+		luaL_register(L, NULL, methods);
+
+		lua_pushlightuserdata(L, methods);
+		lua_pushvalue(L, -2);
+		lua_settable(L, LUA_REGISTRYINDEX);
+	}
+	g_assert(lua_istable(L, -1));
+}
+
+/**
  * get the info connection pool 
  *
  * @return nil or requested information
  */
 static int proxy_pool_queue_get(lua_State *L) {
-	GQueue *queue = *(GQueue **)luaL_checkudata(L, 1, "proxy.backend.pool.queue"); 
-	const char *key = luaL_checkstring(L, 2); /** ... cur_idle */
+	GQueue *queue = *(GQueue **)luaL_checkself(L); 
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
 
-	if (0 == strcmp(key, "cur_idle_connections")) {
+	if (strleq(key, keysize, C("cur_idle_connections"))) {
 		lua_pushinteger(L, queue ? queue->length : 0);
 	} else {
 		lua_pushnil(L);
@@ -930,13 +984,20 @@ static int proxy_pool_queue_get(lua_State *L) {
 
 	return 1;
 }
+
+static const struct luaL_reg methods_proxy_backend_pool_queue[] = { \
+	{ "__index", proxy_pool_queue_get },
+
+	{ NULL, NULL },
+};
+
 /**
  * get the info connection pool 
  *
  * @return nil or requested information
  */
 static int proxy_pool_users_get(lua_State *L) {
-	network_connection_pool *pool = *(network_connection_pool **)luaL_checkudata(L, 1, "proxy.backend.pool.users"); 
+	network_connection_pool *pool = *(network_connection_pool **)luaL_checkself(L); 
 	const char *key = luaL_checkstring(L, 2); /** the username */
 	GString *s = g_string_new(key);
 	GQueue **q_p = NULL;
@@ -945,38 +1006,34 @@ static int proxy_pool_users_get(lua_State *L) {
 	*q_p = network_connection_pool_get_conns(pool, s, NULL);
 	g_string_free(s, TRUE);
 
-	/* if the meta-table is new, add __index to it */
-	if (1 == luaL_newmetatable(L, "proxy.backend.pool.queue")) {
-		lua_pushcfunction(L, proxy_pool_queue_get);            /* (sp += 1) */
-		lua_setfield(L, -2, "__index");                        /* (sp -= 1) */
-	}
-
-	lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
+	proxy_getmetatable(L, methods_proxy_backend_pool_queue);
+	lua_setmetatable(L, -2);
 
 	return 1;
 }
 
-static int proxy_pool_get(lua_State *L) {
-	network_connection_pool *pool = *(network_connection_pool **)luaL_checkudata(L, 1, "proxy.backend.pool"); 
-	const char *key = luaL_checkstring(L, 2);
+static const struct luaL_reg methods_proxy_backend_pool_users[] = {
+	{ "__index", proxy_pool_users_get },
+	{ NULL, NULL },
+};
 
-	if (0 == strcmp(key, "max_idle_connections")) {
+static int proxy_pool_get(lua_State *L) {
+	network_connection_pool *pool = *(network_connection_pool **)luaL_checkself(L); 
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
+
+	if (strleq(key, keysize, C("max_idle_connections"))) {
 		lua_pushinteger(L, pool->max_idle_connections);
-	} else if (0 == strcmp(key, "min_idle_connections")) {
+	} else if (strleq(key, keysize, C("min_idle_connections"))) {
 		lua_pushinteger(L, pool->min_idle_connections);
-	} else if (0 == strcmp(key, "users")) {
+	} else if (strleq(key, keysize, C("users"))) {
 		network_connection_pool **pool_p;
 
 		pool_p = lua_newuserdata(L, sizeof(*pool_p)); 
 		*pool_p = pool;
 
-		/* if the meta-table is new, add __index to it */
-		if (1 == luaL_newmetatable(L, "proxy.backend.pool.users")) {
-			lua_pushcfunction(L, proxy_pool_users_get);            /* (sp += 1) */
-			lua_setfield(L, -2, "__index");                        /* (sp -= 1) */
-		}
-
-		lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
+		proxy_getmetatable(L, methods_proxy_backend_pool_users);
+		lua_setmetatable(L, -2);
 	} else {
 		lua_pushnil(L);
 	}
@@ -986,12 +1043,13 @@ static int proxy_pool_get(lua_State *L) {
 
 
 static int proxy_pool_set(lua_State *L) {
-	network_connection_pool *pool = *(network_connection_pool **)luaL_checkudata(L, 1, "proxy.backend.pool"); 
-	const char *key = luaL_checkstring(L, 2);
+	network_connection_pool *pool = *(network_connection_pool **)luaL_checkself(L);
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
 
-	if (0 == strcmp(key, "max_idle_connections")) {
+	if (strleq(key, keysize, C("max_idle_connections"))) {
 		pool->max_idle_connections = lua_tointeger(L, -1);
-	} else if (0 == strcmp(key, "min_idle_connections")) {
+	} else if (strleq(key, keysize, C("min_idle_connections"))) {
 		pool->min_idle_connections = lua_tointeger(L, -1);
 	} else {
 		return luaL_error(L, "proxy.backend[...].%s is not writable", key);
@@ -1000,6 +1058,12 @@ static int proxy_pool_set(lua_State *L) {
 	return 0;
 }
 
+
+static const struct luaL_reg methods_proxy_backend_pool[] = {
+	{ "__index", proxy_pool_get },
+	{ "__newindex", proxy_pool_set },
+	{ NULL, NULL },
+};
 
 /**
  * get the info about a backend
@@ -1014,39 +1078,38 @@ static int proxy_pool_set(lua_State *L) {
  * @see backend_state_t backend_type_t
  */
 static int proxy_backend_get(lua_State *L) {
-	backend_t *backend = *(backend_t **)luaL_checkudata(L, 1, "proxy.backend"); 
-	const char *key = luaL_checkstring(L, 2);
+	backend_t *backend = *(backend_t **)luaL_checkself(L);
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
 
-	if (0 == strcmp(key, "connected_clients")) {
+	if (strleq(key, keysize, C("connected_clients"))) {
 		lua_pushinteger(L, backend->connected_clients);
-	} else if (0 == strcmp(key, "address")) {
+	} else if (strleq(key, keysize, C("address"))) {
 		lua_pushstring(L, backend->addr.str);
-	} else if (0 == strcmp(key, "state")) {
+	} else if (strleq(key, keysize, C("state"))) {
 		lua_pushinteger(L, backend->state);
-	} else if (0 == strcmp(key, "type")) {
+	} else if (strleq(key, keysize, C("type"))) {
 		lua_pushinteger(L, backend->type);
-	} else if (0 == strcmp(key, "pool")) {
+	} else if (strleq(key, keysize, C("pool"))) {
 		network_connection_pool *pool; 
 		network_connection_pool **pool_p;
 
 		pool_p = lua_newuserdata(L, sizeof(pool)); 
 		*pool_p = backend->pool;
 
-		/* if the meta-table is new, add __index to it */
-		if (1 == luaL_newmetatable(L, "proxy.backend.pool")) {
-			lua_pushcfunction(L, proxy_pool_get);                  /* (sp += 1) */
-			lua_setfield(L, -2, "__index");                        /* (sp -= 1) */
-			lua_pushcfunction(L, proxy_pool_set);                  /* (sp += 1) */
-			lua_setfield(L, -2, "__newindex");                     /* (sp -= 1) */
-		}
-
-		lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
+		proxy_getmetatable(L, methods_proxy_backend_pool);
+		lua_setmetatable(L, -2);
 	} else {
 		lua_pushnil(L);
 	}
 
 	return 1;
 }
+
+static const struct luaL_reg methods_proxy_backend[] = {
+	{ "__index", proxy_backend_get },
+	{ NULL, NULL },
+};
 
 /**
  * get proxy.backends[ndx]
@@ -1061,7 +1124,7 @@ static int proxy_backends_get(lua_State *L) {
 	backend_t *backend; 
 	backend_t **backend_p;
 
-	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.backends"); 
+	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkself(L);
 	int backend_ndx = luaL_checkinteger(L, 2) - 1; /** lua is indexes from 1, C from 0 */
 
 	st = con->plugin_con_state;
@@ -1078,19 +1141,14 @@ static int proxy_backends_get(lua_State *L) {
 	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneat proxy.backends[ndx] */
 	*backend_p = backend;
 
-	/* if the meta-table is new, add __index to it */
-	if (1 == luaL_newmetatable(L, "proxy.backend")) {
-		lua_pushcfunction(L, proxy_backend_get);                  /* (sp += 1) */
-		lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-	}
-
-	lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
+	proxy_getmetatable(L, methods_proxy_backend);
+	lua_setmetatable(L, -2);
 
 	return 1;
 }
 
 static int proxy_backends_len(lua_State *L) {
-	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.backends"); 
+	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkself(L);
 	plugin_con_state *st;
 
 	st = con->plugin_con_state;
@@ -1100,28 +1158,35 @@ static int proxy_backends_len(lua_State *L) {
         return 1;
 }
 
+static const struct luaL_reg methods_proxy_backends[] = {
+	{ "__index", proxy_backends_get },
+	{ "__len", proxy_backends_len },
+	{ NULL, NULL },
+};
+
 static int proxy_socket_get(lua_State *L) {
-	network_socket *sock = *(network_socket **)luaL_checkudata(L, 1, "proxy.socket"); 
-	const char *key = luaL_checkstring(L, 2);
+	network_socket *sock = *(network_socket **)luaL_checkself(L);
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
 
 	/**
 	 * we to split it in .client and .server here
 	 */
 
-	if (0 == strcmp(key, "default_db")) {
+	if (strleq(key, keysize, C("default_db"))) {
 		lua_pushlstring(L, sock->default_db->str, sock->default_db->len);
-	} else if (0 == strcmp(key, "username")) {
+	} else if (strleq(key, keysize, C("username"))) {
 		lua_pushlstring(L, sock->username->str, sock->username->len);
-	} else if (0 == strcmp(key, "address")) {
+	} else if (strleq(key, keysize, C("address"))) {
 		lua_pushstring(L, sock->addr.str);
-	} else if (0 == strcmp(key, "scrambled_password")) {
+	} else if (strleq(key, keysize, C("scrambled_password"))) {
 		lua_pushlstring(L, sock->scrambled_password->str, sock->scrambled_password->len);
 	} else if (sock->mysqld_version) { /* only the server-side has mysqld_version set */
-		if (0 == strcmp(key, "mysqld_version")) {
+		if (strleq(key, keysize, C("mysqld_version"))) {
 			lua_pushinteger(L, sock->mysqld_version);
-		} else if (0 == strcmp(key, "thread_id")) {
+		} else if (strleq(key, keysize, C("thread_id"))) {
 			lua_pushinteger(L, sock->thread_id);
-		} else if (0 == strcmp(key, "scramble_buffer")) {
+		} else if (strleq(key, keysize, C("scramble_buffer"))) {
 			lua_pushlstring(L, sock->scramble_buf->str, sock->scramble_buf->len);
 		} else {
 			lua_pushnil(L);
@@ -1133,15 +1198,21 @@ static int proxy_socket_get(lua_State *L) {
 	return 1;
 }
 
+static const struct luaL_reg methods_proxy_socket[] = {
+	{ "__index", proxy_socket_get },
+	{ NULL, NULL },
+};
+
 /**
  * get the connection information
  *
  * note: might be called in connect_server() before con->server is set 
  */
 static int proxy_connection_get(lua_State *L) {
-	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.connection"); 
+	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkself(L); 
 	plugin_con_state *st;
-	const char *key = luaL_checkstring(L, 2);
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
 
 	st = con->plugin_con_state;
 
@@ -1149,16 +1220,16 @@ static int proxy_connection_get(lua_State *L) {
 	 * we to split it in .client and .server here
 	 */
 
-	if (0 == strcmp(key, "default_db")) {
+	if (strleq(key, keysize, C("default_db"))) {
 		return luaL_error(L, "proxy.connection.default_db is deprecated, use proxy.connection.client.default_db or proxy.connection.server.default_db instead");
-	} else if (0 == strcmp(key, "thread_id")) {
+	} else if (strleq(key, keysize, C("thread_id"))) {
 		return luaL_error(L, "proxy.connection.thread_id is deprecated, use proxy.connection.server.thread_id instead");
-	} else if (0 == strcmp(key, "mysqld_version")) {
+	} else if (strleq(key, keysize, C("mysqld_version"))) {
 		return luaL_error(L, "proxy.connection.mysqld_version is deprecated, use proxy.connection.server.mysqld_version instead");
-	} else if (0 == strcmp(key, "backend_ndx")) {
+	} else if (strleq(key, keysize, C("backend_ndx"))) {
 		lua_pushinteger(L, st->backend_ndx + 1);
-	} else if ((con->server && (0 == strcmp(key, "server"))) ||
-	           (con->client && (0 == strcmp(key, "client")))) {
+	} else if ((con->server && (strleq(key, keysize, C("server")))) ||
+	           (con->client && (strleq(key, keysize, C("client"))))) {
 		network_socket **socket_p;
 
 		socket_p = lua_newuserdata(L, sizeof(network_socket)); /* the table underneat proxy.socket */
@@ -1169,12 +1240,7 @@ static int proxy_connection_get(lua_State *L) {
 			*socket_p = con->client;
 		}
 
-		/* if the meta-table is new, add __index to it */
-		if (1 == luaL_newmetatable(L, "proxy.socket")) {
-			lua_pushcfunction(L, proxy_socket_get);                   /* (sp += 1) */
-			lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-		}
-
+		proxy_getmetatable(L, methods_proxy_socket);
 		lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
 	} else {
 		lua_pushnil(L);
@@ -1189,13 +1255,14 @@ static int proxy_connection_get(lua_State *L) {
  * note: might be called in connect_server() before con->server is set 
  */
 static int proxy_connection_set(lua_State *L) {
-	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkudata(L, 1, "proxy.connection"); 
+	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkself(L);
 	plugin_con_state *st;
-	const char *key = luaL_checkstring(L, 2);
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
 
 	st = con->plugin_con_state;
 
-	if (0 == strcmp(key, "backend_ndx")) {
+	if (strleq(key, keysize, C("backend_ndx"))) {
 		/**
 		 * in lua-land the ndx is based on 1, in C-land on 0 */
 		int backend_ndx = luaL_checkinteger(L, 3) - 1;
@@ -1221,9 +1288,15 @@ static int proxy_connection_set(lua_State *L) {
 	return 0;
 }
 
+static const struct luaL_reg methods_proxy_connection[] = {
+	{ "__index", proxy_connection_get },
+	{ "__newindex", proxy_connection_set },
+	{ NULL, NULL },
+};
+
 static int proxy_queue_append(lua_State *L) {
 	/* we expect 2 parameters */
-	GQueue *q = *(GQueue **)luaL_checkudata(L, 1, "proxy.queue");
+	GQueue *q = *(GQueue **)luaL_checkself(L);
 	int resp_type = luaL_checkinteger(L, 2);
 	size_t str_len;
 	const char *str = luaL_checklstring(L, 3, &str_len);
@@ -1238,7 +1311,7 @@ static int proxy_queue_append(lua_State *L) {
 
 static int proxy_queue_prepend(lua_State *L) {
 	/* we expect 2 parameters */
-	GQueue *q = *(GQueue **)luaL_checkudata(L, 1, "proxy.queue");
+	GQueue *q = *(GQueue **)luaL_checkself(L);
 	int resp_type = luaL_checkinteger(L, 2);
 	size_t str_len;
 	const char *str = luaL_checklstring(L, 3, &str_len);
@@ -1253,7 +1326,7 @@ static int proxy_queue_prepend(lua_State *L) {
 
 static int proxy_queue_reset(lua_State *L) {
 	/* we expect 2 parameters */
-	GQueue *q = *(GQueue **)luaL_checkudata(L, 1, "proxy.queue");
+	GQueue *q = *(GQueue **)luaL_checkself(L);
 	injection *inj;
 
 	while ((inj = g_queue_pop_head(q))) injection_free(inj);
@@ -1263,12 +1336,20 @@ static int proxy_queue_reset(lua_State *L) {
 
 static int proxy_queue_len(lua_State *L) {
 	/* we expect 2 parameters */
-	GQueue *q = *(GQueue **)luaL_checkudata(L, 1, "proxy.queue");
+	GQueue *q = *(GQueue **)luaL_checkself(L);
 
 	lua_pushinteger(L, q->length);
 
 	return 1;
 }
+
+static const struct luaL_reg methods_proxy_queue[] = {
+	{ "prepend", proxy_queue_prepend },
+	{ "append", proxy_queue_append },
+	{ "reset", proxy_queue_reset },
+	{ "__len", proxy_queue_len },
+	{ NULL, NULL },
+};
 
 /**
  * split the SQL query into a stream of tokens
@@ -1329,7 +1410,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 	plugin_srv_state *g  = st->global_state;
 	GQueue **q_p;
 	network_mysqld_con **con_p;
-	cauldron_plugin_config *config = con->config;
+	chassis_plugin_config *config = con->config;
 	int stack_top;
 
 	if (!config->lua_script) return 0;
@@ -1422,23 +1503,13 @@ static int lua_register_callback(network_mysqld_con *con) {
 	 * - len() and #proxy.queue
 	 *
 	 */
-	if (1 == luaL_newmetatable(L, "proxy.queue")) {
-		lua_pushcfunction(L, proxy_queue_append);
-		lua_setfield(L, -2, "append");
-		lua_pushcfunction(L, proxy_queue_prepend);
-		lua_setfield(L, -2, "prepend");
-		lua_pushcfunction(L, proxy_queue_reset);
-		lua_setfield(L, -2, "reset");
-		lua_pushcfunction(L, proxy_queue_len);
-		lua_setfield(L, -2, "len");   /* DEPRECATED: */
-		lua_pushcfunction(L, proxy_queue_len);
-		lua_setfield(L, -2, "__len"); /* support #proxy.queue too */
+	proxy_getmetatable(L, methods_proxy_queue);
 
-		lua_pushvalue(L, -1); /* meta.__index = meta */
-		lua_setfield(L, -2, "__index");
-	}
+	lua_pushvalue(L, -1); /* meta.__index = meta */
+	lua_setfield(L, -2, "__index");
 
 	lua_setmetatable(L, -2);
+
 
 	lua_setfield(L, -2, "queries"); /* proxy.queries = <userdata> */
 	
@@ -1461,15 +1532,9 @@ static int lua_register_callback(network_mysqld_con *con) {
 	con_p = lua_newuserdata(L, sizeof(con));                          /* (sp += 1) */
 	*con_p = con;
 
-	/* if the meta-table is new, add __index to it */
-	if (1 == luaL_newmetatable(L, "proxy.connection")) {              /* (sp += 1) */
-		lua_pushcfunction(L, proxy_connection_get);               /* (sp += 1) */
-		lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-		lua_pushcfunction(L, proxy_connection_set);               /* (sp += 1) */
-		lua_setfield(L, -2, "__newindex");                        /* (sp -= 1) */
-	}
-
+	proxy_getmetatable(L, methods_proxy_connection);
 	lua_setmetatable(L, -2);          /* tie the metatable to the udata   (sp -= 1) */
+
 	lua_setfield(L, -2, "connection"); /* proxy.connection = <udata>     (sp -= 1) */
 
 	/**
@@ -1480,13 +1545,8 @@ static int lua_register_callback(network_mysqld_con *con) {
 
 	con_p = lua_newuserdata(L, sizeof(con));
 	*con_p = con;
-	/* if the meta-table is new, add __index to it */
-	if (1 == luaL_newmetatable(L, "proxy.backends")) {
-		lua_pushcfunction(L, proxy_backends_get);                  /* (sp += 1) */
-		lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-		lua_pushcfunction(L, proxy_backends_len);                  /* (sp += 1) */
-		lua_setfield(L, -2, "__len");                             /* (sp -= 1) */
-	}
+
+	proxy_getmetatable(L, methods_proxy_backends);
 	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */
 
 	lua_setfield(L, -2, "backends");
@@ -1586,7 +1646,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	const char *str;
 	size_t str_len;
 	lua_State *L = st->injected.L;
-	cauldron_plugin_config *config = con->config;
+	chassis_plugin_config *config = con->config;
 
 	/**
 	 * on the stack should be the fenv of our function */
@@ -1929,25 +1989,26 @@ static int proxy_resultset_gc_light(lua_State *L) {
 }
 
 static int proxy_resultset_fields_len(lua_State *L) {
-	GPtrArray *fields = *(GPtrArray **)luaL_checkudata(L, 1, "proxy.resultset.fields");
+	GPtrArray *fields = *(GPtrArray **)luaL_checkself(L);
         lua_pushinteger(L, fields->len);
         return 1;
 }
 
 static int proxy_resultset_field_get(lua_State *L) {
-	MYSQL_FIELD *field = *(MYSQL_FIELD **)luaL_checkudata(L, 1, "proxy.resultset.fields.field");
-	const char *key = luaL_checkstring(L, 2);
+	MYSQL_FIELD *field = *(MYSQL_FIELD **)luaL_checkself(L);
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
 
 
-	if (0 == strcmp(key, "type")) {
+	if (strleq(key, keysize, C("type"))) {
 		lua_pushinteger(L, field->type);
-	} else if (0 == strcmp(key, "name")) {
+	} else if (strleq(key, keysize, C("name"))) {
 		lua_pushstring(L, field->name);
-	} else if (0 == strcmp(key, "org_name")) {
+	} else if (strleq(key, keysize, C("org_name"))) {
 		lua_pushstring(L, field->org_name);
-	} else if (0 == strcmp(key, "org_table")) {
+	} else if (strleq(key, keysize, C("org_table"))) {
 		lua_pushstring(L, field->org_table);
-	} else if (0 == strcmp(key, "table")) {
+	} else if (strleq(key, keysize, C("table"))) {
 		lua_pushstring(L, field->table);
 	} else {
 		lua_pushnil(L);
@@ -1956,12 +2017,17 @@ static int proxy_resultset_field_get(lua_State *L) {
 	return 1;
 }
 
+static const struct luaL_reg methods_proxy_resultset_fields_field[] = {
+	{ "__index", proxy_resultset_field_get },
+	{ NULL, NULL },
+};
+
 /**
  * get a field from the result-set
  *
  */
 static int proxy_resultset_fields_get(lua_State *L) {
-	GPtrArray *fields = *(GPtrArray **)luaL_checkudata(L, 1, "proxy.resultset.fields");
+	GPtrArray *fields = *(GPtrArray **)luaL_checkself(L);
 	MYSQL_FIELD *field;
 	MYSQL_FIELD **field_p;
 	int ndx = luaL_checkinteger(L, 2);
@@ -1977,13 +2043,8 @@ static int proxy_resultset_fields_get(lua_State *L) {
 	field_p = lua_newuserdata(L, sizeof(field));
 	*field_p = field;
 
-	/* if the meta-table is new, add __index to it */
-	if (1 == luaL_newmetatable(L, "proxy.resultset.fields.field")) {
-		lua_pushcfunction(L, proxy_resultset_field_get);         /* (sp += 1) */
-		lua_setfield(L, -2, "__index");                          /* (sp -= 1) */
-	}
-
-	lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
+	proxy_getmetatable(L, methods_proxy_resultset_fields_field);
+	lua_setmetatable(L, -2);
 
 	return 1;
 }
@@ -2096,11 +2157,23 @@ static int parse_resultset_fields(proxy_resultset_t *res) {
 	return 0;
 }
 
-static int proxy_resultset_get(lua_State *L) {
-	proxy_resultset_t *res = *(proxy_resultset_t **)luaL_checkudata(L, 1, "proxy.resultset");
-	const char *key = luaL_checkstring(L, 2);
+static const struct luaL_reg methods_proxy_resultset_fields[] = {
+	{ "__index", proxy_resultset_fields_get },
+	{ "__len", proxy_resultset_fields_len },
+	{ NULL, NULL },
+};
 
-	if (0 == strcmp(key, "fields")) {
+static const struct luaL_reg methods_proxy_resultset_light[] = {
+	{ "__gc", proxy_resultset_gc_light },
+	{ NULL, NULL },
+};
+
+static int proxy_resultset_get(lua_State *L) {
+	proxy_resultset_t *res = *(proxy_resultset_t **)luaL_checkself(L);
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
+
+	if (strleq(key, keysize, C("fields"))) {
 		GPtrArray **fields_p;
 
 		parse_resultset_fields(res);
@@ -2108,20 +2181,13 @@ static int proxy_resultset_get(lua_State *L) {
 		if (res->fields) {
 			fields_p = lua_newuserdata(L, sizeof(res->fields));
 			*fields_p = res->fields;
-	
-			/* if the meta-table is new, add __index to it */
-			if (1 == luaL_newmetatable(L, "proxy.resultset.fields")) {
-				lua_pushcfunction(L, proxy_resultset_fields_get);         /* (sp += 1) */
-				lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-                                lua_pushcfunction(L, proxy_resultset_fields_len);        /* (sp += 1) */
-                                lua_setfield(L, -2, "__len");                            /* (sp -= 1) */
-			}
-	
+
+			proxy_getmetatable(L, methods_proxy_resultset_fields);
 			lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
 		} else {
 			lua_pushnil(L);
 		}
-	} else if (0 == strcmp(key, "rows")) {
+	} else if (strleq(key, keysize, C("rows"))) {
 		proxy_resultset_t *rows;
 		proxy_resultset_t **rows_p;
 
@@ -2137,23 +2203,19 @@ static int proxy_resultset_get(lua_State *L) {
 			/* push the parameters on the stack */
 			rows_p = lua_newuserdata(L, sizeof(rows));
 			*rows_p = rows;
-	
-			/* if the meta-table is new, add __index to it */
-			if (1 == luaL_newmetatable(L, "proxy.resultset.light")) {
-				lua_pushcfunction(L, proxy_resultset_gc_light);           /* (sp += 1) */
-				lua_setfield(L, -2, "__gc");                              /* (sp -= 1) */
-			}
-			lua_setmetatable(L, -2);         /* tie the metatable to the table   (sp -= 1) */
+
+			proxy_getmetatable(L, methods_proxy_resultset_light);
+			lua_setmetatable(L, -2);
 	
 			/* return a interator */
 			lua_pushcclosure(L, proxy_resultset_rows_iter, 1);
 		} else {
 			lua_pushnil(L);
 		}
-	} else if (0 == strcmp(key, "raw")) {
+	} else if (strleq(key, keysize, C("raw"))) {
 		GString *s = res->result_queue->head->data;
 		lua_pushlstring(L, s->str + 4, s->len - 4);
-	} else if (0 == strcmp(key, "flags")) {
+	} else if (strleq(key, keysize, C("flags"))) {
 		lua_newtable(L);
 		lua_pushboolean(L, (res->qstat.server_status & SERVER_STATUS_IN_TRANS) != 0);
 		lua_setfield(L, -2, "in_trans");
@@ -2166,9 +2228,9 @@ static int proxy_resultset_get(lua_State *L) {
 		
 		lua_pushboolean(L, (res->qstat.server_status & SERVER_QUERY_NO_INDEX_USED) != 0);
 		lua_setfield(L, -2, "no_index_used");
-	} else if (0 == strcmp(key, "warning_count")) {
+	} else if (strleq(key, keysize, C("warning_count"))) {
 		lua_pushinteger(L, res->qstat.warning_count);
-	} else if (0 == strcmp(key, "affected_rows")) {
+	} else if (strleq(key, keysize, C("affected_rows"))) {
 		/**
 		 * if the query had a result-set (SELECT, ...) 
 		 * affected_rows and insert_id are not valid
@@ -2178,13 +2240,13 @@ static int proxy_resultset_get(lua_State *L) {
 		} else {
 			lua_pushnumber(L, res->qstat.affected_rows);
 		}
-	} else if (0 == strcmp(key, "insert_id")) {
+	} else if (strleq(key, keysize, C("insert_id"))) {
 		if (res->qstat.was_resultset) {
 			lua_pushnil(L);
 		} else {
 			lua_pushnumber(L, res->qstat.insert_id);
 		}
-	} else if (0 == strcmp(key, "query_status")) {
+	} else if (strleq(key, keysize, C("query_status"))) {
 		if (0 != parse_resultset_fields(res)) {
 			/* not a result-set */
 			lua_pushnil(L);
@@ -2198,21 +2260,28 @@ static int proxy_resultset_get(lua_State *L) {
 	return 1;
 }
 
-static int proxy_injection_get(lua_State *L) {
-	injection *inj = *(injection **)luaL_checkudata(L, 1, "proxy.injection"); 
-	const char *key = luaL_checkstring(L, 2);
+static const struct luaL_reg methods_proxy_resultset[] = {
+	{ "__index", proxy_resultset_get },
+	{ "__gc", proxy_resultset_gc },
+	{ NULL, NULL },
+};
 
-	if (0 == strcmp(key, "type")) {
+static int proxy_injection_get(lua_State *L) {
+	injection *inj = *(injection **)luaL_checkself(L);
+	gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
+
+	if (strleq(key, keysize, C("type"))) {
 		lua_pushinteger(L, inj->id); /** DEPRECATED: use "inj.id" instead */
-	} else if (0 == strcmp(key, "id")) {
+	} else if (strleq(key, keysize, C("id"))) {
 		lua_pushinteger(L, inj->id);
-	} else if (0 == strcmp(key, "query")) {
+	} else if (strleq(key, keysize, C("query"))) {
 		lua_pushlstring(L, inj->query->str, inj->query->len);
-	} else if (0 == strcmp(key, "query_time")) {
+	} else if (strleq(key, keysize, C("query_time"))) {
 		lua_pushinteger(L, TIME_DIFF_US(inj->ts_read_query_result_first, inj->ts_read_query));
-	} else if (0 == strcmp(key, "response_time")) {
+	} else if (strleq(key, keysize, C("response_time"))) {
 		lua_pushinteger(L, TIME_DIFF_US(inj->ts_read_query_result_last, inj->ts_read_query));
-	} else if (0 == strcmp(key, "resultset")) {
+	} else if (strleq(key, keysize, C("resultset"))) {
 		/* fields, rows */
 		proxy_resultset_t *res;
 		proxy_resultset_t **res_p;
@@ -2223,16 +2292,8 @@ static int proxy_injection_get(lua_State *L) {
 		res->result_queue = inj->result_queue;
 		res->qstat = inj->qstat;
 
-		/* if the meta-table is new, add __index to it */
-		if (1 == luaL_newmetatable(L, "proxy.resultset")) {
-			lua_pushcfunction(L, proxy_resultset_get);                /* (sp += 1) */
-			lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-			lua_pushcfunction(L, proxy_resultset_gc);               /* (sp += 1) */
-			lua_setfield(L, -2, "__gc");                              /* (sp -= 1) */
-		}
-
-		lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
-
+		proxy_getmetatable(L, methods_proxy_resultset);
+		lua_setmetatable(L, -2);
 	} else {
 		g_message("%s.%d: inj[%s] ... not found", __FILE__, __LINE__, key);
 
@@ -2241,6 +2302,13 @@ static int proxy_injection_get(lua_State *L) {
 
 	return 1;
 }
+
+static const struct luaL_reg methods_proxy_injection[] = {
+	{ "__index", proxy_injection_get },
+	{ NULL, NULL },
+};
+
+
 #endif
 static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 #ifdef HAVE_LUA_H
@@ -2272,7 +2340,7 @@ static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 		lua_getfenv(L, -1);
 		g_assert(lua_istable(L, -1));
 		
-		lua_getfield(L, -1, "read_query_result");
+		lua_getfield_literal(L, -1, C("read_query_result"));
 		if (lua_isfunction(L, -1)) {
 			injection **inj_p;
 			GString *packet;
@@ -2283,13 +2351,8 @@ static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 			inj->result_queue = con->client->send_queue->chunks;
 			inj->qstat = st->injected.qstat;
 
-			/* if the meta-table is new, add __index to it */
-			if (1 == luaL_newmetatable(L, "proxy.injection")) {
-				lua_pushcfunction(L, proxy_injection_get);                /* (sp += 1) */
-				lua_setfield(L, -2, "__index");                           /* (sp -= 1) */
-			}
-
-			lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
+			proxy_getmetatable(L, methods_proxy_injection);
+			lua_setmetatable(L, -2);
 
 			if (lua_pcall(L, 1, 1, 0) != 0) {
 				g_critical("(read_query_result) %s", lua_tostring(L, -1));
@@ -2405,7 +2468,7 @@ static proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
 	lua_getfenv(L, -1);
 	g_assert(lua_istable(L, -1));
 	
-	lua_getfield(L, -1, "read_handshake");
+	lua_getfield_literal(L, -1, C("read_handshake"));
 	if (lua_isfunction(L, -1)) {
 		/* export
 		 *
@@ -2684,7 +2747,7 @@ static proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
 	lua_getfenv(L, -1);
 	g_assert(lua_istable(L, -1));
 	
-	lua_getfield(L, -1, "read_auth");
+	lua_getfield_literal(L, -1, C("read_auth"));
 	if (lua_isfunction(L, -1)) {
 
 		/* export
@@ -2899,7 +2962,7 @@ static proxy_stmt_ret proxy_lua_read_auth_result(network_mysqld_con *con) {
 	lua_getfenv(L, -1);
 	g_assert(lua_istable(L, -1));
 	
-	lua_getfield(L, -1, "read_auth_result");
+	lua_getfield_literal(L, -1, C("read_auth_result"));
 	if (lua_isfunction(L, -1)) {
 
 		/* export
@@ -3046,7 +3109,7 @@ static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 	network_socket *recv_sock = con->client;
 	GList   *chunk  = recv_sock->recv_queue->chunks->head;
 	GString *packet = chunk->data;
-	cauldron_plugin_config *config = con->config;
+	chassis_plugin_config *config = con->config;
 
 	if (!config->profiling) return PROXY_SEND_QUERY;
 
@@ -3102,7 +3165,7 @@ static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 		/**
 		 * get the call back
 		 */
-		lua_getfield(L, -1, "read_query");
+		lua_getfield_literal(L, -1, C("read_query"));
 		if (lua_isfunction(L, -1)) {
 
 			/* pass the packet as parameter */
@@ -3336,7 +3399,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	network_socket *recv_sock, *send_sock;
 	plugin_con_state *st = con->plugin_con_state;
 	injection *inj = NULL;
-	cauldron_plugin_config *config = con->config;
+	chassis_plugin_config *config = con->config;
 
 	recv_sock = con->server;
 	send_sock = con->client;
@@ -3819,11 +3882,11 @@ static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
 	lua_getfenv(L, -1);
 	g_assert(lua_istable(L, -1));
 	
-	lua_getfield(L, -1, "connect_server");
+	lua_getfield_literal(L, -1, C("connect_server"));
 	if (lua_isfunction(L, -1)) {
 		if (lua_pcall(L, 0, 1, 0) != 0) {
-			g_critical("%s.%d: (connect_server) %s", 
-					__FILE__, __LINE__,
+			g_critical("%s: (connect_server) %s", 
+					G_STRLOC,
 					lua_tostring(L, -1));
 
 			lua_pop(L, 1); /* errmsg */
@@ -4088,7 +4151,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 }
 
 
-plugin_srv_state *plugin_srv_state_get(cauldron_plugin_config *config) {
+plugin_srv_state *plugin_srv_state_get(chassis_plugin_config *config) {
 	static plugin_srv_state *global_state = NULL;
 	guint i;
 
@@ -4174,7 +4237,7 @@ static proxy_stmt_ret proxy_lua_disconnect_client(network_mysqld_con *con) {
 	lua_getfenv(L, -1);
 	g_assert(lua_istable(L, -1));
 	
-	lua_getfield(L, -1, "disconnect_client");
+	lua_getfield_literal(L, -1, C("disconnect_client"));
 	if (lua_isfunction(L, -1)) {
 		if (lua_pcall(L, 0, 1, 0) != 0) {
 			g_critical("%s.%d: (disconnect_client) %s", 
@@ -4300,10 +4363,10 @@ void network_mysqld_proxy_free(network_mysqld_con *con) {
 	plugin_srv_state_free(g);
 }
 
-cauldron_plugin_config * network_mysqld_proxy_plugin_init(void) {
-	cauldron_plugin_config *config;
+chassis_plugin_config * network_mysqld_proxy_plugin_init(void) {
+	chassis_plugin_config *config;
 
-	config = g_new0(cauldron_plugin_config, 1);
+	config = g_new0(chassis_plugin_config, 1);
 	config->fix_bug_25371   = 0; /** double ERR packet on AUTH failures */
 	config->profiling       = 1;
 	config->start_proxy     = 1;
@@ -4311,7 +4374,7 @@ cauldron_plugin_config * network_mysqld_proxy_plugin_init(void) {
 	return config;
 }
 
-void network_mysqld_proxy_plugin_free(cauldron_plugin_config *config) {
+void network_mysqld_proxy_plugin_free(chassis_plugin_config *config) {
 	gsize i;
 
 	if (config->listen_con) {
@@ -4344,7 +4407,7 @@ void network_mysqld_proxy_plugin_free(cauldron_plugin_config *config) {
 /**
  * plugin options 
  */
-static GOptionEntry * network_mysqld_proxy_plugin_get_options(cauldron_plugin_config *config) {
+static GOptionEntry * network_mysqld_proxy_plugin_get_options(chassis_plugin_config *config) {
 	guint i;
 
 	/* make sure it isn't collected */
@@ -4382,8 +4445,8 @@ static GOptionEntry * network_mysqld_proxy_plugin_get_options(cauldron_plugin_co
 /**
  * init the plugin with the parsed config
  */
-int network_mysqld_proxy_plugin_apply_config(gpointer _srv, cauldron_plugin_config *config) {
-	network_mysqld *srv = _srv;
+int network_mysqld_proxy_plugin_apply_config(gpointer _srv, chassis_plugin_config *config) {
+	chassis *srv = _srv;
 	network_mysqld_con *con;
 	network_socket *listen_sock;
 
@@ -4400,7 +4463,8 @@ int network_mysqld_proxy_plugin_apply_config(gpointer _srv, cauldron_plugin_conf
 	/** 
 	 * create a connection handle for the listen socket 
 	 */
-	con = network_mysqld_con_init(srv);
+	con = network_mysqld_con_init();
+	network_mysqld_add_connection(srv, con);
 	con->config = config;
 
 	config->listen_con = con;
@@ -4432,7 +4496,7 @@ int network_mysqld_proxy_plugin_apply_config(gpointer _srv, cauldron_plugin_conf
 	return 0;
 }
 
-int plugin_init(cauldron_plugin *p) {
+int plugin_init(chassis_plugin *p) {
 	/* append the our init function to the init-hook-list */
 
 	p->init         = network_mysqld_proxy_plugin_init;

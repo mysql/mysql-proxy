@@ -49,7 +49,7 @@
  * - each plugin should able to provide tables as needed
  */
 
-struct cauldron_plugin_config {
+struct chassis_plugin_config {
 	gchar *address;                   /**< listening address of the admin interface */
 
 	gchar *lua_script;                /**< script to load at the start the connection */
@@ -57,7 +57,7 @@ struct cauldron_plugin_config {
 	network_mysqld_con *listen_con;
 };
 
-int network_mysqld_con_handle_stmt(network_mysqld *srv, network_mysqld_con *con, GString *s) {
+int network_mysqld_con_handle_stmt(chassis *srv, network_mysqld_con *con, GString *s) {
 	gsize i, j;
 	GPtrArray *fields;
 	GPtrArray *rows;
@@ -231,15 +231,15 @@ static int network_mysqld_server_connection_init(network_mysqld_con *con) {
 	return 0;
 }
 
-static cauldron_plugin_config *network_mysqld_admin_plugin_init(void) {
-	cauldron_plugin_config *config;
+static chassis_plugin_config *network_mysqld_admin_plugin_init(void) {
+	chassis_plugin_config *config;
 
-	config = g_new0(cauldron_plugin_config, 1);
+	config = g_new0(chassis_plugin_config, 1);
 
 	return config;
 }
 
-static void network_mysqld_admin_plugin_free(cauldron_plugin_config *config) {
+static void network_mysqld_admin_plugin_free(chassis_plugin_config *config) {
 	if (config->listen_con) {
 		/* the socket will be freed by network_mysqld_free() */
 	}
@@ -254,7 +254,7 @@ static void network_mysqld_admin_plugin_free(cauldron_plugin_config *config) {
 /**
  * add the proxy specific options to the cmdline interface 
  */
-static GOptionEntry * network_mysqld_admin_plugin_get_options(cauldron_plugin_config *config) {
+static GOptionEntry * network_mysqld_admin_plugin_get_options(chassis_plugin_config *config) {
 	guint i;
 
 	static GOptionEntry config_entries[] = 
@@ -273,8 +273,8 @@ static GOptionEntry * network_mysqld_admin_plugin_get_options(cauldron_plugin_co
 /**
  * init the plugin with the parsed config
  */
-static int network_mysqld_admin_plugin_apply_config(gpointer _srv, cauldron_plugin_config *config) {
-	network_mysqld *srv = _srv;
+static int network_mysqld_admin_plugin_apply_config(gpointer _srv, chassis_plugin_config *config) {
+	chassis *srv = _srv;
 	network_mysqld_con *con;
 	network_socket *listen_sock;
 
@@ -283,7 +283,8 @@ static int network_mysqld_admin_plugin_apply_config(gpointer _srv, cauldron_plug
 	/** 
 	 * create a connection handle for the listen socket 
 	 */
-	con = network_mysqld_con_init(srv);
+	con = network_mysqld_con_init();
+	network_mysqld_add_connection(srv, con);
 	con->config = config;
 
 	config->listen_con = con;
@@ -314,7 +315,7 @@ static int network_mysqld_admin_plugin_apply_config(gpointer _srv, cauldron_plug
 	return 0;
 }
 
-int plugin_init(cauldron_plugin *p) {
+int plugin_init(chassis_plugin *p) {
 	/* append the our init function to the init-hook-list */
 
 	p->init         = network_mysqld_admin_plugin_init;
