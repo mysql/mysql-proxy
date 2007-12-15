@@ -51,13 +51,17 @@ int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, G
 				*(gint *)(entry->arg_data) = arg_int;
 			}
 			break;
+#if GLIB_MAJOR_VERSION >= 2 && GLIB_MINOR_VERSION >= 12 
 		case G_OPTION_ARG_DOUBLE: 
 			arg_double = g_key_file_get_double(keyfile, ini_group_name, entry->long_name, &gerr);
 			if (!gerr) {
 				*(gint *)(entry->arg_data) = arg_double;
 			}
 			break;
-
+#endif
+		default:
+			g_error("%s: (keyfile) the option %d can't be handled", G_STRLOC, entry->arg);
+			break;
 		}
 
 		if (gerr) {

@@ -174,6 +174,7 @@
 #include "network-mysqld-proto.h"
 #include "network-conn-pool.h"
 #include "chassis-mainloop.h"
+#include "lua-scope.h"
 
 #ifdef HAVE_WRITEV
 #define USE_BUFFERED_NETIO 
@@ -226,33 +227,34 @@ retval_t plugin_call_cleanup(chassis *srv, network_mysqld_con *con) {
 	return (*func)(srv, con);
 }
 
-struct chassis_private {
-	GPtrArray *cons;                          /**< array(network_mysqld_con) */
-};
-
 chassis_private *network_mysqld_priv_init(void) {
 	chassis_private *priv;
 
 	priv = g_new0(chassis_private, 1);
 
 	priv->cons = g_ptr_array_new();
+	priv->sc = lua_scope_init();
 
 	return priv;
 }
 
 void network_mysqld_priv_free(chassis *chas, chassis_private *priv) {
-	gsize i;
-
 	if (!priv) return;
 
-	for (i = 0; i < priv->cons->len; i++) {
-		network_mysqld_con *con = priv->cons->pdata[i];
+	/* network_mysqld_con_free() changes the priv->cons directly
+	 *
+	 * always free the first element until all are gone 
+	 */
+	while (0 != priv->cons->len) {
+		network_mysqld_con *con = priv->cons->pdata[0];
 
 		plugin_call_cleanup(chas, con);
 		network_mysqld_con_free(con);
 	}
 
 	g_ptr_array_free(priv->cons, TRUE);
+
+	lua_scope_free(priv->sc);
 
 	g_free(priv);
 }
@@ -263,7 +265,6 @@ int network_mysqld_init(chassis *srv) {
 
 	return 0;
 }
-
 
 
 /**
@@ -394,14 +395,23 @@ int network_mysqld_con_set_address(network_address *addr, gchar *address) {
  * @return        0
  */
 int network_mysqld_con_set_non_blocking(int fd) {
+	int ret;
 #ifdef _WIN32
 	int ioctlvar;
 
 	ioctlvar = 1;
-	ioctlsocket(fd, FIONBIO, &ioctlvar);
+	ret = ioctlsocket(fd, FIONBIO, &ioctlvar);
 #else
-	fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
+	ret = fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
 #endif
+	if (ret != 0) {
+#ifdef _WIN32
+		errno = WSAGetLastError();
+#endif
+		g_critical("%s.%d: set_non_blocking() failed: %s (%d)", 
+				__FILE__, __LINE__,
+				strerror(errno), errno);
+	}
 	return 0;
 }
 
@@ -428,9 +438,9 @@ int network_mysqld_con_connect(network_socket * con) {
 #ifdef _WIN32
 		errno = WSAGetLastError();
 #endif
-		g_critical("%s.%d: socket(%s) failed: %s", 
+		g_critical("%s.%d: socket(%s) failed: %s (%d)", 
 				__FILE__, __LINE__,
-				con->addr.str, strerror(errno));
+				con->addr.str, strerror(errno), errno);
 		return -1;
 	}
 
@@ -450,12 +460,13 @@ int network_mysqld_con_connect(network_socket * con) {
 		 */
 		switch (errno) {
 		case E_NET_INPROGRESS:
+		case E_NET_WOULDBLOCK: /* win32 uses WSAEWOULDBLOCK */
 			return -2;
 		default:
-			g_critical("%s.%d: connect(%s) failed: %s", 
+			g_critical("%s.%d: connect(%s) failed: %s (%d)", 
 					__FILE__, __LINE__,
 					con->addr.str,
-					strerror(errno));
+					strerror(errno), errno);
 			return -1;
 		}
 	}
@@ -719,7 +730,9 @@ retval_t network_mysqld_read_raw(chassis *UNUSED_PARAM(srv), network_socket *soc
 
 		sock->to_read -= len;
 		sock->recv_queue_raw->len += len;
+#if 0
 		sock->recv_queue_raw->offset = 0; /* offset into the first packet */
+#endif
 		packet->len = len;
 	}
 
@@ -824,7 +837,7 @@ retval_t network_mysqld_read(chassis *srv, network_socket *con) {
  *
  * use a loop over send() to be compatible with win32
  */
-retval_t network_mysqld_write_len(network_mysqld *UNUSED_PARAM(srv), network_socket *con, int send_chunks) {
+retval_t network_mysqld_write_len(chassis *UNUSED_PARAM(chas), network_socket *con, int send_chunks) {
 	/* send the whole queue */
 	GList *chunk;
 
@@ -990,6 +1003,7 @@ retval_t network_mysqld_write(chassis *srv, network_socket *con) {
  * @return         RET_SUCCESS on success
  */
 retval_t plugin_call(chassis *srv, network_mysqld_con *con, int state) {
+	retval_t ret;
 	NETWORK_MYSQLD_PLUGIN_FUNC(func) = NULL;
 
 	switch (state) {
@@ -1122,7 +1136,11 @@ retval_t plugin_call(chassis *srv, network_mysqld_con *con, int state) {
 	}
 	if (!func) return RET_SUCCESS;
 
-	return (*func)(srv, con);
+	lua_scope_get(srv->priv->sc);
+	ret = (*func)(srv, con);
+	lua_scope_release(srv->priv->sc);
+
+	return ret;
 }
 
 /**

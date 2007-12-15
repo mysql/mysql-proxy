@@ -19,9 +19,10 @@
 
 module("proxy.parser", package.seeall)
 
-function tablename_expand(tblname)
-	if proxy.connection.client.default_db then
-		tblname = proxy.connection.client.default_db .. "." .. tblname
+function tablename_expand(tblname, db_name)
+	if not db_name then db_name = proxy.connection.client.default_db end
+	if db_name then
+		tblname = db_name .. "." .. tblname
 	end
 
 	return tblname
@@ -36,6 +37,7 @@ function get_tables(tokens)
 	local in_tablelist = false
 	local next_is_tblname = false
 	local in_braces = 0
+	local db_name = nil
 
 	local tables = {}
 
@@ -66,8 +68,10 @@ function get_tables(tokens)
 				elseif in_braces > 0 then
 					-- ignore sub-queries
 				elseif token["token_name"] == "TK_SQL_AS" then
+					-- FROM tbl AS alias ...
 					next_is_tblname = false
 				elseif token["token_name"] == "TK_SQL_JOIN" then
+					-- FROM tbl JOIN tbl ...
 					next_is_tblname = true
 				elseif token["token_name"] == "TK_SQL_LEFT" or
 				       token["token_name"] == "TK_SQL_RIGHT" or
@@ -78,7 +82,14 @@ function get_tables(tokens)
 				       token["token_name"] == "TK_SQL_OR" then
 					-- ignore me
 				elseif token["token_name"] == "TK_LITERAL" and next_is_tblname then
-					tables[tablename_expand(token.text)] = (sql_stmt == "SELECT" and "read" or "write")
+					-- we have to handle <tbl> and <db>.<tbl>
+					if not db_name and tokens[i + 1] and tokens[i + 1].token_name == "TK_DOT" then
+						db_name = token.text
+					else
+						tables[tablename_expand(token.text, db_name)] = (sql_stmt == "SELECT" and "read" or "write")
+
+						db_name = nil
+					end
 
 					next_is_tblname = false
 				elseif token["token_name"] == "TK_OBRACE" then
@@ -91,8 +102,11 @@ function get_tables(tokens)
 				       token["token_name"] == "TK_SQL_LIMIT" or
 				       token["token_name"] == "TK_CBRACE" then
 					in_tablelist = false
+				elseif token["token_name"] == "TK_DOT" then
+					-- FROM db.tbl
+					next_is_tblname = true
 				else
-					print("unknown, found token: " .. token["token_name"] .. " -> " .. token.text)
+					print("(parser) unknown, found token: " .. token["token_name"] .. " -> " .. token.text)
 					-- in_tablelist = false
 				end
 			elseif token["token_name"] == "TK_SQL_FROM" then

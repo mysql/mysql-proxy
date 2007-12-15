@@ -32,27 +32,28 @@ module("proxy.tokenizer", package.seeall)
 -- 
 -- @see tokenize
 function normalize(tokens)
-	local n_q = ""
+	-- we use a string-stack here and join them at the end
+	-- see http://www.lua.org/pil/11.6.html for more
+	--
+	local stack = {}
 
 	for i, token in ipairs(tokens) do
 		-- normalize the query
 		if token["token_name"] == "TK_COMMENT" then
 		elseif token["token_name"] == "TK_LITERAL" then
-			n_q = n_q .. "`" .. token.text .. "` "
-		elseif token["token_name"] == "TK_STRING" then
-			n_q = n_q .. "? "
-		elseif token["token_name"] == "TK_INTEGER" then
-			n_q = n_q .. "? "
-		elseif token["token_name"] == "TK_FLOAT" then
-			n_q = n_q .. "? "
+			table.insert(stack, "`" .. token.text .. "` ")
+		elseif token["token_name"] == "TK_STRING" or
+		       token["token_name"] == "TK_INTEGER" or
+		       token["token_name"] == "TK_FLOAT" then
+			table.insert(stack, "? ")
 		elseif token["token_name"] == "TK_FUNCTION" then
-			n_q = n_q .. token.text:upper()
+			table.insert(stack,  token.text:upper())
 		else
-			n_q = n_q .. token.text:upper() .. " "
+			table.insert(stack,  token.text:upper() .. " ")
 		end
 	end
 
-	return n_q
+	return table.concat(stack)
 end
 
 ---

@@ -300,6 +300,18 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	if (print_version) {
+		printf("%s\r\n", PACKAGE_STRING); 
+		printf("  glib2: %d.%d.%d\r\n", GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+#ifdef HAVE_EVENT_H
+		printf("  libevent: %s\r\n", event_get_version());
+#endif
+
+		exit_code = EXIT_SUCCESS;
+		goto exit_nicely;
+	}
+
+
 	/* add the other options which can also appear in the configfile */
 	g_option_context_add_main_entries(option_ctx, main_entries, GETTEXT_PACKAGE);
 
@@ -367,6 +379,7 @@ int main(int argc, char **argv) {
 		g_free(plugin_filename);
 		
 		if (NULL == p) {
+			g_critical("setting --plugins-dir=<dir> might help");
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;
 		}
@@ -434,13 +447,6 @@ int main(int argc, char **argv) {
 		g_setenv("LUA_PATH", LUA_PATHSEP LUA_PATHSEP DATADIR "/?.lua", 1);
 	}
 #endif
-
-	if (print_version) {
-		printf("%s\r\n", PACKAGE_STRING);
-
-		exit_code = EXIT_SUCCESS;
-		goto exit_nicely;
-	}
 
 #ifndef _WIN32	
 	signal(SIGPIPE, SIG_IGN);

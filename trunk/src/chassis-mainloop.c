@@ -1,6 +1,15 @@
 #include <sys/types.h>
 #include <signal.h>
+#include <string.h>
 #include <errno.h>
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h> /* event.h need struct timeval */
+#endif
 
 #include <glib.h>
 #include <event.h>
@@ -39,6 +48,7 @@ chassis *chassis_init() {
  */
 void chassis_free(chassis *chas) {
 	guint i;
+	const char *version;
 
 	if (!chas) return;
 
@@ -57,7 +67,15 @@ void chassis_free(chassis *chas) {
 
 #ifdef HAVE_EVENT_BASE_FREE
 	/* only recent versions have this call */
-	if (chas->event_base) event_base_free(chas->event_base);
+
+	version = event_get_version();
+
+	/* libevent < 1.3e doesn't cleanup its own fds from the event-queue in signal_init()
+	 * calling event_base_free() would cause a assert() on shutdown
+	 */
+	if (version && (strcmp(version, "1.3e") >= 0)) {
+		if (chas->event_base) event_base_free(chas->event_base);
+	}
 #endif
 	
 	g_free(chas);

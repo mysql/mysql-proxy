@@ -31,13 +31,11 @@ chassis_plugin *chassis_plugin_load(const gchar *moduledir, const gchar *name) {
 	chassis_plugin *p = chassis_plugin_init();
 	gchar *path;
 
-	p->name = g_strdup(name);
-
-	path = g_module_build_path(moduledir, p->name);
+	path = g_module_build_path(moduledir, name);
 	p->module = g_module_open(path, G_MODULE_BIND_LOCAL);
 
 	if (!p->module) {
-		g_critical("loading module '%s' from '%s' failed: %s", p->name, path, g_module_error());
+		g_critical("loading module '%s' from '%s' failed: %s", name, path, g_module_error());
 		g_free(path);
 
 		chassis_plugin_free(p);
@@ -46,14 +44,21 @@ chassis_plugin *chassis_plugin_load(const gchar *moduledir, const gchar *name) {
 	}
 	g_free(path);
 
+	/* each module has to have a plugin_init function */
 	if (!g_module_symbol(p->module, "plugin_init", (gpointer) &plugin_init)) {
-		g_critical("module '%s' doesn't have a init-function: %s", p->name, g_module_error());
+		g_critical("module '%s' doesn't have a init-function: %s", name, g_module_error());
 		chassis_plugin_free(p);
 		return NULL;
 	}
 
 	if (0 != plugin_init(p)) {
-		g_critical("init-function for module '%s' failed", p->name);
+		g_critical("init-function for module '%s' failed", name);
+		chassis_plugin_free(p);
+		return NULL;
+	}
+
+	if (p->magic != CHASSIS_PLUGIN_MAGIC) {
+		g_critical("plugin '%s' doesn't match the current plugin interface (%ld != %ld)", name, p->magic, CHASSIS_PLUGIN_MAGIC);
 		chassis_plugin_free(p);
 		return NULL;
 	}
@@ -61,6 +66,9 @@ chassis_plugin *chassis_plugin_load(const gchar *moduledir, const gchar *name) {
 	if (p->init) {
 		p->config = p->init();
 	}
+
+	/* if the plugins haven't set p->name provide our own name */
+	if (!p->name) p->name = g_strdup(name);
 
 	return p;
 }

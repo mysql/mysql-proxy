@@ -101,6 +101,8 @@ void network_socket_free(network_socket *s) {
 		g_free(s->addr.str);
 	}
 
+	event_del(&(s->event));
+
 	if (s->fd != -1) {
 		closesocket(s->fd);
 	}

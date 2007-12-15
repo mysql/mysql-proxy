@@ -133,6 +133,10 @@ int network_mysqld_con_handle_stmt(chassis *srv, network_mysqld_con *con, GStrin
 		break;
 	case COM_QUIT:
 		break;
+	case COM_INIT_DB:
+		con->client->packet_id++;
+		network_mysqld_con_send_ok(con->client);
+		break;
 	default:
 		con->client->packet_id++;
 		network_mysqld_con_send_error(con->client, C("unknown COM_*"));
@@ -207,7 +211,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 
 	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
 	
-	network_mysqld_con_handle_stmt(srv, con, s);
+	network_mysqld_con_handle_stmt(chas, con, s);
 		
 	con->parse.len = recv_sock->packet_len;
 
@@ -273,8 +277,7 @@ static GOptionEntry * network_mysqld_admin_plugin_get_options(chassis_plugin_con
 /**
  * init the plugin with the parsed config
  */
-static int network_mysqld_admin_plugin_apply_config(gpointer _srv, chassis_plugin_config *config) {
-	chassis *srv = _srv;
+static int network_mysqld_admin_plugin_apply_config(chassis *chas, chassis_plugin_config *config) {
 	network_mysqld_con *con;
 	network_socket *listen_sock;
 
@@ -284,7 +287,7 @@ static int network_mysqld_admin_plugin_apply_config(gpointer _srv, chassis_plugi
 	 * create a connection handle for the listen socket 
 	 */
 	con = network_mysqld_con_init();
-	network_mysqld_add_connection(srv, con);
+	network_mysqld_add_connection(chas, con);
 	con->config = config;
 
 	config->listen_con = con;
@@ -309,14 +312,15 @@ static int network_mysqld_admin_plugin_apply_config(gpointer _srv, chassis_plugi
 	 * call network_mysqld_con_accept() with this connection when we are done
 	 */
 	event_set(&(listen_sock->event), listen_sock->fd, EV_READ|EV_PERSIST, network_mysqld_con_accept, con);
-	event_base_set(srv->event_base, &(listen_sock->event));
+	event_base_set(chas->event_base, &(listen_sock->event));
 	event_add(&(listen_sock->event), NULL);
 
 	return 0;
 }
 
 int plugin_init(chassis_plugin *p) {
-	/* append the our init function to the init-hook-list */
+	p->magic        = CHASSIS_PLUGIN_MAGIC;
+	p->name         = g_strdup("admin");
 
 	p->init         = network_mysqld_admin_plugin_init;
 	p->get_options  = network_mysqld_admin_plugin_get_options;

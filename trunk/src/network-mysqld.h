@@ -39,15 +39,13 @@
 #include <mysql.h>
 
 #include <glib.h>
-#include <gmodule.h>
-
-#include <event.h>
 
 #include "network-socket.h"
 #include "network-conn-pool.h"
 #include "chassis-plugin.h"
 #include "chassis-mainloop.h"
 #include "sys-pedantic.h"
+#include "lua-scope.h"
 
 /**
  * stolen from sql/log_event.h
@@ -107,8 +105,8 @@ typedef enum {
 
 typedef struct network_mysqld_con network_mysqld_con; /* forward declaration */
 
-#define NETWORK_MYSQLD_PLUGIN_FUNC(x) retval_t (*x)(chassis *srv, network_mysqld_con *con)
-#define NETWORK_MYSQLD_PLUGIN_PROTO(x) static retval_t x(chassis *srv, network_mysqld_con *con)
+#define NETWORK_MYSQLD_PLUGIN_FUNC(x) retval_t (*x)(chassis *chas, network_mysqld_con *con)
+#define NETWORK_MYSQLD_PLUGIN_PROTO(x) static retval_t x(chassis *chas, network_mysqld_con *con)
 
 typedef struct {
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_init);
@@ -220,6 +218,8 @@ struct network_mysqld_con {
 	void *plugin_con_state;
 };
 
+
+
 void g_list_string_free(gpointer data, gpointer UNUSED_PARAM(user_data));
 gboolean g_hash_table_true(gpointer UNUSED_PARAM(key), gpointer UNUSED_PARAM(value), gpointer UNUSED_PARAM(u));
 
@@ -250,7 +250,14 @@ retval_t network_mysqld_read(chassis *srv, network_socket *con);
 retval_t network_mysqld_write(chassis *srv, network_socket *con);
 retval_t network_mysqld_write_len(chassis *srv, network_socket *con, int send_chunks);
 
+struct chassis_private {
+	GPtrArray *cons;                          /**< array(network_mysqld_con) */
+
+	lua_scope *sc;
+};
+
 int network_mysqld_init(chassis *srv);
+void network_mysqld_add_connection(chassis *srv, network_mysqld_con *con);
 
 /**
  * socket handling 
