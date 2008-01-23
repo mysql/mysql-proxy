@@ -7,10 +7,33 @@
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
 #include "sys-pedantic.h"
+
+
 /**
  * we have two phases
  * - getting the binglog-pos with SHOW MASTER STATUS
  * - running the BINLOG_DUMP
+ *
+ * - split binlog stream into multiple streams based on
+ *   lua-script and push the streams into the slaves
+ *   - thread-ids
+ *   - server-id
+ *   - database name
+ *   - table-names
+ * - rewrite binlogs as delayed streams (listening port per delay)
+ *
+ * - chaining of replicants is desired
+ *   a delayed replicator can feed a splitter or the other way around
+ *
+ * - we have to maintain the last know position per backend, perhaps 
+ *   we want to maintain this in lua land and use the tbl2str functions
+ *
+ * - we may want to share the config
+ *
+ * - we have to parse the binlog stream and should also provide a 
+ *   binlog reading library
+ *
+ *
  */
 typedef struct {
 	enum { REPCLIENT_BINLOG_GET_POS, REPCLIENT_BINLOG_DUMP } state;
@@ -587,7 +610,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 		case REPCLIENT_BINLOG_GET_POS:
 			/* parse the result-set and get the 1st and 2nd column */
 
-			network_mysqld_resultset_master_status(srv, con);
+			network_mysqld_resultset_master_status(chas, con);
 
 			/* remove all packets */
 			while ((packet = g_queue_pop_head(send_sock->send_queue->chunks))) g_string_free(packet, TRUE);
@@ -748,8 +771,7 @@ static GOptionEntry * network_mysqld_replicant_plugin_get_options(chassis_plugin
 /**
  * init the plugin with the parsed config
  */
-int network_mysqld_replicant_plugin_apply_config(gpointer _srv, chassis_plugin_config *config) {
-	chassis *srv = _srv;
+int network_mysqld_replicant_plugin_apply_config(chassis *chas, chassis_plugin_config *config) {
 	network_mysqld_con *con;
 	network_socket *listen_sock;
 
