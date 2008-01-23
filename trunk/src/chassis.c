@@ -368,6 +368,9 @@ int main(int argc, char **argv) {
 			plugin_names[0] = g_strdup("admin");
 			plugin_names[1] = g_strdup("proxy");
 			plugin_names[2] = NULL;
+		} else if (IS_PNAME("mysql-cli")) {
+			plugin_names[0] = g_strdup("cli");
+			plugin_names[1] = NULL;
 		}
 	}
 
