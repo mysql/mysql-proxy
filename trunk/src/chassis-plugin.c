@@ -58,7 +58,7 @@ chassis_plugin *chassis_plugin_load(const gchar *moduledir, const gchar *name) {
 	}
 
 	if (p->magic != CHASSIS_PLUGIN_MAGIC) {
-		g_critical("plugin '%s' doesn't match the current plugin interface (%ld != %ld)", name, p->magic, CHASSIS_PLUGIN_MAGIC);
+		g_critical("plugin '%s' doesn't match the current plugin interface (plugin is %lx, chassis is %lx)", name, p->magic, CHASSIS_PLUGIN_MAGIC);
 		chassis_plugin_free(p);
 		return NULL;
 	}
