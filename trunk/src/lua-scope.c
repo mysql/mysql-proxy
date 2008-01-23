@@ -44,7 +44,7 @@ void lua_scope_free(lua_scope *sc) {
 	lua_close(sc->L);
 
 #ifdef HAVE_GTHREAD
-	g_mutex_free(sc->mutex):
+	g_mutex_free(sc->mutex);
 #endif
 
 	g_free(sc);
