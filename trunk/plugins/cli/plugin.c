@@ -9,6 +9,10 @@
 #include "network-mysqld-proto.h"
 #include "sys-pedantic.h"
 
+#ifdef DARWIN
+/* readline.h doesn't include stdio.h on darwin - Apple bug #5704686 */
+#   include <stdio.h>
+#endif /* DARWIN */
 #include <readline/readline.h>
 
 typedef struct {
