@@ -719,7 +719,7 @@ static void *luaL_checkself (lua_State *L) {
 void proxy_getmetatable(lua_State *L, const luaL_reg *methods) {
 	/* check if the */
 
-	lua_pushlightuserdata(L, methods);
+	lua_pushlightuserdata(L, (luaL_reg *)methods);
 	lua_gettable(L, LUA_REGISTRYINDEX);
 
 	if (lua_isnil(L, -1)) {
@@ -729,7 +729,7 @@ void proxy_getmetatable(lua_State *L, const luaL_reg *methods) {
 		lua_newtable(L);
 		luaL_register(L, NULL, methods);
 
-		lua_pushlightuserdata(L, methods);
+		lua_pushlightuserdata(L, (luaL_reg *)methods);
 		lua_pushvalue(L, -2);
 		lua_settable(L, LUA_REGISTRYINDEX);
 	}
