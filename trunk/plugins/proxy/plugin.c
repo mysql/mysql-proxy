@@ -259,6 +259,11 @@ struct chassis_plugin_config {
 	
 	gchar *lua_script;                /**< script to load at the start the connection */
 
+	gint pool_change_user;            /**< don't reset the connection, when a connection is taken from the pool
+					       - this safes a round-trip, but we also don't cleanup the connection
+					       - another name could be "fast-pool-connect", but that's too friendly
+					       */
+
 	gint start_proxy;
 
 	network_mysqld_con *listen_con;
@@ -1389,7 +1394,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 
 		lua_pop(L, 1); /* errmsg */
 	
-		luaL_unref(sc->L, LUA_REGISTRYINDEX, sc->L_ref);
+		luaL_unref(sc->L, LUA_REGISTRYINDEX, st->injected.L_ref);
 
 		return 0;
 	}
@@ -2606,6 +2611,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	network_socket *recv_sock, *send_sock;
 	mysql_packet_auth auth;
 	guint off = 0;
+	chassis_plugin_config *config = con->config;
 
 	recv_sock = con->client;
 	send_sock = con->server;
@@ -2666,42 +2672,73 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 		break;
 	case PROXY_NO_DECISION:
+		/* if the server-side of the connection is already up and authed
+		 * we send a COM_CHANGE_USER to reauth the connection and remove
+		 * all temp-tables and session-variables
+		 *
+		 * for performance reasons this extra reauth can be disabled. But
+		 * that leaves temp-tables on the connection.
+		 */
 		if (con->server->is_authed) {
-			GString *com_change_user = g_string_new(NULL);
-			/* copy incl. the nul */
-			g_string_append_c(com_change_user, COM_CHANGE_USER);
-			g_string_append_len(com_change_user, con->client->username->str, con->client->username->len + 1);
+			if (config->pool_change_user) {
+				GString *com_change_user = g_string_new(NULL);
+				/* copy incl. the nul */
+				g_string_append_c(com_change_user, COM_CHANGE_USER);
+				g_string_append_len(com_change_user, con->client->username->str, con->client->username->len + 1);
 
-			g_assert(con->client->scrambled_password->len < 250);
+				g_assert(con->client->scrambled_password->len < 250);
 
-			g_string_append_c(com_change_user, (con->client->scrambled_password->len & 0xff));
-			g_string_append_len(com_change_user, con->client->scrambled_password->str, con->client->scrambled_password->len);
+				g_string_append_c(com_change_user, (con->client->scrambled_password->len & 0xff));
+				g_string_append_len(com_change_user, con->client->scrambled_password->str, con->client->scrambled_password->len);
 
-			g_string_append_len(com_change_user, con->client->default_db->str, con->client->default_db->len + 1);
+				g_string_append_len(com_change_user, con->client->default_db->str, con->client->default_db->len + 1);
+				
+				network_queue_append(send_sock->send_queue, 
+						com_change_user->str, 
+						com_change_user->len, 
+						0);
+
+				/**
+				 * the server is already authenticated, the client isn't
+				 *
+				 * transform the auth-packet into a COM_CHANGE_USER
+				 */
+
+				g_string_free(com_change_user, TRUE);
 			
-			network_queue_append(send_sock->send_queue, 
-					com_change_user->str, 
-					com_change_user->len, 
-					0);
+				con->state = CON_STATE_SEND_AUTH;
+			} else {
+				GString *auth_resp;
+				/* check if the username and client-scramble are the same as in the previous authed
+				 * connection */
 
-			/**
-			 * the server is already authenticated, the client isn't
-			 *
-			 * transform the auth-packet into a COM_CHANGE_USER
-			 */
+				auth_resp = g_string_new(NULL);
 
-			g_string_free(com_change_user, TRUE);
+				con->state = CON_STATE_SEND_AUTH_RESULT;
 
-			/**
-			 * the packet isn't appended anywhere, free it
-			 */
+				if (!g_string_equal(con->client->username, con->server->username) ||
+				    !g_string_equal(con->client->scrambled_password, con->server->scrambled_password)) {
+					network_mysqld_proto_append_error_packet(auth_resp, C("(proxy-pool) login failed"), ER_ACCESS_DENIED_ERROR, "28000");
+				} else {
+					network_mysqld_proto_append_ok_packet(auth_resp, 0, 0, 2 /* we should track this flag in the pool */, 0);
+				}
+
+				network_queue_append(recv_sock->send_queue, 
+						auth_resp->str, 
+						auth_resp->len, 
+						2);
+
+				g_string_free(auth_resp, TRUE);
+			}
+
+			/* free the packet as we don't forward it */
 			g_string_free(packet, TRUE);
 			chunk->data = packet = NULL;
 		} else {
 			network_queue_append_chunk(send_sock->send_queue, packet);
+			con->state = CON_STATE_SEND_AUTH;
 		}
 
-		con->state = CON_STATE_SEND_AUTH;
 		break;
 	default:
 		g_error("%s.%d: ... ", __FILE__, __LINE__);
@@ -4148,6 +4185,8 @@ chassis_plugin_config * network_mysqld_proxy_plugin_init(void) {
 	config->fix_bug_25371   = 0; /** double ERR packet on AUTH failures */
 	config->profiling       = 1;
 	config->start_proxy     = 1;
+	config->pool_change_user = 1; /* issue a COM_CHANGE_USER to cleanup the connection 
+					 when we get back the connection from the pool */
 
 	return config;
 }
@@ -4203,6 +4242,8 @@ static GOptionEntry * network_mysqld_proxy_plugin_get_options(chassis_plugin_con
 		
 		{ "no-proxy",                 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "don't start the proxy-module (default: enabled)", NULL },
 		
+		{ "proxy-pool-no-change-user", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "don't use CHANGE_USER to reset the connection coming from the pool (default: enabled)", NULL },
+		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 
@@ -4216,6 +4257,7 @@ static GOptionEntry * network_mysqld_proxy_plugin_get_options(chassis_plugin_con
 	config_entries[i++].arg_data = &(config->fix_bug_25371);
 	config_entries[i++].arg_data = &(config->lua_script);
 	config_entries[i++].arg_data = &(config->start_proxy);
+	config_entries[i++].arg_data = &(config->pool_change_user);
 
 	return config_entries;
 }

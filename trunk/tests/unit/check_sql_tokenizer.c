@@ -63,6 +63,45 @@ START_TEST(test_tokenizer) {
 } END_TEST
 
 /**
+ * @test table-names might start with a _ even without quoting
+ *  
+ */
+START_TEST(test_table_name_underscore) {
+	GPtrArray *tokens = NULL;
+	gsize i;
+
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("SELEcT * FROM __test_table "));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+#define T(t_id, t_text) \
+		fail_unless(token->token_id == t_id, "token[%d].token_id should be '%s', got '%s'", i, sql_token_get_name(t_id), sql_token_get_name(token->token_id)); \
+		fail_unless(0 == strcmp(token->text->str, t_text), "token[%d].text should be '%s', got '%s'", i, t_text, token->text->str); \
+
+		switch (i) {
+		case 0: T(TK_SQL_SELECT, "SELEcT"); break;
+		case 1: T(TK_STAR, "*"); break;
+		case 2: T(TK_SQL_FROM, "FROM"); break;
+		case 3: T(TK_LITERAL, "__test_table"); break;
+#undef T
+		default:
+			 /**
+			  * a self-writing test-case 
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			break;
+		}
+	}
+
+	/* cleanup */
+	sql_tokens_free(tokens);
+} END_TEST
+
+
+/**
  * @test check if we can map all tokens to a name and back again
  *   
  */
@@ -115,6 +154,7 @@ Suite *sql_tokenizer_suite(void) {
 	tcase_add_test(tc_core, test_tokenizer);
 	tcase_add_test(tc_core, test_token2name);
 	tcase_add_test(tc_core, test_keyword2token);
+	tcase_add_test(tc_core, test_table_name_underscore);
 
 	return s;
 }

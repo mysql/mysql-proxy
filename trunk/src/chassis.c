@@ -40,7 +40,7 @@
  *
  * To understand the code you basicly only have to know about the three files documented below:
  *
- * - mysql-proxy.c
+ * - chassis.c
  *   - main()
  *     -# command-line handling
  *     -# plugin loading
@@ -328,7 +328,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (log->log_filename) {
-		if (0 != chassis_log_open(log)) {
+		if (0 == chassis_log_open(log)) {
 			g_critical("can't open log-file '%s': %s", log->log_filename, g_strerror(errno));
 
 			exit_code = EXIT_FAILURE;

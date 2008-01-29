@@ -8,6 +8,7 @@
   * added chassis with config-file support
   * added buffered IO on unix
   * added lua-scope that is shared between the plugins
+  * added a option to disable COM_CHANGE_USER on connection reuse
   * removed explicit lua_gc() in favour of automatic lua_step()
   * fixed tutorial-inject.lua to start indexing at 1 (#32088)
 

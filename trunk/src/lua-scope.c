@@ -33,13 +33,9 @@ lua_scope *lua_scope_init(void) {
 void lua_scope_free(lua_scope *sc) {
 	if (!sc) return;
 
-	if (lua_isfunction(sc->L, -1)) {
-		lua_pop(sc->L, 1); /* function */
+	g_assert(lua_gettop(sc->L) == 0);
 
-		g_assert(lua_gettop(sc->L) == 0);
-
-		luaL_unref(sc->L, LUA_REGISTRYINDEX, sc->L_ref);
-	}
+	/* FIXME: we might want to cleanup the cached-scripts in the registry */
 
 	lua_close(sc->L);
 

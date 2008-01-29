@@ -334,8 +334,8 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 	/** strings, quoting, literals */
 [[:space:]]+	/** ignore WS */
 	/** should be a literal */
-[[:alpha:]@][[:alnum:]_@]*	sql_token_append(tokens, sql_token_get_id(yytext), yytext);
-[[:alpha:]@][[:alnum:]_@]*\(	{ yyless(yyleng - 1); sql_token_append(tokens, TK_FUNCTION, yytext); }
+[[:alpha:]_@][[:alnum:]_@]*	sql_token_append(tokens, sql_token_get_id(yytext), yytext);
+[[:alpha:]_@][[:alnum:]_@]*\(	{ yyless(yyleng - 1); sql_token_append(tokens, TK_FUNCTION, yytext); }
 
 [[:digit:]]+	sql_token_append(tokens, TK_INTEGER, yytext);
 [[:digit:]]*"."[[:digit:]]+	sql_token_append(tokens, TK_FLOAT, yytext);
