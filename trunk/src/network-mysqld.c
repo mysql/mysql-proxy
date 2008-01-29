@@ -1154,6 +1154,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	guint ostate;
 	network_mysqld_con *con = user_data;
 	chassis *srv = con->srv;
+	int retval;
 
 	g_assert(srv);
 	g_assert(con);
@@ -1232,14 +1233,15 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			break;
 		case CON_STATE_CONNECT_SERVER:
-			switch (plugin_call(srv, con, con->state)) {
+			switch ((retval = plugin_call(srv, con, con->state))) {
 			case RET_SUCCESS:
 
 				/**
 				 * hmm, if this is success and we have something in the clients send-queue
 				 * we just send it out ... who needs a server ? */
 
-				if (con->client->send_queue->chunks->length > 0 && con->server == NULL) {
+				if ((con->client != NULL && con->client->send_queue->chunks->length > 0) && 
+				     con->server == NULL) {
 					/* we want to send something to the client */
 
 					con->state = CON_STATE_SEND_HANDSHAKE;
@@ -1273,7 +1275,9 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				con->state = CON_STATE_SEND_ERROR;
 				break;
 			default:
-				g_error("%s.%d: ...", __FILE__, __LINE__);
+				g_error("%s: hook for CON_STATE_CONNECT_SERVER return invalid return code: %d", 
+						G_STRLOC, 
+						retval);
 				
 				break;
 			}
