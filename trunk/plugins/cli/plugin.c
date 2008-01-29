@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "network-mysqld.h"
 #include "chassis-plugin.h"
@@ -43,7 +44,16 @@ static void plugin_con_state_free(plugin_con_state *st) {
 	g_free(st);
 }
 
-NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
+/**
+ * called after we received the hand-shake from the
+ * server 
+ *
+ * we intercept the hand-shake packet and send a 
+ * client-auth packet back. 
+ *
+ * @fixme: add scramble + sha1() support
+ */
+NETWORK_MYSQLD_PLUGIN_PROTO(cli_read_handshake) {
 	GString *s;
 	GList *chunk;
 	network_socket *recv_sock;
@@ -51,10 +61,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 	chassis_plugin_config *config = con->config;
 	int i;
 
-	g_debug("%s", G_STRLOC);
-
 	GString *auth = g_string_new(NULL);
-
+	
 	network_mysqld_proto_append_int8(auth, 0x85);
 	network_mysqld_proto_append_int8(auth, 0xa6);
 	network_mysqld_proto_append_int8(auth, 0x03);
@@ -121,7 +129,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 	return RET_SUCCESS;
 }
 
-NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
+NETWORK_MYSQLD_PLUGIN_PROTO(cli_read_auth_result) {
 	GString *packet;
 	GList *chunk;
 	network_socket *recv_sock;
@@ -145,9 +153,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 	case MYSQLD_PACKET_ERR:
 		g_assert(packet->str[NET_HEADER_SIZE + 3] == '#');
 
-		g_critical("%s.%d: error: %d", 
-				__FILE__, __LINE__,
-				packet->str[NET_HEADER_SIZE + 1] | (packet->str[NET_HEADER_SIZE + 2] << 8));
+		g_critical("%s: cli_read_auth_result: auth failed: errno=%d, %s", 
+				G_STRLOC,
+				packet->str[NET_HEADER_SIZE + 1] | (packet->str[NET_HEADER_SIZE + 2] << 8),
+				packet->str + NET_HEADER_SIZE + 9);
 
 		return RET_ERROR;
 	case MYSQLD_PACKET_OK: 
@@ -176,7 +185,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 /**
  * inject a COM_BINLOG_DUMP after we have sent our SHOW MASTER STATUS
  */
-NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
+NETWORK_MYSQLD_PLUGIN_PROTO(cli_read_query_result) {
 	GString *packet;
 	GList *chunk;
 	network_socket *recv_sock, *send_sock;
@@ -324,7 +333,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 		break;
 	}
 
-	network_queue_append(send_sock->send_queue, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE, recv_sock->packet_id);
+	if (chunk->data) g_string_free(chunk->data, TRUE);
+	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+
+	recv_sock->packet_len = PACKET_LEN_UNSET;
 
 	/* ... */
 	if (is_finished) {
@@ -335,59 +347,87 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 		GString *query_packet;
 		gchar *line;
 
-		/* remove all packets */
-		while ((packet = g_queue_pop_head(send_sock->send_queue->chunks))) g_string_free(packet, TRUE);
-
 		query_packet = g_string_new(NULL);
 
 		g_string_append_c(query_packet, '\x03'); /** COM_BINLOG_DUMP */
 
 		line = readline("cli> ");
-		g_string_append(query_packet, line);
-		free(line);
-	       	
-		send_sock = con->server;
-		network_queue_append(send_sock->send_queue, query_packet->str, query_packet->len, 0);
+		if (line) {
+			g_string_append(query_packet, line);
+			free(line);
 	
-		g_string_free(query_packet, TRUE);
+			network_queue_append(recv_sock->send_queue, query_packet->str, query_packet->len, 0);
 	
-		con->state = CON_STATE_SEND_QUERY;
+			g_string_free(query_packet, TRUE);
+	
+			con->state = CON_STATE_SEND_QUERY;
+		} else {
+			chassis_set_shutdown();
+
+			con->state = CON_STATE_ERROR;
+		}
 	}
-
-	if (chunk->data) g_string_free(chunk->data, TRUE);
-	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 
 	return RET_SUCCESS;
 }
 
-NETWORK_MYSQLD_PLUGIN_PROTO(repclient_connect_server) {
+NETWORK_MYSQLD_PLUGIN_PROTO(cli_connect_server) {
 	chassis_plugin_config *config = con->config;
 	gchar *address = config->mysqld_address;
 
-	g_debug("%s", G_STRLOC);
+	if (con->server) {
+		int so_error = 0;
+		socklen_t so_error_len = sizeof(so_error);
 
-	con->server = network_socket_init();
+		/**
+		 * we might get called a 2nd time after a connect() == EINPROGRESS
+		 */
+		if (getsockopt(con->server->fd, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len)) {
+			/* getsockopt failed */
+			g_critical("%s.%d: getsockopt(%s) failed: %s", 
+					__FILE__, __LINE__,
+					con->server->addr.str, strerror(errno));
+			return RET_ERROR;
+		}
 
-	if (0 != network_mysqld_con_set_address(&(con->server->addr), address)) {
-		return -1;
+		switch (so_error) {
+		case 0:
+			break;
+		default:
+			g_critical("%s.%d: connect(%s) failed: %s", 
+					__FILE__, __LINE__,
+					con->server->addr.str, strerror(so_error));
+			return RET_ERROR;
+		}
+	} else {
+		con->server = network_socket_init();
+	
+		if (0 != network_mysqld_con_set_address(&(con->server->addr), address)) {
+			return RET_ERROR;
+		}
+	
+		switch(network_mysqld_con_connect(con->server)) {
+		case -2:
+			/* the socket is non-blocking already, 
+			 * call getsockopt() to see if we are done */
+			return RET_ERROR_RETRY;
+		case 0:
+			break;
+		default:
+			g_message("%s.%d: connecting to backend (%s) failed, marking it as down for ...", 
+					__FILE__, __LINE__, con->server->addr.str);
+	
+			return RET_ERROR;
+		}
 	}
 
-	g_debug("%s", G_STRLOC);
-	if (0 != network_mysqld_con_connect(con->server)) {
-		return -1;
-	}
-
-	g_debug("%s", G_STRLOC);
-	fcntl(con->server->fd, F_SETFL, O_NONBLOCK | O_RDWR);
-
-	con->state = CON_STATE_SEND_HANDSHAKE;
+	/* we are good, send our handshake and try to login */
+	con->state = CON_STATE_READ_HANDSHAKE;
 
 	return RET_SUCCESS;
 }
 
-NETWORK_MYSQLD_PLUGIN_PROTO(repclient_init) {
+NETWORK_MYSQLD_PLUGIN_PROTO(cli_init) {
 	g_assert(con->plugin_con_state == NULL);
 
 	con->plugin_con_state = plugin_con_state_init();
@@ -397,7 +437,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_init) {
 	return RET_SUCCESS;
 }
 
-NETWORK_MYSQLD_PLUGIN_PROTO(repclient_cleanup) {
+NETWORK_MYSQLD_PLUGIN_PROTO(cli_cleanup) {
 	if (con->plugin_con_state == NULL) return RET_SUCCESS;
 
 	plugin_con_state_free(con->plugin_con_state);
@@ -407,13 +447,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_cleanup) {
 	return RET_SUCCESS;
 }
 
-int network_mysqld_repclient_connection_init(chassis *srv, network_mysqld_con *con) {
-	con->plugins.con_init                      = repclient_init;
-	con->plugins.con_connect_server            = repclient_connect_server;
-	con->plugins.con_read_handshake            = repclient_read_handshake;
-	con->plugins.con_read_auth_result          = repclient_read_auth_result;
-	con->plugins.con_read_query_result         = repclient_read_query_result;
-	con->plugins.con_cleanup                   = repclient_cleanup;
+static int network_mysqld_cli_connection_init(chassis *chas, network_mysqld_con *con) {
+	con->plugins.con_init                      = cli_init;
+	con->plugins.con_connect_server            = cli_connect_server;
+	con->plugins.con_read_handshake            = cli_read_handshake;
+	con->plugins.con_read_auth_result          = cli_read_auth_result;
+	con->plugins.con_read_query_result         = cli_read_query_result;
+	con->plugins.con_cleanup                   = cli_cleanup;
 
 	return 0;
 }
@@ -435,8 +475,6 @@ chassis_plugin_config * network_mysqld_cli_plugin_init(void) {
 }
 
 void network_mysqld_cli_plugin_free(chassis_plugin_config *config) {
-	gsize i;
-
 	if (config->mysqld_address) {
 		/* free the global scope */
 		g_free(config->mysqld_address);
@@ -479,12 +517,25 @@ int network_mysqld_cli_plugin_apply_config(chassis *chas, chassis_plugin_config 
 	if (!config->mysqld_username) config->mysqld_username = g_strdup("mysql");
 	if (!config->mysqld_password) config->mysqld_password = g_strdup("");
 
+	/**
+	 * we don't really need this connection handle
+	 * but it carries our shared config 
+	 */
+	con = network_mysqld_con_init();
+	network_mysqld_add_connection(chas, con);
+	con->config = config;
+
+	network_mysqld_cli_connection_init(chas, con);
+	
+	network_mysqld_con_handle(-1, 0, con);
+
 	return 0;
 }
 
 int plugin_init(chassis_plugin *p) {
 	/* append the our init function to the init-hook-list */
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
+	p->name         = g_strdup("cli");
 
 	p->init         = network_mysqld_cli_plugin_init;
 	p->get_options  = network_mysqld_cli_plugin_get_options;
