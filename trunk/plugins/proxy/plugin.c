@@ -4105,6 +4105,7 @@ static proxy_stmt_ret proxy_lua_disconnect_client(network_mysqld_con *con) {
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
 	plugin_con_state *st = con->plugin_con_state;
+	lua_scope  *sc = con->srv->priv->sc;
 	gboolean use_pooled_connection = FALSE;
 
 	if (st == NULL) return RET_SUCCESS;
@@ -4141,6 +4142,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
 		/* we have backend assigned and want to close the connection to it */
 		st->backend->connected_clients--;
 	}
+
+#ifdef HAVE_LUA_H
+	/* remove this cached script from registry */
+	if (st->injected.L_ref > 0) {
+		luaL_unref(sc->L, LUA_REGISTRYINDEX, st->injected.L_ref);
+	}
+#endif
 
 	plugin_con_state_free(st);
 

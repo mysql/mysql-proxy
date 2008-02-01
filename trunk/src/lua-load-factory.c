@@ -1,12 +1,19 @@
-
-#include <lua.h>
-#include <lualib.h>
-#include <lauxlib.h>
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #include <stdio.h>
 #include <errno.h>
 #include <assert.h>
 #include <string.h>
+
+#ifdef HAVE_LUA_H
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+#endif
+
+#include "lua-load-factory.h"
 
 typedef enum { 
 	LOAD_STATE_PREFIX,
@@ -39,6 +46,7 @@ typedef struct {
 	load_factory_state_t state;
 } load_factory_t;
 
+#ifdef HAVE_LUA_H
 const char *loadstring_factory_reader(lua_State *L, void *data, size_t *size) {
 	load_factory_t *factory = data;
 
@@ -108,5 +116,5 @@ int luaL_loadfile_factory(lua_State *L, const char *filename) {
 
 	return ret;
 }
-
+#endif
 

@@ -115,7 +115,9 @@
 #include <glib.h>
 #include <gmodule.h>
 
+#ifdef HAVE_LUA_H
 #include <lua.h>
+#endif
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"

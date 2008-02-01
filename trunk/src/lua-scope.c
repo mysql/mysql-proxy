@@ -5,9 +5,15 @@
 #include <glib.h>
 #include <glib/gstdio.h> /* got g_stat() */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef HAVE_LUA_H
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
+#endif
 
 #include <mysql.h>
 #include <mysqld_error.h> /** for ER_UNKNOWN_ERROR */
@@ -20,8 +26,10 @@ lua_scope *lua_scope_init(void) {
 
 	sc = g_new0(lua_scope, 1);
 
+#ifdef HAVE_LUA_H
 	sc->L = luaL_newstate();
 	luaL_openlibs(sc->L);
+#endif
 
 #ifdef HAVE_GTHREAD
 	sc->mutex = g_mutex_new();
@@ -33,12 +41,13 @@ lua_scope *lua_scope_init(void) {
 void lua_scope_free(lua_scope *sc) {
 	if (!sc) return;
 
+#ifdef HAVE_LUA_H
 	g_assert(lua_gettop(sc->L) == 0);
 
 	/* FIXME: we might want to cleanup the cached-scripts in the registry */
 
 	lua_close(sc->L);
-
+#endif
 #ifdef HAVE_GTHREAD
 	g_mutex_free(sc->mutex);
 #endif
@@ -50,15 +59,19 @@ void lua_scope_get(lua_scope *sc) {
 #ifdef HAVE_GTHREAD
 	g_mutex_lock(sc->mutex);
 #endif
+#ifdef HAVE_LUA_H
 	sc->L_top = lua_gettop(sc->L);
+#endif
 
 	return;
 }
 
 void lua_scope_release(lua_scope *sc) {
+#ifdef HAVE_LUA_H
 	if (lua_gettop(sc->L) != sc->L_top) {
 		g_critical("%s: lua-stack out of sync: is %d, should be %d", G_STRLOC, lua_gettop(sc->L), sc->L_top);
 	}
+#endif
 
 #ifdef HAVE_GTHREAD
 	g_mutex_unlock(sc->mutex);
@@ -66,6 +79,7 @@ void lua_scope_release(lua_scope *sc) {
 	return;
 }
 
+#ifdef HAVE_LUA_H
 /**
  * load the lua script
  *
@@ -259,5 +273,5 @@ lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name) {
 
 	return L;
 }
-
+#endif
 
