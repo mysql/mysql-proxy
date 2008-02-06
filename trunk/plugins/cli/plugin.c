@@ -477,6 +477,8 @@ chassis_plugin_config * network_mysqld_cli_plugin_init(void) {
 void network_mysqld_cli_plugin_free(chassis_plugin_config *config) {
 	if (config->mysqld_address) {
 		/* free the global scope */
+		g_free(config->mysqld_username);
+		g_free(config->mysqld_password);
 		g_free(config->mysqld_address);
 	}
 
@@ -492,9 +494,9 @@ static GOptionEntry * network_mysqld_cli_plugin_get_options(chassis_plugin_confi
 	/* make sure it isn't collected */
 	static GOptionEntry config_entries[] = 
 	{
-		{ "address",            0, 0, G_OPTION_ARG_STRING, NULL, "... (default: :4040)", "<host:port>" },
-		{ "username",           0, 0, G_OPTION_ARG_STRING, NULL, "... (default: :4040)", "<host:port>" },
-		{ "password",           0, 0, G_OPTION_ARG_STRING, NULL, "... (default: :4040)", "<host:port>" },
+		{ "address",            0, 0, G_OPTION_ARG_STRING, NULL, "... (default: 127.0.0.1:3306)", "<host:port>" },
+		{ "username",           0, 0, G_OPTION_ARG_STRING, NULL, "... (default: mysql)", "username" },
+		{ "password",           0, 0, G_OPTION_ARG_STRING, NULL, "... (default: )", "password" },
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 

@@ -50,8 +50,8 @@ function connect_server()
 	local unknown_slave_ndx 
 	local slave_bytes_lag 
 
-	for b_ndx = 1, #proxy.backends do
-		local backend = proxy.backends[b_ndx]
+	for b_ndx = 1, #proxy.global.backends do
+		local backend = proxy.global.backends[b_ndx]
 
 		if backend.state ~= proxy.BACKEND_STATE_DOWN then
 			if backend.type == proxy.BACKEND_TYPE_RW then
@@ -78,7 +78,7 @@ function connect_server()
 	proxy.connection.backend_ndx = unknown_slave_ndx or slave_ndx or fallback_ndx
 
 	if config.is_debug then
-		print("(connect-server) using backend: " .. proxy.backends[proxy.connection.backend_ndx].address)
+		print("(connect-server) using backend: " .. proxy.global.backends[proxy.connection.backend_ndx].address)
 	end
 end
 
@@ -92,7 +92,7 @@ function read_query(packet)
 	--
 	
 	-- translate the backend_ndx into its address
-	local backend_addr = proxy.backends[proxy.connection.backend_ndx].address
+	local backend_addr = proxy.global.backends[proxy.connection.backend_ndx].address
 	backend_lag[backend_addr] = backend_lag[backend_addr] or {
 		state = "unchecked"
 	}
@@ -114,7 +114,7 @@ function read_query(packet)
 		proxy.queries:append(1, packet)
 
 		return proxy.PROXY_SEND_QUERY
-	elseif proxy.backends[proxy.connection.backend_ndx].type == proxy.BACKEND_TYPE_RW or  -- master
+	elseif proxy.global.backends[proxy.connection.backend_ndx].type == proxy.BACKEND_TYPE_RW or  -- master
 	       backend_lag[backend_addr].state == "running" then -- good slave
 		-- pass through
 		return
@@ -165,7 +165,7 @@ function read_query_result(inj)
 		end
 	end
 
-	local backend_addr = proxy.backends[proxy.connection.backend_ndx].address
+	local backend_addr = proxy.global.backends[proxy.connection.backend_ndx].address
 	backend_lag[backend_addr].check_ts = os.time()
 	backend_lag[backend_addr].state = nil
 

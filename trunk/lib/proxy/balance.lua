@@ -22,8 +22,8 @@ module("proxy.balance", package.seeall)
 function idle_failsafe_rw()
 	local backend_ndx = 0
 
-	for i = 1, #proxy.backends do
-		local s = proxy.backends[i]
+	for i = 1, #proxy.global.backends do
+		local s = proxy.global.backends[i]
 		local conns = s.pool.users[proxy.connection.client.username]
 		
 		if conns.cur_idle_connections > 0 and 
@@ -41,8 +41,8 @@ function idle_ro()
 	local max_conns = -1
 	local max_conns_ndx = 0
 
-	for i = 1, #proxy.backends do
-		local s = proxy.backends[i]
+	for i = 1, #proxy.global.backends do
+		local s = proxy.global.backends[i]
 		local conns = s.pool.users[proxy.connection.client.username]
 
 		-- pick a slave which has some idling connections

@@ -11,6 +11,8 @@
   * added a option to disable COM_CHANGE_USER on connection reuse
   * removed explicit lua_gc() in favour of automatic lua_step()
   * fixed tutorial-inject.lua to start indexing at 1 (#32088)
+  * proxy backends now live in proxy.global.backends, not proxy.backends
+    and are shared between plugins
 
 0.6.1 - 
   * added new features to run-tests.lua (see README.TESTS)

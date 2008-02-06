@@ -887,7 +887,7 @@ static const struct luaL_reg methods_proxy_backend[] = {
 };
 
 /**
- * get proxy.backends[ndx]
+ * get proxy.global.backends[ndx]
  *
  * get the backend from the array of mysql backends. 
  *
@@ -913,7 +913,7 @@ static int proxy_backends_get(lua_State *L) {
 
 	backend = st->global_state->backend_pool->pdata[backend_ndx];
 
-	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneat proxy.backends[ndx] */
+	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneat proxy.global.backends[ndx] */
 	*backend_p = backend;
 
 	proxy_getmetatable(L, methods_proxy_backend);
@@ -1297,7 +1297,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 	 * proxy.connection is (mostly) read-only
 	 *
 	 * .thread_id  = ... thread-id against this server
-	 * .backend_id = ... index into proxy.backends[ndx]
+	 * .backend_id = ... index into proxy.global.backends[ndx]
 	 *
 	 */
 	
@@ -1308,20 +1308,6 @@ static int lua_register_callback(network_mysqld_con *con) {
 	lua_setmetatable(L, -2);          /* tie the metatable to the udata   (sp -= 1) */
 
 	lua_setfield(L, -2, "connection"); /* proxy.connection = <udata>     (sp -= 1) */
-
-	/**
-	 * register proxy.backends[]
-	 *
-	 * @see proxy_backends_get()
-	 */
-
-	con_p = lua_newuserdata(L, sizeof(con));
-	*con_p = con;
-
-	proxy_getmetatable(L, methods_proxy_backends);
-	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */
-
-	lua_setfield(L, -2, "backends");
 
 	/**
 	 * proxy.response knows 3 fields with strict types:
@@ -1377,7 +1363,25 @@ static int lua_register_callback(network_mysqld_con *con) {
 
 	lua_setmetatable(L, -2);
 
-	lua_pop(L, 1);  /* _G.proxy */
+	/**
+	 * the following callbacks are in global scope!
+	 */
+	/**
+	 * register proxy.global.backends[]
+	 *
+	 * @see proxy_backends_get()
+	 */
+	lua_getfield(L, -1, "global");
+
+	con_p = lua_newuserdata(L, sizeof(con));
+	*con_p = con;
+
+	proxy_getmetatable(L, methods_proxy_backends);
+	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */
+
+	lua_setfield(L, -2, "backends");
+
+	lua_pop(L, 2);  /* _G.proxy.global and _G.proxy */
 	
 	g_assert(lua_isfunction(L, -2));
 	g_assert(lua_istable(L, -1));
@@ -2090,9 +2094,7 @@ static const struct luaL_reg methods_proxy_injection[] = {
 
 #endif
 static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
-#ifdef HAVE_LUA_H
 	network_socket *send_sock = con->client;
-#endif
 	injection *inj = NULL;
 	plugin_con_state *st = con->plugin_con_state;
 	proxy_stmt_ret ret = PROXY_NO_DECISION;

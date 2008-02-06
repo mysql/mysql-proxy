@@ -72,8 +72,8 @@ function connect_server()
 	local rw_ndx = 0
 
 	-- init all backends 
-	for i = 1, #proxy.backends do
-		local s        = proxy.backends[i]
+	for i = 1, #proxy.global.backends do
+		local s        = proxy.global.backends[i]
 		local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
 		local cur_idle = pool.users[""].cur_idle_connections
 
@@ -284,7 +284,7 @@ function read_query( packet )
 	-- send to master
 	if is_debug then
 		if proxy.connection.backend_ndx > 0 then
-			local b = proxy.backends[proxy.connection.backend_ndx]
+			local b = proxy.global.backends[proxy.connection.backend_ndx]
 			print("  sending to backend : " .. b.address);
 			print("    is_slave         : " .. tostring(b.type == proxy.BACKEND_TYPE_RO));
 			print("    server default db: " .. s.default_db)
@@ -319,7 +319,7 @@ function read_query_result( inj )
 				proxy.response = {
 					type = proxy.MYSQLD_PACKET_ERR,
 					errmsg = "can't change DB ".. proxy.connection.client.default_db ..
-						" to on slave " .. proxy.backends[proxy.connection.backend_ndx].address
+						" to on slave " .. proxy.global.backends[proxy.connection.backend_ndx].address
 				}
 
 				return proxy.PROXY_SEND_RESULT

@@ -61,8 +61,8 @@ function connect_server()
 	local least_idle_conns_ndx = 0
 	local least_idle_conns = 0
 
-	for i = 1, #proxy.backends do
-		local s = proxy.backends[i]
+	for i = 1, #proxy.global.backends do
+		local s = proxy.global.backends[i]
 		local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
 		local cur_idle = pool.users[""].cur_idle_connections
 
@@ -98,7 +98,7 @@ function connect_server()
 	end
 
 	if proxy.connection.backend_ndx > 0 then 
-		local s = proxy.backends[proxy.connection.backend_ndx]
+		local s = proxy.global.backends[proxy.connection.backend_ndx]
 		local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
 		local cur_idle = pool.users[""].cur_idle_connections
 
@@ -164,8 +164,8 @@ function read_query( packet )
 		-- we don't have a backend right now
 		-- 
 		-- let's pick a master as a good default
-		for i = 1, #proxy.backends do
-			local s = proxy.backends[i]
+		for i = 1, #proxy.global.backends do
+			local s = proxy.global.backends[i]
 			local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
 			local cur_idle = pool.users[proxy.connection.client.username].cur_idle_connections
 			
@@ -220,8 +220,8 @@ function disconnect_client()
 		-- currently we don't have a server backend assigned
 		--
 		-- pick a server which has too many idling connections and close one
-		for i = 1, #proxy.backends do
-			local s = proxy.backends[i]
+		for i = 1, #proxy.global.backends do
+			local s = proxy.global.backends[i]
 			local pool     = s.pool -- we don't have a username yet, try to find a connections which is idling
 			local cur_idle = pool.users[proxy.connection.client.username].cur_idle_connections
 

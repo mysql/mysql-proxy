@@ -76,7 +76,7 @@ local function dump_connection()
   print(".== connection ")
  
   cur_backend_ndx = assert(proxy.connection["backend_ndx"])
-  cur_backend = proxy.backends[cur_backend_ndx]
+  cur_backend = proxy.global.backends[cur_backend_ndx]
   
   print("| backend[ndx] = "      .. cur_backend_ndx)
   print("| connected_clients = " .. cur_backend["connected_clients"])
