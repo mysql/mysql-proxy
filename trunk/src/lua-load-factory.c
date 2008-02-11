@@ -7,6 +7,8 @@
 #include <assert.h>
 #include <string.h>
 
+#include <glib.h>
+
 #ifdef HAVE_LUA_H
 #include <lua.h>
 #include <lualib.h>
@@ -62,6 +64,7 @@ const char *loadstring_factory_reader(lua_State *L, void *data, size_t *size) {
 			factory->state = LOAD_STATE_POSTFIX;
 			return factory->data.string.str;
 		case LOAD_TYPE_FILE:
+			g_assert(NULL != factory->data.file.f);
 			*size = fread(factory->data.file.content, 1, sizeof(factory->data.file.content), factory->data.file.f);
 
 			if (*size == 0) {

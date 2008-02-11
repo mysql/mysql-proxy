@@ -219,12 +219,13 @@ typedef struct {
 	struct {
 		GQueue *queries;       /** queries we want to executed */
 		query_status qstat;
-#ifdef HAVE_LUA_H
-		lua_State *L;
-		int L_ref;
-#endif
 		int sent_resultset;    /** make sure we send only one result back to the client */
 	} injected;
+
+#ifdef HAVE_LUA_H
+	lua_State *L;
+	int L_ref;
+#endif
 
 	plugin_srv_state *global_state;
 	backend_t *backend;
@@ -886,32 +887,34 @@ static const struct luaL_reg methods_proxy_backend[] = {
 	{ NULL, NULL },
 };
 
+/* forward decl */
+plugin_srv_state *plugin_srv_state_get(chassis_plugin_config *config);
+
 /**
  * get proxy.global.backends[ndx]
  *
- * get the backend from the array of mysql backends. 
+ * get the backend from the array of mysql backends.
  *
  * @return nil or the backend
  * @see proxy_backend_get
  */
 static int proxy_backends_get(lua_State *L) {
-	plugin_con_state *st;
+	plugin_srv_state *global_state;
 	backend_t *backend; 
 	backend_t **backend_p;
 
 	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkself(L);
 	int backend_ndx = luaL_checkinteger(L, 2) - 1; /** lua is indexes from 1, C from 0 */
 
-	st = con->plugin_con_state;
-
+	global_state = plugin_srv_state_get(con->config);
 	if (backend_ndx < 0 ||
-	    backend_ndx >= st->global_state->backend_pool->len) {
+	    backend_ndx >= global_state->backend_pool->len) {
 		lua_pushnil(L);
 
 		return 1;
 	}
 
-	backend = st->global_state->backend_pool->pdata[backend_ndx];
+	backend = global_state->backend_pool->pdata[backend_ndx];
 
 	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneat proxy.global.backends[ndx] */
 	*backend_p = backend;
@@ -924,13 +927,11 @@ static int proxy_backends_get(lua_State *L) {
 
 static int proxy_backends_len(lua_State *L) {
 	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkself(L);
-	plugin_con_state *st;
+	plugin_srv_state *global_state = plugin_srv_state_get(con->config);
 
-	st = con->plugin_con_state;
+	lua_pushinteger(L, global_state->backend_pool->len);
 
-        lua_pushinteger(L, st->global_state->backend_pool->len);
-
-        return 1;
+	return 1;
 }
 
 static const struct luaL_reg methods_proxy_backends[] = {
@@ -1164,59 +1165,18 @@ static int proxy_tokenize(lua_State *L) {
 
 	return 1;
 }
+
 /**
- * setup the script before we hook function is executed 
- *
- * has to be called before any lua_pcall() is called to start a hook function
- *
- * - we use a global lua_State which is split into child-states with lua_newthread()
- * - luaL_ref() moves the state into the registry and cleans up the global stack
- * - on connection close we call luaL_unref() to hand the thread to the GC
- *
- * @see proxy_lua_free_script
- *
- *
- * if the script is cached we have to point the global proxy object to do all l
- *
+ * Load a lua script and leave the wrapper function on the stack.
  */
-static int lua_register_callback(network_mysqld_con *con) {
-	lua_State *L = NULL;
-	plugin_con_state *st   = con->plugin_con_state;
-
-	lua_scope  *sc = con->srv->priv->sc;
-
-	GQueue **q_p;
-	network_mysqld_con **con_p;
+static int lua_load_script(network_mysqld_con *con) {
+	lua_scope *sc = con->srv->priv->sc;
 	chassis_plugin_config *config = con->config;
-	int stack_top;
+
+	int stack_top = lua_gettop(sc->L);
 
 	if (!config->lua_script) return 0;
-
-	if (st->injected.L) {
-		/* we have to rewrite _G.proxy to point to the local proxy */
-		L = st->injected.L;
-
-		g_assert(lua_isfunction(L, -1));
-
-		lua_getfenv(L, -1);
-		g_assert(lua_istable(L, -1));
-
-		lua_getglobal(L, "proxy");
-		lua_getmetatable(L, -1); /* meta(_G.proxy) */
-
-		lua_getfield(L, -3, "__proxy"); /* fenv.__proxy */
-		lua_setfield(L, -2, "__index"); /* meta[_G.proxy].__index = fenv.__proxy */
-
-		lua_getfield(L, -3, "__proxy"); /* fenv.__proxy */
-		lua_setfield(L, -2, "__newindex"); /* meta[_G.proxy].__newindex = fenv.__proxy */
-
-		lua_pop(L, 3);
-		
-		g_assert(lua_isfunction(L, -1));
-
-		return 0; /* the script-env already setup, get out of here */
-	}
-
+	
 	/* a script cache
 	 *
 	 * we cache the scripts globally in the registry and move a copy of it 
@@ -1234,6 +1194,122 @@ static int lua_register_callback(network_mysqld_con *con) {
 		g_error("luaL_loadfile(%s): returned a %s", config->lua_script, lua_typename(sc->L, lua_type(sc->L, -1)));
 	}
 
+	g_assert(lua_gettop(sc->L) - stack_top == 1);
+
+	return 0;
+}
+
+/**
+ * Set up the global structures for a script.
+ * 
+ * @see lua_register_callback - for connection local setup
+ */
+static int lua_setup_global(network_mysqld_con *con) {
+	lua_scope *sc = con->srv->priv->sc;
+	
+	chassis_plugin_config *config = con->config;
+	network_mysqld_con **con_p;
+
+	int stack_top = lua_gettop(sc->L);
+
+	/* TODO: if we share "proxy." with other plugins, this may fail to initialize it correctly, 
+	 * because maybe they already have registered stuff in there.
+	 * It would be better to have different namespaces, or any other way to make sure we initialize correctly.
+	 */
+	lua_getglobal(sc->L, "proxy");
+	if (lua_isnil(sc->L, -1)) {
+		lua_pop(sc->L, 1);
+
+		proxy_lua_init_global_fenv(sc->L);
+	
+		lua_getglobal(sc->L, "proxy");
+	}
+	g_assert(lua_istable(sc->L, -1));
+	
+	/* at this point we have set up:
+	 *  - the script
+	 *  - _G.proxy and a bunch of constants in that table
+	 *  - _G.proxy.global
+	 */
+	
+	/**
+	 * register proxy.global.backends[]
+	 *
+	 * @see proxy_backends_get()
+	 */
+	lua_getfield(sc->L, -1, "global");
+
+	con_p = lua_newuserdata(sc->L, sizeof(con));
+	*con_p = con;
+
+	proxy_getmetatable(sc->L, methods_proxy_backends);
+	lua_setmetatable(sc->L, -2);          /* tie the metatable to the table   (sp -= 1) */
+
+	lua_setfield(sc->L, -2, "backends");
+
+	lua_pop(sc->L, 2);  /* _G.proxy.global and _G.proxy */
+
+	g_assert(lua_gettop(sc->L) == stack_top);
+}
+
+/**
+ * setup the local script environment before we call the hook function
+ *
+ * has to be called before any lua_pcall() is called to start a hook function
+ *
+ * - we use a global lua_State which is split into child-states with lua_newthread()
+ * - luaL_ref() moves the state into the registry and cleans up the global stack
+ * - on connection close we call luaL_unref() to hand the thread to the GC
+ *
+ * @see proxy_lua_free_script
+ *
+ *
+ * if the script is cached we have to point the global proxy object
+ *
+ */
+static int lua_register_callback(network_mysqld_con *con) {
+	lua_State *L = NULL;
+	plugin_con_state *st   = con->plugin_con_state;
+
+	lua_scope  *sc = con->srv->priv->sc;
+
+	GQueue **q_p;
+	network_mysqld_con **con_p;
+	chassis_plugin_config *config = con->config;
+	int stack_top;
+
+	if (!config->lua_script) return 0;
+
+	if (st->L) {
+		/* we have to rewrite _G.proxy to point to the local proxy */
+		L = st->L;
+
+		g_assert(lua_isfunction(L, -1));
+
+		lua_getfenv(L, -1);
+		g_assert(lua_istable(L, -1));
+
+		lua_getglobal(L, "proxy");
+		lua_getmetatable(L, -1); /* meta(_G.proxy) */
+
+		lua_getfield(L, -3, "__proxy"); /* fenv.__proxy */
+		lua_setfield(L, -2, "__index"); /* meta[_G.proxy].__index = fenv.__proxy */
+
+		lua_getfield(L, -3, "__proxy"); /* fenv.__proxy */
+		lua_setfield(L, -2, "__newindex"); /* meta[_G.proxy].__newindex = fenv.__proxy */
+
+		lua_pop(L, 3);
+
+		g_assert(lua_isfunction(L, -1));
+
+		return 0; /* the script-env already setup, get out of here */
+	}
+
+	/* handles loading the file from disk/cache*/
+	lua_load_script(con);
+	/* sets up global tables */
+	lua_setup_global(con);
+
 	/**
 	 * create a side thread for this connection
 	 *
@@ -1241,7 +1317,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 	 */
 	L = lua_newthread(sc->L);
 
-	st->injected.L_ref = luaL_ref(sc->L, LUA_REGISTRYINDEX);
+	st->L_ref = luaL_ref(sc->L, LUA_REGISTRYINDEX);
 
 	stack_top = lua_gettop(L);
 
@@ -1284,7 +1360,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 
 
 	lua_setfield(L, -2, "queries"); /* proxy.queries = <userdata> */
-	
+
 	/**
 	 * export internal functions 
 	 *
@@ -1300,7 +1376,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 	 * .backend_id = ... index into proxy.global.backends[ndx]
 	 *
 	 */
-	
+
 	con_p = lua_newuserdata(L, sizeof(con));                          /* (sp += 1) */
 	*con_p = con;
 
@@ -1333,18 +1409,11 @@ static int lua_register_callback(network_mysqld_con *con) {
 	lua_setmetatable(L, -2); /* tie the metatable to response    (sp -= 1) */
 #endif
 	lua_setfield(L, -2, "response");
-	
+
 	lua_setfield(L, -2, "__proxy");
 
 	/* patch the _G.proxy to point here */
 	lua_getglobal(L, "proxy");
-	if (lua_isnil(L, -1)) {
-		lua_pop(L, 1);
-
-		proxy_lua_init_global_fenv(L);
-	
-		lua_getglobal(L, "proxy");
-	}
 	g_assert(lua_istable(L, -1));
 
 	if (0 == lua_getmetatable(L, -1)) { /* meta(_G.proxy) */
@@ -1363,26 +1432,8 @@ static int lua_register_callback(network_mysqld_con *con) {
 
 	lua_setmetatable(L, -2);
 
-	/**
-	 * the following callbacks are in global scope!
-	 */
-	/**
-	 * register proxy.global.backends[]
-	 *
-	 * @see proxy_backends_get()
-	 */
-	lua_getfield(L, -1, "global");
+	lua_pop(L, 1);  /* _G.proxy */
 
-	con_p = lua_newuserdata(L, sizeof(con));
-	*con_p = con;
-
-	proxy_getmetatable(L, methods_proxy_backends);
-	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */
-
-	lua_setfield(L, -2, "backends");
-
-	lua_pop(L, 2);  /* _G.proxy.global and _G.proxy */
-	
 	g_assert(lua_isfunction(L, -2));
 	g_assert(lua_istable(L, -1));
 
@@ -1397,14 +1448,14 @@ static int lua_register_callback(network_mysqld_con *con) {
 		g_critical("(lua-error) [%s]\n%s", config->lua_script, lua_tostring(L, -1));
 
 		lua_pop(L, 1); /* errmsg */
-	
-		luaL_unref(sc->L, LUA_REGISTRYINDEX, st->injected.L_ref);
+
+		luaL_unref(sc->L, LUA_REGISTRYINDEX, st->L_ref);
 
 		return 0;
 	}
 
-	st->injected.L = L;
-	
+	st->L = L;
+
 	g_assert(lua_isfunction(L, -1));
 	g_assert(lua_gettop(L) - stack_top == 1);
 
@@ -1428,7 +1479,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 	int resp_type = 1;
 	const char *str;
 	size_t str_len;
-	lua_State *L = st->injected.L;
+	lua_State *L = st->L;
 	chassis_plugin_config *config = con->config;
 
 	/**
@@ -2114,8 +2165,8 @@ static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 	 * */
 	lua_register_callback(con);
 
-	if (st->injected.L) {
-		lua_State *L = st->injected.L;
+	if (st->L) {
+		lua_State *L = st->L;
 
 		g_assert(lua_isfunction(L, -1));
 		lua_getfenv(L, -1);
@@ -2241,9 +2292,9 @@ static proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
 	 * */
 	lua_register_callback(con);
 
-	if (!st->injected.L) return ret;
+	if (!st->L) return ret;
 
-	L = st->injected.L;
+	L = st->L;
 
 	g_assert(lua_isfunction(L, -1));
 	lua_getfenv(L, -1);
@@ -2520,9 +2571,9 @@ static proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
 	 * */
 	lua_register_callback(con);
 
-	if (!st->injected.L) return 0;
+	if (!st->L) return 0;
 
-	L = st->injected.L;
+	L = st->L;
 
 	g_assert(lua_isfunction(L, -1));
 	lua_getfenv(L, -1);
@@ -2767,9 +2818,9 @@ static proxy_stmt_ret proxy_lua_read_auth_result(network_mysqld_con *con) {
 	 * */
 	lua_register_callback(con);
 
-	if (!st->injected.L) return 0;
+	if (!st->L) return 0;
 
-	L = st->injected.L;
+	L = st->L;
 
 	g_assert(lua_isfunction(L, -1));
 	lua_getfenv(L, -1);
@@ -2956,8 +3007,8 @@ static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 #ifdef HAVE_LUA_H
 	lua_register_callback(con);
 
-	if (st->injected.L) {
-		lua_State *L = st->injected.L;
+	if (st->L) {
+		lua_State *L = st->L;
 		proxy_stmt_ret ret = PROXY_NO_DECISION;
 
 		g_assert(lua_isfunction(L, -1));
@@ -3674,6 +3725,33 @@ static void proxy_lua_dumptable(lua_State *L) {
 		lua_pop(L, 1);
 	}
 }
+
+/**
+ * dump the state of the lua stack
+ */
+static void proxy_lua_dumpstack(lua_State *L) {
+	int i;
+	int top = lua_gettop(L);
+	for (i = 1; i <= top; i++) {
+		int t = lua_type(L, i);
+		switch (t) {
+		case LUA_TSTRING:
+			printf("'%s'", lua_tostring(L, i));
+			break;
+		case LUA_TBOOLEAN:
+			printf(lua_toboolean(L, i) ? "true" : "false");
+			break;
+		case LUA_TNUMBER:
+			printf("'%g'", lua_tonumber(L, i));
+			break;
+		default:
+			printf("%s", lua_typename(L, t));
+			break;
+		}
+		printf("  ");
+	}
+	printf("\n");
+}
 #endif
 
 static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
@@ -3687,9 +3765,9 @@ static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
 	 * */
 	lua_register_callback(con);
 
-	if (!st->injected.L) return 0;
+	if (!st->L) return 0;
 
-	L = st->injected.L;
+	L = st->L;
 
 	g_assert(lua_isfunction(L, -1));
 	lua_getfenv(L, -1);
@@ -4046,9 +4124,9 @@ static proxy_stmt_ret proxy_lua_disconnect_client(network_mysqld_con *con) {
 	 * */
 	lua_register_callback(con);
 
-	if (!st->injected.L) return 0;
+	if (!st->L) return 0;
 
-	L = st->injected.L;
+	L = st->L;
 
 	g_assert(lua_isfunction(L, -1));
 	lua_getfenv(L, -1);
@@ -4147,8 +4225,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
 
 #ifdef HAVE_LUA_H
 	/* remove this cached script from registry */
-	if (st->injected.L_ref > 0) {
-		luaL_unref(sc->L, LUA_REGISTRYINDEX, st->injected.L_ref);
+	if (st->L_ref > 0) {
+		luaL_unref(sc->L, LUA_REGISTRYINDEX, st->L_ref);
 	}
 #endif
 
@@ -4313,6 +4391,9 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 	if (0 != network_mysqld_con_bind(listen_sock)) {
 		return -1;
 	}
+
+	/* load the script and setup the global tables */
+	lua_setup_global(con);
 
 	/**
 	 * call network_mysqld_con_accept() with this connection when we are done

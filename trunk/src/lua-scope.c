@@ -196,6 +196,22 @@ lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name) {
 		lua_newtable(L);                /* t = { } */
 		
 		if (0 != g_stat(name, &st)) {
+			gchar *errmsg;
+			/* stat() failed, ... not good */
+
+			lua_pop(L, 2); /* cachedscripts. + cachedscripts.<name> */
+
+			errmsg = g_strdup_printf("%s: stat(%s) failed: %s (%d)",
+				       G_STRLOC, name, strerror(errno), errno);
+			
+			lua_pushstring(L, errmsg);
+
+			g_free(errmsg);
+
+			g_assert(lua_isstring(L, -1));
+			g_assert(lua_gettop(L) == stack_top + 1);
+
+			return L;
 		}
 
 		if (0 != luaL_loadfile_factory(L, name)) {
