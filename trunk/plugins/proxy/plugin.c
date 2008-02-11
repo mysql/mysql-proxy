@@ -1204,7 +1204,7 @@ static int lua_load_script(network_mysqld_con *con) {
  * 
  * @see lua_register_callback - for connection local setup
  */
-static int lua_setup_global(network_mysqld_con *con) {
+static void lua_setup_global(network_mysqld_con *con) {
 	lua_scope *sc = con->srv->priv->sc;
 	
 	chassis_plugin_config *config = con->config;
