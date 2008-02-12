@@ -128,6 +128,26 @@
 #include "chassis-mainloop.h"
 
 /**
+ * map SIGHUP to log->rotate_logs = true
+ *
+ * NOTE: signal handlers have to be volatile sig_atomic_t 
+ */
+#ifdef _WIN32
+volatile int agent_rotate_logs = 0;
+#else
+volatile sig_atomic_t agent_rotate_logs = 0;
+#endif
+
+#ifndef _WIN32
+static void sighup_handler(int sig) {
+	switch (sig) {
+	case SIGHUP: agent_rotate_logs = 1; break;
+	}
+}
+#endif
+
+
+/**
  * turn a GTimeVal into string
  *
  * @return string in ISO notation with micro-seconds
