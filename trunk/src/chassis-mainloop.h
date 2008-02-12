@@ -1,6 +1,20 @@
 #ifndef _CHASSIS_MAINLOOP_H_
 #define _CHASSIS_MAINLOOP_H_
 
+#include <glib.h>    /* GPtrArray */
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>  /* event.h needs struct tm */
+#endif
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#include <event.h>     /* struct event_base */
+
 typedef struct chassis_private chassis_private;
 typedef struct chassis chassis;
 
