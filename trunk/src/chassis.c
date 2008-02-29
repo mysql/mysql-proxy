@@ -358,17 +358,18 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (log_level) {
-		if (0 != chassis_log_set_level(log, log_level)) {
-			g_critical("--log-level=... failed, level '%s' is unknown ", log_level);
-
+	if (keyfile) {
+		if (chassis_keyfile_to_options(keyfile, "mysql-proxy", main_entries)) {
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;
 		}
 	}
 
-	if (keyfile) {
-		if (chassis_keyfile_to_options(keyfile, "mysql-proxy", main_entries)) {
+	/* handle log-level after the config-file is read, just in case it is specified in the file */
+	if (log_level) {
+		if (0 != chassis_log_set_level(log, log_level)) {
+			g_critical("--log-level=... failed, level '%s' is unknown ", log_level);
+
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;
 		}
