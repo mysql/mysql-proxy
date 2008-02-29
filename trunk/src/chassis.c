@@ -382,7 +382,7 @@ int main(int argc, char **argv) {
 		plugin_names = g_new0(char *, 3);
 
 #define IS_PNAME(pname) \
-		((strlen(argv[0]) > sizeof(pname) - 1) && \
+		((strlen(argv[0]) >= sizeof(pname) - 1) && \
 		 0 == strcmp(argv[0] + strlen(argv[0]) - (sizeof(pname) - 1), pname) \
 		)
 

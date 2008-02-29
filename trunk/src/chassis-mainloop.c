@@ -13,7 +13,6 @@
 
 #include <glib.h>
 #include <event.h>
-
 #include "chassis-plugin.h"
 #include "chassis-mainloop.h"
 
@@ -172,5 +171,4 @@ void *chassis_mainloop(void *_chas) {
 
 	return NULL;
 }
-
 

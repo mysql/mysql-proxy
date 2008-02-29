@@ -289,5 +289,82 @@ lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name) {
 
 	return L;
 }
+
+/**
+ * dump the content of a lua table
+ */
+void proxy_lua_dumptable(lua_State *L) {
+	g_assert(lua_istable(L, -1));
+	
+	lua_pushnil(L);
+	while (lua_next(L, -2) != 0) {
+		int t = lua_type(L, -2);
+		
+		switch (t) {
+			case LUA_TSTRING:
+				g_message("[%d] (string) %s", 0, lua_tostring(L, -2));
+				break;
+			case LUA_TBOOLEAN:
+				g_message("[%d] (bool) %s", 0, lua_toboolean(L, -2) ? "true" : "false");
+				break;
+			case LUA_TNUMBER:
+				g_message("[%d] (number) %g", 0, lua_tonumber(L, -2));
+				break;
+			default:
+				g_message("[%d] (%s)", 0, lua_typename(L, lua_type(L, -2)));
+				break;
+		}
+		g_message("[%d] (%s)", 0, lua_typename(L, lua_type(L, -1)));
+		
+		lua_pop(L, 1);
+	}
+}
+
+/**
+ * dump the state of the lua stack
+ */
+void proxy_lua_dumpstack(lua_State *L) {
+	int i;
+	int top = lua_gettop(L);
+	for (i = 1; i <= top; i++) {
+		int t = lua_type(L, i);
+		switch (t) {
+			case LUA_TSTRING:
+				printf("'%s'", lua_tostring(L, i));
+				break;
+			case LUA_TBOOLEAN:
+				printf(lua_toboolean(L, i) ? "true" : "false");
+				break;
+			case LUA_TNUMBER:
+				printf("'%g'", lua_tonumber(L, i));
+				break;
+			default:
+				printf("%s", lua_typename(L, t));
+				break;
+		}
+		printf("  ");
+	}
+	printf("\n");
+}
+
+
+/**
+ * print out information about the currently execute lua code
+ */
+void proxy_lua_currentline(lua_State *L, int level) {
+	lua_Debug ar;
+	const char *name;
+	if (lua_getstack(L, level, &ar)) {
+		lua_getinfo(L, "lnS", &ar);
+		/* currentline is offset by 1 line because of the
+		 * wrapper function we introduce in lua-load-factory.c
+		 */
+		ar.currentline--;
+		name = ar.namewhat[0] == '\0' ? "unknown" : ar.name;
+		printf("%s in %s (line %d)\n", name, ar.short_src, ar.currentline);
+	} else {
+		printf("level %d exceeds the current stack depth\n", level);
+	}
+}
 #endif
 

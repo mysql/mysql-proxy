@@ -127,12 +127,13 @@ typedef int socklen_t;
 #include "network-mysqld-proto.h"
 #include "network-conn-pool.h"
 #include "sys-pedantic.h"
+#include "query-handling.h"
+#include "backend.h"
+
+#include "proxy-plugin.h"
 
 #include "sql-tokenizer.h"
 #include "lua-load-factory.h"
-
-#define TIME_DIFF_US(t2, t1) \
-	        ((t2.tv_sec - t1.tv_sec) * 1000000.0 + (t2.tv_usec - t1.tv_usec))
 
 #define C(x) x, sizeof(x) - 1
 
@@ -158,63 +159,6 @@ typedef enum {
 	PROXY_IGNORE_RESULT       /** for read_query_result */
 } proxy_stmt_ret;
 
-typedef enum { 
-	BACKEND_STATE_UNKNOWN, 
-	BACKEND_STATE_UP, 
-	BACKEND_STATE_DOWN
-} backend_state_t;
-
-typedef enum { 
-	BACKEND_TYPE_UNKNOWN, 
-	BACKEND_TYPE_RW, 
-	BACKEND_TYPE_RO
-} backend_type_t;
-
-typedef struct {
-	network_address addr;
-
-	backend_state_t state;   /**< UP or DOWN */
-	backend_type_t type;     /**< ReadWrite or ReadOnly */
-
-	GTimeVal state_since;    /**< timestamp of the last state-change */
-
-	network_connection_pool *pool; /**< the pool of open connections */
-
-	guint connected_clients; /**< number of open connections to this backend for SQF */
-} backend_t;
-
-/**
- * the shared information across all connections 
- *
- */
-typedef struct {
-	/**
-	 * our pool if backends
-	 *
-	 * GPtrArray<backend_t>
-	 */
-	GPtrArray *backend_pool; 
-
-	GTimeVal backend_last_check;
-} plugin_srv_state;
-
-typedef struct {
-	/**
-	 * the content of the OK packet 
-	 */
-	int server_status;
-	int warning_count;
-	guint64 affected_rows;
-	guint64 insert_id;
-
-	int was_resultset; /** if set, affected_rows and insert_id are ignored */
-
-	/**
-	 * MYSQLD_PACKET_OK or MYSQLD_PACKET_ERR
-	 */	
-	int query_status;
-} query_status;
-
 typedef struct {
 	struct {
 		GQueue *queries;       /** queries we want to executed */
@@ -227,31 +171,17 @@ typedef struct {
 	int L_ref;
 #endif
 
-	plugin_srv_state *global_state;
+	proxy_global_state_t *global_state;
 	backend_t *backend;
 	int backend_ndx;
 
 	int connection_close;
 } plugin_con_state;
 
-typedef struct {
-	GString *query;
-
-	int id; /* a unique id set by the scripts to map the query to a handler */
-
-	/* the userdata's need them */
-	GQueue *result_queue; /* the data to parse */
-	query_status qstat;
-
-	GTimeVal ts_read_query;          /* timestamp when we added this query to the queues */
-	GTimeVal ts_read_query_result_first;   /* when we first finished it */
-	GTimeVal ts_read_query_result_last;     /* when we first finished it */
-} injection;
-
 struct chassis_plugin_config {
 	gchar *address;                   /**< listening address of the proxy */
 
-	gchar **backend_addresses;        /**<    read-write backends */
+	gchar **backend_addresses;        /**< read-write backends */
 	gchar **read_only_backend_addresses; /**< read-only  backends */
 
 	gint fix_bug_25371;               /**< suppress the second ERR packet of bug #25371 */
@@ -269,40 +199,6 @@ struct chassis_plugin_config {
 
 	network_mysqld_con *listen_con;
 };
-
-/**
- * compare two strings for equality 
- */
-gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
-	if (a_len != b_len) return FALSE;
-	return (0 == strcmp(a, b));
-}
-
-
-
-static injection *injection_init(int id, GString *query) {
-	injection *i;
-
-	i = g_new0(injection, 1);
-	i->id = id;
-	i->query = query;
-
-	/**
-	 * we have to assume that injection_init() is only used by the read_query call
-	 * which should be fine
-	 */
-	g_get_current_time(&(i->ts_read_query));
-
-	return i;
-}
-
-static void injection_free(injection *i) {
-	if (!i) return;
-
-	if (i->query) g_string_free(i->query, TRUE);
-
-	g_free(i);
-}
 
 static plugin_con_state *plugin_con_state_init() {
 	plugin_con_state *st;
@@ -436,37 +332,17 @@ static void proxy_lua_init_global_fenv(lua_State *L) {
 }
 #endif
 
-static backend_t *backend_init() {
-	backend_t *b;
+static proxy_global_state_t *proxy_global_state_init() {
+	proxy_global_state_t *g;
 
-	b = g_new0(backend_t, 1);
-
-	b->pool = network_connection_pool_init();
-
-	return b;
-}
-
-void backend_free(backend_t *b) {
-	if (!b) return;
-
-	network_connection_pool_free(b->pool);
-
-	if (b->addr.str) g_free(b->addr.str);
-
-	g_free(b);
-}
-
-static plugin_srv_state *plugin_srv_state_init() {
-	plugin_srv_state *g;
-
-	g = g_new0(plugin_srv_state, 1);
+	g = g_new0(proxy_global_state_t, 1);
 
 	g->backend_pool = g_ptr_array_new();
 
 	return g;
 }
 
-void plugin_srv_state_free(plugin_srv_state *g) {
+void proxy_global_state_free(proxy_global_state_t *g) {
 	gsize i;
 
 	if (!g) return;
@@ -483,92 +359,12 @@ void plugin_srv_state_free(plugin_srv_state *g) {
 }
 
 /**
- * parse the result-set packet and extract the fields
- *
- * @param chunk  list of mysql packets 
- * @param fields empty array where the fields shall be stored in
- *
- * @return NULL if there is no resultset
- *         pointer to the chunk after the fields (to the EOF packet)
- */ 
-static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields) {
-	GString *packet = chunk->data;
-	guint8 field_count;
-	guint i;
-
-	/*
-	 * read(6, "\1\0\0\1", 4)                  = 4
-	 * read(6, "\2", 1)                        = 1
-	 * read(6, "6\0\0\2", 4)                   = 4
-	 * read(6, "\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0", 54) = 54
-	 * read(6, "&\0\0\3", 4)                   = 4
-	 * read(6, "\3def\0\6STATUS\0\5Value\5Value\f\10\0\0\2\0\0\375\1\0\0\0\0", 38) = 38
-	 * read(6, "\5\0\0\4", 4)                  = 4
-	 * read(6, "\376\0\0\"\0", 5)              = 5
-	 * read(6, "\23\0\0\5", 4)                 = 4
-	 * read(6, "\17Aborted_clients\00298", 19) = 19
-	 *
-	 */
-
-	g_assert(packet->len > NET_HEADER_SIZE);
-
-	/* the first chunk is the length
-	 *  */
-	if (packet->len != NET_HEADER_SIZE + 1) {
-		/*
-		 * looks like this isn't a result-set
-		 * 
-		 *    read(6, "\1\0\0\1", 4)                  = 4
-		 *    read(6, "\2", 1)                        = 1
-		 *
-		 * is expected. We might got called on a non-result, tell the user about it.
-		 */
-#if 0
-		g_debug("%s.%d: network_mysqld_result_parse_fields() got called on a non-resultset. "F_SIZE_T" != 5", __FILE__, __LINE__, packet->len);
-#endif
-
-		return NULL;
-	}
-	
-	field_count = packet->str[NET_HEADER_SIZE]; /* the byte after the net-header is the field-count */
-
-	/* the next chunk, the field-def */
-	for (i = 0; i < field_count; i++) {
-		guint off = NET_HEADER_SIZE;
-		MYSQL_FIELD *field;
-
-		chunk = chunk->next;
-		packet = chunk->data;
-
-		field = network_mysqld_proto_field_init();
-
-		field->catalog   = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->db        = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->table     = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->org_table = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->name      = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->org_name  = network_mysqld_proto_get_lenenc_string(packet, &off);
-
-		network_mysqld_proto_skip(packet, &off, 1); /* filler */
-
-		field->charsetnr = network_mysqld_proto_get_int16(packet, &off);
-		field->length    = network_mysqld_proto_get_int32(packet, &off);
-		field->type      = network_mysqld_proto_get_int8(packet, &off);
-		field->flags     = network_mysqld_proto_get_int16(packet, &off);
-		field->decimals  = network_mysqld_proto_get_int8(packet, &off);
-
-		network_mysqld_proto_skip(packet, &off, 2); /* filler */
-
-		g_ptr_array_add(fields, field);
-	}
-
-	/* this should be EOF chunk */
-	chunk = chunk->next;
-	packet = chunk->data;
-	
-	g_assert(packet->str[NET_HEADER_SIZE] == MYSQLD_PACKET_EOF);
-
-	return chunk;
+ * compare two strings for equality 
+ */
+#warning Should be in a util file or something
+static gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
+	if (a_len != b_len) return FALSE;
+	return (0 == strcmp(a, b));
 }
 
 /**
@@ -647,7 +443,7 @@ static network_socket *proxy_connection_pool_swap(network_mysqld_con *con, int b
 	backend_t *backend = NULL;
 	network_socket *send_sock;
 	plugin_con_state *st = con->plugin_con_state;
-	plugin_srv_state *g = st->global_state;
+	proxy_global_state_t *g = st->global_state;
 
 	/*
 	 * we can only change to another backend if the backend is already
@@ -882,13 +678,27 @@ static int proxy_backend_get(lua_State *L) {
 	return 1;
 }
 
+static int proxy_backend_set(lua_State *L) {
+    backend_t *backend = *(backend_t **)luaL_checkself(L);
+    gsize keysize = 0;
+	const char *key = luaL_checklstring(L, 2, &keysize);
+
+    if (strleq(key, keysize, C("state"))) {
+        backend->state = lua_tointeger(L, -1);
+    } else {
+        return luaL_error(L, "proxy.global.backends[...].%s is not writable", key);
+    }
+    return 1;
+}
+
 static const struct luaL_reg methods_proxy_backend[] = {
 	{ "__index", proxy_backend_get },
+    { "__newindex", proxy_backend_set },
 	{ NULL, NULL },
 };
 
 /* forward decl */
-plugin_srv_state *plugin_srv_state_get(chassis_plugin_config *config);
+proxy_global_state_t *proxy_global_state_get(chassis_plugin_config *config);
 
 /**
  * get proxy.global.backends[ndx]
@@ -899,14 +709,14 @@ plugin_srv_state *plugin_srv_state_get(chassis_plugin_config *config);
  * @see proxy_backend_get
  */
 static int proxy_backends_get(lua_State *L) {
-	plugin_srv_state *global_state;
+	proxy_global_state_t *global_state;
 	backend_t *backend; 
 	backend_t **backend_p;
 
 	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkself(L);
 	int backend_ndx = luaL_checkinteger(L, 2) - 1; /** lua is indexes from 1, C from 0 */
 
-	global_state = plugin_srv_state_get(con->config);
+	global_state = proxy_global_state_get(con->config);
 	if (backend_ndx < 0 ||
 	    backend_ndx >= global_state->backend_pool->len) {
 		lua_pushnil(L);
@@ -916,7 +726,7 @@ static int proxy_backends_get(lua_State *L) {
 
 	backend = global_state->backend_pool->pdata[backend_ndx];
 
-	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneat proxy.global.backends[ndx] */
+	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneath proxy.global.backends[ndx] */
 	*backend_p = backend;
 
 	proxy_getmetatable(L, methods_proxy_backend);
@@ -927,7 +737,7 @@ static int proxy_backends_get(lua_State *L) {
 
 static int proxy_backends_len(lua_State *L) {
 	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkself(L);
-	plugin_srv_state *global_state = plugin_srv_state_get(con->config);
+	proxy_global_state_t *global_state = proxy_global_state_get(con->config);
 
 	lua_pushinteger(L, global_state->backend_pool->len);
 
@@ -1067,63 +877,6 @@ static int proxy_connection_set(lua_State *L) {
 static const struct luaL_reg methods_proxy_connection[] = {
 	{ "__index", proxy_connection_get },
 	{ "__newindex", proxy_connection_set },
-	{ NULL, NULL },
-};
-
-static int proxy_queue_append(lua_State *L) {
-	/* we expect 2 parameters */
-	GQueue *q = *(GQueue **)luaL_checkself(L);
-	int resp_type = luaL_checkinteger(L, 2);
-	size_t str_len;
-	const char *str = luaL_checklstring(L, 3, &str_len);
-
-	GString *query = g_string_sized_new(str_len);
-	g_string_append_len(query, str, str_len);
-
-	g_queue_push_tail(q, injection_init(resp_type, query));
-
-	return 0;
-}
-
-static int proxy_queue_prepend(lua_State *L) {
-	/* we expect 2 parameters */
-	GQueue *q = *(GQueue **)luaL_checkself(L);
-	int resp_type = luaL_checkinteger(L, 2);
-	size_t str_len;
-	const char *str = luaL_checklstring(L, 3, &str_len);
-
-	GString *query = g_string_sized_new(str_len);
-	g_string_append_len(query, str, str_len);
-
-	g_queue_push_head(q, injection_init(resp_type, query));
-
-	return 0;
-}
-
-static int proxy_queue_reset(lua_State *L) {
-	/* we expect 2 parameters */
-	GQueue *q = *(GQueue **)luaL_checkself(L);
-	injection *inj;
-
-	while ((inj = g_queue_pop_head(q))) injection_free(inj);
-
-	return 0;
-}
-
-static int proxy_queue_len(lua_State *L) {
-	/* we expect 2 parameters */
-	GQueue *q = *(GQueue **)luaL_checkself(L);
-
-	lua_pushinteger(L, q->length);
-
-	return 1;
-}
-
-static const struct luaL_reg methods_proxy_queue[] = {
-	{ "prepend", proxy_queue_prepend },
-	{ "append", proxy_queue_append },
-	{ "reset", proxy_queue_reset },
-	{ "__len", proxy_queue_len },
 	{ NULL, NULL },
 };
 
@@ -1351,7 +1104,7 @@ static int lua_register_callback(network_mysqld_con *con) {
 	 * - len() and #proxy.queue
 	 *
 	 */
-	proxy_getmetatable(L, methods_proxy_queue);
+	proxy_getqueuemetatable(L);
 
 	lua_pushvalue(L, -1); /* meta.__index = meta */
 	lua_setfield(L, -2, "__index");
@@ -1771,379 +1524,6 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 }
 #endif
 
-#ifdef HAVE_LUA_H
-/**
- * parsed result set
- *
- * 
- */
-typedef struct {
-	GQueue *result_queue;   /**< where the packets are read from */
-
-	GPtrArray *fields;      /**< the parsed fields */
-
-	GList *rows_chunk_head; /**< pointer to the EOF packet after the fields */
-	GList *row;             /**< the current row */
-
-	query_status qstat;     /**< state if this query */
-} proxy_resultset_t;
-
-proxy_resultset_t *proxy_resultset_init() {
-	proxy_resultset_t *res;
-
-	res = g_new0(proxy_resultset_t, 1);
-
-	return res;
-}
-
-void proxy_resultset_free(proxy_resultset_t *res) {
-	if (!res) return;
-
-	if (res->fields) {
-		network_mysqld_proto_fields_free(res->fields);
-	}
-
-	g_free(res);
-}
-
-static int proxy_resultset_gc(lua_State *L) {
-	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, 1);
-	
-	proxy_resultset_free(res);
-
-	return 0;
-}
-
-static int proxy_resultset_gc_light(lua_State *L) {
-	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, 1);
-	
-	g_free(res);
-
-	return 0;
-}
-
-static int proxy_resultset_fields_len(lua_State *L) {
-	GPtrArray *fields = *(GPtrArray **)luaL_checkself(L);
-        lua_pushinteger(L, fields->len);
-        return 1;
-}
-
-static int proxy_resultset_field_get(lua_State *L) {
-	MYSQL_FIELD *field = *(MYSQL_FIELD **)luaL_checkself(L);
-	gsize keysize = 0;
-	const char *key = luaL_checklstring(L, 2, &keysize);
-
-
-	if (strleq(key, keysize, C("type"))) {
-		lua_pushinteger(L, field->type);
-	} else if (strleq(key, keysize, C("name"))) {
-		lua_pushstring(L, field->name);
-	} else if (strleq(key, keysize, C("org_name"))) {
-		lua_pushstring(L, field->org_name);
-	} else if (strleq(key, keysize, C("org_table"))) {
-		lua_pushstring(L, field->org_table);
-	} else if (strleq(key, keysize, C("table"))) {
-		lua_pushstring(L, field->table);
-	} else {
-		lua_pushnil(L);
-	}
-
-	return 1;
-}
-
-static const struct luaL_reg methods_proxy_resultset_fields_field[] = {
-	{ "__index", proxy_resultset_field_get },
-	{ NULL, NULL },
-};
-
-/**
- * get a field from the result-set
- *
- */
-static int proxy_resultset_fields_get(lua_State *L) {
-	GPtrArray *fields = *(GPtrArray **)luaL_checkself(L);
-	MYSQL_FIELD *field;
-	MYSQL_FIELD **field_p;
-	int ndx = luaL_checkinteger(L, 2);
-
-	if (ndx < 1 || ndx > fields->len) {
-		lua_pushnil(L);
-
-		return 1;
-	}
-
-	field = fields->pdata[ndx - 1]; /** lua starts at 1, C at 0 */
-
-	field_p = lua_newuserdata(L, sizeof(field));
-	*field_p = field;
-
-	proxy_getmetatable(L, methods_proxy_resultset_fields_field);
-	lua_setmetatable(L, -2);
-
-	return 1;
-}
-
-/**
- * get the next row from the resultset
- *
- * returns a lua-table with the fields (starting at 1)
- *
- * @return 0 on error, 1 on success
- *
- */
-static int proxy_resultset_rows_iter(lua_State *L) {
-	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, lua_upvalueindex(1));
-	guint32 off = NET_HEADER_SIZE; /* skip the packet-len and sequence-number */
-	GString *packet;
-	GPtrArray *fields = res->fields;
-	gsize i;
-
-	GList *chunk = res->row;
-
-	if (chunk == NULL) return 0;
-
-	packet = chunk->data;
-
-	/* if we find the 2nd EOF packet we are done */
-	if (packet->str[off] == MYSQLD_PACKET_EOF &&
-	    packet->len < 10) return 0;
-
-	/* a ERR packet instead of real rows
-	 *
-	 * like "explain select fld3 from t2 ignore index (fld3,not_existing)"
-	 *
-	 * see mysql-test/t/select.test
-	 *  */
-	if (packet->str[off] == MYSQLD_PACKET_ERR) {
-		return 0;
-	}
-
-	lua_newtable(L);
-
-	for (i = 0; i < fields->len; i++) {
-		guint64 field_len;
-
-		g_assert(off <= packet->len + NET_HEADER_SIZE);
-
-		field_len = network_mysqld_proto_get_lenenc_int(packet, &off);
-
-		if (field_len == 251) { /** @todo use constant */
-			lua_pushnil(L);
-			
-			off += 0;
-		} else {
-			/**
-			 * @todo we only support fields in the row-iterator < 16M (packet-len)
-			 */
-			g_assert(field_len <= packet->len + NET_HEADER_SIZE);
-			g_assert(off + field_len <= packet->len + NET_HEADER_SIZE);
-
-			lua_pushlstring(L, packet->str + off, field_len);
-
-			off += field_len;
-		}
-
-		/* lua starts its tables at 1 */
-		lua_rawseti(L, -2, i + 1);
-	}
-
-	res->row = res->row->next;
-
-	return 1;
-}
-
-/**
- * parse the result-set of the query
- *
- * @return if this is not a result-set we return -1
- */
-static int parse_resultset_fields(proxy_resultset_t *res) {
-	GString *packet = res->result_queue->head->data;
-	GList *chunk;
-
-	if (res->fields) return 0;
-
-	switch (packet->str[NET_HEADER_SIZE]) {
-	case MYSQLD_PACKET_OK:
-	case MYSQLD_PACKET_ERR:
-		res->qstat.query_status = packet->str[NET_HEADER_SIZE];
-
-		return 0;
-	default:
-		/* OK with a resultset */
-		res->qstat.query_status = MYSQLD_PACKET_OK;
-		break;
-	}
-
-	/* parse the fields */
-	res->fields = network_mysqld_proto_fields_init();
-
-	if (!res->fields) return -1;
-
-	chunk = network_mysqld_result_parse_fields(res->result_queue->head, res->fields);
-
-	/* no result-set found */
-	if (!chunk) return -1;
-
-	/* skip the end-of-fields chunk */
-	res->rows_chunk_head = chunk->next;
-
-	return 0;
-}
-
-static const struct luaL_reg methods_proxy_resultset_fields[] = {
-	{ "__index", proxy_resultset_fields_get },
-	{ "__len", proxy_resultset_fields_len },
-	{ NULL, NULL },
-};
-
-static const struct luaL_reg methods_proxy_resultset_light[] = {
-	{ "__gc", proxy_resultset_gc_light },
-	{ NULL, NULL },
-};
-
-static int proxy_resultset_get(lua_State *L) {
-	proxy_resultset_t *res = *(proxy_resultset_t **)luaL_checkself(L);
-	gsize keysize = 0;
-	const char *key = luaL_checklstring(L, 2, &keysize);
-
-	if (strleq(key, keysize, C("fields"))) {
-		GPtrArray **fields_p;
-
-		parse_resultset_fields(res);
-
-		if (res->fields) {
-			fields_p = lua_newuserdata(L, sizeof(res->fields));
-			*fields_p = res->fields;
-
-			proxy_getmetatable(L, methods_proxy_resultset_fields);
-			lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
-		} else {
-			lua_pushnil(L);
-		}
-	} else if (strleq(key, keysize, C("rows"))) {
-		proxy_resultset_t *rows;
-		proxy_resultset_t **rows_p;
-
-		parse_resultset_fields(res);
-
-		if (res->rows_chunk_head) {
-	
-			rows = proxy_resultset_init();
-			rows->rows_chunk_head = res->rows_chunk_head;
-			rows->row    = rows->rows_chunk_head;
-			rows->fields = res->fields;
-	
-			/* push the parameters on the stack */
-			rows_p = lua_newuserdata(L, sizeof(rows));
-			*rows_p = rows;
-
-			proxy_getmetatable(L, methods_proxy_resultset_light);
-			lua_setmetatable(L, -2);
-	
-			/* return a interator */
-			lua_pushcclosure(L, proxy_resultset_rows_iter, 1);
-		} else {
-			lua_pushnil(L);
-		}
-	} else if (strleq(key, keysize, C("raw"))) {
-		GString *s = res->result_queue->head->data;
-		lua_pushlstring(L, s->str + 4, s->len - 4);
-	} else if (strleq(key, keysize, C("flags"))) {
-		lua_newtable(L);
-		lua_pushboolean(L, (res->qstat.server_status & SERVER_STATUS_IN_TRANS) != 0);
-		lua_setfield(L, -2, "in_trans");
-
-		lua_pushboolean(L, (res->qstat.server_status & SERVER_STATUS_AUTOCOMMIT) != 0);
-		lua_setfield(L, -2, "auto_commit");
-		
-		lua_pushboolean(L, (res->qstat.server_status & SERVER_QUERY_NO_GOOD_INDEX_USED) != 0);
-		lua_setfield(L, -2, "no_good_index_used");
-		
-		lua_pushboolean(L, (res->qstat.server_status & SERVER_QUERY_NO_INDEX_USED) != 0);
-		lua_setfield(L, -2, "no_index_used");
-	} else if (strleq(key, keysize, C("warning_count"))) {
-		lua_pushinteger(L, res->qstat.warning_count);
-	} else if (strleq(key, keysize, C("affected_rows"))) {
-		/**
-		 * if the query had a result-set (SELECT, ...) 
-		 * affected_rows and insert_id are not valid
-		 */
-		if (res->qstat.was_resultset) {
-			lua_pushnil(L);
-		} else {
-			lua_pushnumber(L, res->qstat.affected_rows);
-		}
-	} else if (strleq(key, keysize, C("insert_id"))) {
-		if (res->qstat.was_resultset) {
-			lua_pushnil(L);
-		} else {
-			lua_pushnumber(L, res->qstat.insert_id);
-		}
-	} else if (strleq(key, keysize, C("query_status"))) {
-		if (0 != parse_resultset_fields(res)) {
-			/* not a result-set */
-			lua_pushnil(L);
-		} else {
-			lua_pushinteger(L, res->qstat.query_status);
-		}
-	} else {
-		lua_pushnil(L);
-	}
-
-	return 1;
-}
-
-static const struct luaL_reg methods_proxy_resultset[] = {
-	{ "__index", proxy_resultset_get },
-	{ "__gc", proxy_resultset_gc },
-	{ NULL, NULL },
-};
-
-static int proxy_injection_get(lua_State *L) {
-	injection *inj = *(injection **)luaL_checkself(L);
-	gsize keysize = 0;
-	const char *key = luaL_checklstring(L, 2, &keysize);
-
-	if (strleq(key, keysize, C("type"))) {
-		lua_pushinteger(L, inj->id); /** DEPRECATED: use "inj.id" instead */
-	} else if (strleq(key, keysize, C("id"))) {
-		lua_pushinteger(L, inj->id);
-	} else if (strleq(key, keysize, C("query"))) {
-		lua_pushlstring(L, inj->query->str, inj->query->len);
-	} else if (strleq(key, keysize, C("query_time"))) {
-		lua_pushinteger(L, TIME_DIFF_US(inj->ts_read_query_result_first, inj->ts_read_query));
-	} else if (strleq(key, keysize, C("response_time"))) {
-		lua_pushinteger(L, TIME_DIFF_US(inj->ts_read_query_result_last, inj->ts_read_query));
-	} else if (strleq(key, keysize, C("resultset"))) {
-		/* fields, rows */
-		proxy_resultset_t *res;
-		proxy_resultset_t **res_p;
-
-		res_p = lua_newuserdata(L, sizeof(res));
-		*res_p = res = proxy_resultset_init();
-
-		res->result_queue = inj->result_queue;
-		res->qstat = inj->qstat;
-
-		proxy_getmetatable(L, methods_proxy_resultset);
-		lua_setmetatable(L, -2);
-	} else {
-		g_message("%s.%d: inj[%s] ... not found", __FILE__, __LINE__, key);
-
-		lua_pushnil(L);
-	}
-
-	return 1;
-}
-
-static const struct luaL_reg methods_proxy_injection[] = {
-	{ "__index", proxy_injection_get },
-	{ NULL, NULL },
-};
-
-
-#endif
 static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 	network_socket *send_sock = con->client;
 	injection *inj = NULL;
@@ -2183,7 +1563,7 @@ static proxy_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 			inj->result_queue = con->client->send_queue->chunks;
 			inj->qstat = st->injected.qstat;
 
-			proxy_getmetatable(L, methods_proxy_injection);
+			proxy_getinjectionmetatable(L);
 			lua_setmetatable(L, -2);
 
 			if (lua_pcall(L, 1, 1, 0) != 0) {
@@ -3695,65 +3075,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	return RET_SUCCESS;
 }
 
-#ifdef HAVE_LUA_H
-/**
- * dump the content of a lua table
- */
-static void proxy_lua_dumptable(lua_State *L) {
-	g_assert(lua_istable(L, -1));
-
-	lua_pushnil(L);
-	while (lua_next(L, -2) != 0) {
-		int t = lua_type(L, -2);
-
-		switch (t) {
-		case LUA_TSTRING:
-			g_message("[%d] (string) %s", 0, lua_tostring(L, -2));
-			break;
-		case LUA_TBOOLEAN:
-			g_message("[%d] (bool) %s", 0, lua_toboolean(L, -2) ? "true" : "false");
-			break;
-		case LUA_TNUMBER:
-			g_message("[%d] (number) %g", 0, lua_tonumber(L, -2));
-			break;
-		default:
-			g_message("[%d] (%s)", 0, lua_typename(L, lua_type(L, -2)));
-			break;
-		}
-		g_message("[%d] (%s)", 0, lua_typename(L, lua_type(L, -1)));
-
-		lua_pop(L, 1);
-	}
-}
-
-/**
- * dump the state of the lua stack
- */
-static void proxy_lua_dumpstack(lua_State *L) {
-	int i;
-	int top = lua_gettop(L);
-	for (i = 1; i <= top; i++) {
-		int t = lua_type(L, i);
-		switch (t) {
-		case LUA_TSTRING:
-			printf("'%s'", lua_tostring(L, i));
-			break;
-		case LUA_TBOOLEAN:
-			printf(lua_toboolean(L, i) ? "true" : "false");
-			break;
-		case LUA_TNUMBER:
-			printf("'%g'", lua_tonumber(L, i));
-			break;
-		default:
-			printf("%s", lua_typename(L, t));
-			break;
-		}
-		printf("  ");
-	}
-	printf("\n");
-}
-#endif
-
 static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
 	proxy_stmt_ret ret = PROXY_NO_DECISION;
 
@@ -3840,7 +3161,7 @@ static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	plugin_con_state *st = con->plugin_con_state;
-	plugin_srv_state *g = st->global_state;
+	proxy_global_state_t *g = st->global_state;
 	guint min_connected_clients = G_MAXUINT;
 	guint i;
 	GTimeVal now;
@@ -3911,7 +3232,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		/* we answered directly ... like denial ...
 		 *
 		 * for sure we have something in the send-queue 
-		 *  */
+		 *
+         */
 		
 		return RET_SUCCESS;
 	case PROXY_NO_DECISION:
@@ -4045,8 +3367,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 }
 
 
-plugin_srv_state *plugin_srv_state_get(chassis_plugin_config *config) {
-	static plugin_srv_state *global_state = NULL;
+proxy_global_state_t *proxy_global_state_get(chassis_plugin_config *config) {
+	static proxy_global_state_t *global_state = NULL;
 	guint i;
 
 	/**
@@ -4057,7 +3379,7 @@ plugin_srv_state *plugin_srv_state_get(chassis_plugin_config *config) {
 	/* if config is not set, return the old global-state (used at shutdown) */
 	if (!config) return global_state;
 
-	global_state = plugin_srv_state_init();
+	global_state = proxy_global_state_init();
 		
 	/* init the pool */
 	for (i = 0; config->backend_addresses[i]; i++) {
@@ -4093,6 +3415,24 @@ plugin_srv_state *plugin_srv_state_get(chassis_plugin_config *config) {
 	return global_state;
 }
 
+/**
+ * Access a specific member of the global state.
+ * Returns a void pointer to make sure there's no compile time dependency with respect to the chassis.
+ * Currently only supports the 'backend_pool' member.
+ * 
+ * @param[in] config A pointer to this plugin's config
+ * @param[in] member The name of the global state's member to return
+ * @returns A void* to the data in the global state.
+ * @retval NULL if there is no member with that name
+ */
+void* proxy_global_state_get_member(chassis_plugin_config *config, const char* member) {
+    proxy_global_state_t* global_state = proxy_global_state_get(config);
+    
+    if (0 == strcmp(member, "backend_pool")) {
+        return (void*)global_state->backend_pool;
+    }
+    return NULL;
+}
 
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 	plugin_con_state *st = con->plugin_con_state;
@@ -4102,7 +3442,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 
 	st = plugin_con_state_init();
 
-	if (NULL == (st->global_state = plugin_srv_state_get(con->config))) {
+	if (NULL == (st->global_state = proxy_global_state_get(con->config))) {
 		return RET_ERROR;
 	}
 
@@ -4261,9 +3601,9 @@ int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
  * make sure that is called after all connections are closed
  */
 void network_mysqld_proxy_free(network_mysqld_con *con) {
-	plugin_srv_state *g = plugin_srv_state_get(NULL);
+	proxy_global_state_t *g = proxy_global_state_get(NULL);
 
-	plugin_srv_state_free(g);
+	proxy_global_state_free(g);
 }
 
 chassis_plugin_config * network_mysqld_proxy_plugin_init(void) {
@@ -4392,6 +3732,9 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 		return -1;
 	}
 
+    /* initializes the backend pool, must be called before lua_setup_global is called */
+    (void)proxy_global_state_get(config);
+
 	/* load the script and setup the global tables */
 	lua_setup_global(con);
 
@@ -4414,6 +3757,8 @@ int plugin_init(chassis_plugin *p) {
 	p->get_options  = network_mysqld_proxy_plugin_get_options;
 	p->apply_config = network_mysqld_proxy_plugin_apply_config;
 	p->destroy      = network_mysqld_proxy_plugin_free;
+    /* FIXME: prevent dependency leakage somehow */
+    p->get_global_state = proxy_global_state_get_member;
 
 	return 0;
 }

@@ -86,3 +86,19 @@ GOptionEntry *chassis_plugin_get_options(chassis_plugin *p) {
 }
 
 
+chassis_plugin* chassis_plugin_for_name(chassis *chas, gchar* plugin_name) {
+    int i;
+
+    if (!chas || !plugin_name) return NULL;
+
+    /* search for a plugin named plugin_name */
+	for (i = 0; i < chas->modules->len; i++) {
+		chassis_plugin *p = chas->modules->pdata[i];
+        if (!strcmp(p->name, plugin_name)) {
+            return p;
+        }
+	}
+    return NULL;
+    
+}
+
