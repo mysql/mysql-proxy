@@ -32,6 +32,10 @@ chassis_log *chassis_log_init(void) {
 	log->log_ts_str = g_string_sized_new(sizeof("2004-01-01T00:00:00.000Z"));
 	log->min_lvl = G_LOG_LEVEL_CRITICAL;
 
+	log->last_msg = g_string_new(NULL);
+	log->last_msg_ts = 0;
+	log->last_msg_count = 0;
+
 	return log;
 }
 
@@ -70,6 +74,7 @@ void chassis_log_free(chassis_log *log) {
 	chassis_log_close(log);
 
 	g_string_free(log->log_ts_str, TRUE);
+	g_string_free(log->last_msg, TRUE);
 
 	g_free(log);
 }
@@ -88,10 +93,34 @@ static int chassis_log_update_timestamp(chassis_log *log) {
 	return 0;
 }
 
+int chassis_log_write(chassis_log *log, GString *str) {
+	if (-1 != log->log_file_fd) {
+		/* prepend a timestamp */
+		if (-1 == write(log->log_file_fd, log->log_ts_str->str, log->log_ts_str->len)) {
+			/* writing to the file failed (Disk Full, what ever ... */
+			
+			write(STDERR_FILENO, log->log_ts_str->str, log->log_ts_str->len);
+			write(STDERR_FILENO, "\n", 1);
+		} else {
+			write(log->log_file_fd, "\n", 1);
+		}
+#ifdef HAVE_SYSLOG_H
+	} else if (log->log_to_syslog) {
+		syslog(LOG_ERR, "%s", message);
+#endif
+	} else {
+		write(STDERR_FILENO, log->log_ts_str->str, log->log_ts_str->len);
+		write(STDERR_FILENO, "\n", 1);
+	}
+
+	return 0;
+}
+
 void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
 	chassis_log *log = user_data;
 	int i;
 	gchar *log_lvl_name = "(error)";
+	gboolean is_duplicate = FALSE;
 
 	/**
 	 * make sure we syncronize the order of the write-statements 
@@ -120,31 +149,38 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 			chassis_log_open(log);
 		}
 	}
-	
-	chassis_log_update_timestamp(log);
-	g_string_append(log->log_ts_str, ": (");
-	g_string_append(log->log_ts_str, log_lvl_name);
-	g_string_append(log->log_ts_str, ") ");
-	g_string_append(log->log_ts_str, message);
 
-	if (-1 != log->log_file_fd) {
-		/* prepend a timestamp */
-		if (-1 == write(log->log_file_fd, log->log_ts_str->str, log->log_ts_str->len)) {
-			/* writing to the file failed (Disk Full, what ever ... */
-			
-			write(STDERR_FILENO, log->log_ts_str->str, log->log_ts_str->len);
-			write(STDERR_FILENO, "\n", 1);
-		} else {
-			write(log->log_file_fd, "\n", 1);
+	if (log->last_msg->len > 0 &&
+	    0 == strcmp(log->last_msg->str, message)) {
+		is_duplicate = TRUE;
+	}
+
+	if (!is_duplicate ||
+	    log->last_msg_count > 100 ||
+	    time(NULL) - log->last_msg_ts > 30) {
+		/* if we lave the last message repeating, log it */
+		if (log->last_msg_count) {
+			chassis_log_update_timestamp(log);
+			g_string_append_printf(log->log_ts_str, ": (%s) last message repeated %d times",
+					log_lvl_name,
+					log->last_msg_count);
+
+			chassis_log_write(log, log->log_ts_str);
 		}
+		chassis_log_update_timestamp(log);
+		g_string_append(log->log_ts_str, ": (");
+		g_string_append(log->log_ts_str, log_lvl_name);
+		g_string_append(log->log_ts_str, ") ");
+		g_string_append(log->log_ts_str, message);
 
-#ifdef HAVE_SYSLOG_H
-	} else if (log->log_to_syslog) {
-		syslog(LOG_ERR, "%s", message);
-#endif
+		/* reset the last-logged message */	
+		g_string_assign(log->last_msg, message);
+		log->last_msg_count = 0;
+		log->last_msg_ts = time(NULL);
+			
+		chassis_log_write(log, log->log_ts_str);
 	} else {
-		write(STDERR_FILENO, log->log_ts_str->str, log->log_ts_str->len);
-		write(STDERR_FILENO, "\n", 1);
+		log->last_msg_count++;
 	}
 
 	log->rotate_logs = 0;

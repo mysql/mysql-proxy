@@ -14,6 +14,10 @@ typedef struct {
 	gboolean rotate_logs;
 
 	GString *log_ts_str;
+
+	GString *last_msg;
+	time_t   last_msg_ts;
+	guint    last_msg_count;
 } chassis_log;
 
 
