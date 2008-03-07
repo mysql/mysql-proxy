@@ -86,7 +86,8 @@ network_socket *network_socket_init() {
 	s->scramble_buf = g_string_new(NULL);
 	s->auth_handshake_packet = g_string_new(NULL);
 	s->header       = g_string_sized_new(4);
-	
+	s->fd           = -1;
+
 	return s;
 }
 

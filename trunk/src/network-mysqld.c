@@ -1216,7 +1216,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_INIT:
 			/* if we are a proxy ask the remote server for the hand-shake packet 
 			 * if not, we generate one */
-
 			switch (plugin_call(srv, con, con->state)) {
 			case RET_SUCCESS:
 				break;
@@ -1233,7 +1232,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			break;
 		case CON_STATE_CONNECT_SERVER:
-			switch ((retval = plugin_call(srv, con, con->state))) {
+            switch ((retval = plugin_call(srv, con, con->state))) {
 			case RET_SUCCESS:
 
 				/**
@@ -1288,7 +1287,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			 * read auth data from the remote mysql-server 
 			 */
 			network_socket *recv_sock;
-
 			recv_sock = con->server;
 			g_assert(events == 0 || event_fd == recv_sock->fd);
 
@@ -1328,7 +1326,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			break; }
 		case CON_STATE_SEND_HANDSHAKE: 
 			/* send the hand-shake to the client and wait for a response */
-			
+
 			switch (network_mysqld_write(srv, con->client)) {
 			case RET_SUCCESS:
 				break;
@@ -1415,7 +1413,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			network_socket *recv_sock;
 			GList *chunk;
 			GString *packet;
-
 			recv_sock = con->server;
 
 			g_assert(events == 0 || event_fd == recv_sock->fd);
@@ -1483,7 +1480,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			break; }
 		case CON_STATE_READ_AUTH_OLD_PASSWORD: 
 			/* read auth from client */
-
 			switch (network_mysqld_read(srv, con->client)) {
 			case RET_SUCCESS:
 				break;
@@ -1535,7 +1531,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 		case CON_STATE_READ_QUERY: {
 			network_socket *recv_sock;
-
 			recv_sock = con->client;
 
 			g_assert(events == 0 || event_fd == recv_sock->fd);
@@ -1565,7 +1560,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			break; }
 		case CON_STATE_SEND_QUERY: 
 			/* send the query to the server */
-
 			if (con->server->send_queue->offset == 0) {
 				/* only parse the packets once */
 				GString *s;
@@ -1668,7 +1662,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				
 			break; 
 		case CON_STATE_READ_QUERY_RESULT: 
-			do {
+            do {
 				network_socket *recv_sock;
 
 				recv_sock = con->server;
@@ -1708,8 +1702,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_SEND_QUERY_RESULT:
 			/**
 			 * send the query result-set to the client */
-
-			switch (network_mysqld_write(srv, con->client)) {
+            switch (network_mysqld_write(srv, con->client)) {
 			case RET_SUCCESS:
 				break;
 			case RET_WAIT_FOR_EVENT:
@@ -1743,7 +1736,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			 * send error to the client
 			 * and close the connections afterwards
 			 *  */
-
 			switch (network_mysqld_write(srv, con->client)) {
 			case RET_SUCCESS:
 				break;

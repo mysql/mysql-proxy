@@ -121,6 +121,9 @@ typedef struct {
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_query);
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_query_result);
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_query_result);
+    
+    NETWORK_MYSQLD_PLUGIN_FUNC(con_timer_elapsed);
+    
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_cleanup);
 } network_mysqld_hooks;
 
@@ -141,25 +144,25 @@ struct network_mysqld_con {
 	 *   to get the binlog-file and the pos 
 	 */
 	enum { 
-		CON_STATE_INIT, 
-		CON_STATE_CONNECT_SERVER, 
-		CON_STATE_READ_HANDSHAKE, 
-		CON_STATE_SEND_HANDSHAKE, 
-		CON_STATE_READ_AUTH, 
-		CON_STATE_SEND_AUTH, 
-		CON_STATE_READ_AUTH_RESULT,
-		CON_STATE_SEND_AUTH_RESULT,
-		CON_STATE_READ_AUTH_OLD_PASSWORD,
-		CON_STATE_SEND_AUTH_OLD_PASSWORD,
-		CON_STATE_READ_QUERY,
-		CON_STATE_SEND_QUERY,
-		CON_STATE_READ_QUERY_RESULT,
-		CON_STATE_SEND_QUERY_RESULT,
-
-		CON_STATE_CLOSE_CLIENT,
-		CON_STATE_SEND_ERROR,
-		CON_STATE_ERROR
-       	} state;
+        CON_STATE_INIT, 
+        CON_STATE_CONNECT_SERVER, 
+        CON_STATE_READ_HANDSHAKE, 
+        CON_STATE_SEND_HANDSHAKE, 
+        CON_STATE_READ_AUTH, 
+        CON_STATE_SEND_AUTH, 
+        CON_STATE_READ_AUTH_RESULT,
+        CON_STATE_SEND_AUTH_RESULT,
+        CON_STATE_READ_AUTH_OLD_PASSWORD,
+        CON_STATE_SEND_AUTH_OLD_PASSWORD,
+        CON_STATE_READ_QUERY,
+        CON_STATE_SEND_QUERY,
+        CON_STATE_READ_QUERY_RESULT,
+        CON_STATE_SEND_QUERY_RESULT,
+        
+        CON_STATE_CLOSE_CLIENT,
+        CON_STATE_SEND_ERROR,
+        CON_STATE_ERROR
+    } state;                      /**< the current/next state of this connection */
 
 	/**
 	 * the client and server side of the connection
@@ -258,6 +261,7 @@ struct chassis_private {
 
 int network_mysqld_init(chassis *srv);
 void network_mysqld_add_connection(chassis *srv, network_mysqld_con *con);
+void network_mysqld_con_handle(int event_fd, short events, void *user_data);
 
 /**
  * socket handling 
