@@ -1,0 +1,8 @@
+*.lo
+Makefile
+Makefile.in
+.deps
+.libs
+*.la
+trunk/src/sql-tokenizer.c
+trunk/tests/unit/sql-tokenizer.c
