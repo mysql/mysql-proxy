@@ -3646,6 +3646,8 @@ void network_mysqld_proxy_plugin_free(chassis_plugin_config *config) {
 		g_free(config->address);
 	}
 
+	if (config->lua_script) g_free(config->lua_script);
+
 	g_free(config);
 }
 
