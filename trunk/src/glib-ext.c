@@ -2,6 +2,7 @@
 
 #include "glib-ext.h"
 #include "sys-pedantic.h"
+#include <string.h>
 
 /** @file
  * helper functions for common glib operations
@@ -55,3 +56,12 @@ GString *g_string_dup(GString *src) {
 
 	return dst;
 }
+
+/**
+ * compare two strings (gchar arrays), whose lengths are known
+ */
+gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
+	if (a_len != b_len) return FALSE;
+	return (0 == strcmp(a, b));
+}
+

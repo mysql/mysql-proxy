@@ -18,6 +18,7 @@
 #include "query-handling.h"
 
 #include "network-mysqld-proto.h"
+#include "glib-ext.h"
 
 #define C(x) x, sizeof(x) - 1
 
@@ -113,16 +114,6 @@ static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields
 	g_assert(packet->str[NET_HEADER_SIZE] == MYSQLD_PACKET_EOF);
     
 	return chunk;
-}
-
-
-/**
- * compare two strings for equality 
- */
-#warning Should be in a util file or something
-static gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
-	if (a_len != b_len) return FALSE;
-	return (0 == strcmp(a, b));
 }
 
 /**

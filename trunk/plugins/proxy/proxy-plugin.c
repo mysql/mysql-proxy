@@ -129,6 +129,7 @@ typedef int socklen_t;
 #include "sys-pedantic.h"
 #include "query-handling.h"
 #include "backend.h"
+#include "glib-ext.h"
 
 #include "proxy-plugin.h"
 
@@ -356,15 +357,6 @@ void proxy_global_state_free(proxy_global_state_t *g) {
 	g_ptr_array_free(g->backend_pool, TRUE);
 
 	g_free(g);
-}
-
-/**
- * compare two strings for equality 
- */
-#warning Should be in a util file or something
-static gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
-	if (a_len != b_len) return FALSE;
-	return (0 == strcmp(a, b));
 }
 
 /**

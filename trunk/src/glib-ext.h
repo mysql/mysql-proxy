@@ -12,4 +12,6 @@ void     g_hash_table_string_free(gpointer data);
 
 GString *g_string_dup(GString *);
 
+gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len);
+
 #endif
