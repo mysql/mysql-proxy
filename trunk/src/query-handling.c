@@ -35,7 +35,6 @@
  * @return NULL if there is no resultset
  *         pointer to the chunk after the fields (to the EOF packet)
  */ 
-#warning this is mysql packet specific and should be in a separate file
 static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields) {
 	GString *packet = chunk->data;
 	guint8 field_count;
