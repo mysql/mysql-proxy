@@ -1,4 +1,4 @@
-/* Copyright (C) 2007 MySQL AB
+/* Copyright (C) 2007, 2008 MySQL AB
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -375,7 +375,24 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (!plugin_dir) plugin_dir = g_strdup(LIBDIR);
+        /* Lets find the plugin directory relative the executable path */
+        if (!plugin_dir) {
+          gchar *absolute_path;
+          gchar *bin_dir, *top_dir;
+          if (g_path_is_absolute(argv[0])) {
+            absolute_path = g_strdup(argv[0]);  /* No need to dup, just to get free right */
+          } else {
+            absolute_path = g_find_program_in_path(argv[0]);
+            if (absolute_path == NULL)
+              g_critical("can't find myself (%s) in PATH",argv[0]);
+          }
+          bin_dir = g_path_get_dirname(absolute_path);
+          top_dir = g_path_get_dirname(bin_dir);
+          plugin_dir = g_strconcat(top_dir, "/lib/mysql-proxy", NULL);
+          g_free(absolute_path);
+          g_free(bin_dir);
+          g_free(top_dir);
+        }
 
 	/* if not plugins are specified, load admin and proxy */
 	if (!plugin_names) {
@@ -405,7 +422,7 @@ int main(int argc, char **argv) {
 		g_free(plugin_filename);
 		
 		if (NULL == p) {
-			g_critical("setting --plugins-dir=<dir> might help");
+			g_critical("setting --plugin-dir=<dir> might help");
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;
 		}

@@ -1,4 +1,4 @@
-/* Copyright (C) 2007 MySQL AB
+/* Copyright (C) 2007, 2008 MySQL AB
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -3178,10 +3178,15 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		case 0:
 			break;
 		default:
-			g_critical("%s.%d: connect(%s) failed: %s", 
+			g_message("%s.%d: connect(%s) failed: %s. Retrying with different backend.", 
 					__FILE__, __LINE__,
 					con->server->addr.str, strerror(so_error));
-			return RET_ERROR;
+
+			/* mark the backend as being DOWN and retry with a different one */
+			st->backend->state = BACKEND_STATE_DOWN;
+			network_socket_free(con->server);
+			con->server = NULL;	
+			return RET_ERROR_RETRY;
 		}
 
 		if (st->backend->state != BACKEND_STATE_UP) {
@@ -3298,6 +3303,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 	if (NULL == st->backend) {
 		network_mysqld_con_send_error(con->client, C("(proxy) all backends are down"));
+		g_critical("%s.%d: Cannot connect, all backends are down.", __FILE__, __LINE__);
 		return RET_ERROR;
 	}
 
