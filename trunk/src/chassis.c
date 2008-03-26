@@ -396,7 +396,7 @@ int main(int argc, char **argv) {
 
 	/* if not plugins are specified, load admin and proxy */
 	if (!plugin_names) {
-		plugin_names = g_new0(char *, 3);
+		plugin_names = g_new0(char *, 4); /* make sure we allocate _enough_ memory */
 
 #define IS_PNAME(pname) \
 		((strlen(argv[0]) >= sizeof(pname) - 1) && \
