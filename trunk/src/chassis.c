@@ -388,7 +388,7 @@ int main(int argc, char **argv) {
           }
           bin_dir = g_path_get_dirname(absolute_path);
           top_dir = g_path_get_dirname(bin_dir);
-          plugin_dir = g_strconcat(top_dir, "/lib/mysql-proxy", NULL);
+          plugin_dir = g_strconcat(top_dir, "/lib/" PACKAGE_STRING, NULL);
           g_free(absolute_path);
           g_free(bin_dir);
           g_free(top_dir);
