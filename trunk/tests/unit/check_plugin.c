@@ -152,16 +152,28 @@ Suite *plugin_suite(void) {
 	return s;
 }
 
-int main() {
+int main(int argc, char **argv) {
 	int nf;
 	Suite *s = plugin_suite();
 	SRunner *sr = srunner_create(s);
+	char *logfile = getenv("CK_LOGFILE");
+	char *full_logfile = NULL;
+
+	if (logfile) {
+		gchar *basename = g_path_get_basename(argv[0]);
+		g_assert(basename);
+		full_logfile = g_strdup_printf("%s-%s.txt", logfile, basename);
+		g_free(basename);
+		srunner_set_log(sr, full_logfile);
+	}
 		
 	srunner_run_all(sr, CK_ENV);
 
 	nf = srunner_ntests_failed(sr);
 
 	srunner_free(sr);
+
+	if (full_logfile) g_free(full_logfile);
 	
 	return (nf == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
