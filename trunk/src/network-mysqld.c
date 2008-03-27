@@ -1545,13 +1545,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 
 			break; }
-		case CON_STATE_SEND_QUERY: 
+		case CON_STATE_SEND_QUERY:
 			/* send the query to the server */
 			if (con->server->send_queue->offset == 0) {
 				/* only parse the packets once */
 				GString *s;
 				GList *chunk;
 
+				g_assert(con->server->send_queue->chunks);
 				chunk = con->server->send_queue->chunks->head;
 				s = chunk->data;
 

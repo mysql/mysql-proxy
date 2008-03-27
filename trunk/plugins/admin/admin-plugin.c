@@ -250,7 +250,7 @@ static GOptionEntry * network_mysqld_admin_plugin_get_options(chassis_plugin_con
 
 	static GOptionEntry config_entries[] = 
 	{
-		{ "admin-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the admin-server (default: :4040)", "<host:port>" },
+		{ "admin-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the admin-server (default: :4041)", "<host:port>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
