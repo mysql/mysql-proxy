@@ -17,6 +17,8 @@
 #include <lualib.h>
 #endif /* HAVE_LUA_H */
 
+#include "network-exports.h"
+
 typedef struct {
 	/**
 	 * the content of the OK packet 
@@ -62,10 +64,11 @@ typedef struct {
 	query_status qstat;     /**< state of this query */
 } proxy_resultset_t;
 
-injection *injection_init(int id, GString *query);
-void injection_free(injection *i);
+NETWORK_API injection *injection_init(int id, GString *query);
+NETWORK_API void injection_free(injection *i);
 
-void proxy_getqueuemetatable(lua_State *L);
-void proxy_getinjectionmetatable(lua_State *L);
+NETWORK_API void proxy_getqueuemetatable(lua_State *L);
+NETWORK_API void proxy_getinjectionmetatable(lua_State *L);
+NETWORK_API void proxy_getmetatable(lua_State *L, const luaL_reg *methods);
 
 #endif /* _QUERY_HANDLING_H_ */

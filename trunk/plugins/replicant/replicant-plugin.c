@@ -1,7 +1,18 @@
 /* Copyright (C) 2008 MySQL AB */ 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
+#ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h> /* FIONREAD */
+#else
+#include <windows.h>
+#include <winsock2.h>
+#include <io.h>
+#define ioctl ioctlsocket
 
+#define STDERR_FILENO 2
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -671,12 +682,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_connect_server) {
 	if (0 != network_mysqld_con_set_address(&(con->server->addr), address)) {
 		return -1;
 	}
+    
+	/* FIXME ... add non-blocking support (getsockopt()) */
 
 	if (0 != network_mysqld_con_connect(con->server)) {
 		return -1;
 	}
-
-	fcntl(con->server->fd, F_SETFL, O_NONBLOCK | O_RDWR);
 
 	con->state = CON_STATE_SEND_HANDSHAKE;
 

@@ -10,6 +10,8 @@
 #include "network-conn-pool.h"
 #include "chassis-mainloop.h"
 
+#include "network-exports.h"
+
 typedef enum { 
 	BACKEND_STATE_UNKNOWN, 
 	BACKEND_STATE_UP, 
@@ -36,8 +38,8 @@ typedef struct {
 } backend_t;
 
 
-backend_t *backend_init();
-void backend_free(backend_t *b);
+NETWORK_API backend_t *backend_init();
+NETWORK_API void backend_free(backend_t *b);
 
 /**
  * Retrieve the backend pool from the proxy plugin, if it is loaded.
@@ -47,7 +49,7 @@ void backend_free(backend_t *b);
  * @return A pointer array to the backend_t structs
  * @retval NULL if the proxy plugin is not loaded or not uninitialized
  */
-GPtrArray* get_proxy_backend_pool(chassis *chas);
+NETWORK_API GPtrArray* get_proxy_backend_pool(chassis *chas);
 
 #endif /* _BACKEND_H_ */
 

@@ -17,9 +17,6 @@
 #include <lauxlib.h>
 #endif
 
-#include <mysql.h>
-#include <mysqld_error.h> /** for ER_UNKNOWN_ERROR */
-
 #include "lua-load-factory.h"
 #include "lua-scope.h"
 

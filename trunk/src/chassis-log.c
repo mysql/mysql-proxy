@@ -2,7 +2,13 @@
 
 #include <string.h>
 #include <fcntl.h>
+#ifndef WIN32
 #include <unistd.h> /* close */
+#else
+#include <windows.h>
+#include <io.h>
+#define STDERR_FILENO 2
+#endif
 #include <glib.h>
 
 #include "sys-pedantic.h"
@@ -82,15 +88,15 @@ void chassis_log_free(chassis_log *log) {
 }
 
 static int chassis_log_update_timestamp(chassis_log *log) {
-	struct tm tm;
+	struct tm *tm;
 	time_t t;
 	GString *s = log->log_ts_str;
 
 	t = time(NULL);
 	
-	localtime_r(&(t), &tm);
+	tm = localtime(&(t));
 	
-	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%d %H:%M:%S", &tm);
+	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%d %H:%M:%S", tm);
 	
 	return 0;
 }

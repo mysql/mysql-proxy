@@ -5,6 +5,8 @@
 
 #include <glib.h>
 
+#include "network-exports.h"
+
 /** @file
  *
  * a tokenizer for MySQLs SQL dialect
@@ -326,17 +328,17 @@ typedef struct {
  *
  * @return         a empty SQL token
  */
-sql_token *sql_token_new(void);
+NETWORK_API sql_token *sql_token_new(void);
 
 /**
  * free a sql-token
  */
-void sql_token_free(sql_token *token);
+NETWORK_API void sql_token_free(sql_token *token);
 
 /**
  * get the name for a token-id
  */
-const gchar *sql_token_get_name(sql_token_id token_id);
+NETWORK_API const gchar *sql_token_get_name(sql_token_id token_id);
 
 /**
  * get the token_id for a literal
@@ -346,7 +348,7 @@ const gchar *sql_token_get_name(sql_token_id token_id);
  * @param name     a SQL keyword
  * @return         TK_SQL_(keyword) or TK_LITERAL
  */
-sql_token_id sql_token_get_id(const gchar *name);
+NETWORK_API sql_token_id sql_token_get_id(const gchar *name);
 
 /**
  * scan a string into SQL tokens
@@ -357,7 +359,7 @@ sql_token_id sql_token_get_id(const gchar *name);
  * @return 0 on success
  *
  */
-int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len);
+NETWORK_API int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len);
 
 /**
  * create a empty token list
@@ -366,14 +368,14 @@ int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len);
  *
  * @return a empty token list 
  */
-GPtrArray * sql_tokens_new(void);
+NETWORK_API GPtrArray * sql_tokens_new(void);
 
 /**
  * free a token-stream
  *
  * @param tokens   a token list to free
  */
-void sql_tokens_free(GPtrArray *tokens);
+NETWORK_API void sql_tokens_free(GPtrArray *tokens);
 
 /*@}*/
 

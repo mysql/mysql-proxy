@@ -13,6 +13,8 @@
 #include <lua.h>
 #endif
 
+#include "chassis-exports.h"
+
 typedef struct {
 #ifdef HAVE_LUA_H
 	lua_State *L;
@@ -24,14 +26,14 @@ typedef struct {
 	int L_top;
 } lua_scope;
 
-lua_scope *lua_scope_init(void);
-void lua_scope_free(lua_scope *sc);
+CHASSIS_API lua_scope *lua_scope_init(void);
+CHASSIS_API void lua_scope_free(lua_scope *sc);
 
-void lua_scope_get(lua_scope *sc);
-void lua_scope_release(lua_scope *sc);
+CHASSIS_API void lua_scope_get(lua_scope *sc);
+CHASSIS_API void lua_scope_release(lua_scope *sc);
 
 #ifdef HAVE_LUA_H
-lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name);
+CHASSIS_API lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name);
 #endif
 
 #endif

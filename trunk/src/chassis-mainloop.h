@@ -17,6 +17,8 @@
 #endif
 #include <event.h>     /* struct event_base */
 
+#include "chassis-exports.h"
+
 typedef struct chassis_private chassis_private;
 typedef struct chassis chassis;
 
@@ -29,17 +31,17 @@ struct chassis {
 	void (*priv_free)(chassis *chas, chassis_private *priv);
 };
 
-chassis *chassis_init(void);
-void chassis_free(chassis *chas);
+CHASSIS_API chassis *chassis_init(void);
+CHASSIS_API void chassis_free(chassis *chas);
 
 /**
  * the mainloop for all chassis apps 
  *
  * can be called directly or as gthread_* functions 
  */
-void *chassis_mainloop(void *user_data);
+CHASSIS_API void *chassis_mainloop(void *user_data);
 
-void chassis_set_shutdown(void);
-gboolean chassis_is_shutdown(void);
+CHASSIS_API void chassis_set_shutdown(void);
+CHASSIS_API gboolean chassis_is_shutdown(void);
 
 #endif

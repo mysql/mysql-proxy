@@ -7,6 +7,7 @@
 #include <gmodule.h>
 
 #include "chassis-mainloop.h"
+#include "chassis-exports.h"
 
 /* current magic is 0.7.0-2 */
 #define CHASSIS_PLUGIN_MAGIC 0x00070002L
@@ -28,10 +29,10 @@ typedef struct chassis_plugin {
     
 } chassis_plugin;
 
-chassis_plugin *chassis_plugin_init(void);
-chassis_plugin *chassis_plugin_load(const gchar *plugin_dir, const gchar *name);
-void chassis_plugin_free(chassis_plugin *p);
-GOptionEntry * chassis_plugin_get_options(chassis_plugin *p);
+CHASSIS_API chassis_plugin *chassis_plugin_init(void);
+CHASSIS_API chassis_plugin *chassis_plugin_load(const gchar *plugin_dir, const gchar *name);
+CHASSIS_API void chassis_plugin_free(chassis_plugin *p);
+CHASSIS_API GOptionEntry * chassis_plugin_get_options(chassis_plugin *p);
 
 /**
  * Retrieve the chassis plugin for a particular name.
@@ -40,6 +41,6 @@ GOptionEntry * chassis_plugin_get_options(chassis_plugin *p);
  * @return A pointer to a chassis_plugin structure
  * @retval NULL if there is no loaded chassis with this name
  */
-chassis_plugin* chassis_plugin_for_name(chassis *chas, gchar* plugin_name);
+CHASSIS_API chassis_plugin* chassis_plugin_for_name(chassis *chas, gchar* plugin_name);
 
 #endif

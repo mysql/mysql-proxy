@@ -7,6 +7,8 @@
 #include "config.h"
 #endif
 
+#include "network-exports.h"
+
 #ifdef HAVE_SYS_TIME_H
 /**
  * event.h needs struct timeval and doesn't include sys/time.h itself
@@ -105,13 +107,13 @@ typedef struct {
 } network_socket;
 
 
-network_queue *network_queue_init(void);
-void network_queue_free(network_queue *queue);
-int network_queue_append(network_queue *queue, const char *data, size_t len, int packet_id);
-int network_queue_append_chunk(network_queue *queue, GString *chunk);
+NETWORK_API network_queue *network_queue_init(void);
+NETWORK_API void network_queue_free(network_queue *queue);
+NETWORK_API int network_queue_append(network_queue *queue, const char *data, size_t len, int packet_id);
+NETWORK_API int network_queue_append_chunk(network_queue *queue, GString *chunk);
 
-network_socket *network_socket_init(void);
-void network_socket_free(network_socket *s);
+NETWORK_API network_socket *network_socket_init(void);
+NETWORK_API void network_socket_free(network_socket *s);
 
 #endif
 
