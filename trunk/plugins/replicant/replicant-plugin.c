@@ -793,7 +793,7 @@ int network_mysqld_replicant_plugin_apply_config(chassis *chas, chassis_plugin_c
 	return 0;
 }
 
-int plugin_init(chassis_plugin *p) {
+G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	/* append the our init function to the init-hook-list */
 
 	p->init         = network_mysqld_replicant_plugin_init;

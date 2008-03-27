@@ -412,7 +412,7 @@ static int network_mysqld_debug_plugin_apply_config(chassis *chas, chassis_plugi
 	return 0;
 }
 
-int plugin_init(chassis_plugin *p) {
+G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
 	p->name         = g_strdup("debug");
 
