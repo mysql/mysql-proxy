@@ -29,23 +29,19 @@ void chassis_plugin_free(chassis_plugin *p) {
 	g_free(p);
 }
 
-chassis_plugin *chassis_plugin_load(const gchar *moduledir, const gchar *name) {
+chassis_plugin *chassis_plugin_load(const gchar *name) {
 	int (*plugin_init)(chassis_plugin *p);
 	chassis_plugin *p = chassis_plugin_init();
-	gchar *path;
 
-	path = g_module_build_path(moduledir, name);
-	p->module = g_module_open(path, G_MODULE_BIND_LOCAL);
+	p->module = g_module_open(name, G_MODULE_BIND_LOCAL);
 
 	if (!p->module) {
-		g_critical("loading module '%s' from '%s' failed: %s", name, path, g_module_error());
-		g_free(path);
+		g_critical("loading module '%s' failed: %s", name, g_module_error());
 
 		chassis_plugin_free(p);
 
 		return NULL;
 	}
-	g_free(path);
 
 	/* each module has to have a plugin_init function */
 	if (!g_module_symbol(p->module, "plugin_init", (gpointer) &plugin_init)) {

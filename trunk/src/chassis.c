@@ -375,7 +375,7 @@ int main(int argc, char **argv) {
           }
           bin_dir = g_path_get_dirname(absolute_path);
           top_dir = g_path_get_dirname(bin_dir);
-          plugin_dir = g_strconcat(top_dir, "/lib/" PACKAGE, NULL);
+          plugin_dir = g_strconcat(top_dir, G_DIR_SEPARATOR_S, "lib", G_DIR_SEPARATOR_S, PACKAGE, NULL);
           g_free(absolute_path);
           g_free(bin_dir);
           g_free(top_dir);
@@ -403,9 +403,18 @@ int main(int argc, char **argv) {
 
 	/* load the plugins */
 	for (i = 0; plugin_names && plugin_names[i]; i++) {
-		char *plugin_filename = g_strdup_printf("lib%s.la", plugin_names[i]);
+#ifdef WIN32
+#define G_MODULE_PREFIX ""
+#else
+#define G_MODULE_PREFIX "lib"
+#endif
+		char *plugin_filename = g_strdup_printf("%s%c%s%s.la", 
+				plugin_dir, 
+				G_DIR_SEPARATOR, 
+				G_MODULE_PREFIX,
+				plugin_names[i]);
 
-		p = chassis_plugin_load(plugin_dir, plugin_filename);
+		p = chassis_plugin_load(plugin_filename);
 		g_free(plugin_filename);
 		
 		if (NULL == p) {

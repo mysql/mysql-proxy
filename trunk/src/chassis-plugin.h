@@ -30,7 +30,7 @@ typedef struct chassis_plugin {
 } chassis_plugin;
 
 CHASSIS_API chassis_plugin *chassis_plugin_init(void);
-CHASSIS_API chassis_plugin *chassis_plugin_load(const gchar *plugin_dir, const gchar *name);
+CHASSIS_API chassis_plugin *chassis_plugin_load(const gchar *name);
 CHASSIS_API void chassis_plugin_free(chassis_plugin *p);
 CHASSIS_API GOptionEntry * chassis_plugin_get_options(chassis_plugin *p);
 
