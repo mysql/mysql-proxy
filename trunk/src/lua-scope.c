@@ -1,5 +1,6 @@
 /* Copyright (C) 2007, 2008 MySQL AB */ 
 
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <string.h>
 #include <errno.h>
