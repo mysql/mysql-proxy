@@ -5,7 +5,7 @@
 
 #ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h> /* FIONREAD */
-#else
+#elif defined(WIN32)
 #include <windows.h>
 #include <winsock2.h>
 #include <io.h>
