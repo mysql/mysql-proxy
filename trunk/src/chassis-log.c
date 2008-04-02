@@ -133,7 +133,7 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 	/**
 	 * make sure we syncronize the order of the write-statements 
 	 */
-	GStaticMutex log_mutex = G_STATIC_MUTEX_INIT;
+	static GStaticMutex log_mutex = G_STATIC_MUTEX_INIT;
 
 	/* ignore the verbose log-levels */
 	if (log_level > log->min_lvl) return;
