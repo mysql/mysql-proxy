@@ -1,6 +1,7 @@
 /* Copyright (C) 2007, 2008 MySQL AB */ 
 
 #include <string.h>
+#include <stdio.h>
 #include "network-mysqld-proto.h"
 
 #include "sys-pedantic.h"
@@ -614,6 +615,220 @@ int network_mysqld_proto_append_int16(GString *packet, guint16 num) {
  */
 int network_mysqld_proto_append_int32(GString *packet, guint32 num) {
 	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
+}
+
+/**
+ * high-level functions
+ */
+
+network_mysqld_handshake *network_mysqld_handshake_new() {
+	network_mysqld_handshake *shake;
+
+	shake = g_new0(network_mysqld_handshake, 1);
+	
+	shake->challenge = g_string_new("");
+
+	return shake;
+}
+
+void network_mysqld_handshake_free(network_mysqld_handshake *shake) {
+	if (!shake) return;
+
+	if (shake->server_version_str) g_string_free(shake->server_version_str, TRUE);
+	if (shake->challenge)          g_string_free(shake->challenge, TRUE);
+
+	g_free(shake);
+}
+
+int network_mysqld_proto_get_handshake(GString *packet, network_mysqld_handshake *shake) {
+	GList *chunk;
+	guint off = 0;
+	int maj, min, patch;
+	gchar *scramble_1, *scramble_2;
+
+	if (packet->str[NET_HEADER_SIZE + 0] == '\xff') {
+		return -1;
+	} else if (packet->str[NET_HEADER_SIZE + 0] != '\x0a') {
+		g_critical("%s: unknown protocol", G_STRLOC);
+
+		return -1;
+	}
+
+	/* scan for a \0 */
+	for (off = NET_HEADER_SIZE + 1; packet->str[off] && off < packet->len + NET_HEADER_SIZE; off++);
+
+	if (packet->str[off] != '\0') {
+		/* the server has sent us garbage */
+
+		g_critical("%s: protocol 10, but version number not terminated", G_STRLOC);
+
+		return -1;
+	}
+
+	if (3 != sscanf(packet->str + NET_HEADER_SIZE + 1, "%d.%d.%d%*s", &maj, &min, &patch)) {
+		/* can't parse the protocol */
+
+		g_critical("%s: protocol 10, but version number not parsable", G_STRLOC);
+
+		return -1;
+	}
+
+	/**
+	 * out of range 
+	 */
+	if (min   < 0 || min   > 100 ||
+	    patch < 0 || patch > 100 ||
+	    maj   < 0 || maj   > 10) {
+		g_critical("%s: protocol 10, but version number out of range", G_STRLOC);
+
+		return -1;
+	}
+
+	shake->server_version = 
+		maj * 10000 +
+		min *   100 +
+		patch;
+
+	/* skip the \0 */
+	off++;
+
+	shake->thread_id = network_mysqld_proto_get_int32(packet, &off);
+
+	/**
+	 * get the scramble buf
+	 *
+	 * 8 byte here and some the other 12 somewhen later
+	 */	
+	scramble_1 = network_mysqld_proto_get_string_len(packet, &off, 8);
+
+	network_mysqld_proto_skip(packet, &off, 1);
+
+	shake->capabilities  = network_mysqld_proto_get_int16(packet, &off);
+	shake->charset       = network_mysqld_proto_get_int8(packet, &off);
+	shake->status        = network_mysqld_proto_get_int16(packet, &off);
+	
+	network_mysqld_proto_skip(packet, &off, 13);
+	
+	scramble_2 = network_mysqld_proto_get_string_len(packet, &off, 12);
+	network_mysqld_proto_skip(packet, &off, 1);
+
+	/**
+	 * scramble_1 + scramble_2 == scramble
+	 *
+	 * a len-encoded string
+	 */
+
+	g_string_truncate(shake->challenge, 0);
+	g_string_append_len(shake->challenge, scramble_1, 8);
+	g_string_append_len(shake->challenge, scramble_2, 12);
+
+	g_free(scramble_1);
+	g_free(scramble_2);
+
+	return 0;
+}
+
+network_mysqld_auth *network_mysqld_auth_new() {
+	network_mysqld_auth *auth;
+
+	auth = g_new0(network_mysqld_auth, 1);
+
+	/* we have to make sure scramble->buf is not-NULL to get
+	 * the "empty string" and not a "NULL-string"
+	 */
+	auth->response = g_string_new("");
+
+	auth->username = g_string_new("");
+
+	return auth;
+}
+
+void network_mysqld_auth_free(network_mysqld_auth *auth) {
+	if (!auth) return;
+
+	if (auth->response)          g_string_free(auth->response, TRUE);
+	if (auth->username)          g_string_free(auth->username, TRUE);
+	if (auth->database)          g_string_free(auth->database, TRUE);
+
+	g_free(auth);
+}
+
+/**
+ * append the auth struct to the mysqld packet
+ */
+int network_mysqld_proto_append_auth(GString *packet, network_mysqld_auth *auth) {
+	int i;
+
+	network_mysqld_proto_append_int32(packet, auth->capabilities);
+	network_mysqld_proto_append_int32(packet, auth->max_packet_size); /* max-allowed-packet */
+	
+	network_mysqld_proto_append_int8(packet, auth->charset); /* charset */
+
+	for (i = 0; i < 23; i++) { /* filler */
+		network_mysqld_proto_append_int8(packet, 0x00);
+	}
+
+	g_string_append(packet, auth->username->str);
+	network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
+
+	/* scrambled password */
+	network_mysqld_proto_append_lenenc_string_len(packet, auth->response->str, auth->response->len);
+
+	return 0;
+}
+
+/**
+ * generate the response to the server challenge
+ *
+ * SHA1( scramble +
+ *       SHA1(SHA1( password )) 
+ *
+ */
+int network_mysqld_proto_scramble(GString *response, GString *challenge, const char *password) {
+	int i;
+
+	/* we only have SHA1() in glib 2.16.0 and higher */
+#if GLIB_CHECK_VERSION(2, 16, 0)
+	GChecksum *cs;
+	GString *step1, *step2;
+
+	/* first round */
+	cs = g_checksum_new(G_CHECKSUM_SHA1);
+
+	g_checksum_update(cs, password, strlen(password));
+
+	step1 = g_string_sized_new(g_checksum_type_get_length(G_CHECKSUM_SHA1));
+
+	step1->len = step1->allocated_len;
+	g_checksum_get_digest(cs, &(step1->str), &(step1->len));
+
+	g_checksum_free(cs);
+
+	/* second round */
+	cs = g_checksum_new(G_CHECKSUM_SHA1);
+	
+	step2 = g_string_sized_new(g_checksum_type_get_length(G_CHECKSUM_SHA1));
+	g_checksum_update(cs, step1->str, step1->len);
+	
+	step2->len = step2->allocated_len;
+	g_checksum_get_digest(cs, &(step2->str), &(step2->len));
+
+	g_checksum_free(cs);
+	
+	/* final round */
+	cs = g_checksum_new(G_CHECKSUM_SHA1);
+	g_checksum_update(cs, challenge->str, challenge->len);
+	g_checksum_update(cs, step2->str, step2->len);
+	
+	response->len = response->allocated_len;
+	g_checksum_get_digest(cs, &(response->str), &(response->len));
+	g_checksum_free(cs);
+#else
+	/* we don't know how to encrypt, so fake it */
+	g_string_set_size(response, 20);
+	for (i = 0; i < 20; i++) response->str[i] = '\0';
+#endif
+	return 0;
 }
 
 /*@}*/

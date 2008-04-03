@@ -75,4 +75,34 @@ NETWORK_API int network_mysqld_proto_append_lenenc_int(GString *packet, guint64 
 NETWORK_API int network_mysqld_proto_append_lenenc_string_len(GString *packet, const char *s, guint64 len);
 NETWORK_API int network_mysqld_proto_append_lenenc_string(GString *packet, const char *s);
 
+typedef struct {
+	gint8    protocol_version;
+	GString *server_version_str;
+	gint32   server_version;
+	gint32   thread_id;
+	GString *challenge;
+	gint16   capabilities;
+	gint8    charset;
+	gint16   status;
+} network_mysqld_handshake;
+
+NETWORK_API network_mysqld_handshake *network_mysqld_handshake_new(void);
+NETWORK_API void network_mysqld_handshake_free(network_mysqld_handshake *shake);
+NETWORK_API int network_mysqld_proto_get_handshake(GString *packet, network_mysqld_handshake *shake);
+
+typedef struct {
+	guint32  capabilities;
+	guint32  max_packet_size;
+	guint8   charset;
+	GString *username;
+	GString *response;
+	GString *database;
+} network_mysqld_auth;
+
+NETWORK_API network_mysqld_auth *network_mysqld_auth_new(void);
+NETWORK_API void network_mysqld_auth_free(network_mysqld_auth *auth);
+NETWORK_API int network_mysqld_proto_scramble(GString *response, GString *challenge, const char *password);
+NETWORK_API int network_mysqld_proto_append_auth(GString *packet, network_mysqld_auth *auth);
+
+
 #endif
