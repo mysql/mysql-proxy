@@ -76,14 +76,14 @@ NETWORK_API int network_mysqld_proto_append_lenenc_string_len(GString *packet, c
 NETWORK_API int network_mysqld_proto_append_lenenc_string(GString *packet, const char *s);
 
 typedef struct {
-	gint8    protocol_version;
+	guint8    protocol_version;
 	GString *server_version_str;
-	gint32   server_version;
-	gint32   thread_id;
+	guint32   server_version;
+	guint32   thread_id;
 	GString *challenge;
-	gint16   capabilities;
-	gint8    charset;
-	gint16   status;
+	guint16   capabilities;
+	guint8    charset;
+	guint16   status;
 } network_mysqld_handshake;
 
 NETWORK_API network_mysqld_handshake *network_mysqld_handshake_new(void);
