@@ -792,7 +792,7 @@ int network_mysqld_proto_scramble(GString *response, GString *challenge, const c
 	GChecksum *cs;
 	GString *step1, *step2;
 
-	/* first round */
+	/* first round: SHA1(password) */
 	cs = g_checksum_new(G_CHECKSUM_SHA1);
 
 	g_checksum_update(cs, password, strlen(password));
@@ -800,29 +800,37 @@ int network_mysqld_proto_scramble(GString *response, GString *challenge, const c
 	step1 = g_string_sized_new(g_checksum_type_get_length(G_CHECKSUM_SHA1));
 
 	step1->len = step1->allocated_len;
-	g_checksum_get_digest(cs, &(step1->str), &(step1->len));
+	g_checksum_get_digest(cs, step1->str, &(step1->len));
 
 	g_checksum_free(cs);
 
-	/* second round */
+	/* second round SHA1(SHA1(password)) */
 	cs = g_checksum_new(G_CHECKSUM_SHA1);
 	
 	step2 = g_string_sized_new(g_checksum_type_get_length(G_CHECKSUM_SHA1));
 	g_checksum_update(cs, step1->str, step1->len);
 	
 	step2->len = step2->allocated_len;
-	g_checksum_get_digest(cs, &(step2->str), &(step2->len));
+	g_checksum_get_digest(cs, step2->str, &(step2->len));
 
 	g_checksum_free(cs);
 	
-	/* final round */
+	/* final round SHA1(challenge + SHA1(SHA1(password))) */
 	cs = g_checksum_new(G_CHECKSUM_SHA1);
 	g_checksum_update(cs, challenge->str, challenge->len);
 	g_checksum_update(cs, step2->str, step2->len);
 	
+	g_string_set_size(response, g_checksum_type_get_length(G_CHECKSUM_SHA1));
 	response->len = response->allocated_len;
-	g_checksum_get_digest(cs, &(response->str), &(response->len));
+	g_checksum_get_digest(cs, response->str, &(response->len));
+	
 	g_checksum_free(cs);
+
+	/* XOR the SHA1(password) with SHA1(challenge + SHA1(SHA1(password))) */
+	for (i = 0; i < 20; i++) {
+		response->str[i] = (guchar)response->str[i] ^ (guchar)step1->str[i];
+	}
+
 #else
 	/* we don't know how to encrypt, so fake it */
 	g_string_set_size(response, 20);
