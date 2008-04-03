@@ -1,5 +1,9 @@
 /* Copyright (C) 2007, 2008 MySQL AB */ 
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <string.h>
 #include <fcntl.h>
 #ifndef WIN32
@@ -10,6 +14,10 @@
 #define STDERR_FILENO 2
 #endif
 #include <glib.h>
+
+#ifdef HAVE_SYSLOG_H
+#include <syslog.h>
+#endif
 
 #include "sys-pedantic.h"
 #include "chassis-log.h"
@@ -101,7 +109,7 @@ static int chassis_log_update_timestamp(chassis_log *log) {
 	return 0;
 }
 
-int chassis_log_write(chassis_log *log, GString *str) {
+static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 	if (-1 != log->log_file_fd) {
 		/* prepend a timestamp */
 		if (-1 == write(log->log_file_fd, log->log_ts_str->str, log->log_ts_str->len)) {
@@ -113,8 +121,19 @@ int chassis_log_write(chassis_log *log, GString *str) {
 			write(log->log_file_fd, "\n", 1);
 		}
 #ifdef HAVE_SYSLOG_H
-	} else if (log->log_to_syslog) {
-		syslog(LOG_ERR, "%s", message);
+	} else if (log->use_syslog) {
+		int syslog_lvl;
+		/* ERROR and CRITICAL have a different order/meaning in syslog */
+		switch (log_level) {
+		case G_LOG_LEVEL_ERROR: syslog_lvl = LOG_CRIT; break;
+		case G_LOG_LEVEL_CRITICAL: syslog_lvl = LOG_ERR; break;
+		case G_LOG_LEVEL_WARNING: syslog_lvl = LOG_WARNING; break;
+		case G_LOG_LEVEL_MESSAGE: syslog_lvl = LOG_NOTICE; break;
+		case G_LOG_LEVEL_INFO: syslog_lvl = LOG_INFO; break;
+		case G_LOG_LEVEL_DEBUG: syslog_lvl = LOG_DEBUG; break;
+		default: syslog_lvl = LOG_ERR;
+		}
+		syslog(syslog_lvl, "%s", log->log_ts_str->str);
 #endif
 	} else {
 		write(STDERR_FILENO, log->log_ts_str->str, log->log_ts_str->len);
@@ -173,7 +192,7 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 					log_lvl_name,
 					log->last_msg_count);
 
-			chassis_log_write(log, log->log_ts_str);
+			chassis_log_write(log, log_level, log->log_ts_str);
 		}
 		chassis_log_update_timestamp(log);
 		g_string_append(log->log_ts_str, ": (");
@@ -186,7 +205,7 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 		log->last_msg_count = 0;
 		log->last_msg_ts = time(NULL);
 			
-		chassis_log_write(log, log->log_ts_str);
+		chassis_log_write(log, log_level, log->log_ts_str);
 	} else {
 		log->last_msg_count++;
 	}
