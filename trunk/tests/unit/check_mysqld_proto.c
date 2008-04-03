@@ -145,7 +145,7 @@ START_TEST(test_mysqld_handshake) {
 			SERVER_STATUS_AUTOCOMMIT);
 	fail_unless(shake->charset == 8);
 	fail_unless(shake->capabilities ==
-			CLIENT_CONNECT_WITH_DB |
+			(CLIENT_CONNECT_WITH_DB |
 			CLIENT_LONG_FLAG |
 
 			CLIENT_COMPRESS |
@@ -153,7 +153,7 @@ START_TEST(test_mysqld_handshake) {
 			CLIENT_PROTOCOL_41 |
 
 			CLIENT_TRANSACTIONS |
-			CLIENT_SECURE_CONNECTION);
+			CLIENT_SECURE_CONNECTION));
 
 	fail_unless(shake->challenge->len == 20);
 	fail_unless(0 == memcmp(shake->challenge->str, "\"L;!3|8@vV,s#PLjSA+Q", shake->challenge->len));
@@ -173,7 +173,7 @@ START_TEST(test_mysqld_auth_empty_pw) {
 	auth = network_mysqld_auth_new();
 	g_string_assign(auth->username, "root");
 	auth->capabilities    = 
-		CLIENT_LONG_PASSWORD |
+		(CLIENT_LONG_PASSWORD |
 	       	CLIENT_LONG_FLAG |
 		CLIENT_LOCAL_FILES | 
 		CLIENT_PROTOCOL_41 |
@@ -181,7 +181,7 @@ START_TEST(test_mysqld_auth_empty_pw) {
 		CLIENT_TRANSACTIONS |
 		CLIENT_SECURE_CONNECTION |
 		CLIENT_MULTI_STATEMENTS |
-		CLIENT_MULTI_RESULTS; 
+		CLIENT_MULTI_RESULTS); 
 	auth->max_packet_size = 1 << 24;
 	auth->charset         = 8;
 	
