@@ -67,3 +67,18 @@ gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
 	return (0 == strcmp(a, b));
 }
 
+int g_string_get_time(GString *s, GTimeVal *gt) {
+	struct tm tm;
+	time_t t;
+
+	t = gt->tv_sec;
+	
+	gmtime_r(&(t), &tm);
+
+	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%dT%H:%M:%S.", &tm);
+	/* append microsec + Z */
+	g_string_append_printf(s, "%03ldZ", gt->tv_usec / 1000);
+	
+	return 0;
+}
+
