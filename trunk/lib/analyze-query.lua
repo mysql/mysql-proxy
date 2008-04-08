@@ -69,7 +69,7 @@ end
 
 
 function math.rolling_avg_init()
-	return { count = 0, value = 0 }
+	return { count = 0, value = 0, sum_value = 0 }
 end
 
 function math.rolling_stddev_init()
@@ -78,10 +78,9 @@ end
 
 function math.rolling_avg(val, tbl) 
 	tbl.count = tbl.count + 1
+	tbl.sum_value = tbl.sum_value + val
 
-	-- scale the old avg to the full-sum
-	-- add the current val and divide it against the new count
-	tbl.value = ((tbl.value * (tbl.count - 1)) + val) / tbl.count
+	tbl.value = tbl.sum_value / tbl.count
 
 	return tbl.value
 end
@@ -131,6 +130,14 @@ function read_query(packet)
 
 	tokens = tokenizer.tokenize(cmd.query)
 	norm_query = tokenizer.normalize(tokens)
+
+	-- create a id for this query
+	query_id   = ("%s.%s.%s"):format(
+		proxy.connection.backend_ndx, 
+		proxy.connection.client.default_db ~= "" and 
+			proxy.connection.client.default_db or 
+			"(null)", 
+		norm_query)
 
 	-- handle the internal data
 	if norm_query == "SELECT * FROM `histogram` . `queries` " then
@@ -191,16 +198,17 @@ function read_query(packet)
 	--
 	local queries = proxy.global.queries
 
-	if not queries[norm_query] then
-		queries[norm_query] = {
-			query = norm_query,
-			avg = math.rolling_avg_init(),
+	if not queries[query_id] then
+		queries[query_id] = {
+			db     = proxy.connection.client.default_db,
+			query  = norm_query,
+			avg    = math.rolling_avg_init(),
 			stddev = math.rolling_stddev_init()
 		}
 	end
 
 
-	if queries[norm_query].do_analyze then
+	if queries[query_id].do_analyze then
 		-- wrap the query in SHOW SESSION STATUS
 		--
 		-- note: not used yet
@@ -251,7 +259,7 @@ function read_query_result(inj)
 		local avg_query_time    = math.rolling_avg(   inj.query_time, bl.avg)
 		local stddev_query_time = math.rolling_stddev(inj.query_time, bl.stddev)
 
-		local st = proxy.global.queries[norm_query]
+		local st = proxy.global.queries[query_id]
 		local q_avg_query_time    = math.rolling_avg(   inj.query_time, st.avg)
 		local q_stddev_query_time = math.rolling_stddev(inj.query_time, st.stddev)
 
