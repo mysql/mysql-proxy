@@ -21,6 +21,7 @@
 #cmakedefine HAVE_SYS_UN_H
 #cmakedefine HAVE_TIME_H
 #cmakedefine HAVE_UNISTD_H
+#cmakedefine HAVE_SYSLOG_H
 
 #cmakedefine HAVE_GETCWD
 #cmakedefine HAVE_SIGNAL
