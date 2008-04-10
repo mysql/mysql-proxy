@@ -336,6 +336,13 @@ int main(int argc, char **argv) {
 		goto exit_nicely;
 	}
 
+	if (keyfile) {
+		if (chassis_keyfile_to_options(keyfile, "mysql-proxy", main_entries)) {
+			exit_code = EXIT_FAILURE;
+			goto exit_nicely;
+		}
+	}
+
 	if (log->log_filename) {
 		if (0 == chassis_log_open(log)) {
 			g_critical("can't open log-file '%s': %s", log->log_filename, g_strerror(errno));
@@ -345,12 +352,6 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (keyfile) {
-		if (chassis_keyfile_to_options(keyfile, "mysql-proxy", main_entries)) {
-			exit_code = EXIT_FAILURE;
-			goto exit_nicely;
-		}
-	}
 
 	/* handle log-level after the config-file is read, just in case it is specified in the file */
 	if (log_level) {
