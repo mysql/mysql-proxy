@@ -162,7 +162,7 @@ function read_query(packet)
 			local cutoff = proxy.global.config.analyze_query.query_cutoff
 
 			for k, v in pairs(proxy.global.queries) do
-				local q = k
+				local q = v.query
 
 				if cutoff and cutoff < #k then
 					q = k:sub(1, cutoff) .. "..."
