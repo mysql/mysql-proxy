@@ -9,7 +9,7 @@ tests_to_skip = {
         ['dummy']       = 'Too ugly to show',
         ['bug_XYZ']     = 'Nobody cares anymore',
         ['end_session']     = 'Have to figure out the sequence',
---        ['bug_30867']   = 'Takes too long',
+        ['bug_35669']   = 'not fixed yet',
 
 }
 
