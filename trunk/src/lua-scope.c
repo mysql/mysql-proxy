@@ -42,7 +42,16 @@ void lua_scope_free(lua_scope *sc) {
 	if (!sc) return;
 
 #ifdef HAVE_LUA_H
-	g_assert(lua_gettop(sc->L) == 0);
+	/**
+	 * enforce that the stack is clean
+	 *
+	 * we still have items on the stack
+	 */
+	if (lua_gettop(sc->L) != 0) {
+		g_critical("%s: lua-scope has %d items on the stack", 
+				G_STRLOC,
+				lua_gettop(sc->L));
+	}
 
 	/* FIXME: we might want to cleanup the cached-scripts in the registry */
 
