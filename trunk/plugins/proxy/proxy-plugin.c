@@ -900,6 +900,8 @@ static int proxy_tokenize(lua_State *L) {
 
 /**
  * Load a lua script and leave the wrapper function on the stack.
+ *
+ * @return 0 on success, -1 on error
  */
 static int lua_load_script(network_mysqld_con *con) {
 	lua_scope *sc = con->srv->priv->sc;
@@ -907,7 +909,7 @@ static int lua_load_script(network_mysqld_con *con) {
 
 	int stack_top = lua_gettop(sc->L);
 
-	if (!config->lua_script) return 0;
+	if (!config->lua_script) return -1;
 	
 	/* a script cache
 	 *
@@ -917,13 +919,17 @@ static int lua_load_script(network_mysqld_con *con) {
 	lua_scope_load_script(sc, config->lua_script);
 
 	if (lua_isstring(sc->L, -1)) {
-		g_warning("lua_load_file(%s) failed: %s", config->lua_script, lua_tostring(sc->L, -1));
+		g_warning("%s: lua_load_file(%s) failed: %s", 
+				G_STRLOC, 
+				config->lua_script, lua_tostring(sc->L, -1));
 
 		lua_pop(sc->L, 1); /* remove the error-msg from the stack */
 		
-		return 0;
+		return -1;
 	} else if (!lua_isfunction(sc->L, -1)) {
-		g_error("luaL_loadfile(%s): returned a %s", config->lua_script, lua_typename(sc->L, lua_type(sc->L, -1)));
+		g_error("%s: luaL_loadfile(%s): returned a %s", 
+				G_STRLOC, 
+				config->lua_script, lua_typename(sc->L, lua_type(sc->L, -1)));
 	}
 
 	g_assert(lua_gettop(sc->L) - stack_top == 1);
@@ -1038,7 +1044,11 @@ static int lua_register_callback(network_mysqld_con *con) {
 	}
 
 	/* handles loading the file from disk/cache*/
-	lua_load_script(con);
+	if (0 != lua_load_script(con)) {
+		/* loading script failed */
+		return 0;
+	}
+
 	/* sets up global tables */
 	lua_setup_global(con);
 

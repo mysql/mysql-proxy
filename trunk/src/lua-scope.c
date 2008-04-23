@@ -224,8 +224,7 @@ lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name) {
 		}
 
 		if (0 != luaL_loadfile_factory(L, name)) {
-			/* log a warning and leave the error-msg on the stack */
-			g_warning("luaL_loadfile(%s) failed", name);
+			/* leave the error-msg on the stack */
 
 			/* cleanup a bit */
 			lua_remove(L, -2); /* remove the t = { } */
@@ -281,14 +280,14 @@ lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name) {
 	 *
 	 * */
 	if (0 != lua_pcall(L, 0, 1, 0)) {
-		g_warning("lua_pcall(factory<%s>) failed", name);
+		g_warning("%s: lua_pcall(factory<%s>) failed", G_STRLOC, name);
 
 		return L;
 	}
 #else
 	if (0 != luaL_loadfile(L, name)) {
 		/* log a warning and leave the error-msg on the stack */
-		g_warning("luaL_loadfile(%s) failed", name);
+		g_warning("%s: luaL_loadfile(%s) failed", G_STRLOC, name);
 
 		return L;
 	}
