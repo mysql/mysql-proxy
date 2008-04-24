@@ -82,3 +82,8 @@ int g_string_get_time(GString *s, GTimeVal *gt) {
 	return 0;
 }
 
+GString * g_string_assign_len(GString *s, const char *str, gsize str_len) {
+	g_string_truncate(s, 0);
+	return g_string_append_len(s, str, str_len);
+}
+
