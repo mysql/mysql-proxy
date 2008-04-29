@@ -176,7 +176,6 @@ function handle(tbl, cmd)
 		},
 		["PROXY LOAD CONFIG"] = { -- PROXY LOAD CONFIG FROM "<filename>"
 			{ type = "TK_LITERAL", func = function (tk)
-				print(error_is_fatal)
 				return tk.text:upper() == "PROXY"
 			end },
 			{ type = "TK_SQL_LOAD" },
