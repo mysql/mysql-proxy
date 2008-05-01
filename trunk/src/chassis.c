@@ -485,9 +485,17 @@ int main(int argc, char **argv) {
 	 */
 	if (!g_getenv(LUA_PATH)) {
 		g_setenv(LUA_PATH, 
-				LUA_PATHSEP DATADIR "/?.lua" 
-				LUA_PATHSEP DATADIR "/?.so", 1);
+				DATADIR "/?.lua", 1);
 	}
+
+	/**
+	 * if the LUA_PATH is not set, set a good default 
+	 */
+	if (!g_getenv(LUA_CPATH)) {
+		g_setenv(LUA_CPATH, 
+				DATADIR "/?.so", 1);
+	}
+
 #endif
 
 #ifndef _WIN32	
