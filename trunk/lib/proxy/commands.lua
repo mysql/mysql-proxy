@@ -67,6 +67,8 @@ function parse(packet)
 	       cmd.type == proxy.COM_CREATE_DB or
 	       cmd.type == proxy.COM_DROP_DB then
 		cmd.schema = packet:sub(2)
+	elseif cmd.type == proxy.COM_SET_OPTION then
+		cmd.option = packet:sub(2)
 	else
 		print("[debug] (command) unhandled type " .. cmd.type_name)
 	end
