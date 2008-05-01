@@ -6,14 +6,28 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
-
-
 static int lua_g_usleep (lua_State *L) {
 	int ms = luaL_checkinteger (L, 1);
 
 	g_usleep(ms);
 
 	return 0;
+}
+
+static int lua_g_checksum_md5 (lua_State *L) {
+	size_t str_len;
+	const char *str = luaL_checklstring (L, 1, &str_len);
+	GChecksum *cs;
+
+	cs = g_checksum_new(G_CHECKSUM_MD5);
+
+	g_checksum_update(cs, (guchar *)str, str_len);
+
+	lua_pushstring(L, g_checksum_get_string(cs));
+
+	g_checksum_free(cs);
+
+	return 1;
 }
 
 /*
@@ -34,6 +48,7 @@ static void set_info (lua_State *L) {
 
 static const struct luaL_reg gliblib[] = {
 	{"usleep", lua_g_usleep},
+	{"md5", lua_g_checksum_md5},
 	{NULL, NULL},
 };
 
