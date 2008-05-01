@@ -483,8 +483,10 @@ int main(int argc, char **argv) {
 	/**
 	 * if the LUA_PATH is not set, set a good default 
 	 */
-	if (!g_getenv("LUA_PATH")) {
-		g_setenv("LUA_PATH", LUA_PATHSEP LUA_PATHSEP DATADIR "/?.lua", 1);
+	if (!g_getenv(LUA_PATH)) {
+		g_setenv(LUA_PATH, 
+				LUA_PATHSEP DATADIR "/?.lua" 
+				LUA_PATHSEP DATADIR "/?.so", 1);
 	}
 #endif
 
