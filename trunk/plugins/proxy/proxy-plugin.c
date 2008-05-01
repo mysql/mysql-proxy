@@ -2094,6 +2094,26 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 		break;
 	case PROXY_NO_DECISION:
+		/* if we don't have a backend (con->server), we just ack the client auth
+		 */
+		if (!con->server) {
+			con->state = CON_STATE_SEND_AUTH_RESULT;
+		
+			chunk->data = NULL;
+
+			g_string_truncate(packet, 0);
+
+			network_mysqld_proto_append_ok_packet(packet, 0, 0, 2 /* we should track this flag in the pool */, 0);
+
+			network_queue_append(recv_sock->send_queue, 
+						packet->str, 
+						packet->len, 
+						2);
+
+			g_string_free(packet, TRUE);
+
+			break;
+		}
 		/* if the server-side of the connection is already up and authed
 		 * we send a COM_CHANGE_USER to reauth the connection and remove
 		 * all temp-tables and session-variables

@@ -10,6 +10,11 @@ tests_to_skip = {
         ['bug_XYZ']     = 'Nobody cares anymore',
         ['end_session']     = 'Have to figure out the sequence',
         ['bug_35669']   = 'not fixed yet',
+        ['bug_30867']   = 'needs backends',
+        ['load_multi']   = 'needs backends',
+        ['xtab1']   = 'needs backends',
+        ['xtab2']   = 'needs backends',
+        ['select_affected_rows']   = 'needs backends',
 
 }
 

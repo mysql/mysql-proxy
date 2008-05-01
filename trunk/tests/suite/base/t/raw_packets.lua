@@ -1,3 +1,34 @@
+
+function packet_auth(fields)
+	fields = fields or { }
+	return "\010" ..             -- proto version
+		(fields.version or "5.0.45-proxy") .. -- version
+		"\000" ..             -- term-null
+		"\001\000\000\000" .. -- thread-id
+		"\065\065\065\065" ..
+		"\065\065\065\065" .. -- challenge - part I
+		"\000" ..             -- filler
+		"\001\130" ..         -- server cap (long pass, 4.1 proto)
+		"\008" ..             -- charset
+		"\002\000" ..         -- status
+		("\000"):rep(13) ..   -- filler
+		"\065\065\065\065"..
+		"\065\065\065\065"..
+		"\065\065\065\065"..
+		"\000"                -- challenge - part II
+end
+
+function connect_server()
+	-- emulate a server
+	proxy.response = {
+		type = proxy.MYSQLD_PACKET_RAW,
+		packets = {
+			packet_auth()
+		}
+	}
+	return proxy.PROXY_SEND_RESULT
+end
+
 function read_query(packet) 
 	if packet:byte() == proxy.COM_QUERY then
 		local q = packet:sub(2) 
@@ -56,6 +87,30 @@ function read_query(packet)
 			proxy.response.errcode = 1106
 			
 			return proxy.PROXY_SEND_RESULT
+		else
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_ERR,
+				errmsg = "(raw-packet) unhandled query: " .. q
+			}
+			
+			return proxy.PROXY_SEND_RESULT
 		end
+	elseif packet:byte() == proxy.COM_INIT_DB then
+		local db = packet:sub(2) 
+
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			affected_rows = 0,
+			insert_id     = 0
+		}
+
+		return proxy.PROXY_SEND_RESULT
 	end
+
+	proxy.response = {
+		type = proxy.MYSQLD_PACKET_ERR,
+		errmsg = "(raw-packet) command " .. tonumber(packet:byte())
+	}
+			
+	return proxy.PROXY_SEND_RESULT
 end
