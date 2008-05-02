@@ -24,7 +24,9 @@ function normalize(tokens)
 	--
 	local stack = {}
 
-	for i, token in ipairs(tokens) do
+	for i = 1, #tokens do
+		local token = tokens[i]
+
 		-- normalize the query
 		if token["token_name"] == "TK_COMMENT" then
 		elseif token["token_name"] == "TK_LITERAL" then
@@ -57,7 +59,8 @@ end
 --
 -- * strips the leading comments
 function first_stmt_token(tokens)
-	for i, token in ipairs(tokens) do
+	for i = 1, #tokens do
+		local token = tokens[i]
 		-- normalize the query
 		if token["token_name"] == "TK_COMMENT" then
 		elseif token["token_name"] == "TK_LITERAL" then
@@ -84,7 +87,8 @@ end
 --]]
 function bare_tokens (tokens, quote_strings)
     local simple_tokens = {}
-	for i, token in ipairs(tokens) do
+	for i = 1, #tokens do
+		local token = tokens[i]
         if (token['token_name'] == 'TK_STRING') and quote_strings then
             table.insert(simple_tokens, string.format('%q', token['text'] ))
         elseif (token['token_name'] ~= 'TK_COMMENT') then
@@ -113,7 +117,8 @@ function tokens_to_query ( tokens , start_item, end_item )
     end
     local counter  = 0
     local new_query = ''
-	for i, token in ipairs(tokens) do
+	for i = 1, #tokens do
+		local token = tokens[i]
         counter = counter + 1
         if (counter >= start_item and counter <= end_item ) then
             if (token['token_name'] == 'TK_STRING') then
@@ -141,7 +146,8 @@ end
 --]]
 function tokens_without_comments (tokens)
     local new_tokens = {}
-	for i, token in ipairs(tokens) do
+	for i = 1, #tokens do
+		local token = tokens[i]
         if (token['token_name'] ~= 'TK_COMMENT') then
             table.insert(new_tokens, token['text'])
         end

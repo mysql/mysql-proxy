@@ -58,7 +58,8 @@ function read_query( packet )
         },
         rows = {  }
     }
-    for i,token in pairs(tokens) do
+    for i = 1, #tokens do
+	    local token = tokens[i]
         table.insert(proxy.response.resultset.rows,
             {
                token['token_id'], 
