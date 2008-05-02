@@ -48,6 +48,9 @@ typedef struct {
 	GTimeVal ts_read_query;                 /**< timestamp when we added this query to the queues */
 	GTimeVal ts_read_query_result_first;    /**< timestamp when we received the first packet */
 	GTimeVal ts_read_query_result_last;     /**< timestamp when we received the last packet */
+
+	guint64      rows;
+	guint64      bytes;
 } injection;
 
 /**
@@ -62,6 +65,9 @@ typedef struct {
 	GList *row;             /**< the current row */
     
 	query_status qstat;     /**< state of this query */
+	
+	guint64      rows;
+	guint64      bytes;
 } proxy_resultset_t;
 
 NETWORK_API injection *injection_init(int id, GString *query);

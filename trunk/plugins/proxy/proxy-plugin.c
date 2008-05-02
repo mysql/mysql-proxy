@@ -3061,6 +3061,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 			case MYSQLD_PACKET_NULL: /* the first field might be a NULL */
 				break;
 			default:
+				if (inj) {
+					inj->rows++;
+					inj->bytes += packet->len;
+				}
 				break;
 			}
 			break;

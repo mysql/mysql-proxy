@@ -496,6 +496,10 @@ static int proxy_resultset_get(lua_State *L) {
 		} else {
 			lua_pushnil(L);
 		}
+	} else if (strleq(key, keysize, C("row_count"))) {
+		lua_pushinteger(L, res->rows);
+	} else if (strleq(key, keysize, C("bytes"))) {
+		lua_pushinteger(L, res->bytes);
 	} else if (strleq(key, keysize, C("raw"))) {
 		GString *s = res->result_queue->head->data;
 		lua_pushlstring(L, s->str + 4, s->len - 4);
@@ -575,6 +579,8 @@ static int proxy_injection_get(lua_State *L) {
         
 		res->result_queue = inj->result_queue;
 		res->qstat = inj->qstat;
+		res->rows  = inj->rows;
+		res->bytes = inj->bytes;
         
 		proxy_getmetatable(L, methods_proxy_resultset);
 		lua_setmetatable(L, -2);
