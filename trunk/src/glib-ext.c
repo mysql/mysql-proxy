@@ -48,6 +48,16 @@ gboolean g_hash_table_true(gpointer UNUSED_PARAM(key), gpointer UNUSED_PARAM(val
 	return TRUE;
 }	
 
+gpointer g_hash_table_lookup_const(GHashTable *h, const gchar *name, gsize name_len) {
+	GString key;
+
+	key.str = (char *)name; /* we are still const */
+	key.len = name_len;
+
+	return g_hash_table_lookup(h, &key);
+}
+
+
 /**
  * duplicate a GString
  */
@@ -68,19 +78,31 @@ gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
 }
 
 int g_string_get_time(GString *s, GTimeVal *gt) {
-	struct tm tm;
-	time_t t;
+	struct tm *tm;
+	time_t t = gt->tv_sec;
+	static GStaticMutex m = G_STATIC_MUTEX_INIT;
 
-	t = gt->tv_sec;
-	
-	gmtime_r(&(t), &tm);
+	g_static_mutex_lock(&m);
 
-	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%dT%H:%M:%S.", &tm);
+	tm = gmtime(&(t));
+
+	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%dT%H:%M:%S.", tm);
 	/* append microsec + Z */
 	g_string_append_printf(s, "%03ldZ", gt->tv_usec / 1000);
+
+	g_static_mutex_unlock(&m);
 	
 	return 0;
 }
+
+int g_string_get_current_time(GString *s) {
+	GTimeVal gt;
+
+	g_get_current_time(&gt);
+
+	return g_string_get_time(s, &gt);
+}
+
 
 GString * g_string_assign_len(GString *s, const char *str, gsize str_len) {
 	g_string_truncate(s, 0);
