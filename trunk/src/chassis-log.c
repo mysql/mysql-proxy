@@ -22,6 +22,8 @@
 #include "sys-pedantic.h"
 #include "chassis-log.h"
 
+#define S(x) x->str, x->len
+
 /**
  * log everything to the stdout for now
  */
@@ -112,10 +114,10 @@ static int chassis_log_update_timestamp(chassis_log *log) {
 static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 	if (-1 != log->log_file_fd) {
 		/* prepend a timestamp */
-		if (-1 == write(log->log_file_fd, log->log_ts_str->str, log->log_ts_str->len)) {
+		if (-1 == write(log->log_file_fd, S(str))) {
 			/* writing to the file failed (Disk Full, what ever ... */
 			
-			write(STDERR_FILENO, log->log_ts_str->str, log->log_ts_str->len);
+			write(STDERR_FILENO, S(str));
 			write(STDERR_FILENO, "\n", 1);
 		} else {
 			write(log->log_file_fd, "\n", 1);
@@ -133,10 +135,10 @@ static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 		case G_LOG_LEVEL_DEBUG: syslog_lvl = LOG_DEBUG; break;
 		default: syslog_lvl = LOG_ERR;
 		}
-		syslog(syslog_lvl, "%s", log->log_ts_str->str);
+		syslog(syslog_lvl, "%s", str->str);
 #endif
 	} else {
-		write(STDERR_FILENO, log->log_ts_str->str, log->log_ts_str->len);
+		write(STDERR_FILENO, S(str));
 		write(STDERR_FILENO, "\n", 1);
 	}
 

@@ -86,7 +86,7 @@ GOptionEntry *chassis_plugin_get_options(chassis_plugin *p) {
 
 
 chassis_plugin* chassis_plugin_for_name(chassis *chas, gchar* plugin_name) {
-    int i;
+    gsize i;
 
     if (!chas || !plugin_name) return NULL;
 

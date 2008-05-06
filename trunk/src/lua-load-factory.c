@@ -51,7 +51,7 @@ typedef struct {
 } load_factory_t;
 
 #ifdef HAVE_LUA_H
-const char *loadstring_factory_reader(lua_State *L, void *data, size_t *size) {
+const char *loadstring_factory_reader(lua_State G_GNUC_UNUSED *L, void *data, size_t *size) {
 	load_factory_t *factory = data;
 
 	switch (factory->state) {

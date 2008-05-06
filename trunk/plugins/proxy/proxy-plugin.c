@@ -430,8 +430,13 @@ static network_socket *proxy_connection_pool_swap(network_mysqld_con *con, int b
 	 * in the connection pool and connected
 	 */
 
+	/* check that we are in range for a _int_ */
+	if (g->backend_pool->len >= G_MAXINT) {
+		return NULL;
+	}
+
 	if (backend_ndx < 0 || 
-	    backend_ndx >= g->backend_pool->len) {
+	    backend_ndx >= (int)g->backend_pool->len) {
 		/* backend_ndx is out of range */
 		return NULL;
 	} 
@@ -695,10 +700,16 @@ static int proxy_backends_get(lua_State *L) {
 
 	network_mysqld_con *con = *(network_mysqld_con **)luaL_checkself(L);
 	int backend_ndx = luaL_checkinteger(L, 2) - 1; /** lua is indexes from 1, C from 0 */
-
+	
 	global_state = proxy_global_state_get(con->config);
+
+	/* check that we are in range for a _int_ */
+	if (global_state->backend_pool->len >= G_MAXINT) {
+		return 0;
+	}
+
 	if (backend_ndx < 0 ||
-	    backend_ndx >= global_state->backend_pool->len) {
+	    backend_ndx >= (int)global_state->backend_pool->len) {
 		lua_pushnil(L);
 
 		return 1;
@@ -891,8 +902,12 @@ static int proxy_tokenize_get(lua_State *L) {
 	sql_token *token;
 	sql_token **token_p;
 
+	if (tokens->len > G_MAXINT) {
+		return 0;
+	}
+
 	/* lua uses 1 is starting index */
-	if (ndx < 1 && ndx > tokens->len) {
+	if (ndx < 1 && ndx > (int)tokens->len) {
 		return 0;
 	}
 
@@ -1000,7 +1015,7 @@ static int lua_load_script(network_mysqld_con *con) {
 static void lua_setup_global(network_mysqld_con *con) {
 	lua_scope *sc = con->srv->priv->sc;
 	
-	chassis_plugin_config *config = con->config;
+	chassis_plugin_config * G_GNUC_UNUSED config = con->config;
 	network_mysqld_con **con_p;
 
 	int stack_top = lua_gettop(sc->L);
@@ -3322,11 +3337,14 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		break;
 	}
 
+	/* protect the typecast below */
+	g_assert_cmpint(g->backend_pool->len, <, G_MAXINT);
+
 	/**
 	 * if the current backend is down, ignore it 
 	 */
 	if (st->backend_ndx >= 0 && 
-	    st->backend_ndx < g->backend_pool->len) {
+	    st->backend_ndx < (int)g->backend_pool->len) {
 		backend_t *cur = g->backend_pool->pdata[st->backend_ndx];
 
 		if (cur->state == BACKEND_STATE_DOWN) {
@@ -3368,12 +3386,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		}
 	
 		if (st->backend_ndx >= 0 && 
-		    st->backend_ndx < g->backend_pool->len) {
+		    st->backend_ndx < (int)g->backend_pool->len) {
 			st->backend = g->backend_pool->pdata[st->backend_ndx];
 		}
 	} else if (NULL == st->backend &&
 		   st->backend_ndx >= 0 && 
-		   st->backend_ndx < g->backend_pool->len) {
+		   st->backend_ndx < (int)g->backend_pool->len) {
 		st->backend = g->backend_pool->pdata[st->backend_ndx];
 	}
 
@@ -3510,7 +3528,6 @@ void* proxy_global_state_get_member(chassis_plugin_config *config, const char* m
 
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 	plugin_con_state *st = con->plugin_con_state;
-	chassis_private *priv = chas->priv;
 
 	g_assert(con->plugin_con_state == NULL);
 
@@ -3674,7 +3691,7 @@ int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
  *
  * make sure that is called after all connections are closed
  */
-void network_mysqld_proxy_free(network_mysqld_con *con) {
+void network_mysqld_proxy_free(network_mysqld_con G_GNUC_UNUSED *con) {
 	proxy_global_state_t *g = proxy_global_state_get(NULL);
 
 	proxy_global_state_free(g);

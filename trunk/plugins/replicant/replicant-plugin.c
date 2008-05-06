@@ -714,7 +714,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_cleanup) {
 	return RET_SUCCESS;
 }
 
-int network_mysqld_repclient_connection_init(chassis *srv, network_mysqld_con *con) {
+int network_mysqld_repclient_connection_init(chassis G_GNUC_UNUSED *chas, network_mysqld_con *con) {
 	con->plugins.con_init                      = repclient_init;
 	con->plugins.con_connect_server            = repclient_connect_server;
 	con->plugins.con_read_handshake            = repclient_read_handshake;
@@ -723,14 +723,6 @@ int network_mysqld_repclient_connection_init(chassis *srv, network_mysqld_con *c
 	con->plugins.con_cleanup                   = repclient_cleanup;
 
 	return 0;
-}
-
-/**
- * free the global scope which is shared between all connections
- *
- * make sure that is called after all connections are closed
- */
-void network_mysqld_replicant_free(network_mysqld_con *con) {
 }
 
 chassis_plugin_config * network_mysqld_replicant_plugin_init(void) {
@@ -742,8 +734,6 @@ chassis_plugin_config * network_mysqld_replicant_plugin_init(void) {
 }
 
 void network_mysqld_replicant_plugin_free(chassis_plugin_config *config) {
-	gsize i;
-
 	if (config->listen_con) {
 		/**
 		 * the connection will be free()ed by the network_mysqld_free()
@@ -784,10 +774,7 @@ static GOptionEntry * network_mysqld_replicant_plugin_get_options(chassis_plugin
 /**
  * init the plugin with the parsed config
  */
-int network_mysqld_replicant_plugin_apply_config(chassis *chas, chassis_plugin_config *config) {
-	network_mysqld_con *con;
-	network_socket *listen_sock;
-
+int network_mysqld_replicant_plugin_apply_config(chassis G_GNUC_UNUSED *chas, chassis_plugin_config *config) {
 	if (!config->master_address) config->master_address = g_strdup(":4040");
 
 	return 0;

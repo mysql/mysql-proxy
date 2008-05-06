@@ -43,7 +43,7 @@ static int lua_table_key_to_mysql_field(lua_State *L, GPtrArray *fields) {
 		 */
 		field->name = g_strdup(lua_tostring(L, -2));
 	} else if (lua_isnumber(L, -2)) {
-		field->name = g_strdup_printf("%d", lua_tointeger(L, -2));
+		field->name = g_strdup_printf("%ld", lua_tointeger(L, -2));
 	} else {
 		/* we don't know how to convert the key */
 		field->name = g_strdup("(hmm)");

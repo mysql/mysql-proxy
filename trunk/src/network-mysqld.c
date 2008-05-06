@@ -897,7 +897,7 @@ retval_t network_mysqld_write_len(chassis *UNUSED_PARAM(srv), network_socket *co
 
 	if (send_chunks == 0) return RET_SUCCESS;
 
-	chunk_count = send_chunks > 0 ? send_chunks : con->send_queue->chunks->length;
+	chunk_count = send_chunks > 0 ? send_chunks : (gint)con->send_queue->chunks->length;
 	
 	if (chunk_count == 0) return RET_SUCCESS;
 

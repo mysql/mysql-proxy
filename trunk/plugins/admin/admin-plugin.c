@@ -44,7 +44,7 @@ struct chassis_plugin_config {
 	network_mysqld_con *listen_con;
 };
 
-int network_mysqld_con_handle_stmt(chassis *srv, network_mysqld_con *con, GString *s) {
+int network_mysqld_con_handle_stmt(chassis G_GNUC_UNUSED *chas, network_mysqld_con *con, GString *s) {
 	gsize i, j;
 	GPtrArray *fields;
 	GPtrArray *rows;

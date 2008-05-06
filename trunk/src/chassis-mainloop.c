@@ -90,7 +90,7 @@ gboolean chassis_is_shutdown() {
 	return signal_shutdown == 1;
 }
 
-static void sigterm_handler(int fd, short event_type, void *_data) {
+static void sigterm_handler(int G_GNUC_UNUSED fd, short G_GNUC_UNUSED event_type, void G_GNUC_UNUSED *_data) {
 	chassis_set_shutdown();
 }
 

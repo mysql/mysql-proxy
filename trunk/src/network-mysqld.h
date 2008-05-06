@@ -94,8 +94,11 @@ typedef enum {
 
 typedef struct network_mysqld_con network_mysqld_con; /* forward declaration */
 
+/**
+ * some plugins don't use the global "chas" pointer 
+ */
 #define NETWORK_MYSQLD_PLUGIN_FUNC(x) retval_t (*x)(chassis *chas, network_mysqld_con *con)
-#define NETWORK_MYSQLD_PLUGIN_PROTO(x) static retval_t x(chassis *chas, network_mysqld_con *con)
+#define NETWORK_MYSQLD_PLUGIN_PROTO(x) static retval_t x(chassis G_GNUC_UNUSED *chas, network_mysqld_con *con)
 
 typedef struct {
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_init);

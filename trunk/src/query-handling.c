@@ -146,7 +146,6 @@ injection *injection_init(int id, GString *query) {
  * Free an injection struct
  */
 void injection_free(injection *i) {
-	GString *packet;
 	if (!i) return;
     
 	if (i->query) g_string_free(i->query, TRUE);
@@ -314,9 +313,14 @@ static int proxy_resultset_fields_get(lua_State *L) {
 	GPtrArray *fields = *(GPtrArray **)luaL_checkself(L);
 	MYSQL_FIELD *field;
 	MYSQL_FIELD **field_p;
-	int ndx = luaL_checkinteger(L, 2);
+	lua_Integer ndx = luaL_checkinteger(L, 2);
+
+	/* protect the compare */
+	if (fields->len > G_MAXINT) {
+		return 0;
+	}
     
-	if (ndx < 1 || ndx > fields->len) {
+	if (ndx < 1 || ndx > (lua_Integer)fields->len) {
 		lua_pushnil(L);
         
 		return 1;

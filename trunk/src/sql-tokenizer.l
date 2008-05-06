@@ -5,6 +5,14 @@
 
 #include "sql-tokenizer.h"
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
 #define YY_DECL int sql_tokenizer_internal(GPtrArray *tokens)
 
 static void sql_token_append(GPtrArray *tokens, sql_token_id token_id, gchar *text);
