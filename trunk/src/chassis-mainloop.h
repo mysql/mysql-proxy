@@ -15,6 +15,9 @@
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
 #include <event.h>     /* struct event_base */
 
 #include "chassis-exports.h"

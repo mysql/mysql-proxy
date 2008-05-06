@@ -14,7 +14,6 @@
 #endif
 
 #include <glib.h>
-#include <event.h>
 #include "chassis-plugin.h"
 #include "chassis-mainloop.h"
 

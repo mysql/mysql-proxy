@@ -150,6 +150,12 @@ the following command:
 The binary will be installed in /usr/sbin/mysql-proxy, the example lua scripts
 are placed into /usr/share/doc/packages/mysql-proxy
 
+Windows
+-------
+
+To be written...
+
+C:\work\mysql-lb-win32\trunk>cmake -G "Visual Studio 8 2005" -DFLEX_EXECUTABLE="c:\Program Files\GnuWin32\bin\flex.exe" -DMYSQL_INCLUDE_DIRS="c:\Program Files\MySQL\MySQL Server 5.0\include" -DMYSQL_LIBRARY_DIRS="c:\Program Files\MySQL\MySQL Server 5.0\lib" -DGLIB_INCLUDE_DIRS="c:\Program Files\GTK2-Runtime\include\glib-2.0";"c:\Program Files\GTK2-Runtime\lib\glib-2.0\include" -DGLIB_LIBRARY_DIRS="c:\Program Files\GTK2-Runtime\lib" -DCMAKE_INSTALL_PREFIX=c:\work\install .
 
 All other Platforms
 -------------------
