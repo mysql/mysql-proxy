@@ -18,9 +18,9 @@
 #include "chassis-mainloop.h"
 
 #ifdef _WIN32
-volatile static int signal_shutdown;
+static volatile int signal_shutdown;
 #else
-volatile static sig_atomic_t signal_shutdown;
+static volatile sig_atomic_t signal_shutdown;
 #endif
 
 
