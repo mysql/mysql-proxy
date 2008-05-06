@@ -6,11 +6,13 @@
 
 #include <glib.h>
 
-#include <check.h>
-
 #include "chassis-plugin.h"
 
+#if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
+
+#define START_TEST(x) void (x)(void)
+#define END_TEST
 
 /**
  * Tests for the plugin interface
@@ -68,14 +70,16 @@ START_TEST(test_plugin_load) {
 	GLogFunc old_log_func;
 
 	p = chassis_plugin_init();
-	fail_unless(p != NULL);
+	g_assert(p != NULL);
 	chassis_plugin_free(p);
+
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
 
 	old_log_func = g_log_set_default_handler(devnull_log_func, NULL);
 	/** should fail */
 	p = chassis_plugin_load("non-existing");
 	g_log_set_default_handler(old_log_func, NULL);
-	fail_unless(p == NULL);
+	g_assert(p == NULL);
 	if (p != NULL) chassis_plugin_free(p);
 } END_TEST
 
@@ -94,7 +98,7 @@ START_TEST(test_plugin_config) {
 	p->get_options = mock_plugin_get_options;
 
 	p->config = p->init();
-	fail_unless(p->config != NULL);
+	g_assert(p->config != NULL);
 	
 	_argv = g_new(char *, 2);
 	_argv[0] = g_strdup("test_plugin_config");
@@ -103,16 +107,16 @@ START_TEST(test_plugin_config) {
 	/* set some config variables */
 	option_ctx = g_option_context_new("- MySQL Proxy");
 
-	fail_unless(NULL != (config_entries = p->get_options(p->config)));
+	g_assert(NULL != (config_entries = p->get_options(p->config)));
 	
 	option_grp = g_option_group_new("foo", "foo-module", "Show options for the foo-module", NULL, NULL);
 	g_option_group_add_entries(option_grp, config_entries);
 	g_option_context_add_group(option_ctx, option_grp);
 
-	fail_unless(FALSE != g_option_context_parse(option_ctx, &_argc, &_argv, &gerr));
+	g_assert(FALSE != g_option_context_parse(option_ctx, &_argc, &_argv, &gerr));
 	g_option_context_free(option_ctx);
 
-	fail_unless(0 == strcmp(p->config->foo, "123"));
+	g_assert(0 == strcmp(p->config->foo, "123"));
 
 	g_free(_argv[1]);
 
@@ -121,14 +125,14 @@ START_TEST(test_plugin_config) {
 	_argc = 2;
 
 	option_ctx = g_option_context_new("- MySQL Proxy");
-	fail_unless(NULL != (config_entries = p->get_options(p->config)));
+	g_assert(NULL != (config_entries = p->get_options(p->config)));
 	
 	option_grp = g_option_group_new("foo", "foo-module", "Show options for the foo-module", NULL, NULL);
 	g_option_group_add_entries(option_grp, config_entries);
 	g_option_context_add_group(option_ctx, option_grp);
 
-	fail_unless(FALSE == g_option_context_parse(option_ctx, &_argc, &_argv, &gerr));
-	fail_unless(gerr->domain == G_OPTION_ERROR);
+	g_assert(FALSE == g_option_context_parse(option_ctx, &_argc, &_argv, &gerr));
+	g_assert(gerr->domain == G_OPTION_ERROR);
 	g_error_free(gerr); gerr = NULL;
 
 	g_option_context_free(option_ctx);
@@ -141,40 +145,18 @@ START_TEST(test_plugin_config) {
 } END_TEST
 /*@}*/
 
-Suite *plugin_suite(void) {
-	Suite *s = suite_create("plugin");
-	TCase *tc_core = tcase_create("Core");
-
-	suite_add_tcase (s, tc_core);
-	tcase_add_test(tc_core, test_plugin_load);
-	tcase_add_test(tc_core, test_plugin_config);
-
-	return s;
-}
-
 int main(int argc, char **argv) {
-	int nf;
-	Suite *s = plugin_suite();
-	SRunner *sr = srunner_create(s);
-	char *logfile = getenv("CK_LOGFILE");
-	char *full_logfile = NULL;
+	g_test_init(&argc, &argv, NULL);
+	g_test_bug_base("http://bugs.mysql.com/");
 
-	if (logfile) {
-		gchar *basename = g_path_get_basename(argv[0]);
-		g_assert(basename);
-		full_logfile = g_strdup_printf("%s-%s.txt", logfile, basename);
-		g_free(basename);
-		srunner_set_log(sr, full_logfile);
-	}
-		
-	srunner_run_all(sr, CK_ENV);
+	g_test_add_func("/core/plugin_load", test_plugin_load);
+	g_test_add_func("/core/plugin_config", test_plugin_config);
 
-	nf = srunner_ntests_failed(sr);
-
-	srunner_free(sr);
-
-	if (full_logfile) g_free(full_logfile);
-	
-	return (nf == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+	return g_test_run();
 }
 
+#else
+int main() {
+	return 77;
+}
+#endif

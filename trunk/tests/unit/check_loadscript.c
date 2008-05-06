@@ -6,7 +6,9 @@
 
 #include <glib.h>
 
-#include <check.h>
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #ifdef HAVE_LUA_H
 #include <lua.h>
@@ -16,8 +18,11 @@
 
 #include "lua-scope.h"
 
+#if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
 
+#define START_TEST(x) void (x)(void)
+#define END_TEST
 /**
  * Tests for the Lua script loading facility
  * @ingroup Core
@@ -32,45 +37,35 @@
 START_TEST(test_luaL_loadfile_factory) {
 #ifdef HAVE_LUA_H
 	lua_scope *sc = lua_scope_init();
-	fail_unless(sc->L != NULL);
+	g_assert(sc->L != NULL);
 	
 	/* lua_scope_load_script used to give a bus error, when supplying a non-existant script */
 	lua_scope_load_script(sc, "/this/is/not/there.lua");
-	fail_unless(lua_isstring(sc->L, -1));		/* if it's a string, loading failed. exactly what we expect */
+	g_assert(lua_isstring(sc->L, -1));		/* if it's a string, loading failed. exactly what we expect */
 	lua_pop(sc->L, 1);
 	lua_scope_free(sc);
 #else
-	fail_unless(1 != 0);	/* always succeeds */
+	g_assert(1 != 0);	/* always succeeds */
 #endif
 } END_TEST
 
 
 /*@}*/
 
-Suite *loadfile_suite(void) {
-	Suite *s = suite_create("lua-loading");
-	TCase *tc_core = tcase_create("Core");
-
-	suite_add_tcase (s, tc_core);
-	tcase_add_test(tc_core, test_luaL_loadfile_factory);
-
+int main(int argc, char **argv) {
 #ifdef HAVE_GTHREAD	
 	g_thread_init(NULL);
 #endif
 
-	return s;
-}
+	g_test_init(&argc, &argv, NULL);
+	g_test_bug_base("http://bugs.mysql.com/");
 
+	g_test_add_func("/core/lua-load-factory", test_luaL_loadfile_factory);
+
+	return g_test_run();
+}
+#else
 int main() {
-	int nf;
-	Suite *s = loadfile_suite();
-	SRunner *sr = srunner_create(s);
-		
-	srunner_run_all(sr, CK_ENV);
-
-	nf = srunner_ntests_failed(sr);
-
-	srunner_free(sr);
-	
-	return (nf == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+	return 77;
 }
+#endif

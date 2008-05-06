@@ -6,11 +6,14 @@
 
 #include <glib.h>
 
-#include <check.h>
-
 #include "network-mysqld-proto.h"
 
+#if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
+
+#define START_TEST(x) void (x)(void)
+#define END_TEST
+
 
 /**
  * Tests for the MySQL Protocol Codec functions
@@ -28,8 +31,8 @@ START_TEST(test_mysqld_proto_header) {
 	unsigned char header[4];
 	size_t length = 1256;
 
-	fail_unless(0 == network_mysqld_proto_set_header(header, length, 0));
-	fail_unless(length == network_mysqld_proto_get_header(header));
+	g_assert(0 == network_mysqld_proto_set_header(header, length, 0));
+	g_assert(length == network_mysqld_proto_get_header(header));
 } END_TEST
 
 /**
@@ -47,33 +50,33 @@ START_TEST(test_mysqld_proto_lenenc_int) {
 	 */
 	length = 0; off = 0;
 	g_string_truncate(packet, off);
-	fail_unless(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	fail_unless(packet->len == 1);
-	fail_unless(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
+	g_assert(packet->len == 1);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
 
 	length = 250; off = 0;
 	g_string_truncate(packet, off);
-	fail_unless(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	fail_unless(packet->len == 1);
-	fail_unless(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
+	g_assert(packet->len == 1);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
 
 	length = 251; off = 0;
 	g_string_truncate(packet, off);
-	fail_unless(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	fail_unless(packet->len == 3);
-	fail_unless(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
+	g_assert(packet->len == 3);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
 
 	length = 0xffff; off = 0;
 	g_string_truncate(packet, off);
-	fail_unless(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	fail_unless(packet->len == 3);
-	fail_unless(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
+	g_assert(packet->len == 3);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
 
 	length = 0x10000; off = 0;
 	g_string_truncate(packet, off);
-	fail_unless(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	fail_unless(packet->len == 4);
-	fail_unless(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
+	g_assert(packet->len == 4);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
 
 	g_string_free(packet, TRUE);
 } END_TEST
@@ -94,21 +97,21 @@ START_TEST(test_mysqld_proto_int) {
 
 	length = 0; off = 0;
 	g_string_truncate(packet, off);
-	fail_unless(0 == network_mysqld_proto_append_int8(packet, length));
-	fail_unless(packet->len == 1);
-	fail_unless(length == network_mysqld_proto_get_int8(packet, &off));
+	g_assert(0 == network_mysqld_proto_append_int8(packet, length));
+	g_assert(packet->len == 1);
+	g_assert(length == network_mysqld_proto_get_int8(packet, &off));
 
 	length = 0; off = 0;
 	g_string_truncate(packet, off);
-	fail_unless(0 == network_mysqld_proto_append_int16(packet, length));
-	fail_unless(packet->len == 2);
-	fail_unless(length == network_mysqld_proto_get_int16(packet, &off));
+	g_assert(0 == network_mysqld_proto_append_int16(packet, length));
+	g_assert(packet->len == 2);
+	g_assert(length == network_mysqld_proto_get_int16(packet, &off));
 
 	length = 0; off = 0;
 	g_string_truncate(packet, off);
-	fail_unless(0 == network_mysqld_proto_append_int32(packet, length));
-	fail_unless(packet->len == 4);
-	fail_unless(length == network_mysqld_proto_get_int32(packet, &off));
+	g_assert(0 == network_mysqld_proto_append_int32(packet, length));
+	g_assert(packet->len == 4);
+	g_assert(length == network_mysqld_proto_get_int32(packet, &off));
 
 	g_string_free(packet, TRUE);
 } END_TEST
@@ -135,16 +138,16 @@ START_TEST(test_mysqld_handshake) {
 	packet = g_string_new(NULL);
 	g_string_append_len(packet, raw_packet, sizeof(raw_packet) - 1);
 
-	fail_unless(packet->len == 78);
+	g_assert(packet->len == 78);
 
-	fail_unless(0 == network_mysqld_proto_get_handshake(packet, shake));
+	g_assert(0 == network_mysqld_proto_get_handshake(packet, shake));
 
-	fail_unless(shake->server_version == 50045);
-	fail_unless(shake->thread_id == 119);
-	fail_unless(shake->status == 
+	g_assert(shake->server_version == 50045);
+	g_assert(shake->thread_id == 119);
+	g_assert(shake->status == 
 			SERVER_STATUS_AUTOCOMMIT);
-	fail_unless(shake->charset == 8);
-	fail_unless(shake->capabilities ==
+	g_assert(shake->charset == 8);
+	g_assert(shake->capabilities ==
 			(CLIENT_CONNECT_WITH_DB |
 			CLIENT_LONG_FLAG |
 
@@ -155,8 +158,8 @@ START_TEST(test_mysqld_handshake) {
 			CLIENT_TRANSACTIONS |
 			CLIENT_SECURE_CONNECTION));
 
-	fail_unless(shake->challenge->len == 20);
-	fail_unless(0 == memcmp(shake->challenge->str, "\"L;!3|8@vV,s#PLjSA+Q", shake->challenge->len));
+	g_assert(shake->challenge->len == 20);
+	g_assert(0 == memcmp(shake->challenge->str, "\"L;!3|8@vV,s#PLjSA+Q", shake->challenge->len));
 
 	network_mysqld_handshake_free(shake);
 	g_string_free(packet, TRUE);
@@ -192,13 +195,13 @@ START_TEST(test_mysqld_auth_empty_pw) {
 	network_mysqld_proto_append_int8(packet, 0);
 	network_mysqld_proto_append_int8(packet, 1);
 
-	fail_unless(0 == network_mysqld_proto_append_auth(packet, auth));
+	g_assert(0 == network_mysqld_proto_append_auth(packet, auth));
 
 #if 0
 	g_message("%s: packet->len = %d, packet is: %d", G_STRLOC, packet->len, sizeof(raw_packet) - 1);
 #endif
 
-	fail_unless(packet->len == sizeof(raw_packet) - 1);
+	g_assert(packet->len == sizeof(raw_packet) - 1);
 
 #if 0
 	for (i = 0; i < packet->len; i++) {
@@ -206,7 +209,7 @@ START_TEST(test_mysqld_auth_empty_pw) {
 	}
 #endif
 
-	fail_unless(0 == memcmp(packet->str, raw_packet, sizeof(raw_packet) - 1));
+	g_assert(0 == memcmp(packet->str, raw_packet, sizeof(raw_packet) - 1));
 
 	network_mysqld_auth_free(auth);
 
@@ -258,8 +261,8 @@ START_TEST(test_mysqld_auth_with_pw) {
 	network_mysqld_proto_append_int8(packet, 0);
 	network_mysqld_proto_append_int8(packet, 1);
 
-	fail_unless(0 == network_mysqld_proto_append_auth(packet, auth));
-	fail_unless(packet->len == sizeof(raw_packet) - 1);
+	g_assert(0 == network_mysqld_proto_append_auth(packet, auth));
+	g_assert(packet->len == sizeof(raw_packet) - 1);
 
 #if 0
 	for (i = 0; i < packet->len; i++) {
@@ -267,45 +270,30 @@ START_TEST(test_mysqld_auth_with_pw) {
 	}
 #endif
 
-	fail_unless(0 == memcmp(packet->str, raw_packet, sizeof(raw_packet) - 1));
+	g_assert(0 == memcmp(packet->str, raw_packet, sizeof(raw_packet) - 1));
 
 	network_mysqld_auth_free(auth);
 
 	g_string_free(packet, TRUE);
 } END_TEST
 
+int main(int argc, char **argv) {
+	g_test_init(&argc, &argv, NULL);
+	g_test_bug_base("http://bugs.mysql.com/");
 
-Suite *mysqld_proto_suite(void) {
-	Suite *s = suite_create("mysqld_proto");
-	TCase *tc = tcase_create("Core");
-
-	suite_add_tcase (s, tc);
-	tcase_add_test(tc, test_mysqld_proto_header);
-	tcase_add_test(tc, test_mysqld_proto_lenenc_int);
-	tcase_add_test(tc, test_mysqld_proto_int);
+	g_test_add_func("/core/mysqld-proto-header", test_mysqld_proto_header);
+	g_test_add_func("/core/mysqld-proto-lenenc-int", test_mysqld_proto_lenenc_int);
+	g_test_add_func("/core/mysqld-proto-int", test_mysqld_proto_int);
 	
-	tc= tcase_create("Handshake");
-	suite_add_tcase (s, tc);
-	tcase_add_test(tc, test_mysqld_handshake);
+	g_test_add_func("/core/mysqld-proto-handshake", test_mysqld_handshake);
 
-	tc= tcase_create("Auth");
-	suite_add_tcase (s, tc);
-	tcase_add_test(tc, test_mysqld_auth_empty_pw);
-	tcase_add_test(tc, test_mysqld_auth_with_pw);
-	return s;
+	g_test_add_func("/core/mysqld-proto-pw-empty", test_mysqld_auth_empty_pw);
+	g_test_add_func("/core/mysqld-proto-pw", test_mysqld_auth_with_pw);
+
+	return g_test_run();
 }
-
+#else
 int main() {
-	int nf;
-	Suite *s = mysqld_proto_suite();
-	SRunner *sr = srunner_create(s);
-		
-	srunner_run_all(sr, CK_ENV);
-
-	nf = srunner_ntests_failed(sr);
-
-	srunner_free(sr);
-	
-	return (nf == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+	return 77;
 }
-
+#endif

@@ -19,11 +19,12 @@
 
 #include <glib.h>
 
-#include <check.h>
-
 #include "chassis-log.h"
 
+#if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
+
+#define START_TEST(x) void (x)(void)
 
 /**
  * Tests for the plugin interface
@@ -41,6 +42,8 @@ START_TEST(test_log_compress) {
 
 	l = chassis_log_init();
 
+	g_log_set_always_fatal(G_LOG_FATAL_MASK);
+
 	old_log_func = g_log_set_default_handler(chassis_log_func, l);
 
 	g_critical("I am duplicate");
@@ -51,30 +54,19 @@ START_TEST(test_log_compress) {
 	g_log_set_default_handler(old_log_func, NULL);
 
 	chassis_log_free(l);
-} END_TEST
+}
 /*@}*/
 
-Suite *plugin_suite(void) {
-	Suite *s = suite_create("plugin");
-	TCase *tc_core = tcase_create("Core");
+int main(int argc, char **argv) {
+	g_test_init(&argc, &argv, NULL);
+	g_test_bug_base("http://bugs.mysql.com/");
 
-	suite_add_tcase (s, tc_core);
-	tcase_add_test(tc_core, test_log_compress);
+	g_test_add_func("/core/log_compress", test_log_compress);
 
-	return s;
+	return g_test_run();
 }
-
+#else
 int main() {
-	int nf;
-	Suite *s = plugin_suite();
-	SRunner *sr = srunner_create(s);
-		
-	srunner_run_all(sr, CK_ENV);
-
-	nf = srunner_ntests_failed(sr);
-
-	srunner_free(sr);
-	
-	return (nf == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+	return 77;
 }
-
+#endif

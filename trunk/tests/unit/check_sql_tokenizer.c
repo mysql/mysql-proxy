@@ -6,11 +6,13 @@
 
 #include <glib.h>
 
-#include <check.h>
-
 #include "sql-tokenizer.h"
 
+#if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
+
+#define START_TEST(x) void (x)(void)
+#define END_TEST
 
 /** 
  * tests for the SQL tokenizer
@@ -34,8 +36,8 @@ START_TEST(test_tokenizer) {
 		sql_token *token = tokens->pdata[i];
 
 #define T(t_id, t_text) \
-		fail_unless(token->token_id == t_id, "token[%d].token_id should be '%s', got '%s'", i, sql_token_get_name(t_id), sql_token_get_name(token->token_id)); \
-		fail_unless(0 == strcmp(token->text->str, t_text), "token[%d].text should be '%s', got '%s'", i, t_text, token->text->str); \
+		g_assert_cmpint(token->token_id, ==, t_id); \
+		g_assert_cmpstr(token->text->str, ==, t_text); 
 
 		switch (i) {
 		case 0: T(TK_SQL_SELECT, "SELEcT"); break;
@@ -80,8 +82,8 @@ START_TEST(test_table_name_underscore) {
 		sql_token *token = tokens->pdata[i];
 
 #define T(t_id, t_text) \
-		fail_unless(token->token_id == t_id, "token[%d].token_id should be '%s', got '%s'", i, sql_token_get_name(t_id), sql_token_get_name(token->token_id)); \
-		fail_unless(0 == strcmp(token->text->str, t_text), "token[%d].text should be '%s', got '%s'", i, t_text, token->text->str); \
+		g_assert_cmpint(token->token_id, ==, t_id); \
+		g_assert_cmpstr(token->text->str, ==, t_text);
 
 		switch (i) {
 		case 0: T(TK_SQL_SELECT, "SELEcT"); break;
@@ -114,7 +116,7 @@ START_TEST(test_token2name) {
 	for (i = 0; i < TK_LAST_TOKEN; i++) {
 		const char *name;
 
-		fail_unless(NULL != (name = sql_token_get_name(i)));
+		g_assert((name = sql_token_get_name(i)));
 	}
 } END_TEST
 
@@ -137,41 +139,27 @@ START_TEST(test_keyword2token) {
 
 	/* convert tokens to id and back to name */
 	for (i = 0; keywords[i].token; i++) {
-		fail_unless(keywords[i].id == sql_token_get_id(keywords[i].token), 
-				"%d == sql_token_get_id(%s), got = %d", 
-				keywords[i].id, keywords[i].token, 
-				sql_token_get_id(keywords[i].token));
+		g_assert_cmpint(keywords[i].id, ==, sql_token_get_id(keywords[i].token));
 	}
 
 	/* yeah, COMMIT should be a normal literal */
-	fail_unless(TK_LITERAL == sql_token_get_id("COMMIT"));
+	g_assert_cmpint(TK_LITERAL, ==, sql_token_get_id("COMMIT"));
 } END_TEST
 /* @} */
 
-Suite *sql_tokenizer_suite(void) {
-	Suite *s = suite_create("sql-tokenizer");
-	TCase *tc_core = tcase_create("Core");
+int main(int argc, char **argv) {
+	g_test_init(&argc, &argv, NULL);
+	g_test_bug_base("http://bugs.mysql.com/");
 
-	suite_add_tcase (s, tc_core);
-	tcase_add_test(tc_core, test_tokenizer);
-	tcase_add_test(tc_core, test_token2name);
-	tcase_add_test(tc_core, test_keyword2token);
-	tcase_add_test(tc_core, test_table_name_underscore);
+	g_test_add_func("/core/tokenizer", test_tokenizer);
+	g_test_add_func("/core/tokenizer_token2name", test_token2name);
+	g_test_add_func("/core/tokenizer_keywork2token", test_keyword2token);
+	g_test_add_func("/core/tokenizer_table_name_underscore", test_table_name_underscore);
 
-	return s;
+	return g_test_run();
 }
-
+#else
 int main() {
-	int nf;
-	Suite *s = sql_tokenizer_suite();
-	SRunner *sr = srunner_create(s);
-		
-	srunner_run_all(sr, CK_ENV);
-
-	nf = srunner_ntests_failed(sr);
-
-	srunner_free(sr);
-	
-	return (nf == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+	return 77;
 }
-
+#endif
