@@ -78,27 +78,24 @@ gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
 }
 
 int g_string_get_time(GString *s, GTimeVal *gt) {
-	time_t t;
-	t = gt->tv_sec;
-	static GStaticMutex m = G_STATIC_MUTEX_INIT;
+	time_t t = gt->tv_sec;
+
+#ifndef HAVE_GMTIME_R
+	static GStaticMutex m = G_STATIC_MUTEX_INIT; /* gmtime() isn't thread-safe */
 
 	g_static_mutex_lock(&m);
-	{
-#ifdef _WIN32
-	struct tm *tm;
-	tm = gmtime(&(t));
-	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%dT%H:%M:%S.", tm);
+
+	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%dT%H:%M:%S.", gmtime(&(t)));
+	
+	g_static_mutex_unlock(&m);
 #else
 	struct tm tm;
 	gmtime_r(&(t), &tm);
 	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%dT%H:%M:%S.", &tm);
 #endif
-	}
 
 	/* append microsec + Z */
 	g_string_append_printf(s, "%03ldZ", gt->tv_usec / 1000);
-
-	g_static_mutex_unlock(&m);
 	
 	return 0;
 }
