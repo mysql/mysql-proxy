@@ -44,7 +44,7 @@
 %VS_CMD% mysql-proxy.sln /Clean
 %VS_CMD% mysql-proxy.sln /Build
 %VS_CMD% mysql-proxy.sln /Build Debug /project RUN_TESTS
-%VS_CMD% mysql-proxy.sln /Build Debug /project PACKAGE
+%VS_CMD% mysql-proxy.sln /Build Release /project PACKAGE
 %VS_CMD% mysql-proxy.sln /Build Debug /project INSTALL
 
 @rem if you use VS8 to build then VS80COMNTOOLS should be set
