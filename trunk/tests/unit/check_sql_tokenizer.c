@@ -145,6 +145,103 @@ START_TEST(test_keyword2token) {
 	/* yeah, COMMIT should be a normal literal */
 	g_assert_cmpint(TK_LITERAL, ==, sql_token_get_id("COMMIT"));
 } END_TEST
+
+
+/**
+ * @test check if single line comments are recognized properly
+ */
+START_TEST(test_simple_dashdashcomment) {
+	gsize i;
+	GPtrArray *tokens = NULL;
+	
+	tokens = sql_tokens_new();
+	
+	sql_tokenizer(tokens, C("-- comment"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+		
+#define T(t_id, t_text) \
+g_assert_cmpint(token->token_id, ==, t_id); \
+g_assert_cmpstr(token->text->str, ==, t_text); 
+
+		switch (i) {
+		case 0: T(TK_COMMENT, "comment"); break;
+		default: g_assert(FALSE); break;
+#undef T
+		}
+	}
+
+	sql_tokens_free(tokens);
+
+} END_TEST
+
+/**
+ * @test check if single line comments are recognized properly
+ */
+START_TEST(test_dashdashcomment) {
+	gsize i;
+	GPtrArray *tokens = NULL;
+	
+	tokens = sql_tokens_new();
+	
+	sql_tokenizer(tokens, C("--  comment\nSELECT 1 FROM dual"));
+	
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+		
+#define T(t_id, t_text) \
+g_assert_cmpint(token->token_id, ==, t_id); \
+g_assert_cmpstr(token->text->str, ==, t_text); 
+		
+		switch (i) {
+			case 0: T(TK_COMMENT, " comment"); break;	/* note the leading whitespace here! */
+			case 1: T(TK_SQL_SELECT, "SELECT"); break;
+			case 2: T(TK_INTEGER, "1"); break;
+			case 3: T(TK_SQL_FROM, "FROM"); break;
+			case 4: T(TK_SQL_DUAL, "dual"); break;
+			default: g_assert(FALSE); break;
+#undef T
+		}
+	}
+	
+	sql_tokens_free(tokens);
+	
+} END_TEST
+
+/**
+ * @test check that '--1' will not start a comment
+ */
+START_TEST(test_doubleminus) {
+	gsize i;
+	GPtrArray *tokens = NULL;
+	
+	tokens = sql_tokens_new();
+	
+	sql_tokenizer(tokens, C("SELECT 1--1 FROM DUAL"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+#define T(t_id, t_text) \
+g_assert_cmpint(token->token_id, ==, t_id); \
+g_assert_cmpstr(token->text->str, ==, t_text); 
+	
+		switch (i) {
+			case 0: T(TK_SQL_SELECT, "SELECT"); break;
+			case 1: T(TK_INTEGER, "1"); break;
+			case 2: T(TK_MINUS, "-"); break;
+			case 3: T(TK_MINUS, "-"); break;
+			case 4: T(TK_INTEGER, "1"); break;
+			case 5: T(TK_SQL_FROM, "FROM"); break;
+			case 6: T(TK_SQL_DUAL, "DUAL"); break;
+			default: g_assert(FALSE); break;
+#undef T
+		}
+	}	
+	
+	sql_tokens_free(tokens);
+} END_TEST
 /* @} */
 
 int main(int argc, char **argv) {
@@ -155,6 +252,9 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/tokenizer_token2name", test_token2name);
 	g_test_add_func("/core/tokenizer_keywork2token", test_keyword2token);
 	g_test_add_func("/core/tokenizer_table_name_underscore", test_table_name_underscore);
+	g_test_add_func("/core/tokenizer_simple_dashdashcomment", test_simple_dashdashcomment);
+	g_test_add_func("/core/tokenizer_dashdashcomment", test_dashdashcomment);
+	g_test_add_func("/core/tokenizer_doubleminus", test_doubleminus);
 
 	return g_test_run();
 }

@@ -308,15 +308,19 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 %option never-interactive
 %option 8bit
 %option fast
-%x COMMENT QUOTED
+%x COMMENT LINECOMMENT QUOTED
 %%
 
 	/** comments */
 "/*"		comment_token_id = TK_COMMENT;       sql_token_append(tokens, comment_token_id, ""); BEGIN(COMMENT);
 "/*!"		comment_token_id = TK_COMMENT_MYSQL; sql_token_append(tokens, comment_token_id, ""); BEGIN(COMMENT);
+"--"[[:blank:]]		comment_token_id = TK_COMMENT; sql_token_append(tokens, comment_token_id, ""); BEGIN(LINECOMMENT);
 <COMMENT>[^*]*	sql_token_append_last_token(tokens, comment_token_id, yytext);
 <COMMENT>"*"+[^*/]*	sql_token_append_last_token(tokens, comment_token_id, yytext);
 <COMMENT>"*"+"/"	BEGIN(INITIAL);
+<LINECOMMENT>[^\n]* sql_token_append_last_token(tokens, comment_token_id, yytext);
+<LINECOMMENT>\r?\n	BEGIN(INITIAL);
+<LINECOMMENT><<EOF>>	BEGIN(INITIAL);
 
 	/** start of a quote string */
 ["'`]		{ BEGIN(QUOTED);  
