@@ -318,6 +318,7 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 <COMMENT>[^*]*	sql_token_append_last_token(tokens, comment_token_id, yytext);
 <COMMENT>"*"+[^*/]*	sql_token_append_last_token(tokens, comment_token_id, yytext);
 <COMMENT>"*"+"/"	BEGIN(INITIAL);
+<COMMENT><<EOF>>	BEGIN(INITIAL);
 <LINECOMMENT>[^\n]* sql_token_append_last_token(tokens, comment_token_id, yytext);
 <LINECOMMENT>\r?\n	BEGIN(INITIAL);
 <LINECOMMENT><<EOF>>	BEGIN(INITIAL);
@@ -342,8 +343,7 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 			}
 			}
 <QUOTED>["'`]	if (*yytext == quote_char) { BEGIN(INITIAL); } else { sql_token_append_last_token(tokens, quote_token_id, yytext); }
-
-
+<QUOTED><<EOF>>	BEGIN(INITIAL);
 
 	/** strings, quoting, literals */
 [[:space:]]+	/** ignore WS */

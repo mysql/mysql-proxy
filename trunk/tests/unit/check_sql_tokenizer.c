@@ -242,6 +242,110 @@ g_assert_cmpstr(token->text->str, ==, t_text);
 	
 	sql_tokens_free(tokens);
 } END_TEST
+
+/**
+ * @test First test for bug 36506, where EOF encountered while the tokenizer is in a start start
+ *       corrupts its internal state resulting in failure to correctly tokenize the subsequent query.
+ */
+START_TEST(test_startstate_reset_quoted) {
+	gsize i;
+	GPtrArray *tokens = NULL;
+	
+	tokens = sql_tokens_new();
+	/* EOF encountered while sql-tokenizer is in QUOTED start state */
+	sql_tokenizer(tokens, C("SELECT \"foo"));
+	sql_tokens_free(tokens);
+
+	tokens = sql_tokens_new();
+	/* valid query, fails with an assertion when bug 36506 is unfixed */
+	sql_tokenizer(tokens, C("SELECT \"foo\""));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+		
+#define T(t_id, t_text) \
+g_assert_cmpint(token->token_id, ==, t_id); \
+g_assert_cmpstr(token->text->str, ==, t_text); 
+		
+		switch (i) {
+			case 0: T(TK_SQL_SELECT, "SELECT"); break;
+			case 1: T(TK_STRING, "foo"); break;
+			default: g_assert(FALSE); break;
+#undef T
+		}
+	}	
+	
+	sql_tokens_free(tokens);
+	
+} END_TEST
+
+/**
+ * @test Second test for bug 36506, where EOF encountered while the tokenizer is in a start start
+ *       corrupts its internal state resulting in failure to correctly tokenize the subsequent query.
+ */
+START_TEST(test_startstate_reset_comment) {
+	gsize i;
+	GPtrArray *tokens = NULL;
+	
+	/* test for C-style comments */
+	
+	tokens = sql_tokens_new();
+	/* EOF encountered while sql-tokenizer is in COMMENT start state */
+	sql_tokenizer(tokens, C("SELECT /* foo"));
+	sql_tokens_free(tokens);
+	
+	tokens = sql_tokens_new();
+	/* valid query, fails with an assertion when bug 36506 is unfixed */
+	sql_tokenizer(tokens, C("SELECT /*foo*/ 1"));
+	
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+		
+#define T(t_id, t_text) \
+g_assert_cmpint(token->token_id, ==, t_id); \
+g_assert_cmpstr(token->text->str, ==, t_text); 
+		
+		switch (i) {
+			case 0: T(TK_SQL_SELECT, "SELECT"); break;
+			case 1: T(TK_COMMENT, "foo"); break;
+			case 2: T(TK_INTEGER, "1"); break;
+			default: g_assert(FALSE); break;
+#undef T
+		}
+	}	
+	
+	sql_tokens_free(tokens);
+
+	/* test for line comments */
+	
+	tokens = sql_tokens_new();
+	/* EOF encountered while sql-tokenizer is in LINECOMMENT start state */
+	sql_tokenizer(tokens, C("SELECT -- foo"));
+	sql_tokens_free(tokens);
+	
+	tokens = sql_tokens_new();
+	/* valid query, fails with an assertion when bug 36506 is unfixed */
+	sql_tokenizer(tokens, C("SELECT -- foo\n1"));
+	
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+		
+#define T(t_id, t_text) \
+g_assert_cmpint(token->token_id, ==, t_id); \
+g_assert_cmpstr(token->text->str, ==, t_text); 
+		
+		switch (i) {
+			case 0: T(TK_SQL_SELECT, "SELECT"); break;
+			case 1: T(TK_COMMENT, "foo"); break;
+			case 2: T(TK_INTEGER, "1"); break;
+			default: g_assert(FALSE); break;
+#undef T
+		}
+	}	
+	
+	sql_tokens_free(tokens);
+	
+} END_TEST
 /* @} */
 
 int main(int argc, char **argv) {
@@ -255,6 +359,8 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/tokenizer_simple_dashdashcomment", test_simple_dashdashcomment);
 	g_test_add_func("/core/tokenizer_dashdashcomment", test_dashdashcomment);
 	g_test_add_func("/core/tokenizer_doubleminus", test_doubleminus);
+	g_test_add_func("/core/tokenizer_startstate_reset_quoted", test_startstate_reset_quoted);
+	g_test_add_func("/core/tokenizer_startstate_reset_comment", test_startstate_reset_comment);
 
 	return g_test_run();
 }
