@@ -567,6 +567,11 @@ int main(int argc, char **argv) {
 	}
 
 exit_nicely:
+	/* necessary to set the shutdown flag, because the monitor will continue
+	 * to schedule timers otherwise, causing an infinite loop in cleanup
+	 */
+	chassis_set_shutdown();
+	
 	if (keyfile) g_key_file_free(keyfile);
 	if (default_file) g_free(default_file);
 
