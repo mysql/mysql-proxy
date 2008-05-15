@@ -252,11 +252,36 @@ int main(int argc, char **argv) {
 		g_error("loading modules is not supported on this platform");
 	}
 
+#if defined(HAVE_LUA_H)
+# if defined(DATADIR)
+	/**
+	 * if the LUA_PATH or LUA_CPATH are not set, set a good default 
+	 */
+	if (!g_getenv(LUA_PATH)) {
+		g_setenv(LUA_PATH, 
+				DATADIR "/?.lua", 1);
+	}
+# endif
+
+# if defined(LIBDIR)
+	if (!g_getenv(LUA_CPATH)) {
+#  if _WIN32
+		g_setenv(LUA_CPATH, 
+				LIBDIR "/?.dll", 1);
+#  else
+		g_setenv(LUA_CPATH, 
+				LIBDIR "/?.so", 1);
+#  endif
+	}
+# endif
+#endif
+
 #ifdef HAVE_GTHREAD	
 	g_thread_init(NULL);
 #endif
 
 	log = chassis_log_init();
+	log->min_lvl = G_LOG_LEVEL_MESSAGE; /* display messages while parsing or loading plugins */
 	
 	g_log_set_default_handler(chassis_log_func, log);
 
@@ -361,6 +386,9 @@ int main(int argc, char **argv) {
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;
 		}
+	} else {
+		/* if it is not set, use "critical" as default */
+		log->min_lvl = G_LOG_LEVEL_CRITICAL;
 	}
 
         /* Lets find the plugin directory relative the executable path */
@@ -478,25 +506,6 @@ int main(int argc, char **argv) {
 		goto exit_nicely;
 	}
 
-
-#if defined(HAVE_LUA_H) && defined(DATADIR)
-	/**
-	 * if the LUA_PATH is not set, set a good default 
-	 */
-	if (!g_getenv(LUA_PATH)) {
-		g_setenv(LUA_PATH, 
-				DATADIR "/?.lua", 1);
-	}
-
-	/**
-	 * if the LUA_PATH is not set, set a good default 
-	 */
-	if (!g_getenv(LUA_CPATH)) {
-		g_setenv(LUA_CPATH, 
-				DATADIR "/?.so", 1);
-	}
-
-#endif
 
 #ifndef _WIN32	
 	signal(SIGPIPE, SIG_IGN);
