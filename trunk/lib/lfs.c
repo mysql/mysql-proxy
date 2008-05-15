@@ -590,8 +590,13 @@ static const struct luaL_reg fslib[] = {
 	{"unlock", file_unlock},
 	{NULL, NULL},
 };
+#if defined(_WIN32)
+# define LUAEXT_API __declspec(dllexport)
+#else
+# define LUAEXT_API extern
+#endif
 
-int luaopen_lfs (lua_State *L) {
+LUAEXT_API int luaopen_lfs (lua_State *L) {
 	dir_create_meta (L);
 	luaL_openlib (L, "lfs", fslib, 0);
 	set_info (L);

@@ -52,7 +52,13 @@ static const struct luaL_reg gliblib[] = {
 	{NULL, NULL},
 };
 
-int luaopen_glib2 (lua_State *L) {
+#if defined(_WIN32)
+# define LUAEXT_API __declspec(dllexport)
+#else
+# define LUAEXT_API extern
+#endif
+
+LUAEXT_API int luaopen_glib2 (lua_State *L) {
 	luaL_openlib (L, "glib2", gliblib, 0);
 	set_info (L);
 	return 1;
