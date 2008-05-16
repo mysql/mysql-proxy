@@ -42,10 +42,10 @@
 @cmake -DMYSQL_LIBRARY_DIRS:PATH=%MYSQL_DIR%\lib\debug -DMYSQL_INCLUDE_DIRS:PATH=%MYSQL_DIR%\include -DGLIB_LIBRARY_DIRS:PATH=%GLIB_DIR%\lib -DGLIB_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include .
 
 %VS_CMD% mysql-proxy.sln /Clean
-%VS_CMD% mysql-proxy.sln /Build
-%VS_CMD% mysql-proxy.sln /Build Debug /project RUN_TESTS
+%VS_CMD% mysql-proxy.sln /Build Release
+%VS_CMD% mysql-proxy.sln /Build Release /project RUN_TESTS
 %VS_CMD% mysql-proxy.sln /Build Release /project PACKAGE
-%VS_CMD% mysql-proxy.sln /Build Debug /project INSTALL
+%VS_CMD% mysql-proxy.sln /Build Release /project INSTALL
 
 @rem if you use VS8 to build then VS80COMNTOOLS should be set
 @rem "%VS80COMNTOOLS%\..\IDE\devenv.com" mysql-proxy.sln /Clean

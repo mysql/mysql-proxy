@@ -52,7 +52,13 @@
 #define chdir_error	strerror(errno)
 #endif
 
-int luaopen_lfs (lua_State *L);
+#if defined(_WIN32)
+# define LUAEXT_API __declspec(dllexport)
+#else
+# define LUAEXT_API extern
+#endif
+
+LUAEXT_API int luaopen_lfs (lua_State *L);
 /* Define 'strerror' for systems that do not implement it */
 #ifndef HAVE_STRERROR
 #define strerror(_)	"System unable to describe the error"
@@ -590,11 +596,6 @@ static const struct luaL_reg fslib[] = {
 	{"unlock", file_unlock},
 	{NULL, NULL},
 };
-#if defined(_WIN32)
-# define LUAEXT_API __declspec(dllexport)
-#else
-# define LUAEXT_API extern
-#endif
 
 LUAEXT_API int luaopen_lfs (lua_State *L) {
 	dir_create_meta (L);
