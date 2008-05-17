@@ -195,7 +195,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 	chunk = recv_sock->recv_queue->chunks->tail;
 	s = chunk->data;
 
-	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
+	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 
 	g_string_free(chunk->data, TRUE);
 	recv_sock->packet_len = PACKET_LEN_UNSET;
@@ -203,11 +203,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
 	/* we have to reply with a useful password */
-	network_queue_append(send_sock->send_queue, auth, sizeof(auth) - 1, send_sock->packet_id + 1);
+	network_mysqld_queue_append(send_sock->send_queue, auth, sizeof(auth) - 1, send_sock->packet_id + 1);
 
 	con->state = CON_STATE_SEND_AUTH;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
@@ -227,7 +227,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 	packet = chunk->data;
 
 	/* we aren't finished yet */
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
+	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 
 	/* the auth should be fine */
 	switch (packet->str[NET_HEADER_SIZE + 0]) {
@@ -238,7 +238,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 				__FILE__, __LINE__,
 				packet->str[NET_HEADER_SIZE + 1] | (packet->str[NET_HEADER_SIZE + 2] << 8));
 
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	case MYSQLD_PACKET_OK: 
 		break; 
 	default:
@@ -246,7 +246,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 				__FILE__, __LINE__,
 				packet->str[NET_HEADER_SIZE + 0]);
 
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	} 
 
 	g_string_free(chunk->data, TRUE);
@@ -255,11 +255,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
 	send_sock = con->server;
-	network_queue_append(send_sock->send_queue, query_packet, sizeof(query_packet) - 1, 0);
+	network_mysqld_queue_append(send_sock->send_queue, query_packet, sizeof(query_packet) - 1, 0);
 
 	con->state = CON_STATE_SEND_QUERY;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 /**
@@ -298,7 +298,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 	chunk = recv_sock->recv_queue->chunks->tail;
 	packet = chunk->data;
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS; /* packet isn't finished yet */
+	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS; /* packet isn't finished yet */
 #if 0
 	g_message("%s.%d: packet-len: %08x, packet-id: %d, command: COM_(%02x)", 
 			__FILE__, __LINE__,
@@ -608,7 +608,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 		break;
 	}
 
-	network_queue_append(send_sock->send_queue, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE, recv_sock->packet_id);
+	network_mysqld_queue_append(send_sock->send_queue, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE, recv_sock->packet_id);
 
 	/* ... */
 	if (is_finished) {
@@ -647,7 +647,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 			g_string_append_c(query_packet, '\x00');
 		       	
 			send_sock = con->server;
-			network_queue_append(send_sock->send_queue, query_packet->str, query_packet->len, 0);
+			network_mysqld_queue_append(send_sock->send_queue, query_packet->str, query_packet->len, 0);
 		
 			g_string_free(query_packet, TRUE);
 		
@@ -670,7 +670,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(repclient_connect_server) {
@@ -679,19 +679,19 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_connect_server) {
 
 	con->server = network_socket_init();
 
-	if (0 != network_mysqld_con_set_address(&(con->server->addr), address)) {
+	if (0 != network_address_set_address(&(con->server->addr), address)) {
 		return -1;
 	}
     
 	/* FIXME ... add non-blocking support (getsockopt()) */
 
-	if (0 != network_mysqld_con_connect(con->server)) {
+	if (0 != network_socket_connect(con->server)) {
 		return -1;
 	}
 
 	con->state = CON_STATE_SEND_HANDSHAKE;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(repclient_init) {
@@ -701,17 +701,17 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_init) {
 	
 	con->state = CON_STATE_CONNECT_SERVER;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(repclient_cleanup) {
-	if (con->plugin_con_state == NULL) return RET_SUCCESS;
+	if (con->plugin_con_state == NULL) return NETWORK_SOCKET_SUCCESS;
 
 	plugin_con_state_free(con->plugin_con_state);
 	
 	con->plugin_con_state = NULL;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 int network_mysqld_repclient_connection_init(chassis G_GNUC_UNUSED *chas, network_mysqld_con *con) {

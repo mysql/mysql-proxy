@@ -40,6 +40,13 @@
 #include <glib.h>
 #include <event.h>
 
+typedef enum {
+	NETWORK_SOCKET_SUCCESS,
+	NETWORK_SOCKET_WAIT_FOR_EVENT,
+	NETWORK_SOCKET_ERROR,
+	NETWORK_SOCKET_ERROR_RETRY
+} network_socket_retval_t;
+
 /* a input or output stream */
 typedef struct {
 	GQueue *chunks;
@@ -70,7 +77,6 @@ typedef struct {
 
 	guint32 packet_len; /**< the packet_len is a 24bit unsigned int */
 	guint8  packet_id;  /**< id which increments for each packet in the stream */
-	
 
 	network_queue *recv_queue;
 	network_queue *recv_queue_raw;
@@ -109,11 +115,17 @@ typedef struct {
 
 NETWORK_API network_queue *network_queue_init(void);
 NETWORK_API void network_queue_free(network_queue *queue);
-NETWORK_API int network_queue_append(network_queue *queue, const char *data, size_t len, int packet_id);
-NETWORK_API int network_queue_append_chunk(network_queue *queue, GString *chunk);
+NETWORK_API int network_queue_append(network_queue *queue, GString *chunk);
 
 NETWORK_API network_socket *network_socket_init(void);
 NETWORK_API void network_socket_free(network_socket *s);
+NETWORK_API network_socket_retval_t network_socket_write(network_socket *con, int send_chunks);
+NETWORK_API network_socket_retval_t network_socket_read(network_socket *con, GString *dest, ssize_t we_want);
+NETWORK_API network_socket_retval_t network_socket_set_non_blocking(network_socket *sock);
+NETWORK_API network_socket_retval_t network_socket_connect(network_socket *con);
+NETWORK_API network_socket_retval_t network_socket_bind(network_socket *con);
+
+NETWORK_API network_socket_retval_t network_address_set_address(network_address *addr, gchar *address);
 
 #endif
 

@@ -1552,7 +1552,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 			if (lua_isstring(L, -1)) { /** proxy.response.packets[i] */
 				str = lua_tolstring(L, -1, &str_len);
 
-				network_queue_append(con->client->send_queue, str, str_len, con->client->packet_id++);
+				network_mysqld_queue_append(con->client->send_queue, str, str_len, con->client->packet_id++);
 	
 				lua_pop(L, 1); /* pop value */
 			} else if (lua_isnil(L, -1)) {
@@ -1849,7 +1849,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 		recv_sock->packet_len = PACKET_LEN_UNSET;
 		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	}
 
 	if (packet->str[NET_HEADER_SIZE + 0] == '\xff') {
@@ -1857,12 +1857,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 		 *
 		 * forward it to the client */
 
-		network_queue_append_chunk(send_sock->send_queue, packet);
+		network_queue_append(send_sock->send_queue, packet);
 
 		recv_sock->packet_len = PACKET_LEN_UNSET;
 		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	} else if (packet->str[NET_HEADER_SIZE + 0] != '\x0a') {
 		/* the server isn't 4.1+ server, send a client a ERR packet
 		 */
@@ -1871,7 +1871,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 
 		network_mysqld_con_send_error(send_sock, C("unknown protocol"));
 
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	}
 
 	/* scan for a \0 */
@@ -1884,7 +1884,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 
 		network_mysqld_con_send_error(send_sock, C("protocol 10, but version number not terminated"));
 
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	}
 
 	if (3 != sscanf(packet->str + NET_HEADER_SIZE + 1, "%d.%d.%d%*s", &maj, &min, &patch)) {
@@ -1894,7 +1894,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 
 		network_mysqld_con_send_error(send_sock, C("protocol 10, but version number not parsable"));
 
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	}
 
 	/**
@@ -1908,7 +1908,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 
 		network_mysqld_con_send_error(send_sock, C("protocol 10, but version number out of range"));
 
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	}
 
 	recv_sock->mysqld_version = 
@@ -1979,7 +1979,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 		recv_sock->packet_len = PACKET_LEN_UNSET;
 		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	default:
 		g_error("%s.%d: ...", __FILE__, __LINE__);
 		break;
@@ -1988,7 +1988,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	/*
 	 * move the packets to the server queue 
 	 */
-	network_queue_append_chunk(send_sock->send_queue, packet);
+	network_queue_append(send_sock->send_queue, packet);
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
@@ -1996,7 +1996,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	/* copy the pack to the client */
 	con->state = CON_STATE_SEND_HANDSHAKE;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 static proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
@@ -2111,7 +2111,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	chunk = recv_sock->recv_queue->chunks->tail;
 	packet = chunk->data;
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS; /* we are not finished yet */
+	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS; /* we are not finished yet */
 
 	/* extract the default db from it */
 	network_mysqld_proto_skip(packet, &off, NET_HEADER_SIZE); /* packet-header */
@@ -2175,7 +2175,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 			network_mysqld_proto_append_ok_packet(packet, 0, 0, 2 /* we should track this flag in the pool */, 0);
 
-			network_queue_append(recv_sock->send_queue, 
+			network_mysqld_queue_append(recv_sock->send_queue, 
 						packet->str, 
 						packet->len, 
 						2);
@@ -2205,7 +2205,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 				g_string_append_len(com_change_user, con->client->default_db->str, con->client->default_db->len + 1);
 				
-				network_queue_append(send_sock->send_queue, 
+				network_mysqld_queue_append(send_sock->send_queue, 
 						com_change_user->str, 
 						com_change_user->len, 
 						0);
@@ -2235,7 +2235,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 					network_mysqld_proto_append_ok_packet(auth_resp, 0, 0, 2 /* we should track this flag in the pool */, 0);
 				}
 
-				network_queue_append(recv_sock->send_queue, 
+				network_mysqld_queue_append(recv_sock->send_queue, 
 						auth_resp->str, 
 						auth_resp->len, 
 						2);
@@ -2247,7 +2247,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 			g_string_free(packet, TRUE);
 			chunk->data = packet = NULL;
 		} else {
-			network_queue_append_chunk(send_sock->send_queue, packet);
+			network_queue_append(send_sock->send_queue, packet);
 			con->state = CON_STATE_SEND_AUTH;
 		}
 
@@ -2260,7 +2260,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 static proxy_stmt_ret proxy_lua_read_auth_result(network_mysqld_con *con) {
@@ -2361,7 +2361,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	packet = chunk->data;
 
 	/* we aren't finished yet */
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
+	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 
 	/* send the auth result to the client */
 	if (con->server->is_authed) {
@@ -2406,7 +2406,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 		
 		break;
 	case PROXY_NO_DECISION:
-		network_queue_append_chunk(send_sock->send_queue, packet);
+		network_queue_append(send_sock->send_queue, packet);
 
 		break;
 	default:
@@ -2422,7 +2422,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	
 	con->state = CON_STATE_SEND_AUTH_RESULT;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 static proxy_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
@@ -2591,7 +2591,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	
 	packet = chunk->data;
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
+	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 
 	con->parse.len = recv_sock->packet_len;
 
@@ -2606,7 +2606,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	if (ret != PROXY_SEND_RESULT &&
 	    con->server == NULL) {
 		g_critical("%s.%d: I have no server backend, closing connection", __FILE__, __LINE__);
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	}
 	
 	send_sock = con->server;
@@ -2617,7 +2617,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		/* no injection, pass on the chunk as is */
 		send_sock->packet_id = recv_sock->packet_id;
 
-		network_queue_append_chunk(send_sock->send_queue, packet);
+		network_queue_append(send_sock->send_queue, packet);
 
 		break;
 	case PROXY_SEND_RESULT: 
@@ -2632,7 +2632,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		inj = g_queue_peek_head(st->injected.queries);
 
 		/* there might be no query, if it was banned */
-		network_queue_append(send_sock->send_queue, inj->query->str, inj->query->len, 0);
+		network_mysqld_queue_append(send_sock->send_queue, inj->query->str, inj->query->len, 0);
 
 		g_string_free(chunk->data, TRUE);
 
@@ -2650,7 +2650,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		con->state = CON_STATE_SEND_QUERY_RESULT;
 	}
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 /**
@@ -2673,7 +2673,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	if (st->connection_close) {
 		con->state = CON_STATE_ERROR;
 
-		return RET_SUCCESS;
+		return NETWORK_SOCKET_SUCCESS;
 	}
 
 	if (con->parse.command == COM_BINLOG_DUMP) {
@@ -2684,24 +2684,24 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 		 */
 		con->state = CON_STATE_READ_QUERY_RESULT;
 
-		return RET_SUCCESS;
+		return NETWORK_SOCKET_SUCCESS;
 	}
 
 	if (st->injected.queries->length == 0) {
 		con->state = CON_STATE_READ_QUERY;
 
-		return RET_SUCCESS;
+		return NETWORK_SOCKET_SUCCESS;
 	}
 
 	con->parse.len = recv_sock->packet_len;
 
 	inj = g_queue_peek_head(st->injected.queries);
 
-	network_queue_append(send_sock->send_queue, inj->query->str, inj->query->len, 0);
+	network_mysqld_queue_append(send_sock->send_queue, inj->query->str, inj->query->len, 0);
 
 	con->state = CON_STATE_SEND_QUERY;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 /**
@@ -2747,7 +2747,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		g_get_current_time(&(inj->ts_read_query_result_first));
 	}
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
+	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 
 #if 0
 	g_message("%s.%d: packet-len: %08x, packet-id: %d, command: COM_(%02x)", 
@@ -3123,7 +3123,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	}
 
 	if (send_packet) {
-		network_queue_append_chunk(send_sock->send_queue, packet);
+		network_queue_append(send_sock->send_queue, packet);
 	} else {
 		if (chunk->data) g_string_free(chunk->data, TRUE);
 	}
@@ -3155,7 +3155,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		}
 	}
 	
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
@@ -3238,9 +3238,9 @@ static proxy_stmt_ret proxy_lua_connect_server(network_mysqld_con *con) {
  * connect to a backend
  *
  * @return
- *   RET_SUCCESS        - connected successfully
- *   RET_ERROR_RETRY    - connecting backend failed, call again to connect to another backend
- *   RET_ERROR          - no backends available, adds a ERR packet to the client queue
+ *   NETWORK_SOCKET_SUCCESS        - connected successfully
+ *   NETWORK_SOCKET_ERROR_RETRY    - connecting backend failed, call again to connect to another backend
+ *   NETWORK_SOCKET_ERROR          - no backends available, adds a ERR packet to the client queue
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	plugin_con_state *st = con->plugin_con_state;
@@ -3262,7 +3262,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 			g_critical("%s.%d: getsockopt(%s) failed: %s", 
 					__FILE__, __LINE__,
 					con->server->addr.str, strerror(errno));
-			return RET_ERROR;
+			return NETWORK_SOCKET_ERROR;
 		}
 
 		switch (so_error) {
@@ -3277,7 +3277,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 			st->backend->state = BACKEND_STATE_DOWN;
 			network_socket_free(con->server);
 			con->server = NULL;	
-			return RET_ERROR_RETRY;
+			return NETWORK_SOCKET_ERROR_RETRY;
 		}
 
 		if (st->backend->state != BACKEND_STATE_UP) {
@@ -3287,7 +3287,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 		con->state = CON_STATE_READ_HANDSHAKE;
 
-		return RET_SUCCESS;
+		return NETWORK_SOCKET_SUCCESS;
 	}
 
 	st->backend = NULL;
@@ -3323,7 +3323,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		 *
          */
 		
-		return RET_SUCCESS;
+		return NETWORK_SOCKET_SUCCESS;
 	case PROXY_NO_DECISION:
 		/* just go on */
 
@@ -3398,7 +3398,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	if (NULL == st->backend) {
 		network_mysqld_con_send_error(con->client, C("(proxy) all backends are down"));
 		g_critical("%s.%d: Cannot connect, all backends are down.", __FILE__, __LINE__);
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	}
 
 	/**
@@ -3411,11 +3411,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	
 		st->backend->connected_clients++;
 
-		switch(network_mysqld_con_connect(con->server)) {
+		switch(network_socket_connect(con->server)) {
 		case -2:
 			/* the socket is non-blocking already, 
 			 * call getsockopt() to see if we are done */
-			return RET_ERROR_RETRY;
+			return NETWORK_SOCKET_ERROR_RETRY;
 		case 0:
 			break;
 		default:
@@ -3428,7 +3428,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 			network_socket_free(con->server);
 			con->server = NULL;
 
-			return RET_ERROR_RETRY;
+			return NETWORK_SOCKET_ERROR_RETRY;
 		}
 
 		if (st->backend->state != BACKEND_STATE_UP) {
@@ -3443,7 +3443,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		 */
 
 		/* remove the idle-handler from the socket */
-		network_queue_append(con->client->send_queue, 
+		network_mysqld_queue_append(con->client->send_queue, 
 				con->server->auth_handshake_packet->str, 
 				con->server->auth_handshake_packet->len,
 			       	0); /* packet-id */
@@ -3455,7 +3455,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		 */
 	}
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 
@@ -3481,7 +3481,7 @@ proxy_global_state_t *proxy_global_state_get(chassis_plugin_config *config) {
 		backend = backend_init();
 		backend->type = BACKEND_TYPE_RW;
 
-		if (0 != network_mysqld_con_set_address(&backend->addr, address)) {
+		if (0 != network_address_set_address(&backend->addr, address)) {
 			return NULL;
 		}
 
@@ -3497,7 +3497,7 @@ proxy_global_state_t *proxy_global_state_get(chassis_plugin_config *config) {
 		backend = backend_init();
 		backend->type = BACKEND_TYPE_RO;
 
-		if (0 != network_mysqld_con_set_address(&backend->addr, address)) {
+		if (0 != network_address_set_address(&backend->addr, address)) {
 			return NULL;
 		}
 
@@ -3534,14 +3534,14 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 	st = plugin_con_state_init();
 
 	if (NULL == (st->global_state = proxy_global_state_get(con->config))) {
-		return RET_ERROR;
+		return NETWORK_SOCKET_ERROR;
 	}
 
 	con->plugin_con_state = st;
 	
 	con->state = CON_STATE_CONNECT_SERVER;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 static proxy_stmt_ret proxy_lua_disconnect_client(network_mysqld_con *con) {
@@ -3611,7 +3611,7 @@ static proxy_stmt_ret proxy_lua_disconnect_client(network_mysqld_con *con) {
  * move the server connection into the connection pool in case it is a 
  * good client-side close
  *
- * @return RET_SUCCESS
+ * @return NETWORK_SOCKET_SUCCESS
  * @see plugin_call_cleanup
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
@@ -3619,7 +3619,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
 	lua_scope  *sc = con->srv->priv->sc;
 	gboolean use_pooled_connection = FALSE;
 
-	if (st == NULL) return RET_SUCCESS;
+	if (st == NULL) return NETWORK_SOCKET_SUCCESS;
 	
 	/**
 	 * let the lua-level decide if we want to keep the connection in the pool
@@ -3669,7 +3669,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
 	 * walk all pools and clean them up
 	 */
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
@@ -3816,12 +3816,12 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 	network_mysqld_proxy_connection_init(con);
 
 	/* FIXME: network_socket_set_address() */
-	if (0 != network_mysqld_con_set_address(&listen_sock->addr, config->address)) {
+	if (0 != network_address_set_address(&listen_sock->addr, config->address)) {
 		return -1;
 	}
 
 	/* FIXME: network_socket_bind() */
-	if (0 != network_mysqld_con_bind(listen_sock)) {
+	if (0 != network_socket_bind(listen_sock)) {
 		return -1;
 	}
 

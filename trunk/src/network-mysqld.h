@@ -85,20 +85,13 @@ enum Log_event_type
 };
 
 
-typedef enum {
-	RET_SUCCESS,
-	RET_WAIT_FOR_EVENT,
-	RET_ERROR,
-	RET_ERROR_RETRY
-} retval_t;
-
 typedef struct network_mysqld_con network_mysqld_con; /* forward declaration */
 
 /**
  * some plugins don't use the global "chas" pointer 
  */
-#define NETWORK_MYSQLD_PLUGIN_FUNC(x) retval_t (*x)(chassis *chas, network_mysqld_con *con)
-#define NETWORK_MYSQLD_PLUGIN_PROTO(x) static retval_t x(chassis G_GNUC_UNUSED *chas, network_mysqld_con *con)
+#define NETWORK_MYSQLD_PLUGIN_FUNC(x) network_socket_retval_t (*x)(chassis *chas, network_mysqld_con *con)
+#define NETWORK_MYSQLD_PLUGIN_PROTO(x) static network_socket_retval_t x(chassis G_GNUC_UNUSED *chas, network_mysqld_con *con)
 
 typedef struct {
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_init);
@@ -224,13 +217,7 @@ NETWORK_API void network_mysqld_con_free(network_mysqld_con *con);
 /** 
  * should be socket 
  */
-NETWORK_API int network_mysqld_con_set_address(network_address *addr, gchar *address);
-NETWORK_API int network_mysqld_con_connect(network_socket *con);
-NETWORK_API int network_mysqld_con_bind(network_socket *con);
 NETWORK_API void network_mysqld_con_accept(int event_fd, short events, void *user_data); /** event handler for accept() */
-
-NETWORK_API int network_queue_append(network_queue *queue, const char *data, size_t len, int packet_id);
-NETWORK_API int network_queue_append_chunk(network_queue *queue, GString *chunk);
 
 NETWORK_API int network_mysqld_con_send_ok(network_socket *con);
 NETWORK_API int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings);
@@ -241,9 +228,9 @@ NETWORK_API int network_mysqld_con_send_resultset(network_socket *con, GPtrArray
 /**
  * should be socket 
  */
-NETWORK_API retval_t network_mysqld_read(chassis *srv, network_socket *con);
-NETWORK_API retval_t network_mysqld_write(chassis *srv, network_socket *con);
-NETWORK_API retval_t network_mysqld_write_len(chassis *srv, network_socket *con, int send_chunks);
+NETWORK_API network_socket_retval_t network_mysqld_read(chassis *srv, network_socket *con);
+NETWORK_API network_socket_retval_t network_mysqld_write(chassis *srv, network_socket *con);
+NETWORK_API network_socket_retval_t network_mysqld_write_len(chassis *srv, network_socket *con, int send_chunks);
 
 struct chassis_private {
 	GPtrArray *cons;                          /**< array(network_mysqld_con) */
@@ -254,10 +241,6 @@ struct chassis_private {
 NETWORK_API int network_mysqld_init(chassis *srv);
 NETWORK_API void network_mysqld_add_connection(chassis *srv, network_mysqld_con *con);
 NETWORK_API void network_mysqld_con_handle(int event_fd, short events, void *user_data);
-
-/**
- * socket handling 
- */
-NETWORK_API network_socket *network_socket_init(void);
+NETWORK_API int network_mysqld_queue_append(network_queue *queue, const char *data, size_t len, int packet_id);
 
 #endif

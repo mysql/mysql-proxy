@@ -150,11 +150,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_con_init) {
 		"\x00"             /* 13-byte filler */
 		;
 
-	network_queue_append(con->client->send_queue, (gchar *)handshake, (sizeof(handshake) - 1), 0);
+	network_mysqld_queue_append(con->client->send_queue, (gchar *)handshake, (sizeof(handshake) - 1), 0);
 	
 	con->state = CON_STATE_SEND_HANDSHAKE;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
@@ -167,7 +167,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 	chunk = recv_sock->recv_queue->chunks->tail;
 	s = chunk->data;
 
-	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS; /* we are not finished yet */
+	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS; /* we are not finished yet */
 
 	/* the password is fine */
 	send_sock = con->client;
@@ -183,7 +183,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 
 	con->state = CON_STATE_SEND_AUTH_RESULT;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
@@ -196,7 +196,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 	chunk = recv_sock->recv_queue->chunks->tail;
 	s = chunk->data;
 
-	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
+	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 	
 	network_mysqld_con_handle_stmt(chas, con, s);
 		
@@ -209,7 +209,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 
 	con->state = CON_STATE_SEND_QUERY_RESULT;
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 static int network_mysqld_server_connection_init(network_mysqld_con *con) {
@@ -286,12 +286,12 @@ static int network_mysqld_admin_plugin_apply_config(chassis *chas, chassis_plugi
 	network_mysqld_server_connection_init(con);
 
 	/* FIXME: network_socket_set_address() */
-	if (0 != network_mysqld_con_set_address(&listen_sock->addr, config->address)) {
+	if (0 != network_address_set_address(&listen_sock->addr, config->address)) {
 		return -1;
 	}
 
 	/* FIXME: network_socket_bind() */
-	if (0 != network_mysqld_con_bind(listen_sock)) {
+	if (0 != network_socket_bind(listen_sock)) {
 		return -1;
 	}
 

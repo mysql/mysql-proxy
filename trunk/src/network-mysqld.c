@@ -202,14 +202,14 @@
  * @param srv    global context
  * @param con    connection context
  *
- * @return       RET_SUCCESS on success
+ * @return       NETWORK_SOCKET_SUCCESS on success
  */
-retval_t plugin_call_cleanup(chassis *srv, network_mysqld_con *con) {
+network_socket_retval_t plugin_call_cleanup(chassis *srv, network_mysqld_con *con) {
 	NETWORK_MYSQLD_PLUGIN_FUNC(func) = NULL;
 
 	func = con->plugins.con_cleanup;
 	
-	if (!func) return RET_SUCCESS;
+	if (!func) return NETWORK_SOCKET_SUCCESS;
 
 	return (*func)(srv, con);
 }
@@ -294,228 +294,6 @@ void network_mysqld_con_free(network_mysqld_con *con) {
 	g_free(con);
 }
 
-/**
- * translate a address-string into a network_address structure
- *
- * - if the address contains a colon we assume IPv4, 
- *   - ":3306" -> (tcp) "0.0.0.0:3306"
- * - if it starts with a / it is a unix-domain socket 
- *   - "/tmp/socket" -> (unix) "/tmp/socket"
- *
- * @param addr     the address-struct
- * @param address  the address string
- * @return 0 on success, -1 otherwise
- */
-int network_mysqld_con_set_address(network_address *addr, gchar *address) {
-	gchar *s;
-	guint port;
-
-	/* split the address:port */
-	if (NULL != (s = strchr(address, ':'))) {
-		port = strtoul(s + 1, NULL, 10);
-
-		if (port == 0) {
-			g_critical("<ip>:<port>, port is invalid or 0, has to be > 0, got '%s'", address);
-			return -1;
-		}
-		if (port > 65535) {
-			g_critical("<ip>:<port>, port is too large, has to be < 65536, got '%s'", address);
-
-			return -1;
-		}
-
-		memset(&addr->addr.ipv4, 0, sizeof(struct sockaddr_in));
-
-		if (address == s || 
-		    0 == strcmp("0.0.0.0", address)) {
-			/* no ip */
-			addr->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
-		} else {
-			struct hostent *he;
-
-			*s = '\0';
-			he = gethostbyname(address);
-			*s = ':';
-
-			if (NULL == he)  {
-				g_error("resolving proxy-address '%s' failed: ", address);
-			}
-
-			g_assert(he->h_addrtype == AF_INET);
-			g_assert(he->h_length == sizeof(struct in_addr));
-
-			memcpy(&(addr->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
-		}
-
-		addr->addr.ipv4.sin_family = AF_INET;
-		addr->addr.ipv4.sin_port = htons(port);
-		addr->len = sizeof(struct sockaddr_in);
-
-		addr->str = g_strdup(address);
-#ifdef HAVE_SYS_UN_H
-	} else if (address[0] == '/') {
-		if (strlen(address) >= sizeof(addr->addr.un.sun_path) - 1) {
-			g_critical("unix-path is too long: %s", address);
-			return -1;
-		}
-
-		addr->addr.un.sun_family = AF_UNIX;
-		strcpy(addr->addr.un.sun_path, address);
-		addr->len = sizeof(struct sockaddr_un);
-		addr->str = g_strdup(address);
-#endif
-	} else {
-		/* might be a unix socket */
-		g_critical("%s.%d: network_mysqld_con_set_address(%s) failed: address has to be <ip>:<port> for TCP or a absolute path starting with / for Unix sockets", 
-				__FILE__, __LINE__,
-				address);
-		return -1;
-	}
-
-	return 0;
-}
-
-/**
- * portable 'set non-blocking io'
- *
- * @param fd      socket-fd
- * @return        0
- */
-int network_mysqld_con_set_non_blocking(int fd) {
-	int ret;
-#ifdef _WIN32
-	int ioctlvar;
-
-	ioctlvar = 1;
-	ret = ioctlsocket(fd, FIONBIO, &ioctlvar);
-#else
-	ret = fcntl(fd, F_SETFL, O_NONBLOCK | O_RDWR);
-#endif
-	if (ret != 0) {
-#ifdef _WIN32
-		errno = WSAGetLastError();
-#endif
-		g_critical("%s.%d: set_non_blocking() failed: %s (%d)", 
-				__FILE__, __LINE__,
-				strerror(errno), errno);
-	}
-	return 0;
-}
-
-
-/**
- * connect a socket
- *
- * the con->addr has to be set before 
- * 
- * @param con    a socket 
- * @return       0 on connected, -1 on error, -2 for try again
- * @see network_mysqld_set_address()
- */
-int network_mysqld_con_connect(network_socket * con) {
-	int val = 1;
-
-	g_assert(con->addr.len);
-
-	/**
-	 * con->addr.addr.ipv4.sin_family is always mapped to the same field 
-	 * even if it is not a IPv4 address as we use a union
-	 */
-	if (-1 == (con->fd = socket(con->addr.addr.ipv4.sin_family, SOCK_STREAM, 0))) {
-#ifdef _WIN32
-		errno = WSAGetLastError();
-#endif
-		g_critical("%s.%d: socket(%s) failed: %s (%d)", 
-				__FILE__, __LINE__,
-				con->addr.str, strerror(errno), errno);
-		return -1;
-	}
-
-	/**
-	 * make the connect() call non-blocking
-	 *
-	 */
-	network_mysqld_con_set_non_blocking(con->fd);
-
-	if (-1 == connect(con->fd, (struct sockaddr *) &(con->addr.addr), con->addr.len)) {
-#ifdef _WIN32
-		errno = WSAGetLastError();
-#endif
-		/**
-		 * in most TCP cases we connect() will return with 
-		 * EINPROGRESS ... 3-way handshake
-		 */
-		switch (errno) {
-		case E_NET_INPROGRESS:
-		case E_NET_WOULDBLOCK: /* win32 uses WSAEWOULDBLOCK */
-			return -2;
-		default:
-			g_critical("%s.%d: connect(%s) failed: %s (%d)", 
-					__FILE__, __LINE__,
-					con->addr.str,
-					strerror(errno), errno);
-			return -1;
-		}
-	}
-
-	/**
-	 * set the same options as the mysql client 
-	 */
-#ifdef IP_TOS
-	val = 8;
-	setsockopt(con->fd, IPPROTO_IP,     IP_TOS, &val, sizeof(val));
-#endif
-	val = 1;
-	setsockopt(con->fd, IPPROTO_TCP,    TCP_NODELAY, &val, sizeof(val) );
-	val = 1;
-	setsockopt(con->fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val) );
-
-	return 0;
-}
-
-
-/**
- * connect a socket
- *
- * the con->addr has to be set before 
- * 
- * @param con    a socket 
- * @return       0 on connected, -1 on error, -2 for try again
- * @see network_mysqld_set_address()
- */
-int network_mysqld_con_bind(network_socket * con) {
-	int val = 1;
-
-	g_assert(con->addr.len);
-
-	if (-1 == (con->fd = socket(con->addr.addr.ipv4.sin_family, SOCK_STREAM, 0))) {
-		g_critical("%s.%d: socket(%s) failed: %s", 
-				__FILE__, __LINE__,
-				con->addr.str, strerror(errno));
-		return -1;
-	}
-
-	setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
-	setsockopt(con->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
-
-	if (-1 == bind(con->fd, (struct sockaddr *) &(con->addr.addr), con->addr.len)) {
-		g_critical("%s.%d: bind(%s) failed: %s", 
-				__FILE__, __LINE__,
-				con->addr.str,
-				strerror(errno));
-		return -1;
-	}
-
-	if (-1 == listen(con->fd, 8)) {
-		g_critical("%s.%d: listen() failed: %s",
-				__FILE__, __LINE__,
-				strerror(errno));
-		return -1;
-	}
-
-	return 0;
-}
-
 #if 0 
 static void dump_str(const char *msg, const unsigned char *s, size_t len) {
 	GString *hex;
@@ -540,6 +318,23 @@ static void dump_str(const char *msg, const unsigned char *s, size_t len) {
 }
 #endif
 
+int network_mysqld_queue_append(network_queue *queue, const char *data, size_t len, int packet_id) {
+	unsigned char header[4];
+	GString *s;
+
+	network_mysqld_proto_set_header(header, len, packet_id);
+
+	s = g_string_sized_new(len + 4);
+
+	g_string_append_len(s, (gchar *)header, 4);
+	g_string_append_len(s, data, len);
+
+	network_queue_append(queue, s);
+
+	return 0;
+}
+
+
 /**
  * create a OK packet and append it to the send-queue
  *
@@ -557,7 +352,7 @@ int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, 
 
 	network_mysqld_proto_append_ok_packet(packet, affected_rows, insert_id, server_status, warnings);
 	
-	network_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
+	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
 
 	g_string_free(packet, TRUE);
 
@@ -598,7 +393,7 @@ int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, 
 
 	network_mysqld_proto_append_error_packet(packet, errmsg, errmsg_len, errorcode, sqlstate);
 
-	network_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
+	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
 
 	g_string_free(packet, TRUE);
 
@@ -620,171 +415,28 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
 	return network_mysqld_con_send_error_full(con, errmsg, errmsg_len, ER_UNKNOWN_ERROR, NULL);
 }
 
-#ifndef USE_BUFFERED_NETIO
-/**
- * read a data from the socket
- *
- */
-retval_t network_mysqld_read_raw(chassis *UNUSED_PARAM(srv), network_socket *con, GString *dest, size_t we_want) {
-	gssize len;
-
-	/**
-	 * nothing to read, let's get out of here 
-	 */
-	if (we_want - dest->len == 0) {
-		return RET_SUCCESS;
-	}
-
-	if (-1 == (len = recv(con->fd, dest->str + dest->len, we_want - dest->len, 0))) {
-#ifdef _WIN32
-		errno = WSAGetLastError();
-#endif
-		switch (errno) {
-		case E_NET_CONNABORTED:
-		case E_NET_CONNRESET: /** nothing to read, let's let ioctl() handle the close for us */
-		case E_NET_WOULDBLOCK: /** the buffers are empty, try again later */
-		case EAGAIN:     
-			return RET_WAIT_FOR_EVENT;
-		default:
-			g_debug("%s: recv() failed: %s (errno=%d)", G_STRLOC, strerror(errno), errno);
-			return RET_ERROR;
-		}
-	} else if (len == 0) {
-		/**
-		 * connection close
-		 *
-		 * let's call the ioctl() and let it handle it for use
-		 */
-		return RET_WAIT_FOR_EVENT;
-	}
-
-	dest->len += len;
-	dest->str[dest->len] = '\0';
-
-	if (dest->len < we_want) {
-		/* we don't have enough */
-
-		return RET_WAIT_FOR_EVENT;
-	}
-
-	return RET_SUCCESS;
-}
-#else
-/**
- * read a data from the socket
- *
- */
-retval_t network_mysqld_read_raw(chassis *UNUSED_PARAM(srv), network_socket *sock, GString *dest, size_t we_want) {
-	gssize len;
-	size_t we_have;
-
-	we_want -= dest->len;
-
-	/**
-	 * nothing to read, let's get out of here 
-	 */
-	if (we_want == 0) {
-		return RET_SUCCESS;
-	}
-
-	if (sock->to_read > 0) {
-		GString *packet = g_string_sized_new(sock->to_read);
-
-		g_queue_push_tail(sock->recv_queue_raw->chunks, packet);
-
-		if (-1 == (len = recv(sock->fd, packet->str, sock->to_read, 0))) {
-#ifdef _WIN32
-			errno = WSAGetLastError();
-#endif
-			switch (errno) {
-			case E_NET_CONNABORTED:
-			case E_NET_CONNRESET: /** nothing to read, let's let ioctl() handle the close for us */
-			case E_NET_WOULDBLOCK: /** the buffers are empty, try again later */
-			case EAGAIN:     
-				return RET_WAIT_FOR_EVENT;
-			default:
-				g_debug("%s: recv() failed: %s (errno=%d)", G_STRLOC, strerror(errno), errno);
-				return RET_ERROR;
-			}
-		} else if (len == 0) {
-			/**
-			 * connection close
-			 *
-			 * let's call the ioctl() and let it handle it for use
-			 */
-			return RET_WAIT_FOR_EVENT;
-		}
-
-		sock->to_read -= len;
-		sock->recv_queue_raw->len += len;
-#if 0
-		sock->recv_queue_raw->offset = 0; /* offset into the first packet */
-#endif
-		packet->len = len;
-	}
-
-	/* check if we have read enough data to satisfy the caller */
-
-	if (sock->recv_queue_raw->len - sock->recv_queue_raw->offset < we_want) { 
-		/* we don't have enough */
-
-		return RET_WAIT_FOR_EVENT;
-	}
-
-	for (we_have = 0; we_have < we_want; ) {
-		GString *packet = g_queue_peek_head(sock->recv_queue_raw->chunks);
-		gsize we_need = we_want - we_have;
-	
-		if (packet->len - sock->recv_queue_raw->offset <= we_need) {
-			/* packet is smaller or equal to what we need, 
-			 * pop it from the queue and free it */
-		
-			packet = g_queue_pop_head(sock->recv_queue_raw->chunks);
-
-			/* copy everything */
-			g_string_append_len(dest, packet->str + sock->recv_queue_raw->offset, packet->len - sock->recv_queue_raw->offset);
-			we_have += packet->len - sock->recv_queue_raw->offset;
-
-			sock->recv_queue_raw->offset = 0;
-			sock->recv_queue_raw->len -= packet->len;
-
-			g_string_free(packet, TRUE);
-		} else {
-			/* the packet it larger than we need */
-			g_string_append_len(dest, packet->str + sock->recv_queue_raw->offset, we_need);
-
-			sock->recv_queue_raw->offset += we_need;
-			we_have += we_need;
-		}
-	}
-
-	return RET_SUCCESS;
-}
-
-#endif
-
 /**
  * read a MySQL packet from the socket
  *
  * the packet is added to the con->recv_queue and contains a full mysql packet
  * with packet-header and everything 
  */
-retval_t network_mysqld_read(chassis *srv, network_socket *con) {
+network_socket_retval_t network_mysqld_read(chassis *srv, network_socket *con) {
 	GString *packet = NULL;
 
 	/** 
 	 * read the packet header (4 bytes)
 	 */
 	if (con->packet_len == PACKET_LEN_UNSET) {
-		switch (network_mysqld_read_raw(srv, con, con->header, NET_HEADER_SIZE)) {
-		case RET_WAIT_FOR_EVENT:
-			return RET_WAIT_FOR_EVENT;
-		case RET_ERROR:
-			return RET_ERROR;
-		case RET_SUCCESS:
+		switch (network_socket_read(con, con->header, NET_HEADER_SIZE)) {
+		case NETWORK_SOCKET_WAIT_FOR_EVENT:
+			return NETWORK_SOCKET_WAIT_FOR_EVENT;
+		case NETWORK_SOCKET_ERROR:
+			return NETWORK_SOCKET_ERROR;
+		case NETWORK_SOCKET_SUCCESS:
 			break;
-		case RET_ERROR_RETRY:
-			g_error("RET_ERROR_RETRY wasn't expected");
+		case NETWORK_SOCKET_ERROR_RETRY:
+			g_error("NETWORK_SOCKET_ERROR_RETRY wasn't expected");
 			break;
 		}
 
@@ -794,7 +446,7 @@ retval_t network_mysqld_read(chassis *srv, network_socket *con) {
 		packet = g_string_sized_new(con->packet_len + NET_HEADER_SIZE + 1); /* we need some space for the \0 */
 		g_string_append_len(packet, con->header->str, NET_HEADER_SIZE); /* copy the header */
 
-		network_queue_append_chunk(con->recv_queue, packet);
+		network_queue_append(con->recv_queue, packet);
 		g_string_truncate(con->header, 0);
 	} else {
 		packet = con->recv_queue->chunks->tail->data;
@@ -802,179 +454,26 @@ retval_t network_mysqld_read(chassis *srv, network_socket *con) {
 
 	g_assert(packet->allocated_len >= con->packet_len + NET_HEADER_SIZE);
 
-	switch (network_mysqld_read_raw(srv, con, packet, con->packet_len + NET_HEADER_SIZE)) {
-	case RET_WAIT_FOR_EVENT:
-		return RET_WAIT_FOR_EVENT;
-	case RET_ERROR:
-		return RET_ERROR;
-	case RET_SUCCESS:
+	switch (network_socket_read(con, packet, con->packet_len + NET_HEADER_SIZE)) {
+	case NETWORK_SOCKET_WAIT_FOR_EVENT:
+		return NETWORK_SOCKET_WAIT_FOR_EVENT;
+	case NETWORK_SOCKET_ERROR:
+		return NETWORK_SOCKET_ERROR;
+	case NETWORK_SOCKET_SUCCESS:
 		break;
-	case RET_ERROR_RETRY:
-		g_error("RET_ERROR_RETRY wasn't expected");
+	case NETWORK_SOCKET_ERROR_RETRY:
+		g_error("NETWORK_SOCKET_ERROR_RETRY wasn't expected");
 		break;
 	}
 	g_assert(packet->len == con->packet_len + NET_HEADER_SIZE);
 
-	return RET_SUCCESS;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
-#ifndef USE_BUFFERED_NETIO
-/**
- * write data to the socket
- *
- * use a loop over send() to be compatible with win32
- */
-retval_t network_mysqld_write_len(chassis *UNUSED_PARAM(chas), network_socket *con, int send_chunks) {
-	/* send the whole queue */
-	GList *chunk;
+network_socket_retval_t network_mysqld_write(chassis *srv, network_socket *con) {
+	network_socket_retval_t ret;
 
-	if (send_chunks == 0) return RET_SUCCESS;
-
-	for (chunk = con->send_queue->chunks->head; chunk; ) {
-		GString *s = chunk->data;
-		gssize len;
-
-		g_assert(con->send_queue->offset < s->len);
-
-		if (-1 == (len = send(con->fd, s->str + con->send_queue->offset, s->len - con->send_queue->offset, 0))) {
-#ifdef _WIN32
-			errno = WSAGetLastError();
-#endif
-			switch (errno) {
-			case E_NET_WOULDBLOCK:
-			case EAGAIN:
-				return RET_WAIT_FOR_EVENT;
-			case EPIPE:
-			case E_NET_CONNRESET:
-			case E_NET_CONNABORTED:
-				/** remote side closed the connection */
-				return RET_ERROR;
-			default:
-				g_message("%s.%d: send(%s, "F_SIZE_T") failed: %s", 
-						__FILE__, __LINE__, 
-						con->addr.str, 
-						s->len - con->send_queue->offset, 
-						strerror(errno));
-				return RET_ERROR;
-			}
-		} else if (len == 0) {
-			return RET_ERROR;
-		}
-
-		con->send_queue->offset += len;
-
-		if (con->send_queue->offset == s->len) {
-			g_string_free(s, TRUE);
-			
-			g_queue_delete_link(con->send_queue->chunks, chunk);
-			con->send_queue->offset = 0;
-
-			if (send_chunks > 0 && --send_chunks == 0) break;
-
-			chunk = con->send_queue->chunks->head;
-		} else {
-			return RET_WAIT_FOR_EVENT;
-		}
-	}
-
-	return RET_SUCCESS;
-}
-#else
-/**
- * write data to the socket
- *
- * bundle the writes into a writev()
- *
- */
-retval_t network_mysqld_write_len(chassis *UNUSED_PARAM(srv), network_socket *con, int send_chunks) {
-	/* send the whole queue */
-	GList *chunk;
-	struct iovec *iov;
-	gint chunk_id;
-	gint chunk_count;
-	gssize len;
-	int os_errno;
-
-	if (send_chunks == 0) return RET_SUCCESS;
-
-	chunk_count = send_chunks > 0 ? send_chunks : (gint)con->send_queue->chunks->length;
-	
-	if (chunk_count == 0) return RET_SUCCESS;
-
-	chunk_count = chunk_count > sysconf(_SC_IOV_MAX) ? sysconf(_SC_IOV_MAX) : chunk_count;
-
-	iov = g_new0(struct iovec, chunk_count);
-
-	for (chunk = con->send_queue->chunks->head, chunk_id = 0; 
-	     chunk && chunk_id < chunk_count; 
-	     chunk_id++, chunk = chunk->next) {
-		GString *s = chunk->data;
-	
-		if (chunk_id == 0) {
-			g_assert(con->send_queue->offset < s->len);
-
-			iov[chunk_id].iov_base = s->str + con->send_queue->offset;
-			iov[chunk_id].iov_len  = s->len - con->send_queue->offset;
-		} else {
-			iov[chunk_id].iov_base = s->str;
-			iov[chunk_id].iov_len  = s->len;
-		}
-	}
-
-	len = writev(con->fd, iov, chunk_count);
-	os_errno = errno;
-
-	g_free(iov);
-
-	if (-1 == len) {
-		switch (os_errno) {
-		case E_NET_WOULDBLOCK:
-		case EAGAIN:
-			return RET_WAIT_FOR_EVENT;
-		case EPIPE:
-		case E_NET_CONNRESET:
-		case E_NET_CONNABORTED:
-			/** remote side closed the connection */
-			return RET_ERROR;
-		default:
-			g_message("%s.%d: writev(%s, ...) failed: %s", 
-					__FILE__, __LINE__, 
-					con->addr.str, 
-					strerror(errno));
-			return RET_ERROR;
-		}
-	} else if (len == 0) {
-		return RET_ERROR;
-	}
-
-	con->send_queue->offset += len;
-
-	/* check all the chunks which we have sent out */
-	for (chunk = con->send_queue->chunks->head; chunk; ) {
-		GString *s = chunk->data;
-
-		if (con->send_queue->offset >= s->len) {
-			con->send_queue->offset -= s->len;
-
-			g_string_free(s, TRUE);
-			
-			g_queue_delete_link(con->send_queue->chunks, chunk);
-
-			chunk = con->send_queue->chunks->head;
-		} else {
-			return RET_WAIT_FOR_EVENT;
-		}
-	}
-
-	return RET_SUCCESS;
-}
-
-#endif
-
-retval_t network_mysqld_write(chassis *srv, network_socket *con) {
-	retval_t ret;
-
-	ret = network_mysqld_write_len(srv, con, -1);
+	ret = network_socket_write(con, -1);
 
 	return ret;
 }
@@ -987,10 +486,10 @@ retval_t network_mysqld_write(chassis *srv, network_socket *con) {
  * @param srv      the global context
  * @param con      the connection context
  * @param state    state to handle
- * @return         RET_SUCCESS on success
+ * @return         NETWORK_SOCKET_SUCCESS on success
  */
-retval_t plugin_call(chassis *srv, network_mysqld_con *con, int state) {
-	retval_t ret;
+network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int state) {
+	network_socket_retval_t ret;
 	NETWORK_MYSQLD_PLUGIN_FUNC(func) = NULL;
 
 	switch (state) {
@@ -1085,9 +584,9 @@ retval_t plugin_call(chassis *srv, network_mysqld_con *con, int state) {
 		packet = chunk->data;
 
 		/* we aren't finished yet */
-		if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return RET_SUCCESS;
+		if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 
-		network_queue_append_chunk(send_sock->send_queue, packet);
+		network_queue_append(send_sock->send_queue, packet);
 
 		recv_sock->packet_len = PACKET_LEN_UNSET;
 		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
@@ -1121,7 +620,7 @@ retval_t plugin_call(chassis *srv, network_mysqld_con *con, int state) {
 				__FILE__, __LINE__,
 				state);
 	}
-	if (!func) return RET_SUCCESS;
+	if (!func) return NETWORK_SOCKET_SUCCESS;
 
 	lua_scope_get(srv->priv->sc);
 	ret = (*func)(srv, con);
@@ -1204,13 +703,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			/* if we are a proxy ask the remote server for the hand-shake packet 
 			 * if not, we generate one */
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
 				/**
 				 * no luck, let's close the connection
 				 */
-				g_critical("%s.%d: plugin_call(CON_STATE_INIT) != RET_SUCCESS", __FILE__, __LINE__);
+				g_critical("%s.%d: plugin_call(CON_STATE_INIT) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
 
 				con->state = CON_STATE_ERROR;
 				
@@ -1220,7 +719,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			break;
 		case CON_STATE_CONNECT_SERVER:
             switch ((retval = plugin_call(srv, con, con->state))) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 
 				/**
 				 * hmm, if this is success and we have something in the clients send-queue
@@ -1236,7 +735,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				}
 
 				break;
-			case RET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR_RETRY:
 				if (con->server) {
 					/**
 					 * we have a server connection waiting to begin writable
@@ -1252,7 +751,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				}
 
 				break;
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR:
 				/**
 				 * connecting failed and no option to retry
 				 *
@@ -1278,23 +777,23 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			g_assert(events == 0 || event_fd == recv_sock->fd);
 
 			switch (network_mysqld_read(srv, recv_sock)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				/* call us again when you have a event */
 				WAIT_FOR_EVENT(con->server, EV_READ, NULL);
 
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				g_error("%s.%d: plugin_call(CON_STATE_CONNECT_SERVER) returned an error", __FILE__, __LINE__);
 				break;
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR:
 				/**
 				 * we couldn't understand the pack from the server 
 				 * 
@@ -1315,14 +814,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			/* send the hand-shake to the client and wait for a response */
 
 			switch (network_mysqld_write(srv, con->client)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
 				
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				/**
 				 * writing failed, closing connection
 				 */
@@ -1331,10 +830,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_SEND_HANDSHAKE) != RET_SUCCESS", __FILE__, __LINE__);
+				g_error("%s.%d: plugin_call(CON_STATE_SEND_HANDSHAKE) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
 				break;
 			}
 
@@ -1348,23 +847,23 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			g_assert(events == 0 || event_fd == recv_sock->fd);
 
 			switch (network_mysqld_read(srv, recv_sock)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_READ, NULL);
 
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH) returned an error", __FILE__, __LINE__);
 				return;
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_READ_AUTH) != RET_SUCCESS", __FILE__, __LINE__);
+				g_error("%s.%d: plugin_call(CON_STATE_READ_AUTH) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
 				break;
 			}
 
@@ -1372,14 +871,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_SEND_AUTH:
 			/* send the auth-response to the server */
 			switch (network_mysqld_write(srv, con->server)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
 
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				/* might be a connection close, we should just close the connection and be happy */
 				con->state = CON_STATE_ERROR;
 
@@ -1387,10 +886,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_SEND_AUTH) != RET_SUCCESS", __FILE__, __LINE__);
+				g_error("%s.%d: plugin_call(CON_STATE_SEND_AUTH) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
 				break;
 			}
 
@@ -1405,13 +904,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			g_assert(events == 0 || event_fd == recv_sock->fd);
 
 			switch (network_mysqld_read(srv, recv_sock)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->server, EV_READ, NULL);
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH_RESULT) returned an error", __FILE__, __LINE__);
 				return;
 			}
@@ -1429,10 +928,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			con->parse.state.auth_result.state = packet->str[NET_HEADER_SIZE];
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_critical("%s.%d: plugin_call(CON_STATE_READ_AUTH_RESULT) != RET_SUCCESS", __FILE__, __LINE__);
+				g_critical("%s.%d: plugin_call(CON_STATE_READ_AUTH_RESULT) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
 
 				con->state = CON_STATE_ERROR;
 				break;
@@ -1443,13 +942,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			/* send the hand-shake to the client and wait for a response */
 
 			switch (network_mysqld_write(srv, con->client)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				g_debug("%s.%d: network_mysqld_write(CON_STATE_SEND_AUTH_RESULT) returned an error", __FILE__, __LINE__);
 
 				con->state = CON_STATE_ERROR;
@@ -1457,7 +956,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
 				g_error("%s.%d: ...", __FILE__, __LINE__);
@@ -1468,23 +967,23 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_READ_AUTH_OLD_PASSWORD: 
 			/* read auth from client */
 			switch (network_mysqld_read(srv, con->client)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_READ, NULL);
 
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH_OLD_PASSWORD) returned an error", __FILE__, __LINE__);
 				return;
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_READ_AUTH_OLD_PASSWORD) != RET_SUCCESS", __FILE__, __LINE__);
+				g_error("%s.%d: plugin_call(CON_STATE_READ_AUTH_OLD_PASSWORD) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
 				break;
 			}
 
@@ -1492,14 +991,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_SEND_AUTH_OLD_PASSWORD:
 			/* send the auth-response to the server */
 			switch (network_mysqld_write(srv, con->server)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
 
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				/* might be a connection close, we should just close the connection and be happy */
 				g_debug("%s.%d: network_mysqld_write(CON_STATE_SEND_AUTH_OLD_PASSWORD) returned an error", __FILE__, __LINE__);
 				con->state = CON_STATE_ERROR;
@@ -1507,10 +1006,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_SEND_AUTH_OLD_PASSWORD) != RET_SUCCESS", __FILE__, __LINE__);
+				g_error("%s.%d: plugin_call(CON_STATE_SEND_AUTH_OLD_PASSWORD) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
 				break;
 			}
 
@@ -1523,19 +1022,19 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			g_assert(events == 0 || event_fd == recv_sock->fd);
 
 			switch (network_mysqld_read(srv, recv_sock)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_READ, NULL);
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_QUERY) returned an error", __FILE__, __LINE__);
 				return;
 			}
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
 				g_critical("%s.%d: plugin_call(CON_STATE_READ_QUERY) failed", __FILE__, __LINE__);
@@ -1608,14 +1107,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				}
 			}
 	
-			switch (network_mysqld_write_len(srv, con->server, 1)) {
-			case RET_SUCCESS:
+			switch (network_socket_write(con->server, 1)) {
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				g_debug("%s.%d: network_mysqld_write(CON_STATE_SEND_QUERY) returned an error", __FILE__, __LINE__);
 
 				/**
@@ -1658,19 +1157,19 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				g_assert(events == 0 || event_fd == recv_sock->fd);
 
 				switch (network_mysqld_read(srv, recv_sock)) {
-				case RET_SUCCESS:
+				case NETWORK_SOCKET_SUCCESS:
 					break;
-				case RET_WAIT_FOR_EVENT:
+				case NETWORK_SOCKET_WAIT_FOR_EVENT:
 					WAIT_FOR_EVENT(con->server, EV_READ, NULL);
 					return;
-				case RET_ERROR_RETRY:
-				case RET_ERROR:
+				case NETWORK_SOCKET_ERROR_RETRY:
+				case NETWORK_SOCKET_ERROR:
 					g_error("%s.%d: network_mysqld_read(CON_STATE_READ_QUERY_RESULT) returned an error", __FILE__, __LINE__);
 					return;
 				}
 
 				switch (plugin_call(srv, con, con->state)) {
-				case RET_SUCCESS:
+				case NETWORK_SOCKET_SUCCESS:
 					break;
 				default:
 					g_error("%s.%d: ...", __FILE__, __LINE__);
@@ -1691,13 +1190,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			/**
 			 * send the query result-set to the client */
             switch (network_mysqld_write(srv, con->client)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				/**
 				 * client is gone away
 				 *
@@ -1711,7 +1210,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			if (con->state != CON_STATE_SEND_QUERY_RESULT) break;
 
 			switch (plugin_call(srv, con, con->state)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
 				g_error("%s.%d: ...", __FILE__, __LINE__);
@@ -1725,13 +1224,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			 * and close the connections afterwards
 			 *  */
 			switch (network_mysqld_write(srv, con->client)) {
-			case RET_SUCCESS:
+			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case RET_WAIT_FOR_EVENT:
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
 				return;
-			case RET_ERROR_RETRY:
-			case RET_ERROR:
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
 				g_critical("%s.%d: network_mysqld_write(CON_STATE_SEND_ERROR) returned an error", __FILE__, __LINE__);
 
 				con->state = CON_STATE_ERROR;
@@ -1776,7 +1275,6 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 		return ;
 	}
 
-	network_mysqld_con_set_non_blocking(fd);
 
 	/* looks like we open a client connection */
 	client_con = network_mysqld_con_init();
@@ -1786,6 +1284,8 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	client_con->client->addr.addr.ipv4 = ipv4;
 	client_con->client->addr.len = addr_len;
 	client_con->client->fd   = fd;
+
+	network_socket_set_non_blocking(client_con->client);
 
 	/* resolve the peer-addr if necessary */
 	if (!client_con->client->addr.str) {
@@ -1852,7 +1352,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	 */
 
 	g_string_append_c(s, fields->len); /* the field-count */
-	network_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+	network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
 
 	for (i = 0; i < fields->len; i++) {
 		MYSQL_FIELD *field = fields->pdata[i];
@@ -1881,7 +1381,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 		/* this is in the docs, but not on the network */
 		network_mysqld_proto_append_lenenc_string(s, field->def);         /* default-value */
 #endif
-		network_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+		network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
 	}
 
 	g_string_truncate(s, 0);
@@ -1891,7 +1391,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	g_string_append_len(s, "\x00\x00", 2); /* warning count */
 	g_string_append_len(s, "\x02\x00", 2); /* flags */
 	
-	network_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+	network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
 
 	for (i = 0; i < rows->len; i++) {
 		GPtrArray *row = rows->pdata[i];
@@ -1901,7 +1401,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 		for (j = 0; j < row->len; j++) {
 			network_mysqld_proto_append_lenenc_string(s, row->pdata[j]);
 		}
-		network_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+		network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
 	}
 
 	g_string_truncate(s, 0);
@@ -1911,7 +1411,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	g_string_append_len(s, "\x00\x00", 2); /* warning count */
 	g_string_append_len(s, "\x02\x00", 2); /* flags */
 
-	network_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+	network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
 
 	g_string_free(s, TRUE);
 
