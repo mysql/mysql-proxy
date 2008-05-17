@@ -51,8 +51,8 @@ typedef enum {
 typedef struct {
 	GQueue *chunks;
 
-	size_t len; /* len in all chunks */
-	size_t offset; /* offset over all chunks */
+	size_t len;    /* len in all chunks (w/o the offset) */
+	size_t offset; /* offset in the first chunk */
 } network_queue;
 
 typedef struct {
@@ -82,7 +82,6 @@ typedef struct {
 	network_queue *recv_queue_raw;
 	network_queue *send_queue;
 
-	GString *header; /** raw buffer for the packet_len and packet_id */
 	off_t header_read;
 	off_t to_read;
 	
@@ -116,16 +115,19 @@ typedef struct {
 NETWORK_API network_queue *network_queue_init(void);
 NETWORK_API void network_queue_free(network_queue *queue);
 NETWORK_API int network_queue_append(network_queue *queue, GString *chunk);
+NETWORK_API GString *network_queue_pop_string(network_queue *queue, gsize steal_len, GString *dest);
+NETWORK_API GString *network_queue_peek_string(network_queue *queue, gsize peek_len, GString *dest);
 
 NETWORK_API network_socket *network_socket_init(void);
 NETWORK_API void network_socket_free(network_socket *s);
 NETWORK_API network_socket_retval_t network_socket_write(network_socket *con, int send_chunks);
-NETWORK_API network_socket_retval_t network_socket_read(network_socket *con, GString *dest, ssize_t we_want);
+NETWORK_API network_socket_retval_t network_socket_read(network_socket *con);
 NETWORK_API network_socket_retval_t network_socket_set_non_blocking(network_socket *sock);
 NETWORK_API network_socket_retval_t network_socket_connect(network_socket *con);
 NETWORK_API network_socket_retval_t network_socket_bind(network_socket *con);
 
 NETWORK_API network_socket_retval_t network_address_set_address(network_address *addr, gchar *address);
+NETWORK_API network_socket_retval_t network_address_resolve_address(network_address *addr);
 
 #endif
 

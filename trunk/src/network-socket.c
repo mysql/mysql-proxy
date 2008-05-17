@@ -79,10 +79,95 @@ void network_queue_free(network_queue *queue) {
 }
 
 int network_queue_append(network_queue *queue, GString *s) {
+	queue->len += s->len;
+
 	g_queue_push_tail(queue->chunks, s);
 
 	return 0;
 }
+
+/**
+ * get a string from the head of the queue and leave the queue unchanged 
+ *
+ * @param  peek_len bytes to collect
+ * @param  dest 
+ * @return NULL if not enough data
+ *         if dest is not NULL, dest, otherwise a new GString containing the data
+ */
+GString *network_queue_peek_string(network_queue *queue, gsize peek_len, GString *dest) {
+	gsize we_want = peek_len;
+	GList *node;
+
+	if (queue->len < peek_len) {
+		return NULL;
+	}
+
+	if (!dest) {
+		/* no define */
+		dest = g_string_sized_new(peek_len);
+	}
+
+	g_assert_cmpint(dest->allocated_len, >, peek_len);
+
+	for (node = queue->chunks->head; node && we_want; node = node->next) {
+		GString *chunk = node->data;
+
+		if (node == queue->chunks->head) {
+			gsize we_have = we_want < (chunk->len - queue->offset) ? we_want : (chunk->len - queue->offset);
+
+			g_string_append_len(dest, chunk->str + queue->offset, we_have);
+			
+			we_want -= we_have;
+		} else {
+			gsize we_have = we_want < chunk->len ? we_want : chunk->len;
+			
+			g_string_append_len(dest, chunk->str, we_have);
+
+			we_want -= we_have;
+		}
+	}
+
+	return dest;
+}
+
+/**
+ * get a string from the head of the queue and remove the chunks from the queue 
+ */
+GString *network_queue_pop_string(network_queue *queue, gsize steal_len, GString *dest) {
+	gsize we_want = steal_len;
+	GString *chunk;
+
+	if (queue->len < steal_len) {
+		return NULL;
+	}
+
+	if (!dest) {
+		dest = g_string_sized_new(steal_len);
+	}
+	
+	g_assert_cmpint(dest->allocated_len, >, steal_len);
+
+	while ((chunk = g_queue_peek_head(queue->chunks))) {
+		gsize we_have = we_want < (chunk->len - queue->offset) ? we_want : (chunk->len - queue->offset);
+
+		g_string_append_len(dest, chunk->str + queue->offset, we_have);
+
+		queue->offset += we_have;
+		queue->len    -= we_have;
+		we_want -= we_have;
+
+		if (chunk->len == queue->offset) {
+			/* the chunk is done, remove it */
+			g_string_free(g_queue_pop_head(queue->chunks), TRUE);
+			queue->offset = 0;
+		} else {
+			break;
+		}
+	}
+
+	return dest;
+}
+
 
 network_socket *network_socket_init() {
 	network_socket *s;
@@ -100,7 +185,6 @@ network_socket *network_socket_init() {
 	s->scrambled_password = g_string_new(NULL);
 	s->scramble_buf = g_string_new(NULL);
 	s->auth_handshake_packet = g_string_new(NULL);
-	s->header       = g_string_sized_new(4);
 	s->fd           = -1;
 
 	return s;
@@ -128,7 +212,6 @@ void network_socket_free(network_socket *s) {
 	g_string_free(s->username,   TRUE);
 	g_string_free(s->default_db, TRUE);
 	g_string_free(s->scrambled_password, TRUE);
-	g_string_free(s->header, TRUE);
 
 	g_free(s);
 }
@@ -277,22 +360,9 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
  * read a data from the socket
  *
  * @param sock the socket
- * @param dest the buffer we want to put the packet in
- * @param we_want expected length of the buffer
- *
  */
-network_socket_retval_t network_socket_read(network_socket *sock, GString *dest, ssize_t we_want) {
+network_socket_retval_t network_socket_read(network_socket *sock) {
 	gssize len;
-	size_t we_have;
-
-	we_want -= dest->len;
-
-	/**
-	 * nothing to read, let's get out of here 
-	 */
-	if (we_want == 0) {
-		return NETWORK_SOCKET_SUCCESS;
-	}
 
 	if (sock->to_read > 0) {
 		GString *packet = g_string_sized_new(sock->to_read);
@@ -328,41 +398,6 @@ network_socket_retval_t network_socket_read(network_socket *sock, GString *dest,
 		sock->recv_queue_raw->offset = 0; /* offset into the first packet */
 #endif
 		packet->len = len;
-	}
-
-	/* check if we have read enough data to satisfy the caller */
-
-	if (sock->recv_queue_raw->len - sock->recv_queue_raw->offset < we_want) { 
-		/* we don't have enough */
-
-		return NETWORK_SOCKET_WAIT_FOR_EVENT;
-	}
-
-	for (we_have = 0; we_have < we_want; ) {
-		GString *packet = g_queue_peek_head(sock->recv_queue_raw->chunks);
-		gsize we_need = we_want - we_have;
-	
-		if (packet->len - sock->recv_queue_raw->offset <= we_need) {
-			/* packet is smaller or equal to what we need, 
-			 * pop it from the queue and free it */
-		
-			packet = g_queue_pop_head(sock->recv_queue_raw->chunks);
-
-			/* copy everything */
-			g_string_append_len(dest, packet->str + sock->recv_queue_raw->offset, packet->len - sock->recv_queue_raw->offset);
-			we_have += packet->len - sock->recv_queue_raw->offset;
-
-			sock->recv_queue_raw->offset = 0;
-			sock->recv_queue_raw->len -= packet->len;
-
-			g_string_free(packet, TRUE);
-		} else {
-			/* the packet it larger than we need */
-			g_string_append_len(dest, packet->str + sock->recv_queue_raw->offset, we_need);
-
-			sock->recv_queue_raw->offset += we_need;
-			we_have += we_need;
-		}
 	}
 
 	return NETWORK_SOCKET_SUCCESS;
@@ -610,3 +645,23 @@ network_socket_retval_t network_address_set_address(network_address *addr, gchar
 }
 
 
+network_socket_retval_t network_address_resolve_address(network_address *addr) {
+	/* resolve the peer-addr if necessary */
+	if (addr->len > 0) return NETWORK_SOCKET_SUCCESS;
+
+	switch (addr->addr.common.sa_family) {
+	case AF_INET:
+		addr->str = g_strdup_printf("%s:%d", 
+				inet_ntoa(addr->addr.ipv4.sin_addr),
+				addr->addr.ipv4.sin_port);
+		break;
+	default:
+		g_critical("%s.%d: can't convert addr-type %d into a string", 
+				 __FILE__, __LINE__, 
+				 addr->addr.common.sa_family);
+		return NETWORK_SOCKET_ERROR;
+	}
+
+	return NETWORK_SOCKET_SUCCESS;
+
+}

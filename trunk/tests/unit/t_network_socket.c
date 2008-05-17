@@ -28,8 +28,102 @@ void test_network_socket_new() {
 	network_socket *sock;
 
 	sock = network_socket_init();
+	g_assert(sock);
 
 	network_socket_free(sock);
+}
+
+void test_network_queue_append() {
+	network_queue *q;
+
+	q = network_queue_init();
+	g_assert(q);
+
+	network_queue_append(q, g_string_new("123"));
+	network_queue_append(q, g_string_new("345"));
+
+	network_queue_free(q);
+}
+
+void test_network_queue_peek_string() {
+	network_queue *q;
+	GString *s;
+
+	q = network_queue_init();
+	g_assert(q);
+
+	network_queue_append(q, g_string_new("123"));
+	g_assert_cmpint(q->len, ==, 3);
+	network_queue_append(q, g_string_new("456"));
+	g_assert_cmpint(q->len, ==, 6);
+
+	s = network_queue_peek_string(q, 3, NULL);
+	g_assert(s);
+	g_assert_cmpint(s->len, ==, 3);
+	g_assert_cmpstr(s->str, ==, "123");
+	g_string_free(s, TRUE);
+
+	s = network_queue_peek_string(q, 4, NULL);
+	g_assert(s);
+	g_assert_cmpint(s->len, ==, 4);
+	g_assert_cmpstr(s->str, ==, "1234");
+	g_string_free(s, TRUE);
+
+	s = network_queue_peek_string(q, 7, NULL);
+	g_assert(s == NULL);
+	
+	g_assert_cmpint(q->len, ==, 6);
+
+	network_queue_free(q);
+}
+
+void test_network_queue_pop_string() {
+	network_queue *q;
+	GString *s;
+
+	q = network_queue_init();
+	g_assert(q);
+
+	network_queue_append(q, g_string_new("123"));
+	g_assert_cmpint(q->len, ==, 3);
+	network_queue_append(q, g_string_new("456"));
+	g_assert_cmpint(q->len, ==, 6);
+	network_queue_append(q, g_string_new("789"));
+	g_assert_cmpint(q->len, ==, 9);
+
+	s = network_queue_pop_string(q, 3, NULL);
+	g_assert(s);
+	g_assert_cmpint(s->len, ==, 3);
+	g_assert_cmpstr(s->str, ==, "123");
+	g_string_free(s, TRUE);
+	
+	g_assert_cmpint(q->len, ==, 6);
+
+	s = network_queue_pop_string(q, 4, NULL);
+	g_assert(s);
+	g_assert_cmpint(s->len, ==, 4);
+	g_assert_cmpstr(s->str, ==, "4567");
+	g_string_free(s, TRUE);
+	g_assert_cmpint(q->len, ==, 2);
+
+	s = network_queue_pop_string(q, 7, NULL);
+	g_assert(s == NULL);
+
+	s = network_queue_peek_string(q, 2, NULL);
+	g_assert(s);
+	g_assert_cmpint(s->len, ==, 2);
+	g_assert_cmpstr(s->str, ==, "89");
+	g_string_free(s, TRUE);
+	g_assert_cmpint(q->len, ==, 2);
+
+	s = network_queue_pop_string(q, 2, NULL);
+	g_assert(s);
+	g_assert_cmpint(s->len, ==, 2);
+	g_assert_cmpstr(s->str, ==, "89");
+	g_string_free(s, TRUE);
+	g_assert_cmpint(q->len, ==, 0);
+
+	network_queue_free(q);
 }
 
 int main(int argc, char **argv) {
@@ -37,6 +131,9 @@ int main(int argc, char **argv) {
 	g_test_bug_base("http://bugs.mysql.com/");
 
 	g_test_add_func("/core/network_socket_new", test_network_socket_new);
+	g_test_add_func("/core/network_queue_append", test_network_queue_append);
+	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
+	g_test_add_func("/core/network_queue_pop_string", test_network_queue_pop_string);
 
 	return g_test_run();
 }

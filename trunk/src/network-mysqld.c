@@ -424,37 +424,8 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
 network_socket_retval_t network_mysqld_read(chassis *srv, network_socket *con) {
 	GString *packet = NULL;
 
-	/** 
-	 * read the packet header (4 bytes)
-	 */
-	if (con->packet_len == PACKET_LEN_UNSET) {
-		switch (network_socket_read(con, con->header, NET_HEADER_SIZE)) {
-		case NETWORK_SOCKET_WAIT_FOR_EVENT:
-			return NETWORK_SOCKET_WAIT_FOR_EVENT;
-		case NETWORK_SOCKET_ERROR:
-			return NETWORK_SOCKET_ERROR;
-		case NETWORK_SOCKET_SUCCESS:
-			break;
-		case NETWORK_SOCKET_ERROR_RETRY:
-			g_error("NETWORK_SOCKET_ERROR_RETRY wasn't expected");
-			break;
-		}
-
-		con->packet_len = network_mysqld_proto_get_header((unsigned char *)(con->header->str));
-		con->packet_id  = (unsigned char)(con->header->str[3]); /* packet-id if the next packet */
-
-		packet = g_string_sized_new(con->packet_len + NET_HEADER_SIZE + 1); /* we need some space for the \0 */
-		g_string_append_len(packet, con->header->str, NET_HEADER_SIZE); /* copy the header */
-
-		network_queue_append(con->recv_queue, packet);
-		g_string_truncate(con->header, 0);
-	} else {
-		packet = con->recv_queue->chunks->tail->data;
-	}
-
-	g_assert(packet->allocated_len >= con->packet_len + NET_HEADER_SIZE);
-
-	switch (network_socket_read(con, packet, con->packet_len + NET_HEADER_SIZE)) {
+	/* check if the recv_queue is clean up to now */
+	switch (network_socket_read(con)) {
 	case NETWORK_SOCKET_WAIT_FOR_EVENT:
 		return NETWORK_SOCKET_WAIT_FOR_EVENT;
 	case NETWORK_SOCKET_ERROR:
@@ -465,7 +436,32 @@ network_socket_retval_t network_mysqld_read(chassis *srv, network_socket *con) {
 		g_error("NETWORK_SOCKET_ERROR_RETRY wasn't expected");
 		break;
 	}
-	g_assert(packet->len == con->packet_len + NET_HEADER_SIZE);
+
+	/** 
+	 * read the packet header (4 bytes)
+	 */
+	if (con->packet_len == PACKET_LEN_UNSET) {
+		GString header;
+		char header_str[NET_HEADER_SIZE + 1] = "";
+
+		header.str = header_str;
+		header.allocated_len = sizeof(header_str);
+		header.len = 0;
+
+		if (!network_queue_peek_string(con->recv_queue_raw, NET_HEADER_SIZE, &header)) {
+			/* too small */
+
+			return NETWORK_SOCKET_WAIT_FOR_EVENT;
+		}
+
+		con->packet_len = network_mysqld_proto_get_header((unsigned char *)(header_str));
+		con->packet_id  = (unsigned char)(header_str[3]); /* packet-id if the next packet */
+	}
+
+	/* move the packet from the raw queue to the recv-queue */
+	if ((packet = network_queue_pop_string(con->recv_queue_raw, con->packet_len + NET_HEADER_SIZE, NULL))) {
+		network_queue_append(con->recv_queue, packet);
+	}
 
 	return NETWORK_SOCKET_SUCCESS;
 }
@@ -1287,21 +1283,7 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 
 	network_socket_set_non_blocking(client_con->client);
 
-	/* resolve the peer-addr if necessary */
-	if (!client_con->client->addr.str) {
-		switch (client_con->client->addr.addr.common.sa_family) {
-		case AF_INET:
-			client_con->client->addr.str = g_strdup_printf("%s:%d", 
-					inet_ntoa(client_con->client->addr.addr.ipv4.sin_addr),
-					client_con->client->addr.addr.ipv4.sin_port);
-			break;
-		default:
-			g_message("%s.%d: can't convert addr-type %d into a string", 
-					 __FILE__, __LINE__, 
-					 client_con->client->addr.addr.common.sa_family);
-			break;
-		}
-	}
+	network_address_resolve_address(&(client_con->client->addr));
 
 	/**
 	 * inherit the config to the new connection 
