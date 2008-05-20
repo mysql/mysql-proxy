@@ -461,6 +461,8 @@ network_socket_retval_t network_mysqld_read(chassis *srv, network_socket *con) {
 	/* move the packet from the raw queue to the recv-queue */
 	if ((packet = network_queue_pop_string(con->recv_queue_raw, con->packet_len + NET_HEADER_SIZE, NULL))) {
 		network_queue_append(con->recv_queue, packet);
+	} else {
+		return NETWORK_SOCKET_WAIT_FOR_EVENT;
 	}
 
 	return NETWORK_SOCKET_SUCCESS;
