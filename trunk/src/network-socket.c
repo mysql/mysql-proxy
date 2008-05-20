@@ -8,6 +8,10 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+
 #include <arpa/inet.h> /** inet_ntoa */
 #include <netinet/in.h>
 #include <netinet/tcp.h>
