@@ -52,6 +52,9 @@ void chassis_free(chassis *chas) {
 
 	if (!chas) return;
 
+	/* init the shutdown, without freeing share structures */	
+	if (chas->priv_shutdown) chas->priv_shutdown(chas, chas->priv);
+
 	/* call the destructor for all plugins */
 	for (i = 0; i < chas->modules->len; i++) {
 		chassis_plugin *p = chas->modules->pdata[i];

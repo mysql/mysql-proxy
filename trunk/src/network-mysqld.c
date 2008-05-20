@@ -225,7 +225,7 @@ chassis_private *network_mysqld_priv_init(void) {
 	return priv;
 }
 
-void network_mysqld_priv_free(chassis *chas, chassis_private *priv) {
+void network_mysqld_priv_shutdown(chassis *chas, chassis_private *priv) {
 	if (!priv) return;
 
 	/* network_mysqld_con_free() changes the priv->cons directly
@@ -238,6 +238,10 @@ void network_mysqld_priv_free(chassis *chas, chassis_private *priv) {
 		plugin_call_cleanup(chas, con);
 		network_mysqld_con_free(con);
 	}
+}
+
+void network_mysqld_priv_free(chassis *chas, chassis_private *priv) {
+	if (!priv) return;
 
 	g_ptr_array_free(priv->cons, TRUE);
 
@@ -248,6 +252,7 @@ void network_mysqld_priv_free(chassis *chas, chassis_private *priv) {
 
 int network_mysqld_init(chassis *srv) {
 	srv->priv_free = network_mysqld_priv_free;
+	srv->priv_shutdown = network_mysqld_priv_shutdown;
 	srv->priv      = network_mysqld_priv_init();
 
 	return 0;

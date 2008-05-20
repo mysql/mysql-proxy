@@ -31,6 +31,7 @@ struct chassis {
 	GPtrArray *modules;                       /**< array(chassis_plugin) */
 
 	chassis_private *priv;
+	void (*priv_shutdown)(chassis *chas, chassis_private *priv);
 	void (*priv_free)(chassis *chas, chassis_private *priv);
 };
 
