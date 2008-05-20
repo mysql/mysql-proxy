@@ -52,8 +52,6 @@ void chassis_free(chassis *chas) {
 
 	if (!chas) return;
 
-	if (chas->priv_free) chas->priv_free(chas, chas->priv);
-
 	/* call the destructor for all plugins */
 	for (i = 0; i < chas->modules->len; i++) {
 		chassis_plugin *p = chas->modules->pdata[i];
@@ -64,6 +62,9 @@ void chassis_free(chassis *chas) {
 	}
 	
 	g_ptr_array_free(chas->modules, TRUE);
+
+	/* free the pointers _AFTER_ the modules are shutdown */
+	if (chas->priv_free) chas->priv_free(chas, chas->priv);
 
 #ifdef HAVE_EVENT_BASE_FREE
 	/* only recent versions have this call */
