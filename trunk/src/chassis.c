@@ -456,12 +456,19 @@ int main(int argc, char **argv) {
 #else
 #define G_MODULE_PREFIX "lib"
 #endif
-		char *plugin_filename = g_strdup_printf("%s%c%s%s.la", 
+/* we have to hack around some glib distributions that
+ * don't set the correct G_MODULE_SUFFIX, notably MacPorts
+ */
+#ifndef SHARED_LIBRARY_SUFFIX
+#define SHARED_LIBRARY_SUFFIX G_MODULE_SUFFIX
+#endif
+		char *plugin_filename = g_strdup_printf("%s%c%s%s.%s", 
 				plugin_dir, 
 				G_DIR_SEPARATOR, 
 				G_MODULE_PREFIX,
-				plugin_names[i]);
-
+				plugin_names[i],
+				SHARED_LIBRARY_SUFFIX);
+		
 		p = chassis_plugin_load(plugin_filename);
 		g_free(plugin_filename);
 		
