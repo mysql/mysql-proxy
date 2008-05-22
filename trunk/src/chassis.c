@@ -261,9 +261,19 @@ int main(int argc, char **argv) {
 	 * if the LUA_PATH or LUA_CPATH are not set, set a good default 
 	 */
 	if (!g_getenv(LUA_PATH)) {
+#if _WIN32
+		/** on Win32 glib uses _wputenv to set the env variable,
+		 *  but Lua uses getenv. Those two don't see each other,
+		 *  so we use _putenv. Since we only set ASCII chars, this
+		 *  is safe.
+		 */
+		_putenv(LUA_PATH "=!\\..\\" DATADIR "\\?.lua");
+#else
 		g_setenv(LUA_PATH, 
 				DATADIR "/?.lua", 1);
+#endif
 	}
+
 # endif
 
 # if defined(LIBDIR)
@@ -407,7 +417,12 @@ int main(int argc, char **argv) {
           }
           bin_dir = g_path_get_dirname(absolute_path);
           top_dir = g_path_get_dirname(bin_dir);
+/* for Win32 the default plugin dir is bin/ and not lib/package_name */
+#ifdef WIN32
+          plugin_dir = g_strconcat(top_dir, G_DIR_SEPARATOR_S, "bin", NULL);
+#else
           plugin_dir = g_strconcat(top_dir, G_DIR_SEPARATOR_S, "lib", G_DIR_SEPARATOR_S, PACKAGE, NULL);
+#endif
           g_free(absolute_path);
           g_free(bin_dir);
           g_free(top_dir);
