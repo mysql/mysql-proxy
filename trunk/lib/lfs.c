@@ -599,7 +599,7 @@ static const struct luaL_reg fslib[] = {
 
 LUAEXT_API int luaopen_lfs (lua_State *L) {
 	dir_create_meta (L);
-	luaL_openlib (L, "lfs", fslib, 0);
+	luaL_register (L, "lfs", fslib);
 	set_info (L);
 	return 1;
 }
