@@ -16,7 +16,7 @@ MACRO(TAR_UNPACK _file _wd)
 			MESSAGE(SEND_ERROR "TAR_UNPACK()-err: ${_err}")
 		ENDIF(_err)
 		IF(_out)
-			MESSAGE(SEND_ERROR "TAR_UNPACK()-out: ${_out}")
+			MESSAGE(DEBUG "TAR_UNPACK()-out: ${_out}")
 		ENDIF(_out)
 
 	ELSE(GTAR_EXECUTABLE AND GZIP_EXECUTABLE)
