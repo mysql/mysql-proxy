@@ -1,10 +1,19 @@
 @echo "Run this from a shell started with the Visual Studio Build environment set!"
-@rem set the right path to the install files
+@echo "You can set DEPS_PATH (for the dependencies package) and MYSQL_DIR for a MySQL server installation"
+@IF DEFINED DEPS_PATH (GOTO MYSQL_CONF)
 @SET DEPS_PATH=%CD%\..\..\mysql-lb-deps\win32
+
+:MYSQL_CONF
+@IF DEFINED MYSQL_DIR (GOTO GENERAL_CONF)
 @SET MYSQL_DIR="C:\Program Files\MySQL\MySQL Server 5.0"
+
+:GENERAL_CONF
 @SET GLIB_DIR=%DEPS_PATH%
 @SET PATH=%DEPS_PATH%\bin;%PATH%
 @SET NSISDIR=%DEPS_PATH%\bin
+
+@echo Using MySQL server from %MYSQL_DIR%
+@echo Using dependencies from %DEPS_PATH%
 
 @echo Checking for NSIS...
 @reg query HKLM\Software\NSIS /v VersionMajor
