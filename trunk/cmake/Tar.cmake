@@ -6,9 +6,22 @@ MACRO(TAR_UNPACK _file _wd)
 	MESSAGE(STATUS "gzip: ${GZIP_EXECUTABLE}")
 
 	IF(GTAR_EXECUTABLE AND GZIP_EXECUTABLE)
-		MESSAGE(STATUS "starting ${GZIP_EXECUTABLE}")
-		EXECUTE_PROCESS(COMMAND ${GZIP_EXECUTABLE} "-cd" ${_file} 
-			COMMAND ${GTAR_EXECUTABLE} "xvf" "-"
+		# On Windows gzip -cd $file | tar xvf - sometimes reports
+		# "Broken pipe" which causes cmake to assume an error has occured
+		# In fact, this is harmless, but because of it, this is done in
+		# two steps
+		MESSAGE(STATUS "unzipping ${_file} with ${GZIP_EXECUTABLE}")
+		EXECUTE_PROCESS(COMMAND ${GZIP_EXECUTABLE} "-cd" ${_file}
+		  OUTPUT_FILE "${_file}.tar"
+			WORKING_DIRECTORY ${_wd}
+			ERROR_VARIABLE _err)
+		IF(_err)
+			MESSAGE(SEND_ERROR "GZIP_UNPACK()-err: ${_err}")
+		ENDIF(_err)
+		# untar after successful unzip
+		MESSAGE(STATUS "untarring ${_file}.tar with ${GTAR_EXECUTABLE}")
+		EXECUTE_PROCESS(COMMAND ${GTAR_EXECUTABLE} "xvf" "-"
+			INPUT_FILE "${_file}.tar"
 			WORKING_DIRECTORY ${_wd}
 			OUTPUT_VARIABLE _out
 			ERROR_VARIABLE _err)
@@ -18,7 +31,7 @@ MACRO(TAR_UNPACK _file _wd)
 		IF(_out)
 			MESSAGE(DEBUG "TAR_UNPACK()-out: ${_out}")
 		ENDIF(_out)
-
+		FILE(REMOVE "${_file}.tar")
 	ELSE(GTAR_EXECUTABLE AND GZIP_EXECUTABLE)
 		MESSAGE(STATUS "gnutar not found")
 	ENDIF(GTAR_EXECUTABLE AND GZIP_EXECUTABLE)
