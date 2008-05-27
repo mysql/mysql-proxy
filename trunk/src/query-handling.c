@@ -71,14 +71,14 @@ static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields
 		chunk = chunk->next;
 		packet = chunk->data;
         
-		field = network_mysqld_proto_field_init();
+		field = network_mysqld_proto_fielddef_new();
         
-		field->catalog   = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->db        = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->table     = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->org_table = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->name      = network_mysqld_proto_get_lenenc_string(packet, &off);
-		field->org_name  = network_mysqld_proto_get_lenenc_string(packet, &off);
+		field->catalog   = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
+		field->db        = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
+		field->table     = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
+		field->org_table = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
+		field->name      = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
+		field->org_name  = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
         
 		network_mysqld_proto_skip(packet, &off, 1); /* filler */
         
@@ -244,7 +244,7 @@ void proxy_resultset_free(proxy_resultset_t *res) {
 	if (!res) return;
     
 	if (res->fields) {
-		network_mysqld_proto_fields_free(res->fields);
+		network_mysqld_proto_fielddefs_free(res->fields);
 	}
     
 	g_free(res);
@@ -430,7 +430,7 @@ static int parse_resultset_fields(proxy_resultset_t *res) {
 	}
     
 	/* parse the fields */
-	res->fields = network_mysqld_proto_fields_init();
+	res->fields = network_mysqld_proto_fielddefs_new();
     
 	if (!res->fields) return -1;
     

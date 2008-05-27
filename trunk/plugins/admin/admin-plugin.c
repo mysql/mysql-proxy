@@ -61,9 +61,9 @@ int network_mysqld_con_handle_stmt(chassis G_GNUC_UNUSED *chas, network_mysqld_c
 		if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("select @@version_comment limit 1"))) {
 			MYSQL_FIELD *field;
 
-			fields = network_mysqld_proto_fields_init();
+			fields = network_mysqld_proto_fielddefs_new();
 
-			field = network_mysqld_proto_field_init();
+			field = network_mysqld_proto_fielddef_new();
 			field->name = g_strdup("@@version_comment");
 			field->type = FIELD_TYPE_VAR_STRING;
 			g_ptr_array_add(fields, field);
@@ -79,8 +79,8 @@ int network_mysqld_con_handle_stmt(chassis G_GNUC_UNUSED *chas, network_mysqld_c
 		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("select USER()"))) {
 			MYSQL_FIELD *field;
 
-			fields = network_mysqld_proto_fields_init();
-			field = network_mysqld_proto_field_init();
+			fields = network_mysqld_proto_fielddefs_new();
+			field = network_mysqld_proto_fielddef_new();
 			field->name = g_strdup("USER()");
 			field->type = FIELD_TYPE_VAR_STRING;
 			g_ptr_array_add(fields, field);
@@ -99,7 +99,7 @@ int network_mysqld_con_handle_stmt(chassis G_GNUC_UNUSED *chas, network_mysqld_c
 
 		/* clean up */
 		if (fields) {
-			network_mysqld_proto_fields_free(fields);
+			network_mysqld_proto_fielddefs_free(fields);
 			fields = NULL;
 		}
 

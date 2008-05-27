@@ -35,7 +35,7 @@ struct chassis_plugin_config {
 static int lua_table_key_to_mysql_field(lua_State *L, GPtrArray *fields) {
 	MYSQL_FIELD *field = NULL;
 
-	field = network_mysqld_proto_field_init();
+	field = network_mysqld_proto_fielddef_new();
 	if (lua_isstring(L, -2) && !lua_isnumber(L, -2)) {
 		/* is-string is true for strings AND numbers
 		 * but a tostring() is changing a number into a 
@@ -72,9 +72,9 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 		if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("select @@version_comment limit 1"))) {
 			MYSQL_FIELD *field;
 
-			fields = network_mysqld_proto_fields_init();
+			fields = network_mysqld_proto_fielddefs_new();
 
-			field = network_mysqld_proto_field_init();
+			field = network_mysqld_proto_fielddef_new();
 			field->name = g_strdup("@@version_comment");
 			field->type = FIELD_TYPE_VAR_STRING;
 			g_ptr_array_add(fields, field);
@@ -90,8 +90,8 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("select USER()"))) {
 			MYSQL_FIELD *field;
 
-			fields = network_mysqld_proto_fields_init();
-			field = network_mysqld_proto_field_init();
+			fields = network_mysqld_proto_fielddefs_new();
+			field = network_mysqld_proto_fielddef_new();
 			field->name = g_strdup("USER()");
 			field->type = FIELD_TYPE_VAR_STRING;
 			g_ptr_array_add(fields, field);
@@ -122,7 +122,7 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 				switch (lua_type(L, -1)) {
 				case LUA_TTABLE:
 					/* take the names from the fields */
-					fields = network_mysqld_proto_fields_init();
+					fields = network_mysqld_proto_fielddefs_new();
 
 					lua_pushnil(L);
 					while (lua_next(L, -2) != 0) {
@@ -171,8 +171,8 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 					break;
 				default:
 					/* a scalar value */
-					fields = network_mysqld_proto_fields_init();
-					field = network_mysqld_proto_field_init();
+					fields = network_mysqld_proto_fielddefs_new();
+					field = network_mysqld_proto_fielddef_new();
 					field->name = g_strdup("lua");
 					field->type = FIELD_TYPE_VAR_STRING;
 					g_ptr_array_add(fields, field);
@@ -206,7 +206,7 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 
 		/* clean up */
 		if (fields) {
-			network_mysqld_proto_fields_free(fields);
+			network_mysqld_proto_fielddefs_free(fields);
 			fields = NULL;
 		}
 

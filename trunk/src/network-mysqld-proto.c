@@ -54,7 +54,7 @@ guint64 network_mysqld_proto_get_lenenc_int(GString *packet, guint *_off) {
 	guint64 ret = 0;
 	unsigned char *bytestream = (unsigned char *)packet->str;
 
-	g_assert(off < packet->len);
+	g_assert_cmpint(off, <, packet->len);
 	
 	if (bytestream[off] < 251) { /* */
 		ret = bytestream[off];
@@ -247,6 +247,30 @@ guint32 network_mysqld_proto_get_int32(GString *packet, guint *_off) {
 }
 
 /**
+ * get a 6-byte integer from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return a the decoded integer
+ * @see network_mysqld_proto_get_int_len()
+ */
+guint64 network_mysqld_proto_get_int48(GString *packet, guint *_off) {
+	return network_mysqld_proto_get_int_len(packet, _off, 6);
+}
+
+/**
+ * get a 8-byte integer from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return a the decoded integer
+ * @see network_mysqld_proto_get_int_len()
+ */
+guint64 network_mysqld_proto_get_int64(GString *packet, guint *_off) {
+	return network_mysqld_proto_get_int_len(packet, _off, 8);
+}
+
+/**
  * get a string from the network packet
  *
  * @param packet the MySQL network packet
@@ -259,10 +283,18 @@ gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize l
 
 	g_assert(*_off < packet->len);
 	if (*_off + len > packet->len) {
-		g_error("packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, *_off, len, packet->len);
+		g_error("%s: packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, 
+				G_STRLOC,
+				*_off, len, packet->len);
 	}
 
-	str = len ? g_strndup(packet->str + *_off, len) : NULL; 
+	if (len) {
+		str = g_malloc(len + 1);
+		memcpy(str, packet->str + *_off, len);
+		str[len] = '\0';
+	} else {
+		str = NULL;
+	}
 
 	*_off += len;
 
@@ -279,13 +311,15 @@ gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize l
  * @return the string
  * @see network_mysqld_proto_get_string_len(), network_mysqld_proto_get_lenenc_int()
  */
-gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off) {
+gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off, guint64 *_len) {
 	guint64 len;
 
 	len = network_mysqld_proto_get_lenenc_int(packet, _off);
 	
 	g_assert(*_off < packet->len);
 	g_assert(*_off + len <= packet->len);
+
+	if (_len) *_len = len;
 	
 	return network_mysqld_proto_get_string_len(packet, _off, len);
 }
@@ -401,7 +435,7 @@ gchar *network_mysqld_proto_get_lenenc_gstring(GString *packet, guint *_off, GSt
  *
  * @return a empty MYSQL_FIELD
  */
-MYSQL_FIELD *network_mysqld_proto_field_init() {
+MYSQL_FIELD *network_mysqld_proto_fielddef_new() {
 	MYSQL_FIELD *field;
 	
 	field = g_new0(MYSQL_FIELD, 1);
@@ -414,7 +448,7 @@ MYSQL_FIELD *network_mysqld_proto_field_init() {
  *
  * @param field  the MYSQL_FIELD to free
  */
-void network_mysqld_proto_field_free(MYSQL_FIELD *field) {
+void network_mysqld_proto_fielddef_free(MYSQL_FIELD *field) {
 	if (field->catalog) g_free(field->catalog);
 	if (field->db) g_free(field->db);
 	if (field->name) g_free(field->name);
@@ -430,7 +464,7 @@ void network_mysqld_proto_field_free(MYSQL_FIELD *field) {
  *
  * @return a empty array of MYSQL_FIELD
  */
-GPtrArray *network_mysqld_proto_fields_init(void) {
+GPtrArray *network_mysqld_proto_fielddefs_new(void) {
 	GPtrArray *fields;
 	
 	fields = g_ptr_array_new();
@@ -444,13 +478,13 @@ GPtrArray *network_mysqld_proto_fields_init(void) {
  * @param fields  array of MYSQL_FIELD to free
  * @see network_mysqld_proto_field_free()
  */
-void network_mysqld_proto_fields_free(GPtrArray *fields) {
+void network_mysqld_proto_fielddefs_free(GPtrArray *fields) {
 	guint i;
 
 	for (i = 0; i < fields->len; i++) {
 		MYSQL_FIELD *field = fields->pdata[i];
 
-		if (field) network_mysqld_proto_field_free(field);
+		if (field) network_mysqld_proto_fielddef_free(field);
 	}
 
 	g_ptr_array_free(fields, TRUE);
@@ -621,17 +655,17 @@ int network_mysqld_proto_append_int32(GString *packet, guint32 num) {
  * high-level functions
  */
 
-network_mysqld_handshake *network_mysqld_handshake_new() {
-	network_mysqld_handshake *shake;
+network_mysqld_auth_challenge *network_mysqld_auth_challenge_new() {
+	network_mysqld_auth_challenge *shake;
 
-	shake = g_new0(network_mysqld_handshake, 1);
+	shake = g_new0(network_mysqld_auth_challenge, 1);
 	
 	shake->challenge = g_string_new("");
 
 	return shake;
 }
 
-void network_mysqld_handshake_free(network_mysqld_handshake *shake) {
+void network_mysqld_auth_challenge_free(network_mysqld_auth_challenge *shake) {
 	if (!shake) return;
 
 	if (shake->server_version_str) g_string_free(shake->server_version_str, TRUE);
@@ -640,7 +674,7 @@ void network_mysqld_handshake_free(network_mysqld_handshake *shake) {
 	g_free(shake);
 }
 
-int network_mysqld_proto_get_handshake(GString *packet, network_mysqld_handshake *shake) {
+int network_mysqld_proto_get_auth_challenge(GString *packet, network_mysqld_auth_challenge *shake) {
 	guint off = 0;
 	int maj, min, patch;
 	gchar *scramble_1, *scramble_2;
@@ -727,10 +761,10 @@ int network_mysqld_proto_get_handshake(GString *packet, network_mysqld_handshake
 	return 0;
 }
 
-network_mysqld_auth *network_mysqld_auth_new() {
-	network_mysqld_auth *auth;
+network_mysqld_auth_response *network_mysqld_auth_response_new() {
+	network_mysqld_auth_response *auth;
 
-	auth = g_new0(network_mysqld_auth, 1);
+	auth = g_new0(network_mysqld_auth_response, 1);
 
 	/* we have to make sure scramble->buf is not-NULL to get
 	 * the "empty string" and not a "NULL-string"
@@ -742,7 +776,7 @@ network_mysqld_auth *network_mysqld_auth_new() {
 	return auth;
 }
 
-void network_mysqld_auth_free(network_mysqld_auth *auth) {
+void network_mysqld_auth_response_free(network_mysqld_auth_response *auth) {
 	if (!auth) return;
 
 	if (auth->response)          g_string_free(auth->response, TRUE);
@@ -755,7 +789,7 @@ void network_mysqld_auth_free(network_mysqld_auth *auth) {
 /**
  * append the auth struct to the mysqld packet
  */
-int network_mysqld_proto_append_auth(GString *packet, network_mysqld_auth *auth) {
+int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_auth_response *auth) {
 	int i;
 
 	network_mysqld_proto_append_int32(packet, auth->capabilities);
@@ -837,5 +871,358 @@ int network_mysqld_proto_scramble(GString *response, GString *challenge, const c
 #endif
 	return 0;
 }
+
+/**
+ * replication 
+ */
+
+network_mysqld_table *network_mysqld_table_new() {
+	network_mysqld_table *tbl;
+
+	tbl = g_new0(network_mysqld_table, 1);
+	tbl->db_name = g_string_new(NULL);
+	tbl->table_name = g_string_new(NULL);
+
+	tbl->fields = network_mysqld_proto_fielddefs_new();
+
+	return tbl;
+}
+
+void network_mysqld_table_free(network_mysqld_table *tbl) {
+	if (!tbl) return;
+
+	g_string_free(tbl->db_name, TRUE);
+	g_string_free(tbl->table_name, TRUE);
+
+	network_mysqld_proto_fielddefs_free(tbl->fields);
+
+	g_free(tbl);
+}
+
+static guint guint64_hash(gconstpointer _key) {
+	const guint64 *key = _key;
+
+	return *key & 0xffffffff;
+}
+
+static gboolean guint64_equal(gconstpointer _a, gconstpointer _b) {
+	const guint64 *a = _a;
+	const guint64 *b = _b;
+
+	return *a == *b;
+}
+
+guint64 *guint64_new(guint64 i) {
+	guint64 *ip;
+
+	ip = g_new0(guint64, 1);
+	*ip = i;
+
+	return ip;
+}
+
+network_mysqld_binlog *network_mysqld_binlog_new() {
+	network_mysqld_binlog *binlog;
+
+	binlog = g_new0(network_mysqld_binlog, 1);
+	binlog->rbr_tables = g_hash_table_new_full(
+			guint64_hash,
+			guint64_equal,
+			g_free,
+			(GDestroyNotify)network_mysqld_table_free);
+
+	return binlog;
+}
+
+void network_mysqld_binlog_free(network_mysqld_binlog *binlog) {
+	if (!binlog) return;
+
+	g_hash_table_destroy(binlog->rbr_tables);
+
+	g_free(binlog);
+}
+
+network_packet *network_packet_new(void) {
+	network_packet *packet;
+
+	packet = g_new0(network_packet, 1);
+
+	return packet;
+}
+
+void network_packet_free(network_packet *packet) {
+	if (!packet) return;
+
+	g_free(packet);
+}
+
+network_mysqld_binlog_event *network_mysqld_binlog_event_new() {
+	network_mysqld_binlog_event *binlog;
+
+	binlog = g_new0(network_mysqld_binlog_event, 1);
+
+	return binlog;
+}
+
+int network_mysqld_proto_skip_network_header(network_packet *packet) {
+	network_mysqld_proto_skip(packet->data, &(packet->offset), NET_HEADER_SIZE);
+
+	return 0;
+}
+
+int network_mysqld_proto_get_binlog_status(network_packet *packet) {
+	gint8 ok;
+
+	/* on the network we have a length and packet-number of 4 bytes */
+	ok = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+	g_return_val_if_fail(ok == 0, -1);
+
+	return 0;
+}
+
+int network_mysqld_proto_get_binlog_event_header(network_packet *packet, network_mysqld_binlog_event *event) {
+	event->timestamp  = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+	event->event_type = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+	event->server_id  = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+	event->event_size = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+	event->log_pos    = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+	event->flags      = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+
+	return 0;
+}
+
+int network_mysqld_proto_get_binlog_event(network_packet *packet, 
+		network_mysqld_binlog *binlog,
+		network_mysqld_binlog_event *event) {
+
+	network_mysqld_table *tbl;
+
+	switch ((guchar)event->event_type) {
+	case QUERY_EVENT:
+		event->event.query_event.thread_id   = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		event->event.query_event.exec_time   = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		event->event.query_event.db_name_len = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		event->event.query_event.error_code  = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+
+		/* 5.0 has more flags */
+		if (packet->data->len > packet->offset) {
+			guint16 var_size = 0;
+
+			var_size    = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+			if (var_size) {
+				/* skip the variable size part for now */
+				network_mysqld_proto_skip(packet->data, &(packet->offset), var_size);
+			}
+	
+			/* default db has <db_name_len> chars */
+			event->event.query_event.db_name = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), 
+					event->event.query_event.db_name_len);
+			network_mysqld_proto_skip(packet->data, &(packet->offset), 1); /* the \0 */
+	
+			event->event.query_event.query = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), 
+					packet->data->len - packet->offset);
+		}
+
+		break;
+	case ROTATE_EVENT:
+		event->event.rotate_event.binlog_pos = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		network_mysqld_proto_skip(packet->data, &(packet->offset), 4);
+		event->event.rotate_event.binlog_file = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset), 
+				packet->data->len - packet->offset);
+		break;
+	case STOP_EVENT:
+		/* is empty */
+		break;
+	case FORMAT_DESCRIPTION_EVENT:
+		event->event.format_event.binlog_version = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+		event->event.format_event.master_version = network_mysqld_proto_get_string_len( /* NUL-term string */
+				packet->data, &(packet->offset), ST_SERVER_VER_LEN);
+		event->event.format_event.created_ts = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+
+		/* the header length may change in the future, for now we assume it is 19 */
+		event->event.format_event.log_header_len = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		g_assert_cmpint(event->event.format_event.log_header_len, ==, 19);
+
+		/* there is some funky event-permutation going on */
+		event->event.format_event.perm_events_len = packet->data->len - packet->offset;
+		event->event.format_event.perm_events = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset), packet->data->len - packet->offset);
+		
+		break;
+	case USER_VAR_EVENT:
+		event->event.user_var_event.name_len = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		event->event.user_var_event.name = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset),
+				event->event.user_var_event.name_len);
+
+		event->event.user_var_event.is_null = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		event->event.user_var_event.type = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		event->event.user_var_event.charset = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		event->event.user_var_event.value_len = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		event->event.user_var_event.value = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset),
+				event->event.user_var_event.value_len);
+		break;
+	case TABLE_MAP_EVENT: /* 19 */
+		/**
+		 * looks like a abstract definition of a table 
+		 *
+		 * no, we don't want to know
+		 */
+		event->event.table_map_event.table_id = network_mysqld_proto_get_int48(packet->data, &(packet->offset)); /* 6 bytes */
+		event->event.table_map_event.flags = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+
+		event->event.table_map_event.db_name_len = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		event->event.table_map_event.db_name = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset),
+				event->event.table_map_event.db_name_len);
+		network_mysqld_proto_skip(packet->data, &(packet->offset), 1); /* this should be NUL */
+
+		event->event.table_map_event.table_name_len = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		event->event.table_map_event.table_name = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset),
+				event->event.table_map_event.table_name_len);
+		network_mysqld_proto_skip(packet->data, &(packet->offset), 1); /* this should be NUL */
+
+		event->event.table_map_event.columns_len = network_mysqld_proto_get_lenenc_int(packet->data, &(packet->offset));
+		event->event.table_map_event.columns = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset),
+				event->event.table_map_event.columns_len);
+
+		event->event.table_map_event.metadata_len = network_mysqld_proto_get_lenenc_int(packet->data, &(packet->offset));
+		event->event.table_map_event.metadata = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset),
+				event->event.table_map_event.metadata_len);
+
+		/**
+		 * the null-bit count is columns/8 
+		 */
+
+		event->event.table_map_event.null_bits_len = (int)((event->event.table_map_event.columns_len+7)/8);
+		event->event.table_map_event.null_bits = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset),
+				event->event.table_map_event.null_bits_len);
+
+		g_assert_cmpint(packet->data->len, ==, packet->offset); /* this should be the full packet */
+		break;
+	case DELETE_ROWS_EVENT: /* 25 */
+	case UPDATE_ROWS_EVENT: /* 24 */
+	case WRITE_ROWS_EVENT:  /* 23 */
+		event->event.row_event.table_id = network_mysqld_proto_get_int48(packet->data, &(packet->offset)); /* 6 bytes */
+		event->event.row_event.flags = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+		
+		event->event.row_event.columns_len = network_mysqld_proto_get_lenenc_int(packet->data, &(packet->offset));
+
+		/* a bit-mask of used-fields (m_cols.bitmap) */
+		event->event.row_event.used_columns_len = (int)((event->event.row_event.columns_len+7)/8);
+		event->event.row_event.used_columns = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset),
+				event->event.row_event.used_columns_len);
+
+		if (event->event_type == UPDATE_ROWS_EVENT) {
+			/* the before image */
+			network_mysqld_proto_skip(packet->data, &(packet->offset), event->event.row_event.used_columns_len);
+		}
+
+		/* null-bits for all the columns */
+		event->event.row_event.null_bits_len = (int)((event->event.row_event.columns_len+7)/8);
+
+		/* the null-bits + row,
+		 *
+		 * the rows are stored in field-format, to decode we have to see
+		 * the table description
+		 */
+		event->event.row_event.row_len = packet->data->len - packet->offset;
+		event->event.row_event.row = network_mysqld_proto_get_string_len(
+				packet->data, &(packet->offset),
+				event->event.row_event.row_len);
+		
+		break;
+	case INTVAR_EVENT:
+		event->event.intvar.type = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		event->event.intvar.value = network_mysqld_proto_get_int64(packet->data, &(packet->offset));
+
+		break;
+	case XID_EVENT:
+		event->event.xid.xid_id = network_mysqld_proto_get_int64(packet->data, &(packet->offset));
+		break;
+	default:
+		g_critical("%s: unhandled binlog-event: %d", G_STRLOC, event->event_type);
+		return -1;
+	}
+
+	/* we should check if we have handled all bytes */
+
+	return 0;
+}
+
+void network_mysqld_binlog_event_free(network_mysqld_binlog_event *event) {
+	if (!event) return;
+
+	switch (event->event_type) {
+	case QUERY_EVENT:
+		if (event->event.query_event.db_name) g_free(event->event.query_event.db_name);
+		if (event->event.query_event.query) g_free(event->event.query_event.query);
+		break;
+	case ROTATE_EVENT:
+		if (event->event.rotate_event.binlog_file) g_free(event->event.rotate_event.binlog_file);
+		break;
+	case FORMAT_DESCRIPTION_EVENT:
+		if (event->event.format_event.master_version) g_free(event->event.format_event.master_version);
+		if (event->event.format_event.perm_events) g_free(event->event.format_event.perm_events);
+		break;
+	case USER_VAR_EVENT:
+		if (event->event.user_var_event.name) g_free(event->event.user_var_event.name);
+		if (event->event.user_var_event.value) g_free(event->event.user_var_event.value);
+		break;
+	case TABLE_MAP_EVENT:
+		if (event->event.table_map_event.db_name) g_free(event->event.table_map_event.db_name);
+		if (event->event.table_map_event.table_name) g_free(event->event.table_map_event.table_name);
+		if (event->event.table_map_event.columns) g_free(event->event.table_map_event.columns);
+		if (event->event.table_map_event.metadata) g_free(event->event.table_map_event.metadata);
+		if (event->event.table_map_event.null_bits) g_free(event->event.table_map_event.null_bits);
+		break;
+	case DELETE_ROWS_EVENT:
+	case UPDATE_ROWS_EVENT:
+	case WRITE_ROWS_EVENT:
+		if (event->event.row_event.used_columns) g_free(event->event.row_event.used_columns);
+		if (event->event.row_event.row) g_free(event->event.row_event.row);
+		break;
+	default:
+		break;
+	}
+
+	g_free(event);
+}
+
+
+network_mysqld_binlog_dump *network_mysqld_binlog_dump_new() {
+	network_mysqld_binlog_dump *dump;
+
+	dump = g_new0(network_mysqld_binlog_dump, 1);
+
+	return dump;
+}
+
+int network_mysqld_proto_append_binlog_dump(GString *packet, network_mysqld_binlog_dump *dump) {
+	network_mysqld_proto_append_int8(packet, COM_BINLOG_DUMP);
+	network_mysqld_proto_append_int32(packet, dump->binlog_pos);
+	network_mysqld_proto_append_int16(packet, dump->flags); /* flags */
+	network_mysqld_proto_append_int32(packet, dump->server_id);
+	g_string_append(packet, dump->binlog_file); /* filename */
+	network_mysqld_proto_append_int8(packet, 0); /* term-nul */
+
+	return 0;
+}
+
+void network_mysqld_binlog_dump_free(network_mysqld_binlog_dump *dump) {
+	if (!dump) return;
+
+	g_free(dump);
+}
+
+
+
 
 /*@}*/

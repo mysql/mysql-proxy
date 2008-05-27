@@ -1355,7 +1355,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 			lua_getfield(L, -1, "fields"); /* proxy.response.resultset.fields */
 			g_assert(lua_istable(L, -1));
 
-			fields = g_ptr_array_new();
+			fields = network_mysqld_proto_fielddefs_new();
 		
 			for (i = 1, field_count = 0; ; i++, field_count++) {
 				lua_rawgeti(L, -1, i);
@@ -1363,7 +1363,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 				if (lua_istable(L, -1)) { /** proxy.response.resultset.fields[i] */
 					MYSQL_FIELD *field;
 	
-					field = network_mysqld_proto_field_init();
+					field = network_mysqld_proto_fielddef_new();
 	
 					lua_getfield(L, -1, "name"); /* proxy.response.resultset.fields[].name */
 	
@@ -1475,7 +1475,7 @@ static int proxy_lua_handle_proxy_response(network_mysqld_con *con) {
 		 * someone should cleanup 
 		 */
 		if (fields) {
-			network_mysqld_proto_fields_free(fields);
+			network_mysqld_proto_fielddefs_free(fields);
 			fields = NULL;
 		}
 

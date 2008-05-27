@@ -12,15 +12,23 @@
 #define ioctl ioctlsocket
 
 #define STDERR_FILENO 2
+#else
+#include <unistd.h>
 #endif
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <errno.h>
+
+#include <glib.h>
+#include <glib/gstdio.h>
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
 #include "sys-pedantic.h"
+#include "glib-ext.h"
 
+#define C(x) x, sizeof(x) - 1
 
 /**
  * we have two phases
@@ -56,6 +64,11 @@ typedef struct {
 
 struct chassis_plugin_config {
 	gchar *master_address;                   /**< listening address of the proxy */
+
+	gchar *mysqld_username;
+	gchar *mysqld_password;
+
+	gchar **read_binlogs;
 
 	network_mysqld_con *listen_con;
 };
@@ -164,46 +177,60 @@ static int network_mysqld_resultset_master_status(chassis *UNUSED_PARAM(srv), ne
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
-	GString *s;
-	GList *chunk;
+	GString *packet;
 	network_socket *recv_sock;
 	network_socket *send_sock = NULL;
-	const char auth[] = 
-		"\x85\xa6\x03\x00" /** client flags */
-		"\x00\x00\x00\x01" /** max packet size */
-		"\x08"             /** charset */
-		"\x00\x00\x00\x00"
-		"\x00\x00\x00\x00"
-		"\x00\x00\x00\x00"
-		"\x00\x00\x00\x00"
-		"\x00\x00\x00\x00"
-		"\x00\x00\x00"     /** fillers */
-		"repl\x00"         /** nul-term username */
-#if 0
-		"\x00\x00\x00\x00"
-		"\x00\x00\x00\x00" /** scramble buf */
-#endif
-		"\x00"
-#if 0
-		"\x00"             /** nul-term db-name */
-#endif
-		;
+	chassis_plugin_config *config = con->config;
+	network_mysqld_auth_challenge *shake;
+	network_mysqld_auth_response  *auth;
 	
 	recv_sock = con->server;
 	send_sock = con->server;
 
-	chunk = recv_sock->recv_queue->chunks->tail;
-	s = chunk->data;
+	/* there should only be on packet */
 
-	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
+	packet = g_queue_peek_tail(recv_sock->recv_queue->chunks);
 
-	g_string_free(chunk->data, TRUE);
+	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) {
+		/**
+		 * packet is too short, looks nasty.
+		 *
+		 * report an error and let the core send a error to the 
+		 * client
+		 */
+
+		return NETWORK_SOCKET_ERROR;
+	}
+
+	shake = network_mysqld_auth_challenge_new();
+	network_mysqld_proto_get_auth_challenge(packet, shake);
+
+	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
+
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 
-	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+	/* build the auth packet */
+	packet = g_string_new(NULL);
 
-	/* we have to reply with a useful password */
-	network_mysqld_queue_append(send_sock->send_queue, auth, sizeof(auth) - 1, send_sock->packet_id + 1);
+	auth = network_mysqld_auth_response_new();
+
+	auth->capabilities = shake->capabilities;
+	auth->charset      = shake->charset;
+
+	if (config->mysqld_username) {
+		g_string_append(auth->username, config->mysqld_username);
+	}
+
+	if (config->mysqld_password) {
+		network_mysqld_proto_scramble(auth->response, shake->challenge, config->mysqld_password);
+	}
+
+	network_mysqld_proto_append_auth_response(packet, auth);
+
+	network_mysqld_queue_append(send_sock->send_queue, packet->str, packet->len, send_sock->packet_id + 1);
+
+	network_mysqld_auth_response_free(auth);
+	network_mysqld_auth_challenge_free(shake);
 
 	con->state = CON_STATE_SEND_AUTH;
 
@@ -437,152 +464,26 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 
 			break;
 		case MYSQLD_PACKET_OK: {
-			struct {
-				guint32 timestamp;
-				enum Log_event_type event_type;
-				guint32 server_id;
-				guint32 event_size;
-				guint32 log_pos;
-				guint16 flags;
-			} binlog;
-			guint off;
-			
-			/**
-			 * decoding the binlog packet
-			 *
-			 * - http://dev.mysql.com/doc/internals/en/replication-common-header.html
-			 *
-			 * /\0\0\1
-			 *   \0         - OK
-			 *     \0\0\0\0 - timestamp
-			 *     \4       - ROTATE
-			 *     \1\0\0\0 - server-id
-			 *     .\0\0\0  - event-size
-			 *     \0\0\0\0 - log-pos
-			 *     \0\0     - flags
-			 *     f\0\0\0\0\0\0\0hostname-bin.000009
-			 * c\0\0\2
-			 *   \0 
-			 *     F\335\6F - timestamp
-			 *     \17      - FORMAT_DESCRIPTION_EVENT
-			 *     \1\0\0\0 - server-id
-			 *     b\0\0\0  - event-size
-			 *     \0\0\0\0 - log-pos
-			 *     \0\0     - flags
-			 *     \4\0005.1.16-beta-log\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0238\r\0\10\0\22\0\4\4\4\4\22\0\0O\0\4\32\10\10\10\10
-			 * N\0\0\3
-			 *   \0          
-			 *     g\255\7F   - timestamp
-			 *     \2         - QUERY_EVENT
-			 *     \1\0\0\0   - server-id
-			 *     M\0\0\0    - event-size
-			 *     \263\0\0\0 - log-pos
-			 *     \20\0      - flags
-			 *       \2\0\0\0 - thread-id
-			 *       \0\0\0\0 - query-time
-			 *       \5       - str-len of default-db (world)
-			 *       \0\0     - error-code on master-side
-			 *         \32\0  - var-size-len (5.0 and later)
-			 *           \0   - Q_FLAGS2_CODE
-			 *             \0@\0\0 - flags (4byte)
-			 *           \1   - Q_SQL_MODE_CODE
-			 *             \0\0\0\0\0\0\0\0 (8byte)
-			 *           \6   - Q_CATALOG_NZ_CODE
-			 *             \3std (4byte)
-			 *           \4   - Q_CHARSET_CODE
-			 *             \10\0\10\0\10\0 (6byte)
-			 *           world\0 - 
-			 *           drop table t1
-			 * Y\0\0\4
-			 *   \0 
-			 *     \261\255\7F
-			 *     \2
-			 *     \1\0\0\0
-			 *     X\0\0\0
-			 *     \v\1...
-			 *
-			 */
-
-
-			network_mysqld_proto_skip(packet, &off, NET_HEADER_SIZE + 1);
-
-			binlog.timestamp  = network_mysqld_proto_get_int32(packet, &off);
-			binlog.event_type = network_mysqld_proto_get_int8(packet, &off);
-			binlog.server_id  = network_mysqld_proto_get_int32(packet, &off);
-			binlog.event_size = network_mysqld_proto_get_int32(packet, &off);
-			binlog.log_pos    = network_mysqld_proto_get_int32(packet, &off);
-			binlog.flags      = network_mysqld_proto_get_int16(packet, &off);
-
-
-#if 0
-			g_message("%s.%d: timestamp = %u, event_type = %02x, server_id = %u, event-size = %u, log-pos = %u, flags = %04x", 
-					__FILE__, __LINE__,
-					binlog.timestamp, 
-					binlog.event_type,
-					binlog.server_id,
-					binlog.event_size,
-					binlog.log_pos,
-									binlog.flags);
-#endif
-
-			switch (binlog.event_type) {
-			case QUERY_EVENT: {
-				struct {
-					guint32 thread_id;
-					guint32 exec_time;
-					guint8  db_name_len;
-					guint16 error_code;
-				} query_event;
-				
-				guint16 var_size = 0;
-				gchar *query_str = NULL;
-				
-				query_event.thread_id   = network_mysqld_proto_get_int32(packet, &off);
-				query_event.exec_time   = network_mysqld_proto_get_int32(packet, &off);
-				query_event.db_name_len = network_mysqld_proto_get_int8(packet, &off);
-				query_event.error_code  = network_mysqld_proto_get_int16(packet, &off);
-
-				/* 5.0 has more flags */
-
-				var_size    = network_mysqld_proto_get_int16(packet, &off);
-
-				network_mysqld_proto_skip(packet, &off, var_size);
-
-				/* default db has <db_name_len> chars */
-
-				network_mysqld_proto_skip(packet, &off, query_event.db_name_len);
-				network_mysqld_proto_skip(packet, &off, 1); /* the \0 */
-
-				query_str = g_strndup(packet->str + off, recv_sock->packet_len - off + NET_HEADER_SIZE);
-#define CONST_STR_LEN(x) x, sizeof(x) - 1
-				/* parse the query string if it is a DDL statement */
-				if (0 == g_ascii_strncasecmp(query_str, CONST_STR_LEN("drop table ")) ||
-				    0 == g_ascii_strncasecmp(query_str, CONST_STR_LEN("create table ")) ||
-				    0 == g_ascii_strncasecmp(query_str, CONST_STR_LEN("alter table ")) ||
-				    0 == g_ascii_strncasecmp(query_str, CONST_STR_LEN("create database ")) ||
-				    0 == g_ascii_strncasecmp(query_str, CONST_STR_LEN("alter database ")) ||
-				    0 == g_ascii_strncasecmp(query_str, CONST_STR_LEN("drop database ")) ||
-				    0 == g_ascii_strncasecmp(query_str, CONST_STR_LEN("create index ")) ||
-				    0 == g_ascii_strncasecmp(query_str, CONST_STR_LEN("drop index "))) {
-#if 1
-					g_message("(DDL) thread-id = %u, exec_time = %u, error-code = %04x\n  QUERY: %s", 
-							query_event.thread_id,
-							query_event.exec_time,
-							query_event.error_code,
-							query_str);
-#endif
-
-				}
-
-				g_free(query_str);
-
-				
-				break; }
-			default:
-				break;
-			}
-
 			/* looks like the binlog dump started */
+			network_mysqld_binlog *binlog;
+			network_mysqld_binlog_event *event;
+			network_packet *npack = network_packet_new();
+			npack->data = packet;
+
+			binlog = network_mysqld_binlog_new();
+			event = network_mysqld_binlog_event_new();
+
+			network_mysqld_proto_skip_network_header(npack);
+			network_mysqld_proto_get_binlog_status(npack);
+			network_mysqld_proto_get_binlog_event_header(npack, event);
+			network_mysqld_proto_get_binlog_event(npack, binlog, event);
+
+			network_mysqld_binlog_event_free(event);
+			network_mysqld_binlog_free(binlog);
+
+			npack->data = NULL; /* don't free it */
+			network_packet_free(npack);
+
 			is_finished = 1;
 
 			break; }
@@ -618,6 +519,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 		 * */
 		GString *query_packet;
 		int my_server_id = 2;
+		network_mysqld_binlog_dump *dump;
 
 		switch (st->state) {
 		case REPCLIENT_BINLOG_GET_POS:
@@ -630,24 +532,19 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 
 			st->state = REPCLIENT_BINLOG_DUMP;
 
+			dump = network_mysqld_binlog_dump_new();
+			dump->binlog_pos  = st->binlog_pos;
+			dump->server_id   = my_server_id;
+			dump->binlog_file = g_strdup(st->binlog_file);
+
 			query_packet = g_string_new(NULL);
 
-			g_string_append_c(query_packet, '\x12'); /** COM_BINLOG_DUMP */
-			g_string_append_c(query_packet, (st->binlog_pos >>  0) & 0xff); /* position */
-			g_string_append_c(query_packet, (st->binlog_pos >>  8) & 0xff);
-			g_string_append_c(query_packet, (st->binlog_pos >> 16) & 0xff);
-			g_string_append_c(query_packet, (st->binlog_pos >> 24) & 0xff);
-			g_string_append_c(query_packet, '\x00'); /* flags */
-			g_string_append_c(query_packet, '\x00');
-			g_string_append_c(query_packet, (my_server_id >>  0) & 0xff); /* server-id */
-			g_string_append_c(query_packet, (my_server_id >>  8) & 0xff);
-			g_string_append_c(query_packet, (my_server_id >> 16) & 0xff);
-			g_string_append_c(query_packet, (my_server_id >> 24) & 0xff);
-			g_string_append(query_packet, st->binlog_file); /* filename */
-			g_string_append_c(query_packet, '\x00');
+			network_mysqld_proto_append_binlog_dump(query_packet, dump);
 		       	
 			send_sock = con->server;
 			network_mysqld_queue_append(send_sock->send_queue, query_packet->str, query_packet->len, 0);
+
+			network_mysqld_binlog_dump_free(dump);
 		
 			g_string_free(query_packet, TRUE);
 		
@@ -749,6 +646,10 @@ void network_mysqld_replicant_plugin_free(chassis_plugin_config *config) {
 		g_free(config->master_address);
 	}
 
+	if (config->mysqld_username) g_free(config->mysqld_username);
+	if (config->mysqld_password) g_free(config->mysqld_password);
+	if (config->read_binlogs) g_strfreev(config->read_binlogs);
+
 	g_free(config);
 }
 
@@ -762,13 +663,286 @@ static GOptionEntry * network_mysqld_replicant_plugin_get_options(chassis_plugin
 	static GOptionEntry config_entries[] = 
 	{
 		{ "replicant-master-address",            0, 0, G_OPTION_ARG_STRING, NULL, "... (default: :4040)", "<host:port>" },
+		{ "replicant-username",                  0, 0, G_OPTION_ARG_STRING, NULL, "username", "" },
+		{ "replicant-password",                  0, 0, G_OPTION_ARG_STRING, NULL, "password", "" },
+		{ "replicant-read-binlogs",              0, 0, G_OPTION_ARG_FILENAME_ARRAY, NULL, "password", "" },
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 
 	i = 0;
 	config_entries[i++].arg_data = &(config->master_address);
+	config_entries[i++].arg_data = &(config->mysqld_username);
+	config_entries[i++].arg_data = &(config->mysqld_password);
+	config_entries[i++].arg_data = &(config->read_binlogs);
 	
 	return config_entries;
+}
+
+#if 1 
+static void dump_str(const char *msg, const unsigned char *s, size_t len) {
+	GString *hex;
+	size_t i;
+		
+       	hex = g_string_new(NULL);
+
+	for (i = 0; i < len; i++) {
+		g_string_append_printf(hex, "%02x", s[i]);
+
+		if ((i + 1) % 16 == 0) {
+			int j;
+			g_string_append(hex, "  ");
+			for (j = i - 15; j <= i; j++) {
+				g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
+			}
+			g_string_append(hex, "\n  ");
+		} else {
+			g_string_append_c(hex, ' ');
+		}
+	}
+
+	if (i % 16 != 0) {
+		/* fill up the line */
+		int j;
+
+		for (j = 0; j < 16 - (i % 16); j++) {
+			g_string_append(hex, "   ");
+		}
+
+		g_string_append(hex, " ");
+		for (j = i - (len % 16); j <= i; j++) {
+			g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
+		}
+	}
+
+	g_message("(%s):\n  %s", msg, hex->str);
+
+	g_string_free(hex, TRUE);
+}
+#endif
+
+int network_mysqld_binlog_event_print(network_mysqld_binlog_event *event) {
+	guint i;
+	int metadata_offset = 0;
+#if 1
+	g_message("%s: timestamp = %u, type = %u, server-id = %u, size = %u, pos = %u, flags = %04x",
+			G_STRLOC,
+			event->timestamp,
+			event->event_type,
+			event->server_id,
+			event->event_size,
+			event->log_pos,
+			event->flags);
+#endif
+
+	switch (event->event_type) {
+	case QUERY_EVENT: /* 2 */
+#if 1
+		g_message("%s: QUERY: thread_id = %d, exec_time = %d, error-code = %d\ndb = %s, query = %s",
+				G_STRLOC,
+				event->event.query_event.thread_id,
+				event->event.query_event.exec_time,
+				event->event.query_event.error_code,
+				event->event.query_event.db_name ? event->event.query_event.db_name : "(null)",
+				event->event.query_event.query ? event->event.query_event.query : "(null)"
+			 );
+#endif
+		break;
+	case STOP_EVENT:
+		break;
+	case TABLE_MAP_EVENT:
+		g_message("%s: (table-definition) table-id = %"G_GUINT64_FORMAT", flags = %04x, db = %s, table = %s",
+				G_STRLOC,
+				event->event.table_map_event.table_id,
+				event->event.table_map_event.flags,
+				event->event.table_map_event.db_name ? event->event.table_map_event.db_name : "(null)",
+				event->event.table_map_event.table_name ? event->event.table_map_event.table_name : "(null)"
+			 );
+		g_message("%s: (table-definition) columns = %d",
+				G_STRLOC,
+				event->event.table_map_event.columns_len
+			 );
+
+		/* the metadata is field specific */
+		for (i = 0; i < event->event.table_map_event.columns_len; i++) {
+			MYSQL_FIELD *field = network_mysqld_proto_fielddef_new();
+			enum enum_field_types col_type;
+
+			col_type = event->event.table_map_event.columns[i];
+
+			/* the meta-data depends on the type,
+			 *
+			 * string has 2 byte field-length
+			 * floats have precision
+			 * ints have display length
+			 * */
+			switch (col_type) {
+			case MYSQL_TYPE_STRING: /* 254 */
+				/* byte 0: real_type 
+				 * byte 1: field-length
+				 */
+				field->type = event->event.table_map_event.metadata[metadata_offset + 0];
+				field->length = event->event.table_map_event.metadata[metadata_offset + 1];
+				metadata_offset += 2;
+				break;
+			case MYSQL_TYPE_VAR_STRING:
+				/* 2 byte length (int2store)
+				 */
+				field->type = col_type;
+				field->length = 
+					((guchar)event->event.table_map_event.metadata[metadata_offset + 0]) |
+					((guchar)event->event.table_map_event.metadata[metadata_offset + 1]) << 8;
+				metadata_offset += 2;
+				break;
+			case MYSQL_TYPE_BLOB: /* 252 */
+				field->type = col_type;
+				metadata_offset += 1; /* the packlength (1 .. 4) */
+				break;
+			case MYSQL_TYPE_DECIMAL:
+				field->type = col_type;
+				metadata_offset += 2;
+				/**
+				 * byte 0: precisions
+				 * byte 1: decimals
+				 */
+				break;
+			case MYSQL_TYPE_DOUBLE:
+			case MYSQL_TYPE_FLOAT:
+				field->type = col_type;
+				/* pack-length */
+				metadata_offset += 1;
+				break;
+			case MYSQL_TYPE_ENUM:
+				/* real-type (ENUM|SET)
+				 * pack-length
+				 */
+				field->type = event->event.table_map_event.metadata[metadata_offset + 0];
+				metadata_offset += 2;
+				break;
+			case MYSQL_TYPE_BIT:
+				metadata_offset += 2;
+				break;
+			default:
+				field->type = col_type;
+				metadata_offset += 0;
+				break;
+			}
+
+			g_message("%s: (column-definition) [%d] type = %d, length = %lu",
+					G_STRLOC,
+					i,
+					field->type,
+					field->length
+				 );
+
+			network_mysqld_proto_fielddef_free(field);
+		}
+		break;
+	case FORMAT_DESCRIPTION_EVENT: /* 15 */
+		break;
+	case INTVAR_EVENT: /* 5 */
+	 	break;
+	case XID_EVENT: /* 16 */
+		break;
+	case ROTATE_EVENT: /* 4 */
+		break;
+	default:
+		g_message("%s: unknown event-type: %d",
+				G_STRLOC,
+				event->event_type);
+		return -1;
+	}
+	return 0;
+}
+
+int replicate_binlog_dump_file(const char *filename) {
+	int fd;
+	char binlog_header[4];
+	network_packet *packet;
+	network_mysqld_binlog *binlog;
+	network_mysqld_binlog_event *event;
+
+	if (-1 == (fd = g_open(filename, O_RDONLY, 0))) {
+		g_critical("%s: opening '%s' failed: %s",
+				G_STRLOC,
+				filename,
+				g_strerror(errno));
+		return -1;
+	}
+
+	if (4 != read(fd, binlog_header, 4)) {
+		g_return_val_if_reached(-1);
+	}
+
+	if (binlog_header[0] != '\xfe' ||
+	    binlog_header[1] != 'b' ||
+	    binlog_header[2] != 'i' ||
+	    binlog_header[3] != 'n') {
+
+		g_critical("%s: binlog-header should be: %02x%02x%02x%02x, got %02x%02x%02x%02x",
+				G_STRLOC,
+				'\xfe', 'b', 'i', 'n',
+				binlog_header[0],
+				binlog_header[1],
+				binlog_header[2],
+				binlog_header[3]
+				);
+
+		g_return_val_if_reached(-1);
+	}
+
+	packet = network_packet_new();
+	packet->data = g_string_new(NULL);
+	g_string_set_size(packet->data, 19 + 1);
+
+	binlog = network_mysqld_binlog_new();
+
+	/* next are the events, without the mysql packet header */
+	while (19 == (packet->data->len = read(fd, packet->data->str, 19))) {
+		gssize len;
+		packet->data->str[packet->data->len] = '\0'; /* term the string */
+
+		g_assert_cmpint(packet->data->len, ==, 19);
+
+		event = network_mysqld_binlog_event_new();
+		network_mysqld_proto_get_binlog_event_header(packet, event);
+
+		g_assert_cmpint(event->event_size, >=, 19);
+
+		g_string_set_size(packet->data, event->event_size); /* resize the string */
+		packet->data->len = 19;
+
+		len = read(fd, packet->data->str + 19, event->event_size - 19);
+
+		if (-1 == len) {
+			g_critical("%s: lseek(..., %d, ...) failed: %s",
+					G_STRLOC,
+					event->event_size - 19,
+					g_strerror(errno));
+			return -1;
+		}
+		g_assert_cmpint(len, ==, event->event_size - 19);
+		g_assert_cmpint(packet->data->len, ==, 19);
+		packet->data->len += len;
+		g_assert_cmpint(packet->data->len, ==, event->event_size);
+		
+		if (network_mysqld_proto_get_binlog_event(packet, binlog, event)) {
+			dump_str(G_STRLOC, packet->data->str + 19, packet->data->len - 19);
+		} else if (network_mysqld_binlog_event_print(event)) {
+			/* ignore it */
+		}
+	
+		network_mysqld_binlog_event_free(event);
+
+		packet->offset = 0;
+	}
+	g_string_free(packet->data, TRUE);
+	network_packet_free(packet);
+
+	network_mysqld_binlog_free(binlog);
+
+	close(fd);
+
+	return 0;
 }
 
 /**
@@ -776,11 +950,29 @@ static GOptionEntry * network_mysqld_replicant_plugin_get_options(chassis_plugin
  */
 int network_mysqld_replicant_plugin_apply_config(chassis G_GNUC_UNUSED *chas, chassis_plugin_config *config) {
 	if (!config->master_address) config->master_address = g_strdup(":4040");
+	if (!config->mysqld_username) config->mysqld_username = g_strdup("repl");
+	if (!config->mysqld_password) config->mysqld_password = g_strdup("");
+
+	if (config->read_binlogs) {
+		int i;
+
+		/* we have a list of filenames we shall decode */
+		for (i = 0; config->read_binlogs[i]; i++) {
+			char *filename = config->read_binlogs[i];
+
+			replicate_binlog_dump_file(filename);
+		}
+
+		/* we are done, shutdown */
+		chassis_set_shutdown();
+	}
 
 	return 0;
 }
 
 G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
+	p->magic        = CHASSIS_PLUGIN_MAGIC;
+	p->name         = g_strdup("replicant");
 	/* append the our init function to the init-hook-list */
 
 	p->init         = network_mysqld_replicant_plugin_init;
