@@ -3,6 +3,11 @@
 @IF DEFINED DEPS_PATH (GOTO MYSQL_CONF)
 @SET DEPS_PATH=%CD%\..\..\mysql-lb-deps\win32
 
+@IF DEFINED GENERATOR (GOTO MYSQL_CONF)
+@rem Sane default is VS2005, but maybe not what we really want...
+@SET GENERATOR="Visual Studio 8 2005"
+@GOTO MYSQL_CONF
+
 :MYSQL_CONF
 @IF DEFINED MYSQL_DIR (GOTO GENERAL_CONF)
 @SET MYSQL_DIR="C:\Program Files\MySQL\MySQL Server 5.0"
@@ -14,6 +19,7 @@
 
 @echo Using MySQL server from %MYSQL_DIR%
 @echo Using dependencies from %DEPS_PATH%
+@echo Using %GENERATOR%
 
 @echo Checking for NSIS...
 @reg query HKLM\Software\NSIS /v VersionMajor
@@ -47,14 +53,23 @@
 
 @rem clear the cache if neccesary to let cmake recheck everything
 @rem del CMakeCache.txt
- 
-@cmake -DMYSQL_LIBRARY_DIRS:PATH=%MYSQL_DIR%\lib\debug -DMYSQL_INCLUDE_DIRS:PATH=%MYSQL_DIR%\include -DGLIB_LIBRARY_DIRS:PATH=%GLIB_DIR%\lib -DGLIB_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGMODULE_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGTHREAD_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include .
 
+:CMAKE
+@cmake -G %GENERATOR% -DMYSQL_LIBRARY_DIRS:PATH=%MYSQL_DIR%\lib\debug -DMYSQL_INCLUDE_DIRS:PATH=%MYSQL_DIR%\include -DGLIB_LIBRARY_DIRS:PATH=%GLIB_DIR%\lib -DGLIB_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGMODULE_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGTHREAD_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include .
+
+@IF NOT %GENERATOR%=="NMake Makefiles" (GOTO VS08BUILD)
+nmake
+
+@GOTO CLEANUP
+
+:VS08BUILD
 %VS_CMD% mysql-proxy.sln /Clean
-%VS_CMD% mysql-proxy.sln /Build Release
-%VS_CMD% mysql-proxy.sln /Build Release /project RUN_TESTS
-%VS_CMD% mysql-proxy.sln /Build Release /project PACKAGE
-%VS_CMD% mysql-proxy.sln /Build Release /project INSTALL
+%VS_CMD% mysql-proxy.sln /Build Debug
+%VS_CMD% mysql-proxy.sln /Build Debug /project RUN_TESTS
+%VS_CMD% mysql-proxy.sln /Build Debug /project PACKAGE
+%VS_CMD% mysql-proxy.sln /Build Debug /project INSTALL
+
+@GOTO CLEANUP
 
 @rem if you use VS8 to build then VS80COMNTOOLS should be set
 @rem "%VS80COMNTOOLS%\..\IDE\devenv.com" mysql-proxy.sln /Clean
@@ -63,6 +78,7 @@
 @rem "%VS80COMNTOOLS%\..\IDE\devenv.com" mysql-proxy.sln /Build Debug /project PACKAGE
 @rem "%VS80COMNTOOLS%\..\IDE\devenv.com" mysql-proxy.sln /Build Debug /project INSTALL
 
+:CLEANUP
 
 @IF %CLEANUP_NSIS% EQU 1 (GOTO REMOVEKEYS)
 @echo leaving existing keys untouched
