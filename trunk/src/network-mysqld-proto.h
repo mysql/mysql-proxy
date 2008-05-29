@@ -111,6 +111,7 @@ NETWORK_API guint64 network_mysqld_proto_get_int_len(GString *packet, guint *_of
 
 NETWORK_API guint8 network_mysqld_proto_get_int8(GString *packet, guint *_off);
 NETWORK_API guint16 network_mysqld_proto_get_int16(GString *packet, guint *_off);
+NETWORK_API guint32 network_mysqld_proto_get_int24(GString *packet, guint *_off);
 NETWORK_API guint32 network_mysqld_proto_get_int32(GString *packet, guint *_off);
 NETWORK_API guint64 network_mysqld_proto_get_int48(GString *packet, guint *_off);
 NETWORK_API guint64 network_mysqld_proto_get_int64(GString *packet, guint *_off);

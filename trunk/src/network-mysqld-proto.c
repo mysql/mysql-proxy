@@ -176,7 +176,7 @@ int network_mysqld_proto_append_error_packet(GString *packet, const char *errmsg
  *
  */
 void network_mysqld_proto_skip(GString *packet, guint *_off, gsize size) {
-	g_assert(*_off + size <= packet->len);
+	g_assert_cmpint(*_off + size, <=, packet->len);
 	
 	*_off += size;
 }
@@ -235,6 +235,19 @@ guint16 network_mysqld_proto_get_int16(GString *packet, guint *_off) {
 }
 
 /**
+ * get a 24-bit integer from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return a the decoded integer
+ * @see network_mysqld_proto_get_int_len()
+ */
+guint32 network_mysqld_proto_get_int24(GString *packet, guint *_off) {
+	return network_mysqld_proto_get_int_len(packet, _off, 3);
+}
+
+
+/**
  * get a 32-bit integer from the network packet
  *
  * @param packet the MySQL network packet
@@ -281,7 +294,9 @@ guint64 network_mysqld_proto_get_int64(GString *packet, guint *_off) {
 gchar *network_mysqld_proto_get_string_len(GString *packet, guint *_off, gsize len) {
 	gchar *str;
 
-	g_assert(*_off < packet->len);
+	if (len == 0) return NULL;
+
+	g_assert_cmpint(*_off, <, packet->len);
 	if (*_off + len > packet->len) {
 		g_error("%s: packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, 
 				G_STRLOC,
@@ -316,8 +331,8 @@ gchar *network_mysqld_proto_get_lenenc_string(GString *packet, guint *_off, guin
 
 	len = network_mysqld_proto_get_lenenc_int(packet, _off);
 	
-	g_assert(*_off < packet->len);
-	g_assert(*_off + len <= packet->len);
+	g_assert_cmpint(*_off, <, packet->len);
+	g_assert_cmpint(*_off + len, <=, packet->len);
 
 	if (_len) *_len = len;
 	
