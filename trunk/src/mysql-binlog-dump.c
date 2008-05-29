@@ -83,6 +83,8 @@ void network_mysqld_proto_field_free(network_mysqld_proto_field *field) {
 	if (!field) return;
 
 	switch ((guchar)field->type) {
+	case MYSQL_TYPE_TIMESTAMP:
+	case MYSQL_TYPE_DATE:
 	case MYSQL_TYPE_LONG:
 		break;
 	case MYSQL_TYPE_VARCHAR:
@@ -104,6 +106,8 @@ int network_mysqld_proto_field_get(network_packet *packet,
 		network_mysqld_proto_field *field) {
 
 	switch ((guchar)field->type) {
+	case MYSQL_TYPE_TIMESTAMP: /* int4store */
+	case MYSQL_TYPE_DATE:      /* int4store */
 	case MYSQL_TYPE_LONG:
 		field->data.i = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
 		break;
@@ -177,6 +181,8 @@ struct {
 	{ MYSQL_TYPE_STRING, "CHAR" },
 	{ MYSQL_TYPE_VARCHAR, "VARCHAR" },
 	{ MYSQL_TYPE_LONG, "INT" },
+	{ MYSQL_TYPE_TIMESTAMP, "TIMESTAMP" },
+	{ MYSQL_TYPE_DATE, "DATE" },
 
 	{ 0, NULL }
 };
@@ -188,6 +194,10 @@ const char *network_mysqld_proto_field_get_typestring(enum enum_field_types type
 	for (i = 0; field_type_name[i].name; i++) {
 		if (field_type_name[i].type == type) return field_type_name[i].name;
 	}
+
+	g_critical("%s: field-type %d isn't known yet", 
+			G_STRLOC,
+			type);
 
 	return unknown_type;
 }
@@ -371,7 +381,14 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 		GString row;
 		tbl = g_hash_table_lookup(binlog->rbr_tables, &(event->event.row_event.table_id));
 
-		g_assert(tbl);
+		if (!tbl) {
+			g_critical("%s: table-id: %"G_GUINT64_FORMAT" isn't known, needed for a %d event",
+					G_STRLOC,
+					event->event.row_event.table_id,
+					event->event_type
+					);
+			break;
+		}
 
 		row.str = event->event.row_event.row;
 		row.len = event->event.row_event.row_len;
@@ -420,10 +437,18 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 					} else {
 						switch((guchar)field->type) {
 						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_TIMESTAMP:
 							g_string_append_printf(out, "field_%d = %"G_GUINT64_FORMAT, i, field->data.i);
 							break;
-						default:
+						case MYSQL_TYPE_VARCHAR:
+						case MYSQL_TYPE_VAR_STRING:
+						case MYSQL_TYPE_STRING:
 							g_string_append_printf(out, "field_%d = '%s'", i, field->data.s);
+							break;
+						default:
+							g_error("%s: field-type %d isn't known",
+									G_STRLOC,
+									field->type);
 							break;
 						}
 					}
@@ -439,11 +464,20 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						g_string_append_printf(out, "field_%d IS NULL", i);
 					} else {
 						switch((guchar)field->type) {
+						case MYSQL_TYPE_TIMESTAMP:
+						case MYSQL_TYPE_DATE:
 						case MYSQL_TYPE_LONG:
 							g_string_append_printf(out, "field_%d = %"G_GUINT64_FORMAT, i, field->data.i);
 							break;
-						default:
+						case MYSQL_TYPE_VARCHAR:
+						case MYSQL_TYPE_VAR_STRING:
+						case MYSQL_TYPE_STRING:
 							g_string_append_printf(out, "field_%d = '%s'", i, field->data.s);
+							break;
+						default:
+							g_error("%s: field-type %d isn't known",
+									G_STRLOC,
+									field->type);
 							break;
 						}
 					}
@@ -463,11 +497,19 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						g_string_append(out, "NULL");
 					} else {
 						switch((guchar)field->type) {
+						case MYSQL_TYPE_TIMESTAMP:
 						case MYSQL_TYPE_LONG:
 							g_string_append_printf(out, "%"G_GUINT64_FORMAT, field->data.i);
 							break;
-						default:
+						case MYSQL_TYPE_VARCHAR:
+						case MYSQL_TYPE_VAR_STRING:
+						case MYSQL_TYPE_STRING:
 							g_string_append_printf(out, "'%s'", field->data.s);
+							break;
+						default:
+							g_error("%s: field-type %d isn't known",
+									G_STRLOC,
+									field->type);
 							break;
 						}
 					}
@@ -489,11 +531,20 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						g_string_append_printf(out, "field_%d IS NULL", i);
 					} else {
 						switch((guchar)field->type) {
+						case MYSQL_TYPE_TIMESTAMP:
 						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_DATE:
 							g_string_append_printf(out, "field_%d = %"G_GUINT64_FORMAT, i, field->data.i);
 							break;
-						default:
+						case MYSQL_TYPE_VARCHAR:
+						case MYSQL_TYPE_VAR_STRING:
+						case MYSQL_TYPE_STRING:
 							g_string_append_printf(out, "field_%d = '%s'", i, field->data.s);
+							break;
+						default:
+							g_error("%s: field-type %d isn't known",
+									G_STRLOC,
+									field->type);
 							break;
 						}
 					}
