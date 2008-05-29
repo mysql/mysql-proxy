@@ -5,7 +5,7 @@
 int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, GOptionEntry *config_entries) {
 	GError *gerr = NULL;
 	int ret = 0;
-	int i;
+	int i, j;
 	
 	/* all the options are in the group for "mysql-proxy" */
 
@@ -29,7 +29,8 @@ int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, G
 
 			arg_string = g_key_file_get_string(keyfile, ini_group_name, entry->long_name, &gerr);
 			if (!gerr) {
-				*(gchar **)(entry->arg_data) = arg_string;
+				/* strip trailing spaces */
+				*(gchar **)(entry->arg_data) = g_strchomp(arg_string);
 			}
 			break;
 		case G_OPTION_ARG_STRING_ARRAY: 
@@ -38,6 +39,9 @@ int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, G
 
 			arg_string_array = g_key_file_get_string_list(keyfile, ini_group_name, entry->long_name, &len, &gerr);
 			if (!gerr) {
+				for (j = 0; arg_string_array[j]; j++) {
+					g_strchomp(arg_string_array[j]);
+				}	
 				*(gchar ***)(entry->arg_data) = arg_string_array;
 			}
 			break;
