@@ -765,12 +765,13 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 /**
  * read a binlog file
  */
-int replicate_binlog_dump_file(const char *filename) {
+int replicate_binlog_dump_file(const char *filename, gint startpos) {
 	int fd;
 	char binlog_header[4];
 	network_packet *packet;
 	network_mysqld_binlog *binlog;
 	network_mysqld_binlog_event *event;
+	off_t binlog_pos;
 
 	if (-1 == (fd = g_open(filename, O_RDONLY, 0))) {
 		g_critical("%s: opening '%s' failed: %s",
@@ -806,6 +807,20 @@ int replicate_binlog_dump_file(const char *filename) {
 	g_string_set_size(packet->data, 19 + 1);
 
 	binlog = network_mysqld_binlog_new();
+	binlog_pos = 4;
+
+	if (startpos) {
+		if (-1 == lseek(fd, startpos, SEEK_SET)) {
+			g_critical("%s: lseek(%d) failed: %s", 
+					G_STRLOC,
+					startpos,
+					g_strerror(errno)
+					);
+			g_return_val_if_reached(-1);
+		}
+
+		binlog_pos = startpos;
+	}
 
 	/* next are the events, without the mysql packet header */
 	while (19 == (packet->data->len = read(fd, packet->data->str, 19))) {
@@ -813,11 +828,21 @@ int replicate_binlog_dump_file(const char *filename) {
 		packet->data->str[packet->data->len] = '\0'; /* term the string */
 
 		g_assert_cmpint(packet->data->len, ==, 19);
-
+	
 		event = network_mysqld_binlog_event_new();
 		network_mysqld_proto_get_binlog_event_header(packet, event);
 
+		g_print("-- %s: (--binlog-start-pos=%ld (next event at %"G_GUINT32_FORMAT"))\n",
+				G_STRLOC,
+				binlog_pos,
+				event->log_pos
+				);
+		
 		g_assert_cmpint(event->event_size, >=, 19);
+
+		g_assert_cmpint(binlog_pos + event->event_size, ==, event->log_pos);
+
+		binlog_pos += 19;
 
 		g_string_set_size(packet->data, event->event_size); /* resize the string */
 		packet->data->len = 19;
@@ -846,6 +871,7 @@ int replicate_binlog_dump_file(const char *filename) {
 		network_mysqld_binlog_event_free(event);
 
 		packet->offset = 0;
+		binlog_pos += len;
 	}
 	g_string_free(packet->data, TRUE);
 	network_packet_free(packet);
@@ -876,6 +902,7 @@ int main(int argc, char **argv) {
 
 	GKeyFile *keyfile = NULL;
 	chassis_log *log;
+	gint binlog_start_pos = 0;
 
 	/* can't appear in the configfile */
 	GOptionEntry base_main_entries[] = 
@@ -893,6 +920,7 @@ int main(int argc, char **argv) {
 		{ "log-use-syslog",           0, 0, G_OPTION_ARG_NONE, NULL, "send all log-messages to syslog", NULL },
 		
 		{ "binlog-file",              0, 0, G_OPTION_ARG_FILENAME, NULL, "binlog filename", NULL },
+		{ "binlog-start-pos",         0, 0, G_OPTION_ARG_INT, NULL, "binlog start position", NULL },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -955,6 +983,7 @@ int main(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(log->log_filename);
 	main_entries[i++].arg_data  = &(log->use_syslog);
 	main_entries[i++].arg_data  = &(binlog_filename);
+	main_entries[i++].arg_data  = &(binlog_start_pos);
 
 	option_ctx = g_option_context_new("- MySQL Binlog Dump");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
@@ -1046,7 +1075,10 @@ int main(int argc, char **argv) {
 		goto exit_nicely;
 	}
 
-	replicate_binlog_dump_file(binlog_filename);
+	replicate_binlog_dump_file(
+			binlog_filename,
+			binlog_start_pos
+			);
 
 exit_nicely:
 	if (option_ctx) g_option_context_free(option_ctx);
