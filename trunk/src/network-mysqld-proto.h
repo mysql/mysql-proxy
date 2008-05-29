@@ -210,7 +210,7 @@ NETWORK_API void network_mysqld_binlog_free(network_mysqld_binlog *binlog);
 typedef struct {
 	GString *data;
 
-	gsize offset;
+	guint offset;
 } network_packet;
 
 NETWORK_API network_packet *network_packet_new(void);
