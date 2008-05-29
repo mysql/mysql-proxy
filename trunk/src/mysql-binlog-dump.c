@@ -786,13 +786,19 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 /**
  * read a binlog file
  */
-int replicate_binlog_dump_file(const char *filename, gint startpos) {
+int replicate_binlog_dump_file(
+		const char *filename, 
+		gint startpos,
+		gboolean find_startpos
+		) {
 	int fd;
 	char binlog_header[4];
 	network_packet *packet;
 	network_mysqld_binlog *binlog;
 	network_mysqld_binlog_event *event;
 	off_t binlog_pos;
+	int round = 0;
+	int ret = 0;
 
 	if (-1 == (fd = g_open(filename, O_RDONLY, 0))) {
 		g_critical("%s: opening '%s' failed: %s",
@@ -843,6 +849,59 @@ int replicate_binlog_dump_file(const char *filename, gint startpos) {
 		binlog_pos = startpos;
 	}
 
+	if (find_startpos) {
+		/* check if the current binlog-pos is valid,
+		 *
+		 * if not, just skip a byte a retry until we found a valid header
+		 * */
+		while (19 == (packet->data->len = read(fd, packet->data->str, 19))) {
+			gssize len;
+			packet->data->str[packet->data->len] = '\0'; /* term the string */
+			packet->offset = 0;
+
+			g_assert_cmpint(packet->data->len, ==, 19);
+
+			event = network_mysqld_binlog_event_new();
+			network_mysqld_proto_get_binlog_event_header(packet, event);
+
+			if (event->event_size < 19 ||
+			    binlog_pos + event->event_size != event->log_pos) {
+				if (-1 == lseek(fd, -18, SEEK_CUR)) {
+					g_critical("%s: lseek(%d) failed: %s", 
+							G_STRLOC,
+							-18,
+							g_strerror(errno)
+							);
+					g_return_val_if_reached(-1);
+				}
+
+				binlog_pos += 1;
+
+				g_message("%s: --binlog-start-pos isn't valid, trying to sync at %ld (attempt: %d)", 
+						G_STRLOC,
+						binlog_pos,
+						round++
+						);
+			} else {
+				if (-1 == lseek(fd, -19, SEEK_CUR)) {
+					g_critical("%s: lseek(%d) failed: %s", 
+							G_STRLOC,
+							-18,
+							g_strerror(errno)
+							);
+					g_return_val_if_reached(-1);
+				}
+
+				network_mysqld_binlog_event_free(event);
+				
+				break;
+			}
+			network_mysqld_binlog_event_free(event);
+		}
+	} 
+
+	packet->offset = 0;
+
 	/* next are the events, without the mysql packet header */
 	while (19 == (packet->data->len = read(fd, packet->data->str, 19))) {
 		gssize len;
@@ -853,16 +912,22 @@ int replicate_binlog_dump_file(const char *filename, gint startpos) {
 		event = network_mysqld_binlog_event_new();
 		network_mysqld_proto_get_binlog_event_header(packet, event);
 
+		if (event->event_size < 19 ||
+		    binlog_pos + event->event_size != event->log_pos) {
+			g_critical("%s: binlog-pos=%ld is invalid, you may want to start with --binlog-find-start-pos",
+				G_STRLOC,
+				binlog_pos
+			       );
+			ret = -1;
+			break;
+		}
+
 		g_print("-- %s: (--binlog-start-pos=%ld (next event at %"G_GUINT32_FORMAT"))\n",
 				G_STRLOC,
 				binlog_pos,
 				event->log_pos
 				);
-		
-		g_assert_cmpint(event->event_size, >=, 19);
-
-		g_assert_cmpint(binlog_pos + event->event_size, ==, event->log_pos);
-
+	
 		binlog_pos += 19;
 
 		g_string_set_size(packet->data, event->event_size); /* resize the string */
@@ -877,7 +942,8 @@ int replicate_binlog_dump_file(const char *filename, gint startpos) {
 					g_strerror(errno));
 			return -1;
 		}
-		g_assert_cmpint(len, ==, event->event_size - 19);
+		g_assert_cmpint(len, ==, event->event_size - 19); /* read error */
+
 		g_assert_cmpint(packet->data->len, ==, 19);
 		packet->data->len += len;
 		g_assert_cmpint(packet->data->len, ==, event->event_size);
@@ -901,7 +967,7 @@ int replicate_binlog_dump_file(const char *filename, gint startpos) {
 
 	close(fd);
 
-	return 0;
+	return ret;
 }
 
 #define GETTEXT_PACKAGE "mysql-binlog-dump"
@@ -924,6 +990,7 @@ int main(int argc, char **argv) {
 	GKeyFile *keyfile = NULL;
 	chassis_log *log;
 	gint binlog_start_pos = 0;
+	gboolean binlog_find_start_pos = FALSE;
 
 	/* can't appear in the configfile */
 	GOptionEntry base_main_entries[] = 
@@ -942,6 +1009,7 @@ int main(int argc, char **argv) {
 		
 		{ "binlog-file",              0, 0, G_OPTION_ARG_FILENAME, NULL, "binlog filename", NULL },
 		{ "binlog-start-pos",         0, 0, G_OPTION_ARG_INT, NULL, "binlog start position", NULL },
+		{ "binlog-find-start-pos",    0, 0, G_OPTION_ARG_NONE, NULL, "find binlog start position", NULL },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -1005,6 +1073,7 @@ int main(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(log->use_syslog);
 	main_entries[i++].arg_data  = &(binlog_filename);
 	main_entries[i++].arg_data  = &(binlog_start_pos);
+	main_entries[i++].arg_data  = &(binlog_find_start_pos);
 
 	option_ctx = g_option_context_new("- MySQL Binlog Dump");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
@@ -1098,7 +1167,8 @@ int main(int argc, char **argv) {
 
 	replicate_binlog_dump_file(
 			binlog_filename,
-			binlog_start_pos
+			binlog_start_pos,
+			binlog_find_start_pos
 			);
 
 exit_nicely:
