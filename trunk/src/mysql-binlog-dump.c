@@ -176,20 +176,37 @@ int network_mysqld_proto_field_get(network_packet *packet,
 		}
 
 		break;
-	case MYSQL_TYPE_NEWDECIMAL:
+	case MYSQL_TYPE_NEWDECIMAL: {
 		/* the decimal is binary encoded
 		 */
+		guchar digits_per_bytes[] = { 0, 1, 1, 2, 2, 3, 3, 4, 4, 4 }; /* how many bytes are needed to store x decimal digits */
+
+		guint i_digits = field->fielddef->max_length - field->fielddef->decimals;
+		guint f_digits = field->fielddef->decimals;
+
+		guint decimal_full_blocks       = i_digits / 9; /* 9 decimal digits in 4 bytes */
+		guint decimal_last_block_digits = i_digits % 9; /* how many digits are left ? */
+
+		guint scale_full_blocks         = f_digits / 9; /* 9 decimal digits in 4 bytes */
+		guint scale_last_block_digits   = f_digits % 9; /* how many digits are left ? */
+
+		guint size = 0;
+
+		size += decimal_full_blocks * digits_per_bytes[9] + digits_per_bytes[decimal_last_block_digits];
+		size += scale_full_blocks   * digits_per_bytes[9] + digits_per_bytes[scale_last_block_digits];
+
 		dump_str(G_STRLOC, packet->data->str, packet->data->len);
-		network_mysqld_proto_skip(packet->data, &(packet->offset), 2);
 #if 0
-		g_error("%s: don't know how to decode NEWDECIMAL(%lu, %u) at offset %u",
+		g_critical("%s: don't know how to decode NEWDECIMAL(%lu, %u) at offset %u (%d)",
 				G_STRLOC,
 				field->fielddef->max_length,
 				field->fielddef->decimals,
-				packet->offset
+				packet->offset,
+				size
 				);
 #endif
-		break;
+		network_mysqld_proto_skip(packet->data, &(packet->offset), size);
+		break; }
 	default:
 		dump_str(G_STRLOC, packet->data->str, packet->data->len);
 		g_error("%s: unknown field-type to fetch: %d",
@@ -241,8 +258,9 @@ int network_mysqld_proto_fields_get(network_packet *packet, GPtrArray *fields) {
 	for (i = 0; i < fields->len; i++) {
 		network_mysqld_proto_field *field = fields->pdata[i];
 
-		if (!field->is_null) network_mysqld_proto_field_get(packet, field);
-
+		if (!field->is_null) {
+			if (network_mysqld_proto_field_get(packet, field)) return -1;
+		}
 	}
 
 	return 0;
@@ -545,7 +563,10 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 			pre_fields = network_mysqld_proto_fields_new_full(tbl->fields, 
 					pre_bits, 
 					event->event.row_event.null_bits_len);
-			network_mysqld_proto_fields_get(&row_packet, pre_fields);
+
+			if (network_mysqld_proto_fields_get(&row_packet, pre_fields)) {
+				break;
+			}
 
 			if (event->event_type == UPDATE_ROWS_EVENT) {
 				post_bits = network_mysqld_proto_get_string_len(
