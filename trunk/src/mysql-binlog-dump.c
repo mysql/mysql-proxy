@@ -53,14 +53,17 @@ static void dump_str(const char *msg, const unsigned char *s, size_t len) {
 		}
 	}
 
-	g_debug("(%s):\n  %s", msg, hex->str);
+	g_debug("(%s) %"G_GSIZE_FORMAT" bytes:\n  %s", 
+			msg, 
+			len,
+			hex->str);
 
 	g_string_free(hex, TRUE);
 }
 #endif
 
 typedef struct {
-	enum enum_field_types type;
+	MYSQL_FIELD *fielddef;
 
 	union {
 		guint64 i;
@@ -82,11 +85,22 @@ network_mysqld_proto_field *network_mysqld_proto_field_new() {
 void network_mysqld_proto_field_free(network_mysqld_proto_field *field) {
 	if (!field) return;
 
-	switch ((guchar)field->type) {
+	switch ((guchar)field->fielddef->type) {
 	case MYSQL_TYPE_TIMESTAMP:
 	case MYSQL_TYPE_DATE:
+	case MYSQL_TYPE_DATETIME:
+
+	case MYSQL_TYPE_TINY:
+	case MYSQL_TYPE_SHORT:
+	case MYSQL_TYPE_INT24:
 	case MYSQL_TYPE_LONG:
+
+	case MYSQL_TYPE_DECIMAL:
+	case MYSQL_TYPE_NEWDECIMAL:
+
+	case MYSQL_TYPE_ENUM:
 		break;
+	case MYSQL_TYPE_BLOB:
 	case MYSQL_TYPE_VARCHAR:
 	case MYSQL_TYPE_VAR_STRING:
 	case MYSQL_TYPE_STRING:
@@ -95,7 +109,7 @@ void network_mysqld_proto_field_free(network_mysqld_proto_field *field) {
 	default:
 		g_message("%s: unknown field_type to free: %d",
 				G_STRLOC,
-				field->type);
+				field->fielddef->type);
 		break;
 	}
 
@@ -105,21 +119,82 @@ void network_mysqld_proto_field_free(network_mysqld_proto_field *field) {
 int network_mysqld_proto_field_get(network_packet *packet, 
 		network_mysqld_proto_field *field) {
 
-	switch ((guchar)field->type) {
+	switch ((guchar)field->fielddef->type) {
 	case MYSQL_TYPE_TIMESTAMP: /* int4store */
-	case MYSQL_TYPE_DATE:      /* int4store */
 	case MYSQL_TYPE_LONG:
 		field->data.i = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		break;
+
+	case MYSQL_TYPE_DATETIME: /* int8store */
+	case MYSQL_TYPE_LONGLONG:
+		field->data.i = network_mysqld_proto_get_int64(packet->data, &(packet->offset));
+		break;
+	case MYSQL_TYPE_INT24:     
+	case MYSQL_TYPE_DATE:      /* int3store, a newdate, old-data is 4 byte */
+		field->data.i = network_mysqld_proto_get_int24(packet->data, &(packet->offset));
+		break;
+	case MYSQL_TYPE_SHORT:     
+		field->data.i = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+		break;
+	case MYSQL_TYPE_TINY:     
+		field->data.i = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		break;
+	case MYSQL_TYPE_ENUM:
+		switch (field->fielddef->max_length) {
+		case 1:
+			field->data.i = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+			break;
+		case 2:
+			field->data.i = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+			break;
+		default:
+			g_error("%s: enum-length = %lu", 
+					G_STRLOC,
+					field->fielddef->max_length);
+			break;
+		}
+		break;
+	case MYSQL_TYPE_BLOB:
+		if (field->fielddef->max_length == 2) {
+			guint64 length = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+			field->data.s = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), length);
+		} else {
+			g_error("%s: blob-length = %lu", 
+					G_STRLOC,
+					field->fielddef->max_length);
+		}
 		break;
 	case MYSQL_TYPE_VARCHAR:
 	case MYSQL_TYPE_VAR_STRING:
 	case MYSQL_TYPE_STRING:
-		field->data.s = network_mysqld_proto_get_lenenc_string(packet->data, &(packet->offset), &(field->data_len));
+		if (field->fielddef->max_length < 256) {
+			guint64 length = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+			field->data.s = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), length);
+		} else {
+			guint64 length = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+			field->data.s = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), length);
+		}
+
+		break;
+	case MYSQL_TYPE_NEWDECIMAL:
+		/* the decimal is binary encoded
+		 */
+		dump_str(G_STRLOC, packet->data->str, packet->data->len);
+		network_mysqld_proto_skip(packet->data, &(packet->offset), 2);
+#if 0
+		g_error("%s: don't know how to decode NEWDECIMAL(%lu, %u) at offset %u",
+				G_STRLOC,
+				field->fielddef->max_length,
+				field->fielddef->decimals,
+				packet->offset
+				);
+#endif
 		break;
 	default:
-		g_message("%s: unknown field-type to fetch: %d",
+		dump_str(G_STRLOC, packet->data->str, packet->data->len);
+		g_error("%s: unknown field-type to fetch: %d",
 				G_STRLOC,
-				field->type);
+				field->fielddef->type);
 		break;
 	}
 
@@ -142,9 +217,18 @@ GPtrArray *network_mysqld_proto_fields_new_full(
 		guint byteoffset = i / 8;
 		guint bitoffset = i % 8;
 
-		field->type = fielddef->type;
+		field->fielddef = fielddef;
 		field->is_null = (null_bits[byteoffset] >> bitoffset) & 0x1;
-		
+
+		/* the field is defined as NOT NULL, so the null-bit shouldn't be set */
+		if ((fielddef->flags & NOT_NULL_FLAG) != 0) {
+			if (field->is_null) {
+				g_error("%s: [%d] field is defined as NOT NULL, but nul-bit is set",
+						G_STRLOC,
+						i
+						);
+			}
+		}
 		g_ptr_array_add(fields, field);
 	}
 
@@ -180,9 +264,19 @@ struct {
 } field_type_name[] = {
 	{ MYSQL_TYPE_STRING, "CHAR" },
 	{ MYSQL_TYPE_VARCHAR, "VARCHAR" },
+	{ MYSQL_TYPE_BLOB, "BLOB" },
+
+	{ MYSQL_TYPE_TINY, "TINYINT" },
+	{ MYSQL_TYPE_SHORT, "SMALLINT" },
+	{ MYSQL_TYPE_INT24, "MEDIUMINT" },
 	{ MYSQL_TYPE_LONG, "INT" },
+	{ MYSQL_TYPE_NEWDECIMAL, "DECIMAL" },
+
+	{ MYSQL_TYPE_ENUM, "ENUM" },
+
 	{ MYSQL_TYPE_TIMESTAMP, "TIMESTAMP" },
 	{ MYSQL_TYPE_DATE, "DATE" },
+	{ MYSQL_TYPE_DATETIME, "DATETIME" },
 
 	{ 0, NULL }
 };
@@ -192,7 +286,7 @@ const char *network_mysqld_proto_field_get_typestring(enum enum_field_types type
 	guint i;
 
 	for (i = 0; field_type_name[i].name; i++) {
-		if (field_type_name[i].type == type) return field_type_name[i].name;
+		if ((guchar)field_type_name[i].type == (guchar)type) return field_type_name[i].name;
 	}
 
 	g_critical("%s: field-type %d isn't known yet", 
@@ -217,12 +311,35 @@ void network_mysqld_table_print(network_mysqld_table *tbl) {
 			g_string_append(out, ",\n");
 		}
 
-		g_string_append_printf(out, "  field_%d %s(%lu) %s NULL",
-				i,
-				network_mysqld_proto_field_get_typestring(field->type),
-				field->length,
-				field->flags & NOT_NULL_FLAG ? "NOT" : "DEFAULT"
-			 );
+		switch ((guchar)field->type) {
+		case MYSQL_TYPE_TINY:
+		case MYSQL_TYPE_SHORT:
+		case MYSQL_TYPE_INT24:
+		case MYSQL_TYPE_LONG:
+			g_string_append_printf(out, "  field_%d %s %s NULL",
+					i,
+					network_mysqld_proto_field_get_typestring(field->type),
+					field->flags & NOT_NULL_FLAG ? "NOT" : "DEFAULT"
+				 );
+			break;
+		case MYSQL_TYPE_DECIMAL:
+		case MYSQL_TYPE_NEWDECIMAL:
+			g_string_append_printf(out, "  field_%d %s(%lu, %u) %s NULL",
+					i,
+					network_mysqld_proto_field_get_typestring(field->type),
+					field->max_length, field->decimals,
+					field->flags & NOT_NULL_FLAG ? "NOT" : "DEFAULT"
+				 );
+			break;
+		default:
+			g_string_append_printf(out, "  field_%d %s(%lu) %s NULL",
+					i,
+					network_mysqld_proto_field_get_typestring(field->type),
+					field->max_length,
+					field->flags & NOT_NULL_FLAG ? "NOT" : "DEFAULT"
+				 );
+			break;
+		}
 	}
 	g_string_append(out, "\n)");
 
@@ -312,7 +429,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 				 * byte 1: field-length
 				 */
 				field->type  = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-				field->length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
+				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
 
 				break;
 			case MYSQL_TYPE_VARCHAR: /* 15 (VARCHAR) */
@@ -320,46 +437,65 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 				/* 2 byte length (int2store)
 				 */
 				field->type = col_type;
-				field->length = network_mysqld_proto_get_int16(metadata_packet.data, &(metadata_packet.offset));
+				field->max_length = network_mysqld_proto_get_int16(metadata_packet.data, &(metadata_packet.offset));
 				break;
 			case MYSQL_TYPE_BLOB: /* 252 */
 				field->type = col_type;
 
 				/* the packlength (1 .. 4) */
-				network_mysqld_proto_skip(metadata_packet.data, &(metadata_packet.offset), 1);
+				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
 				break;
+			case MYSQL_TYPE_NEWDECIMAL:
 			case MYSQL_TYPE_DECIMAL:
 				field->type = col_type;
 				/**
 				 * byte 0: precisions
 				 * byte 1: decimals
 				 */
-				network_mysqld_proto_skip(metadata_packet.data, &(metadata_packet.offset), 2);
+				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
+				field->decimals = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
 				break;
 			case MYSQL_TYPE_DOUBLE:
 			case MYSQL_TYPE_FLOAT:
 				field->type = col_type;
 				/* pack-length */
-				network_mysqld_proto_skip(metadata_packet.data, &(metadata_packet.offset), 1);
+				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
 				break;
 			case MYSQL_TYPE_ENUM:
 				/* real-type (ENUM|SET)
 				 * pack-length
 				 */
 				field->type  = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-				network_mysqld_proto_skip(metadata_packet.data, &(metadata_packet.offset), 1);
+				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
 				break;
 			case MYSQL_TYPE_BIT:
 				network_mysqld_proto_skip(metadata_packet.data, &(metadata_packet.offset), 2);
 				break;
-			default:
+			case MYSQL_TYPE_DATE:
+			case MYSQL_TYPE_DATETIME:
+			case MYSQL_TYPE_TIMESTAMP:
+
+			case MYSQL_TYPE_TINY:
+			case MYSQL_TYPE_SHORT:
+			case MYSQL_TYPE_INT24:
+			case MYSQL_TYPE_LONG:
 				field->type = col_type;
+				break;
+			default:
+				g_error("%s: field-type %d isn't handled",
+						G_STRLOC,
+						col_type
+						);
 				break;
 			}
 
 			g_ptr_array_add(tbl->fields, field);
 		}
 
+		if (metadata_packet.offset != metadata_packet.data->len) {
+			dump_str(G_STRLOC, event->event.table_map_event.columns, event->event.table_map_event.columns_len);
+			dump_str(G_STRLOC, event->event.table_map_event.metadata, event->event.table_map_event.metadata_len);
+		}
 		g_assert_cmpint(metadata_packet.offset, ==, metadata_packet.data->len);
 
 		g_hash_table_insert(binlog->rbr_tables, guint64_new(tbl->table_id), tbl);
@@ -435,20 +571,33 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 					if (field->is_null) {
 						g_string_append_printf(out, "field_%d = NULL", i);
 					} else {
-						switch((guchar)field->type) {
-						case MYSQL_TYPE_LONG:
+						switch((guchar)field->fielddef->type) {
+						case MYSQL_TYPE_DATE:
 						case MYSQL_TYPE_TIMESTAMP:
+						case MYSQL_TYPE_DATETIME:
+
+						case MYSQL_TYPE_TINY:
+						case MYSQL_TYPE_SHORT:
+						case MYSQL_TYPE_INT24:
+						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_ENUM:
 							g_string_append_printf(out, "field_%d = %"G_GUINT64_FORMAT, i, field->data.i);
 							break;
 						case MYSQL_TYPE_VARCHAR:
 						case MYSQL_TYPE_VAR_STRING:
 						case MYSQL_TYPE_STRING:
-							g_string_append_printf(out, "field_%d = '%s'", i, field->data.s);
+							g_string_append_printf(out, "field_%d = '%s'", i, field->data.s ? field->data.s : "");
+							break;
+						case MYSQL_TYPE_BLOB:
+							g_string_append_printf(out, "field_%d = '...(blob)'", i);
+							break;
+						case MYSQL_TYPE_NEWDECIMAL:
+							g_string_append_printf(out, "'...(decimal)'");
 							break;
 						default:
 							g_error("%s: field-type %d isn't known",
 									G_STRLOC,
-									field->type);
+									field->fielddef->type);
 							break;
 						}
 					}
@@ -463,21 +612,33 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 					if (field->is_null) {
 						g_string_append_printf(out, "field_%d IS NULL", i);
 					} else {
-						switch((guchar)field->type) {
+						switch((guchar)field->fielddef->type) {
 						case MYSQL_TYPE_TIMESTAMP:
 						case MYSQL_TYPE_DATE:
+						case MYSQL_TYPE_DATETIME:
+
+						case MYSQL_TYPE_TINY:
+						case MYSQL_TYPE_SHORT:
+						case MYSQL_TYPE_INT24:
 						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_ENUM:
 							g_string_append_printf(out, "field_%d = %"G_GUINT64_FORMAT, i, field->data.i);
 							break;
 						case MYSQL_TYPE_VARCHAR:
 						case MYSQL_TYPE_VAR_STRING:
 						case MYSQL_TYPE_STRING:
-							g_string_append_printf(out, "field_%d = '%s'", i, field->data.s);
+							g_string_append_printf(out, "field_%d = '%s'", i, field->data.s ? field->data.s : "");
+							break;
+						case MYSQL_TYPE_BLOB:
+							g_string_append_printf(out, "field_%d = '...(blob)'", i);
+							break;
+						case MYSQL_TYPE_NEWDECIMAL:
+							g_string_append_printf(out, "'...(decimal)'");
 							break;
 						default:
 							g_error("%s: field-type %d isn't known",
 									G_STRLOC,
-									field->type);
+									field->fielddef->type);
 							break;
 						}
 					}
@@ -496,20 +657,33 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 					if (field->is_null) {
 						g_string_append(out, "NULL");
 					} else {
-						switch((guchar)field->type) {
+						switch((guchar)field->fielddef->type) {
 						case MYSQL_TYPE_TIMESTAMP:
+						case MYSQL_TYPE_DATE:
+						case MYSQL_TYPE_DATETIME:
+
+						case MYSQL_TYPE_TINY:
+						case MYSQL_TYPE_SHORT:
+						case MYSQL_TYPE_INT24:
 						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_ENUM:
 							g_string_append_printf(out, "%"G_GUINT64_FORMAT, field->data.i);
 							break;
 						case MYSQL_TYPE_VARCHAR:
 						case MYSQL_TYPE_VAR_STRING:
 						case MYSQL_TYPE_STRING:
-							g_string_append_printf(out, "'%s'", field->data.s);
+							g_string_append_printf(out, "'%s'", field->data.s ? field->data.s : "");
+							break;
+						case MYSQL_TYPE_BLOB:
+							g_string_append_printf(out, "'...(blob)'");
+							break;
+						case MYSQL_TYPE_NEWDECIMAL:
+							g_string_append_printf(out, "'...(decimal)'");
 							break;
 						default:
 							g_error("%s: field-type %d isn't known",
 									G_STRLOC,
-									field->type);
+									field->fielddef->type);
 							break;
 						}
 					}
@@ -530,21 +704,33 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 					if (field->is_null) {
 						g_string_append_printf(out, "field_%d IS NULL", i);
 					} else {
-						switch((guchar)field->type) {
+						switch((guchar)field->fielddef->type) {
 						case MYSQL_TYPE_TIMESTAMP:
-						case MYSQL_TYPE_LONG:
 						case MYSQL_TYPE_DATE:
+						case MYSQL_TYPE_DATETIME:
+
+						case MYSQL_TYPE_TINY:
+						case MYSQL_TYPE_SHORT:
+						case MYSQL_TYPE_INT24:
+						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_ENUM:
 							g_string_append_printf(out, "field_%d = %"G_GUINT64_FORMAT, i, field->data.i);
 							break;
 						case MYSQL_TYPE_VARCHAR:
 						case MYSQL_TYPE_VAR_STRING:
 						case MYSQL_TYPE_STRING:
-							g_string_append_printf(out, "field_%d = '%s'", i, field->data.s);
+							g_string_append_printf(out, "field_%d = '%s'", i, field->data.s ? field->data.s : "");
+							break;
+						case MYSQL_TYPE_BLOB:
+							g_string_append_printf(out, "field_%d = '...(blob)'", i);
+							break;
+						case MYSQL_TYPE_NEWDECIMAL:
+							g_string_append_printf(out, "'...(decimal)'");
 							break;
 						default:
 							g_error("%s: field-type %d isn't known",
 									G_STRLOC,
-									field->type);
+									field->fielddef->type);
 							break;
 						}
 					}
