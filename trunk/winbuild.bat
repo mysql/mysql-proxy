@@ -30,11 +30,11 @@
 @echo using internal NSIS installation
 @SET CLEANUP_NSIS=1
 
-@reg add HKLM\Software\NSIS /ve /t REG_SZ /d %NSISDIR% /f
-@reg add HKLM\Software\NSIS /v VersionMajor /t REG_DWORD /d 00000002 /f
-@reg add HKLM\Software\NSIS /v VersionMinor /t REG_DWORD /d 00000025 /f
-@reg add HKLM\Software\NSIS /v VersionRevision /t REG_DWORD /d 0 /f
-@reg add HKLM\Software\NSIS /v VersionBuild /t REG_DWORD /d 0 /f
+@rem reg add HKLM\Software\NSIS /ve /t REG_SZ /d %NSISDIR% /f
+@rem reg add HKLM\Software\NSIS /v VersionMajor /t REG_DWORD /d 00000002 /f
+@rem reg add HKLM\Software\NSIS /v VersionMinor /t REG_DWORD /d 00000025 /f
+@rem reg add HKLM\Software\NSIS /v VersionRevision /t REG_DWORD /d 0 /f
+@rem reg add HKLM\Software\NSIS /v VersionBuild /t REG_DWORD /d 0 /f
 
 @GOTO ENDNSIS
 
@@ -55,7 +55,7 @@
 @rem del CMakeCache.txt
 
 :CMAKE
-@cmake -G %GENERATOR% -DMYSQL_LIBRARY_DIRS:PATH=%MYSQL_DIR%\lib\debug -DMYSQL_INCLUDE_DIRS:PATH=%MYSQL_DIR%\include -DGLIB_LIBRARY_DIRS:PATH=%GLIB_DIR%\lib -DGLIB_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGMODULE_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGTHREAD_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include .
+@cmake -G %GENERATOR% -DMYSQL_LIBRARY_DIRS:PATH=%MYSQL_DIR%\lib\debug -DMYSQL_INCLUDE_DIRS:PATH=%MYSQL_DIR%\include -DGLIB_LIBRARY_DIRS:PATH=%GLIB_DIR%\lib -DGLIB_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGMODULE_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGTHREAD_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DCMAKE_BUILD_TYPE=Release .
 
 @IF NOT %GENERATOR%=="NMake Makefiles" (GOTO VS08BUILD)
 nmake
@@ -64,10 +64,10 @@ nmake
 
 :VS08BUILD
 %VS_CMD% mysql-proxy.sln /Clean
-%VS_CMD% mysql-proxy.sln /Build Debug
-%VS_CMD% mysql-proxy.sln /Build Debug /project RUN_TESTS
-%VS_CMD% mysql-proxy.sln /Build Debug /project PACKAGE
-%VS_CMD% mysql-proxy.sln /Build Debug /project INSTALL
+%VS_CMD% mysql-proxy.sln /Build Release
+%VS_CMD% mysql-proxy.sln /Build Release /project RUN_TESTS
+%VS_CMD% mysql-proxy.sln /Build Release /project PACKAGE
+%VS_CMD% mysql-proxy.sln /Build Release /project INSTALL
 
 @GOTO CLEANUP
 
@@ -86,6 +86,6 @@ nmake
 
 :REMOVEKEYS
 @echo removing temporary NSIS registry entries
-@reg delete HKLM\Software\NSIS /va /f
+@rem reg delete HKLM\Software\NSIS /va /f
 
 :END
