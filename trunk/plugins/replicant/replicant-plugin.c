@@ -25,6 +25,7 @@
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
+#include "network-mysqld-binlog.h"
 #include "sys-pedantic.h"
 #include "glib-ext.h"
 

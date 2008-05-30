@@ -7,6 +7,7 @@
 #include <glib.h>
 
 #include "network-mysqld-proto.h"
+#include "network-mysqld-binlog.h"
 #include "glib-ext.h"
 
 #if GLIB_CHECK_VERSION(2, 16, 0)

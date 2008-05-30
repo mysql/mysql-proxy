@@ -16,6 +16,7 @@
 #include "chassis-log.h"
 #include "chassis-keyfile.h"
 #include "network-mysqld-proto.h"
+#include "network-mysqld-binlog.h"
 
 #if 1 
 static void dump_str(const char *msg, const unsigned char *s, size_t len) {
@@ -407,119 +408,15 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 		break;
 	case STOP_EVENT:
 		break;
-	case TABLE_MAP_EVENT: {
-		network_packet metadata_packet;
-		GString row;
-
+	case TABLE_MAP_EVENT:
 		tbl = network_mysqld_table_new();
-		g_string_assign(tbl->db_name, event->event.table_map_event.db_name);
-		g_string_assign(tbl->table_name, event->event.table_map_event.table_name);
 
-		tbl->table_id = event->event.table_map_event.table_id;
-
-		row.str = event->event.table_map_event.metadata;
-		row.len = event->event.table_map_event.metadata_len;
-
-		metadata_packet.data = &row;
-		metadata_packet.offset = 0;
-
-		/* the metadata is field specific */
-		for (i = 0; i < event->event.table_map_event.columns_len; i++) {
-			MYSQL_FIELD *field = network_mysqld_proto_fielddef_new();
-			enum enum_field_types col_type;
-
-			guint byteoffset = i / 8;
-			guint bitoffset = i % 8;
-
-			field->flags |= (event->event.table_map_event.null_bits[byteoffset] >> bitoffset) & 0x1 ? 0 : NOT_NULL_FLAG;
-
-			col_type = (enum enum_field_types)event->event.table_map_event.columns[i];
-
-			/* the meta-data depends on the type,
-			 *
-			 * string has 2 byte field-length
-			 * floats have precision
-			 * ints have display length
-			 * */
-			switch ((guchar)col_type) {
-			case MYSQL_TYPE_STRING: /* 254 (CHAR) */
-				/* byte 0: real_type 
-				 * byte 1: field-length
-				 */
-				field->type  = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-
-				break;
-			case MYSQL_TYPE_VARCHAR: /* 15 (VARCHAR) */
-			case MYSQL_TYPE_VAR_STRING:
-				/* 2 byte length (int2store)
-				 */
-				field->type = col_type;
-				field->max_length = network_mysqld_proto_get_int16(metadata_packet.data, &(metadata_packet.offset));
-				break;
-			case MYSQL_TYPE_BLOB: /* 252 */
-				field->type = col_type;
-
-				/* the packlength (1 .. 4) */
-				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-				break;
-			case MYSQL_TYPE_NEWDECIMAL:
-			case MYSQL_TYPE_DECIMAL:
-				field->type = col_type;
-				/**
-				 * byte 0: precisions
-				 * byte 1: decimals
-				 */
-				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-				field->decimals = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-				break;
-			case MYSQL_TYPE_DOUBLE:
-			case MYSQL_TYPE_FLOAT:
-				field->type = col_type;
-				/* pack-length */
-				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-				break;
-			case MYSQL_TYPE_ENUM:
-				/* real-type (ENUM|SET)
-				 * pack-length
-				 */
-				field->type  = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-				field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-				break;
-			case MYSQL_TYPE_BIT:
-				network_mysqld_proto_skip(metadata_packet.data, &(metadata_packet.offset), 2);
-				break;
-			case MYSQL_TYPE_DATE:
-			case MYSQL_TYPE_DATETIME:
-			case MYSQL_TYPE_TIMESTAMP:
-
-			case MYSQL_TYPE_TINY:
-			case MYSQL_TYPE_SHORT:
-			case MYSQL_TYPE_INT24:
-			case MYSQL_TYPE_LONG:
-				field->type = col_type;
-				break;
-			default:
-				g_error("%s: field-type %d isn't handled",
-						G_STRLOC,
-						col_type
-						);
-				break;
-			}
-
-			g_ptr_array_add(tbl->fields, field);
-		}
-
-		if (metadata_packet.offset != metadata_packet.data->len) {
-			dump_str(G_STRLOC, event->event.table_map_event.columns, event->event.table_map_event.columns_len);
-			dump_str(G_STRLOC, event->event.table_map_event.metadata, event->event.table_map_event.metadata_len);
-		}
-		g_assert_cmpint(metadata_packet.offset, ==, metadata_packet.data->len);
-
+		network_mysqld_binlog_event_tablemap_get(event, tbl);
+	
 		g_hash_table_insert(binlog->rbr_tables, guint64_new(tbl->table_id), tbl);
 
 		network_mysqld_table_print(tbl);
-		break; }
+		break; 
 	case FORMAT_DESCRIPTION_EVENT: /* 15 */
 		break;
 	case INTVAR_EVENT: /* 5 */
@@ -577,6 +474,8 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 					event->event.row_event.null_bits_len);
 				network_mysqld_proto_fields_get(&row_packet, post_fields);
 			}
+
+			/* call lua */
 
 			switch (event->event_type) {
 			case UPDATE_ROWS_EVENT:
