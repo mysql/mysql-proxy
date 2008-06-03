@@ -12,6 +12,7 @@
  * - g_list_string_free()
  */
 
+#define S(x) x->str, x->len
 
 /**
  * free function for GStrings in a GList
@@ -112,5 +113,48 @@ int g_string_get_current_time(GString *s) {
 GString * g_string_assign_len(GString *s, const char *str, gsize str_len) {
 	g_string_truncate(s, 0);
 	return g_string_append_len(s, str, str_len);
+}
+
+void g_debug_hexdump(const char *msg, const unsigned char *s, size_t len) {
+	GString *hex;
+	size_t i;
+		
+       	hex = g_string_new(NULL);
+
+	for (i = 0; i < len; i++) {
+		g_string_append_printf(hex, "%02x", s[i]);
+
+		if ((i + 1) % 16 == 0) {
+			int j;
+			g_string_append(hex, "  ");
+			for (j = i - 15; j <= i; j++) {
+				g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
+			}
+			g_string_append(hex, "\n  ");
+		} else {
+			g_string_append_c(hex, ' ');
+		}
+	}
+
+	if (i % 16 != 0) {
+		/* fill up the line */
+		int j;
+
+		for (j = 0; j < 16 - (i % 16); j++) {
+			g_string_append(hex, "   ");
+		}
+
+		g_string_append(hex, " ");
+		for (j = i - (len % 16); j < i; j++) {
+			g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
+		}
+	}
+
+	g_critical("(%s) %"G_GSIZE_FORMAT" bytes:\n  %s", 
+			msg, 
+			len,
+			hex->str);
+
+	g_string_free(hex, TRUE);
 }
 
