@@ -255,7 +255,7 @@ function wait_proc_up(pid_file)
 		rounds = rounds + 1
 		print_verbose(("(wait_proc_up) pid-wait: %d rounds, (%s)"):format(rounds, pid_file))
 
-		if rounds > 5 then error(("proxy failed to start: no pid-file %s"):format(pid_file)) end
+		if rounds > 1000 then error(("proxy failed to start: no pid-file %s"):format(pid_file)) end
 	end
 
 	local pid = get_pid(pid_file)
@@ -271,13 +271,21 @@ function wait_proc_up(pid_file)
 	end
 end
 
+function proc_is_up(pid)
+	return os.execute("kill -0 ".. pid .."  2> /dev/null")
+end
+
+function proc_stop(pid)
+	return os.execute("kill -TERM ".. pid)
+end
+
 function wait_proc_down(pid_file) 
 	local rounds = 0
 	local pid = get_pid(pid_file)
 
 	-- wait until the proc in the pid file is dead
 	-- the shutdown takes at about 500ms
-	while 0 == os.execute("kill -0 ".. pid .."  2> /dev/null") do
+	while 0 == proc_is_up(pid) do
 		glib2.usleep(200 * 1000) -- wait until process is gone
 		rounds = rounds + 1
 		print_verbose(("(wait_proc_down) kill-wait: %d rounds, pid=%d (%s)"):format(rounds, pid, pid_file))
@@ -293,9 +301,18 @@ function stop_proxy()
 	-- shuts down every proxy in the proxy list
 	--
 	for proxy_name, proxy_options in pairs(proxy_list) do
+		local pid
 		pid_file = proxy_options['pid-file']
 		print_verbose ('stopping proxy ' .. proxy_name)
-		os.execute("kill -TERM  ".. get_pid(pid_file) )
+		
+		pid = get_pid(pid_file)
+
+		if proc_is_up(pid) then
+			proc_stop(pid)
+		else
+			print("-- process "..proxy_name.." is already down")
+			exitcode = -1
+		end
 	end
 
 	-- wait until they are all gone
