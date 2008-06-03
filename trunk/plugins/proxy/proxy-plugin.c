@@ -112,6 +112,7 @@ typedef int socklen_t;
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
+#include "network-mysqld-packet.h"
 #include "network-conn-pool.h"
 #include "sys-pedantic.h"
 #include "query-handling.h"
@@ -1822,152 +1823,39 @@ static proxy_stmt_ret proxy_lua_read_handshake(network_mysqld_con *con) {
  *       intercept or parse them.
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
-	GString *packet;
+	network_packet packet;
 	GList *chunk;
 	network_socket *recv_sock, *send_sock;
-	guint off = 0;
-	int maj, min, patch;
-	guint16 server_cap = 0;
-	guint8  server_lang = 0;
-	guint16 server_status = 0;
-	gchar *scramble_1, *scramble_2;
+	network_mysqld_auth_challenge *challenge;
+	GString *challenge_packet;
 
 	send_sock = con->client;
 	recv_sock = con->server;
 
 	chunk = recv_sock->recv_queue->chunks->tail;
-	packet = chunk->data;
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) {
-		/**
-		 * packet is too short, looks nasty.
-		 *
-		 * report an error and let the core send a error to the 
-		 * client
-		 */
+	packet.data = chunk->data;
+	packet.offset = 0;
 
+	challenge = network_mysqld_auth_challenge_new();
+	if (network_mysqld_proto_get_auth_challenge(&packet, challenge)) {
 		recv_sock->packet_len = PACKET_LEN_UNSET;
 		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
 		return NETWORK_SOCKET_ERROR;
 	}
 
-	if (packet->str[NET_HEADER_SIZE + 0] == '\xff') {
-		/* the server doesn't like us and sends a ERR packet
-		 *
-		 * forward it to the client */
-
-		network_queue_append(send_sock->send_queue, packet);
-
-		recv_sock->packet_len = PACKET_LEN_UNSET;
-		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-
-		return NETWORK_SOCKET_ERROR;
-	} else if (packet->str[NET_HEADER_SIZE + 0] != '\x0a') {
-		/* the server isn't 4.1+ server, send a client a ERR packet
-		 */
-		recv_sock->packet_len = PACKET_LEN_UNSET;
-		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-
-		network_mysqld_con_send_error(send_sock, C("unknown protocol"));
-
-		return NETWORK_SOCKET_ERROR;
-	}
-
-	/* scan for a \0 */
-	for (off = NET_HEADER_SIZE + 1; packet->str[off] && off < packet->len + NET_HEADER_SIZE; off++);
-
-	if (packet->str[off] != '\0') {
-		/* the server has sent us garbage */
-		recv_sock->packet_len = PACKET_LEN_UNSET;
-		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-
-		network_mysqld_con_send_error(send_sock, C("protocol 10, but version number not terminated"));
-
-		return NETWORK_SOCKET_ERROR;
-	}
-
-	if (3 != sscanf(packet->str + NET_HEADER_SIZE + 1, "%d.%d.%d%*s", &maj, &min, &patch)) {
-		/* can't parse the protocol */
-		recv_sock->packet_len = PACKET_LEN_UNSET;
-		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-
-		network_mysqld_con_send_error(send_sock, C("protocol 10, but version number not parsable"));
-
-		return NETWORK_SOCKET_ERROR;
-	}
-
-	/**
-	 * out of range 
-	 */
-	if (min   < 0 || min   > 100 ||
-	    patch < 0 || patch > 100 ||
-	    maj   < 0 || maj   > 10) {
-		recv_sock->packet_len = PACKET_LEN_UNSET;
-		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-
-		network_mysqld_con_send_error(send_sock, C("protocol 10, but version number out of range"));
-
-		return NETWORK_SOCKET_ERROR;
-	}
-
-	recv_sock->mysqld_version = 
-		maj * 10000 +
-		min *   100 +
-		patch;
-
-	/* skip the \0 */
-	off++;
-
-	recv_sock->thread_id = network_mysqld_proto_get_int32(packet, &off);
-	send_sock->thread_id = recv_sock->thread_id;
-
-	/**
-	 * get the scramble buf
-	 *
-	 * 8 byte here and some the other 12 somewhen later
-	 */	
-	scramble_1 = network_mysqld_proto_get_string_len(packet, &off, 8);
-
-	network_mysqld_proto_skip(packet, &off, 1);
+	recv_sock->mysqld_version = challenge->server_version;
+	recv_sock->thread_id = challenge->thread_id;
+	send_sock->thread_id = challenge->thread_id;
 
 	/* we can't sniff compressed packets nor do we support SSL */
-	packet->str[off] &= ~(CLIENT_COMPRESS);
-	packet->str[off] &= ~(CLIENT_SSL);
+	challenge->capabilities &= ~(CLIENT_COMPRESS);
+	challenge->capabilities &= ~(CLIENT_SSL);
 
-	server_cap    = network_mysqld_proto_get_int16(packet, &off);
-
-	if (server_cap & CLIENT_COMPRESS) {
-		packet->str[off-2] &= ~(CLIENT_COMPRESS);
-	}
-
-	if (server_cap & CLIENT_SSL) {
-		packet->str[off-1] &= ~(CLIENT_SSL >> 8);
-	}
-
-	
-	server_lang   = network_mysqld_proto_get_int8(packet, &off);
-	server_status = network_mysqld_proto_get_int16(packet, &off);
-	
-	network_mysqld_proto_skip(packet, &off, 13);
-	
-	scramble_2 = network_mysqld_proto_get_string_len(packet, &off, 13);
-
-	/**
-	 * scramble_1 + scramble_2 == scramble
-	 *
-	 * a len-encoded string
-	 */
-
-	g_string_truncate(recv_sock->scramble_buf, 0);
-	g_string_append_len(recv_sock->scramble_buf, scramble_1, 8);
-	g_string_append_len(recv_sock->scramble_buf, scramble_2, 13);
-
-	g_free(scramble_1);
-	g_free(scramble_2);
-	
-	g_string_truncate(recv_sock->auth_handshake_packet, 0);
-	g_string_append_len(recv_sock->auth_handshake_packet, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE);
+	g_string_assign_len(recv_sock->auth_handshake_packet, 
+			packet.data->str + NET_HEADER_SIZE, 
+			packet.data->len - NET_HEADER_SIZE);
 
 	switch (proxy_lua_read_handshake(con)) {
 	case PROXY_NO_DECISION:
@@ -1985,13 +1873,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 		break;
 	} 
 
-	/*
-	 * move the packets to the server queue 
-	 */
-	network_queue_append(send_sock->send_queue, packet);
+	challenge_packet = g_string_new(NULL);
+	network_mysqld_proto_append_auth_challenge(challenge_packet, challenge);
+	network_mysqld_queue_append(send_sock->send_queue, S(challenge_packet), recv_sock->packet_id);
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+	g_string_free(packet.data, TRUE);
 
 	/* copy the pack to the client */
 	con->state = CON_STATE_SEND_HANDSHAKE;
@@ -2087,100 +1975,63 @@ static proxy_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) {
 	return ret;
 }
 
-typedef struct {
-	guint32 client_flags;
-	guint32 max_packet_size;
-	guint8  charset_number;
-	gchar * user;
-	gchar * scramble_buf;
-	gchar * db_name;
-} mysql_packet_auth;
-
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	/* read auth from client */
-	GString *packet;
+	network_packet packet;
 	GList *chunk;
 	network_socket *recv_sock, *send_sock;
-	mysql_packet_auth auth;
-	guint off = 0;
 	chassis_plugin_config *config = con->config;
+	network_mysqld_auth_response *auth;
 
 	recv_sock = con->client;
 	send_sock = con->server;
 
 	chunk = recv_sock->recv_queue->chunks->tail;
-	packet = chunk->data;
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS; /* we are not finished yet */
+	packet.data = chunk->data;
+	packet.offset = 0;
 
-	/* extract the default db from it */
-	network_mysqld_proto_skip(packet, &off, NET_HEADER_SIZE); /* packet-header */
+	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS; /* we are not finished yet */
 
-	/*
-	 * @\0\0\1
-	 *  \215\246\3\0 - client-flags
-	 *  \0\0\0\1     - max-packet-len
-	 *  \10          - charset-num
-	 *  \0\0\0\0
-	 *  \0\0\0\0
-	 *  \0\0\0\0
-	 *  \0\0\0\0
-	 *  \0\0\0\0
-	 *  \0\0\0       - fillers
-	 *  root\0       - username
-	 *  \24          - len of the scrambled buf
-	 *    ~    \272 \361 \346
-	 *    \211 \353 D    \351
-	 *    \24  \243 \223 \257
-	 *    \0   ^    \n   \254
-	 *    t    \347 \365 \244
-	 *  
-	 *  world\0
-	 */
+	auth = network_mysqld_auth_response_new();
 
-	auth.client_flags    = network_mysqld_proto_get_int32(packet, &off);
-	auth.max_packet_size = network_mysqld_proto_get_int32(packet, &off);
-	auth.charset_number  = network_mysqld_proto_get_int8(packet, &off);
-
-	network_mysqld_proto_skip(packet, &off, 23);
-	
-	network_mysqld_proto_get_gstring(packet, &off, con->client->username);
-	network_mysqld_proto_get_lenenc_gstring(packet, &off, con->client->scrambled_password);
-
-	if (off != packet->len) {
-		network_mysqld_proto_get_gstring(packet, &off, con->client->default_db);
+	if (network_mysqld_proto_get_auth_response(&packet, auth)) {
+		return NETWORK_SOCKET_ERROR;
 	}
+
+	g_string_assign_len(con->client->username, S(auth->username));
+	g_string_assign_len(con->client->scrambled_password, S(auth->response));
+	g_string_assign_len(con->client->default_db, S(auth->database));
 
 	/**
 	 * looks like we finished parsing, call the lua function
 	 */
-
 	switch (proxy_lua_read_auth(con)) {
 	case PROXY_SEND_RESULT:
 		con->state = CON_STATE_SEND_AUTH_RESULT;
 
-		g_string_free(packet, TRUE);
-		chunk->data = packet = NULL;
+		g_string_free(packet.data, TRUE);
+		chunk->data = NULL;
 
 		break;
 	case PROXY_NO_DECISION:
 		/* if we don't have a backend (con->server), we just ack the client auth
 		 */
 		if (!con->server) {
+			GString *auth_resp_packet;
+
 			con->state = CON_STATE_SEND_AUTH_RESULT;
 		
 			chunk->data = NULL;
 
-			g_string_truncate(packet, 0);
+			auth_resp_packet = g_string_new(NULL);
 
-			network_mysqld_proto_append_ok_packet(packet, 0, 0, 2 /* we should track this flag in the pool */, 0);
+			network_mysqld_proto_append_ok_packet(auth_resp_packet, 0, 0, 2 /* we should track this flag in the pool */, 0);
 
 			network_mysqld_queue_append(recv_sock->send_queue, 
-						packet->str, 
-						packet->len, 
-						2);
+					S(auth_resp_packet), 2);
 
-			g_string_free(packet, TRUE);
+			g_string_free(auth_resp_packet, TRUE);
 
 			break;
 		}
@@ -2244,10 +2095,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 			}
 
 			/* free the packet as we don't forward it */
-			g_string_free(packet, TRUE);
-			chunk->data = packet = NULL;
+			g_string_free(packet.data, TRUE);
+			chunk->data = NULL;
 		} else {
-			network_queue_append(send_sock->send_queue, packet);
+			network_queue_append(send_sock->send_queue, packet.data);
 			con->state = CON_STATE_SEND_AUTH;
 		}
 
@@ -2687,6 +2538,16 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 		return NETWORK_SOCKET_SUCCESS;
 	}
 
+	/* if we don't have a backend, don't try to forward queries
+	 */
+	if (!send_sock) {
+		while ((inj = g_queue_pop_head(st->injected.queries))) {
+			g_debug_hexdump(G_STRLOC " proxy.queries:append() without a server-backend", S(inj->query));
+
+			injection_free(inj);
+		}
+	}
+
 	if (st->injected.queries->length == 0) {
 		con->state = CON_STATE_READ_QUERY;
 
@@ -2695,9 +2556,15 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 
 	con->parse.len = recv_sock->packet_len;
 
+	/* looks like we still have queries in the queue, 
+	 * push the next one 
+	 */
 	inj = g_queue_peek_head(st->injected.queries);
 
-	network_mysqld_queue_append(send_sock->send_queue, inj->query->str, inj->query->len, 0);
+	g_assert(inj);
+	g_assert(send_sock);
+
+	network_mysqld_queue_append(send_sock->send_queue, S(inj->query), 0);
 
 	con->state = CON_STATE_SEND_QUERY;
 
@@ -2716,19 +2583,20 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	int is_finished = 0;
-	int send_packet = 1; /* shall we forward this packet ? */
-	GString *packet;
+	network_packet packet;
 	GList *chunk;
 	network_socket *recv_sock, *send_sock;
 	plugin_con_state *st = con->plugin_con_state;
 	injection *inj = NULL;
 	chassis_plugin_config *config = con->config;
+	gint8 status;
 
 	recv_sock = con->server;
 	send_sock = con->client;
 
 	chunk = recv_sock->recv_queue->chunks->tail;
-	packet = chunk->data;
+	packet.data = chunk->data;
+	packet.offset = 0;
 
 	/**
 	 * check if we want to forward the statement to the client 
@@ -2747,386 +2615,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		g_get_current_time(&(inj->ts_read_query_result_first));
 	}
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
+	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 
-#if 0
-	g_message("%s.%d: packet-len: %08x, packet-id: %d, command: COM_(%02x)", 
-			__FILE__, __LINE__,
-			recv_sock->packet_len,
-			recv_sock->packet_id,
-			con->parse.command
-		);
-#endif						
-	/* forward the response to the client */
-	switch (con->parse.command) {
-	case COM_CHANGE_USER:
-		/**
-		 * - OK
-		 * - ERR (in 5.1.12+ + a duplicate ERR)
-		 */
-		switch (packet->str[NET_HEADER_SIZE + 0]) {
-		case MYSQLD_PACKET_ERR:
-			if (recv_sock->mysqld_version > 50113 && recv_sock->mysqld_version < 50118) {
-				/**
-				 * Bug #25371
-				 *
-				 * COM_CHANGE_USER returns 2 ERR packets instead of one
-				 *
-				 * we can auto-correct the issue if needed and remove the second packet
-				 * Some clients handle this issue and expect a double ERR packet.
-				 */
-				if (recv_sock->packet_id == 2) {
-					if (config->fix_bug_25371) {
-						send_packet = 0;
-					}
-					is_finished = 1;
-				}
-			} else {
-				is_finished = 1;
-			}
-			break;
-		case MYSQLD_PACKET_OK:
-			is_finished = 1;
-			break;
-		default:
-			g_error("%s.%d: COM_(0x%02x) should be (ERR|OK), got %02x",
-					__FILE__, __LINE__,
-					con->parse.command, packet->str[0 + NET_HEADER_SIZE]);
-			break;
-		}
-		break;
-	case COM_INIT_DB:
-		/**
-		 * in case we have a init-db statement we track the db-change on the server-side
-		 * connection
-		 */
-		switch (packet->str[NET_HEADER_SIZE + 0]) {
-		case MYSQLD_PACKET_ERR:
-			is_finished = 1;
-			break;
-		case MYSQLD_PACKET_OK:
-			/**
-			 * track the change of the init_db */
-			g_string_truncate(con->server->default_db, 0);
-			g_string_truncate(con->client->default_db, 0);
-			if (con->parse.state.init_db.db_name->len) {
-				g_string_append_len(con->server->default_db, 
-						con->parse.state.init_db.db_name->str,
-						con->parse.state.init_db.db_name->len);
-				
-				g_string_append_len(con->client->default_db, 
-						con->parse.state.init_db.db_name->str,
-						con->parse.state.init_db.db_name->len);
-			}
-			 
-			is_finished = 1;
-			break;
-		default:
-			g_error("%s.%d: COM_(0x%02x) should be (ERR|OK), got %02x",
-					__FILE__, __LINE__,
-					con->parse.command, packet->str[0 + NET_HEADER_SIZE]);
-			break;
-		}
+	is_finished = network_mysqld_proto_get_query_result(&packet, con);
 
-		break;
-	case COM_STMT_RESET:
-	case COM_PING:
-	case COM_PROCESS_KILL:
-		switch (packet->str[NET_HEADER_SIZE + 0]) {
-		case MYSQLD_PACKET_ERR:
-		case MYSQLD_PACKET_OK:
-			is_finished = 1;
-			break;
-		default:
-			g_error("%s.%d: COM_(0x%02x) should be (ERR|OK), got %02x",
-					__FILE__, __LINE__,
-					con->parse.command, packet->str[0 + NET_HEADER_SIZE]);
-			break;
-		}
-		break;
-	case COM_DEBUG:
-	case COM_SET_OPTION:
-	case COM_SHUTDOWN:
-		switch (packet->str[NET_HEADER_SIZE + 0]) {
-		case MYSQLD_PACKET_EOF:
-			is_finished = 1;
-			break;
-		default:
-			g_error("%s.%d: COM_(0x%02x) should be EOF, got %02x",
-					__FILE__, __LINE__,
-					con->parse.command, packet->str[0 + NET_HEADER_SIZE]);
-			break;
-		}
-		break;
-
-	case COM_FIELD_LIST:
-		/* we transfer some data and wait for the EOF */
-		switch (packet->str[NET_HEADER_SIZE + 0]) {
-		case MYSQLD_PACKET_ERR:
-		case MYSQLD_PACKET_EOF:
-			is_finished = 1;
-			break;
-		case MYSQLD_PACKET_NULL:
-		case MYSQLD_PACKET_OK:
-			g_error("%s.%d: COM_(0x%02x), packet %d should not be (OK|ERR|NULL), got: %02x",
-					__FILE__, __LINE__,
-					con->parse.command, recv_sock->packet_id, packet->str[NET_HEADER_SIZE + 0]);
-
-			break;
-		default:
-			break;
-		}
-		break;
-#if MYSQL_VERSION_ID >= 50000
-	case COM_STMT_FETCH:
-		/*  */
-		switch (packet->str[NET_HEADER_SIZE + 0]) {
-		case MYSQLD_PACKET_EOF:
-			if (packet->str[NET_HEADER_SIZE + 3] & SERVER_STATUS_LAST_ROW_SENT) {
-				is_finished = 1;
-			}
-			if (packet->str[NET_HEADER_SIZE + 3] & SERVER_STATUS_CURSOR_EXISTS) {
-				is_finished = 1;
-			}
-			break;
-		default:
-			break;
-		}
-		break;
-#endif
-	case COM_QUIT: /* sometimes we get a packet before the connection closes */
-	case COM_STATISTICS:
-		/* just one packet, no EOF */
-		is_finished = 1;
-
-		break;
-	case COM_STMT_PREPARE:
-		if (con->parse.state.prepare.first_packet == 1) {
-			con->parse.state.prepare.first_packet = 0;
-
-			switch (packet->str[NET_HEADER_SIZE + 0]) {
-			case MYSQLD_PACKET_OK:
-				g_assert(packet->len == 12 + NET_HEADER_SIZE); 
-
-				/* the header contains the number of EOFs we expect to see
-				 * - no params -> 0
-				 * - params | fields -> 1
-				 * - params + fields -> 2 
-				 */
-				con->parse.state.prepare.want_eofs = 0;
-
-				if (packet->str[NET_HEADER_SIZE + 5] != 0 || packet->str[NET_HEADER_SIZE + 6] != 0) {
-					con->parse.state.prepare.want_eofs++;
-				}
-				if (packet->str[NET_HEADER_SIZE + 7] != 0 || packet->str[NET_HEADER_SIZE + 8] != 0) {
-					con->parse.state.prepare.want_eofs++;
-				}
-
-				if (con->parse.state.prepare.want_eofs == 0) {
-					is_finished = 1;
-				}
-
-				break;
-			case MYSQLD_PACKET_ERR:
-				is_finished = 1;
-				break;
-			default:
-				g_error("%s.%d: COM_(0x%02x) should either get a (OK|ERR), got %02x",
-						__FILE__, __LINE__,
-						con->parse.command, packet->str[NET_HEADER_SIZE + 0]);
-				break;
-			}
-		} else {
-			switch (packet->str[NET_HEADER_SIZE + 0]) {
-			case MYSQLD_PACKET_OK:
-			case MYSQLD_PACKET_NULL:
-			case MYSQLD_PACKET_ERR:
-				g_error("%s.%d: COM_(0x%02x), packet %d should not be (OK|ERR|NULL), got: %02x",
-						__FILE__, __LINE__,
-						con->parse.command, recv_sock->packet_id, packet->str[NET_HEADER_SIZE + 0]);
-				break;
-			case MYSQLD_PACKET_EOF:
-				if (--con->parse.state.prepare.want_eofs == 0) {
-					is_finished = 1;
-				}
-				break;
-			default:
-				break;
-			}
-		}
-
-		break;
-	case COM_STMT_EXECUTE:
-	case COM_QUERY:
-		/**
-		 * if we get a OK in the first packet there will be no result-set
-		 */
-		switch (con->parse.state.query) {
-		case PARSE_COM_QUERY_INIT:
-			switch (packet->str[NET_HEADER_SIZE + 0]) {
-			case MYSQLD_PACKET_ERR: /* e.g. SELECT * FROM dual -> ERROR 1096 (HY000): No tables used */
-				g_assert(con->parse.state.query == PARSE_COM_QUERY_INIT);
-
-				is_finished = 1;
-				break;
-			case MYSQLD_PACKET_OK: { /* e.g. DELETE FROM tbl */
-				int server_status;
-				int warning_count;
-				guint64 affected_rows;
-				guint64 insert_id;
-				GString s;
-
-				s.str = packet->str + NET_HEADER_SIZE;
-				s.len = packet->len - NET_HEADER_SIZE;
-
-				network_mysqld_proto_get_ok_packet(&s, &affected_rows, &insert_id, &server_status, &warning_count, NULL);
-				if (server_status & SERVER_MORE_RESULTS_EXISTS) {
-				
-				} else {
-					is_finished = 1;
-				}
-
-				st->injected.qstat.server_status = server_status;
-				st->injected.qstat.warning_count = warning_count;
-				st->injected.qstat.affected_rows = affected_rows;
-				st->injected.qstat.insert_id     = insert_id;
-				st->injected.qstat.was_resultset = 0;
-
-				break; }
-			case MYSQLD_PACKET_NULL:
-				/* OH NO, LOAD DATA INFILE :) */
-				con->parse.state.query = PARSE_COM_QUERY_LOAD_DATA;
-
-				is_finished = 1;
-
-				break;
-			case MYSQLD_PACKET_EOF:
-				g_error("%s.%d: COM_(0x%02x), packet %d should not be (NULL|EOF), got: %02x",
-						__FILE__, __LINE__,
-						con->parse.command, recv_sock->packet_id, packet->str[NET_HEADER_SIZE + 0]);
-
-				break;
-			default:
-				/* looks like a result */
-				con->parse.state.query = PARSE_COM_QUERY_FIELD;
-				break;
-			}
-			break;
-		case PARSE_COM_QUERY_FIELD:
-			switch (packet->str[NET_HEADER_SIZE + 0]) {
-			case MYSQLD_PACKET_ERR:
-			case MYSQLD_PACKET_OK:
-			case MYSQLD_PACKET_NULL:
-				g_error("%s.%d: COM_(0x%02x), packet %d should not be (OK|NULL|ERR), got: %02x",
-						__FILE__, __LINE__,
-						con->parse.command, recv_sock->packet_id, packet->str[NET_HEADER_SIZE + 0]);
-
-				break;
-			case MYSQLD_PACKET_EOF:
-#if MYSQL_VERSION_ID >= 50000
-				/**
-				 * in 5.0 we have CURSORs which have no rows, just a field definition
-				 */
-				if (packet->str[NET_HEADER_SIZE + 3] & SERVER_STATUS_CURSOR_EXISTS) {
-					is_finished = 1;
-				} else {
-					con->parse.state.query = PARSE_COM_QUERY_RESULT;
-				}
-#else
-				con->parse.state.query = PARSE_COM_QUERY_RESULT;
-#endif
-				break;
-			default:
-				break;
-			}
-			break;
-		case PARSE_COM_QUERY_RESULT:
-			switch (packet->str[NET_HEADER_SIZE + 0]) {
-			case MYSQLD_PACKET_EOF:
-				if (recv_sock->packet_len < 9) {
-					/* so much on the binary-length-encoding 
-					 *
-					 * sometimes the len-encoding is ...
-					 *
-					 * */
-
-					if (packet->str[NET_HEADER_SIZE + 3] & SERVER_MORE_RESULTS_EXISTS) {
-						con->parse.state.query = PARSE_COM_QUERY_INIT;
-					} else {
-						is_finished = 1;
-					}
-
-					st->injected.qstat.server_status = packet->str[NET_HEADER_SIZE + 3] | (packet->str[NET_HEADER_SIZE + 4] >> 8);
-					st->injected.qstat.warning_count = packet->str[NET_HEADER_SIZE + 1] | (packet->str[NET_HEADER_SIZE + 2] >> 8);
-
-					st->injected.qstat.was_resultset = 1;
-				}
-
-				break;
-			case MYSQLD_PACKET_ERR:
-				/* like 
-				 * 
-				 * EXPLAIN SELECT * FROM dual; returns an error
-				 * 
-				 * EXPLAIN SELECT 1 FROM dual; returns a result-set
-				 * */
-				is_finished = 1;
-				break;
-			case MYSQLD_PACKET_OK:
-			case MYSQLD_PACKET_NULL: /* the first field might be a NULL */
-				break;
-			default:
-				if (inj) {
-					inj->rows++;
-					inj->bytes += packet->len;
-				}
-				break;
-			}
-			break;
-		case PARSE_COM_QUERY_LOAD_DATA_END_DATA:
-			switch (packet->str[NET_HEADER_SIZE + 0]) {
-			case MYSQLD_PACKET_OK:
-				is_finished = 1;
-				break;
-			case MYSQLD_PACKET_NULL:
-			case MYSQLD_PACKET_ERR:
-			case MYSQLD_PACKET_EOF:
-			default:
-				g_error("%s.%d: COM_(0x%02x), packet %d should be (OK), got: %02x",
-						__FILE__, __LINE__,
-						con->parse.command, recv_sock->packet_id, packet->str[NET_HEADER_SIZE + 0]);
-
-
-				break;
-			}
-
-			break;
-		default:
-			g_error("%s.%d: unknown state in COM_(0x%02x): %d", 
-					__FILE__, __LINE__,
-					con->parse.command,
-					con->parse.state.query);
-		}
-		break;
-	case COM_BINLOG_DUMP:
-		/**
-		 * the binlog-dump event stops, forward all packets as we see them
-		 * and keep the command active
-		 */
-		is_finished = 1;
-		break;
-	default:
-		g_error("%s.%d: COM_(0x%02x) is not handled", 
-				__FILE__, __LINE__,
-				con->parse.command);
-		break;
-	}
-
-	if (send_packet) {
-		network_queue_append(send_sock->send_queue, packet);
-	} else {
-		if (chunk->data) g_string_free(chunk->data, TRUE);
-	}
+	network_queue_append(send_sock->send_queue, packet.data);
 
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 	recv_sock->packet_len = PACKET_LEN_UNSET;

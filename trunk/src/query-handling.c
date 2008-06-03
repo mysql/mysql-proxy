@@ -5,6 +5,7 @@
 #include "query-handling.h"
 
 #include "network-mysqld-proto.h"
+#include "network-mysqld-packet.h"
 #include "glib-ext.h"
 
 #define C(x) x, sizeof(x) - 1
@@ -12,95 +13,6 @@
 #define TIME_DIFF_US(t2, t1) \
 ((t2.tv_sec - t1.tv_sec) * 1000000.0 + (t2.tv_usec - t1.tv_usec))
 
-
-/**
- * parse the result-set packet and extract the fields
- *
- * @param chunk  list of mysql packets 
- * @param fields empty array where the fields shall be stored in
- *
- * @return NULL if there is no resultset
- *         pointer to the chunk after the fields (to the EOF packet)
- */ 
-static GList *network_mysqld_result_parse_fields(GList *chunk, GPtrArray *fields) {
-	GString *packet = chunk->data;
-	guint8 field_count;
-	guint i;
-    
-	/*
-	 * read(6, "\1\0\0\1", 4)                  = 4
-	 * read(6, "\2", 1)                        = 1
-	 * read(6, "6\0\0\2", 4)                   = 4
-	 * read(6, "\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0", 54) = 54
-	 * read(6, "&\0\0\3", 4)                   = 4
-	 * read(6, "\3def\0\6STATUS\0\5Value\5Value\f\10\0\0\2\0\0\375\1\0\0\0\0", 38) = 38
-	 * read(6, "\5\0\0\4", 4)                  = 4
-	 * read(6, "\376\0\0\"\0", 5)              = 5
-	 * read(6, "\23\0\0\5", 4)                 = 4
-	 * read(6, "\17Aborted_clients\00298", 19) = 19
-	 *
-	 */
-    
-	g_assert(packet->len > NET_HEADER_SIZE);
-    
-	/* the first chunk is the length
-	 *  */
-	if (packet->len != NET_HEADER_SIZE + 1) {
-		/*
-		 * looks like this isn't a result-set
-		 * 
-		 *    read(6, "\1\0\0\1", 4)                  = 4
-		 *    read(6, "\2", 1)                        = 1
-		 *
-		 * is expected. We might got called on a non-result, tell the user about it.
-		 */
-#if 0
-		g_debug("%s.%d: network_mysqld_result_parse_fields() got called on a non-resultset. "F_SIZE_T" != 5", __FILE__, __LINE__, packet->len);
-#endif
-        
-		return NULL;
-	}
-	
-	field_count = packet->str[NET_HEADER_SIZE]; /* the byte after the net-header is the field-count */
-    
-	/* the next chunk, the field-def */
-	for (i = 0; i < field_count; i++) {
-		guint off = NET_HEADER_SIZE;
-		MYSQL_FIELD *field;
-        
-		chunk = chunk->next;
-		packet = chunk->data;
-        
-		field = network_mysqld_proto_fielddef_new();
-        
-		field->catalog   = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
-		field->db        = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
-		field->table     = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
-		field->org_table = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
-		field->name      = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
-		field->org_name  = network_mysqld_proto_get_lenenc_string(packet, &off, NULL);
-        
-		network_mysqld_proto_skip(packet, &off, 1); /* filler */
-        
-		field->charsetnr = network_mysqld_proto_get_int16(packet, &off);
-		field->length    = network_mysqld_proto_get_int32(packet, &off);
-		field->type      = network_mysqld_proto_get_int8(packet, &off);
-		field->flags     = network_mysqld_proto_get_int16(packet, &off);
-		field->decimals  = network_mysqld_proto_get_int8(packet, &off);
-        
-		network_mysqld_proto_skip(packet, &off, 2); /* filler */
-        
-		g_ptr_array_add(fields, field);
-	}
-    
-	/* this should be EOF chunk */
-	chunk = chunk->next;
-	packet = chunk->data;
-	
-	g_assert(packet->str[NET_HEADER_SIZE] == MYSQLD_PACKET_EOF);
-    
-	return chunk;
-}
 
 /**
  * emulate luaL_newmetatable() with lightuserdata instead of strings
@@ -348,19 +260,29 @@ static int proxy_resultset_fields_get(lua_State *L) {
 static int proxy_resultset_rows_iter(lua_State *L) {
 	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, lua_upvalueindex(1));
 	guint32 off = NET_HEADER_SIZE; /* skip the packet-len and sequence-number */
-	GString *packet;
+	network_packet *packet;
 	GPtrArray *fields = res->fields;
 	gsize i;
+	guint8 status;
     
 	GList *chunk = res->row;
     
 	if (chunk == NULL) return 0;
-    
-	packet = chunk->data;
+
+	packet = network_packet_new();
+	packet->data = chunk->data;
+
+	network_mysqld_proto_skip_network_header(packet);
+
+	status = network_mysqld_proto_get_int8(packet);
     
 	/* if we find the 2nd EOF packet we are done */
-	if (packet->str[off] == MYSQLD_PACKET_EOF &&
-	    packet->len < 10) return 0;
+	if (status == (guint8)MYSQLD_PACKET_EOF &&
+	    packet->data->len < 10) {
+		network_packet_free(packet);
+
+		return 0;
+	}
     
 	/* a ERR packet instead of real rows
 	 *
@@ -368,7 +290,8 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	 *
 	 * see mysql-test/t/select.test
 	 *  */
-	if (packet->str[off] == MYSQLD_PACKET_ERR) {
+	if (status == (guint8)MYSQLD_PACKET_ERR) {
+		network_packet_free(packet);
 		return 0;
 	}
     
@@ -377,9 +300,9 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	for (i = 0; i < fields->len; i++) {
 		guint64 field_len;
         
-		g_assert(off <= packet->len + NET_HEADER_SIZE);
+		g_assert(off <= packet->data->len + NET_HEADER_SIZE);
         
-		field_len = network_mysqld_proto_get_lenenc_int(packet, &off);
+		field_len = network_mysqld_proto_get_lenenc_int(packet);
         
 		if (field_len == 251) { /** @todo use constant */
 			lua_pushnil(L);
@@ -389,10 +312,10 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 			/**
 			 * @todo we only support fields in the row-iterator < 16M (packet-len)
 			 */
-			g_assert(field_len <= packet->len + NET_HEADER_SIZE);
-			g_assert(off + field_len <= packet->len + NET_HEADER_SIZE);
+			g_assert(field_len <= packet->data->len + NET_HEADER_SIZE);
+			g_assert(off + field_len <= packet->data->len + NET_HEADER_SIZE);
             
-			lua_pushlstring(L, packet->str + off, field_len);
+			lua_pushlstring(L, packet->data->str + off, field_len);
             
 			off += field_len;
 		}
@@ -402,6 +325,8 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	}
     
 	res->row = res->row->next;
+
+	network_packet_free(packet);
     
 	return 1;
 }
@@ -434,7 +359,7 @@ static int parse_resultset_fields(proxy_resultset_t *res) {
     
 	if (!res->fields) return -1;
     
-	chunk = network_mysqld_result_parse_fields(res->result_queue->head, res->fields);
+	chunk = network_mysqld_proto_get_fielddefs(res->result_queue->head, res->fields);
     
 	/* no result-set found */
 	if (!chunk) return -1;

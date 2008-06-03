@@ -118,41 +118,14 @@ struct network_mysqld_con {
 
 	int is_listen_socket;
 
+	gint8 auth_result_state;
+
 	struct {
 		guint32 len;
 		enum enum_server_command command;
 
-		/**
-		 * each state can add their local parsing information
-		 *
-		 * auth_result is used to track the state
-		 * - OK  is fine
-		 * - ERR will close the connection
-		 * - EOF asks for old-password
-		 */
-		union {
-			struct {
-				int want_eofs;
-				int first_packet;
-			} prepare;
-
-			enum {
-				PARSE_COM_QUERY_INIT,
-				PARSE_COM_QUERY_FIELD,
-				PARSE_COM_QUERY_RESULT,
-				PARSE_COM_QUERY_LOAD_DATA,
-				PARSE_COM_QUERY_LOAD_DATA_END_DATA
-			} query;
-
-			struct {
-				char state; /** OK, EOF, ERR */
-			} auth_result;
-
-			/** track the db in the COM_INIT_DB */
-			struct {
-				GString *db_name;
-			} init_db;
-		} state;
+		gpointer data;
+		void (*data_free)(gpointer);
 	} parse;
 
 	void *plugin_con_state;

@@ -159,6 +159,7 @@
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
+#include "network-mysqld-packet.h"
 #include "network-conn-pool.h"
 #include "chassis-mainloop.h"
 #include "lua-scope.h"
@@ -288,6 +289,10 @@ void network_mysqld_add_connection(chassis *srv, network_mysqld_con *con) {
  */
 void network_mysqld_con_free(network_mysqld_con *con) {
 	if (!con) return;
+
+	if (con->parse.data && con->parse.data_free) {
+		con->parse.data_free(con->parse.data);
+	}
 
 	if (con->server) network_socket_free(con->server);
 	if (con->client) network_socket_free(con->client);
@@ -541,7 +546,7 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 		func = con->plugins.con_send_auth_result;
 
 		if (!func) { /* default implementation */
-			switch (con->parse.state.auth_result.state) {
+			switch (con->auth_result_state) {
 			case MYSQLD_PACKET_OK:
 				con->state = CON_STATE_READ_QUERY;
 				break;
@@ -557,7 +562,7 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 			default:
 				g_error("%s.%d: unexpected state for SEND_AUTH_RESULT: %02x", 
 						__FILE__, __LINE__,
-						con->parse.state.auth_result.state);
+						con->auth_result_state);
 			}
 		}
 		break;
@@ -811,6 +816,19 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				g_error("%s.%d: ...", __FILE__, __LINE__);
 				break;
 			}
+
+			if (recv_sock->mysqld_version > 50113 && recv_sock->mysqld_version < 50118) {
+				/**
+				 * Bug #25371
+				 *
+				 * COM_CHANGE_USER returns 2 ERR packets instead of one
+				 *
+				 * we can auto-correct the issue if needed and remove the second packet
+				 * Some clients handle this issue and expect a double ERR packet.
+				 */
+
+				con->state = CON_STATE_ERROR;
+			}
 	
 			break; }
 		case CON_STATE_SEND_HANDSHAKE: 
@@ -928,7 +946,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			packet = chunk->data;
 			g_assert(packet);
 			g_assert(packet->len > NET_HEADER_SIZE);
-			con->parse.state.auth_result.state = packet->str[NET_HEADER_SIZE];
+
+			con->auth_result_state = packet->str[NET_HEADER_SIZE];
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
@@ -1046,26 +1065,31 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			}
 
+			con->parse.command = -1;
+			if (con->parse.data && con->parse.data_free) {
+				con->parse.data_free(con->parse.data);
+
+				con->parse.data = NULL;
+				con->parse.data_free = NULL;
+			}
+
 			break; }
 		case CON_STATE_SEND_QUERY:
 			/* send the query to the server */
 			if (con->server->send_queue->offset == 0) {
 				/* only parse the packets once */
-				GString *s;
+				network_packet packet;
 				GList *chunk;
 
 				g_assert(con->server->send_queue->chunks);
 				chunk = con->server->send_queue->chunks->head;
-				s = chunk->data;
+
+				packet.data = chunk->data;
+				packet.offset = 0;
 
 				/* only parse once and don't care about the blocking read */
-				if (con->parse.command == COM_QUERY &&
-				    con->parse.state.query == PARSE_COM_QUERY_LOAD_DATA) {
-					/* is this a LOAD DATA INFILE ... extra round ? */
-					/* this isn't a command packet, but a LOAD DATA INFILE data-packet */
-					if (s->str[0] == 0 && s->str[1] == 0 && s->str[2] == 0) {
-						con->parse.state.query = PARSE_COM_QUERY_LOAD_DATA_END_DATA;
-					}
+				if (con->parse.command == COM_QUERY) {
+					network_mysqld_com_query_result_track_state(&packet, con->parse.data);
 				} else if (con->is_overlong_packet) {
 					/* the last packet was a over-long packet
 					 * this is the same command, just more data */
@@ -1075,7 +1099,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					}
 	
 				} else {
-					con->parse.command = s->str[4];
+					con->parse.command = packet.data->str[4];
 	
 					if (con->parse.len == PACKET_LEN_MAX) {
 						con->is_overlong_packet = 1;
@@ -1085,23 +1109,18 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					switch (con->parse.command) {
 					case COM_QUERY:
 					case COM_STMT_EXECUTE:
-						con->parse.state.query = PARSE_COM_QUERY_INIT;
+						con->parse.data = network_mysqld_com_query_result_new();
+						con->parse.data_free = (GDestroyNotify)network_mysqld_com_query_result_free;
 						break;
 					case COM_STMT_PREPARE:
-						con->parse.state.prepare.first_packet = 1;
+						con->parse.data = network_mysqld_com_stmt_prepare_result_new();
+						con->parse.data_free = (GDestroyNotify)network_mysqld_com_init_db_result_free;
 						break;
 					case COM_INIT_DB:
-						if (s->str[NET_HEADER_SIZE] == COM_INIT_DB && 
-						    (s->len > NET_HEADER_SIZE + 1)) {
-							con->parse.state.init_db.db_name = g_string_new(NULL);
-				
-							g_string_truncate(con->parse.state.init_db.db_name, 0);
-							g_string_append_len(con->parse.state.init_db.db_name, 
-									s->str + NET_HEADER_SIZE + 1, 
-									s->len - NET_HEADER_SIZE - 1);
-						} else {
-							con->parse.state.init_db.db_name = NULL;
-						}
+						con->parse.data = network_mysqld_com_init_db_result_new();
+						con->parse.data_free = (GDestroyNotify)network_mysqld_com_init_db_result_free;
+
+						network_mysqld_com_init_db_result_track_state(&packet, con->parse.data);
 
 						break;
 					default:
@@ -1139,7 +1158,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				con->state = CON_STATE_READ_QUERY;
 				break;
 			case COM_QUERY:
-				if (con->parse.state.query == PARSE_COM_QUERY_LOAD_DATA) {
+				if (network_mysqld_com_query_result_is_load_data(con->parse.data)) {
 					con->state = CON_STATE_READ_QUERY;
 				} else {
 					con->state = CON_STATE_READ_QUERY_RESULT;
@@ -1180,13 +1199,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				}
 
 			} while (con->state == CON_STATE_READ_QUERY_RESULT);
-
-			if (con->parse.command == COM_INIT_DB) {
-				if (con->parse.state.init_db.db_name) {
-					g_string_free(con->parse.state.init_db.db_name, TRUE);
-					con->parse.state.init_db.db_name = NULL;
-				}
-			}
 	
 			break; 
 		case CON_STATE_SEND_QUERY_RESULT:

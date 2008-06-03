@@ -202,7 +202,6 @@ NETWORK_API int network_mysqld_proto_get_binlog_event(network_packet *packet,
 		network_mysqld_binlog *binlog,
 		network_mysqld_binlog_event *event);
 NETWORK_API int network_mysqld_proto_get_binlog_status(network_packet *packet);
-NETWORK_API int network_mysqld_proto_skip_network_header(network_packet *packet);
 
 typedef struct {
 	gchar *binlog_file;

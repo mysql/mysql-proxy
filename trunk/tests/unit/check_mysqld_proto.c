@@ -38,45 +38,46 @@ void test_mysqld_proto_header(void) {
  *
  */
 void test_mysqld_proto_lenenc_int(void) {
-	GString *packet = g_string_new(NULL);
 	guint64 length;
-	guint off;
+	network_packet packet;
+
+	packet.data = g_string_new(NULL);
 
 	/* we should be able to do more corner case testing
 	 *
 	 *
 	 */
-	length = 0; off = 0;
-	g_string_truncate(packet, off);
-	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	g_assert(packet->len == 1);
-	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	length = 0; packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet.data, length));
+	g_assert(packet.data->len == 1);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(&packet));
 
-	length = 250; off = 0;
-	g_string_truncate(packet, off);
-	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	g_assert(packet->len == 1);
-	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	length = 250; packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet.data, length));
+	g_assert(packet.data->len == 1);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(&packet));
 
-	length = 251; off = 0;
-	g_string_truncate(packet, off);
-	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	g_assert(packet->len == 3);
-	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	length = 251; packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet.data, length));
+	g_assert(packet.data->len == 3);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(&packet));
 
-	length = 0xffff; off = 0;
-	g_string_truncate(packet, off);
-	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	g_assert(packet->len == 3);
-	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	length = 0xffff; packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet.data, length));
+	g_assert(packet.data->len == 3);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(&packet));
 
-	length = 0x10000; off = 0;
-	g_string_truncate(packet, off);
-	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet, length));
-	g_assert(packet->len == 4);
-	g_assert(length == network_mysqld_proto_get_lenenc_int(packet, &off));
+	length = 0x10000; packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert(0 == network_mysqld_proto_append_lenenc_int(packet.data, length));
+	g_assert(packet.data->len == 4);
+	g_assert(length == network_mysqld_proto_get_lenenc_int(&packet));
 
-	g_string_free(packet, TRUE);
+	g_string_free(packet.data, TRUE);
 }
 
 /**
@@ -84,34 +85,34 @@ void test_mysqld_proto_lenenc_int(void) {
  *
  */
 void test_mysqld_proto_int(void) {
-	GString *packet = g_string_new(NULL);
 	guint64 length;
-	guint off;
+	network_packet packet;
 
+	packet.data = g_string_new(NULL);
 	/* we should be able to do more corner case testing
 	 *
 	 *
 	 */
 
-	length = 0; off = 0;
-	g_string_truncate(packet, off);
-	g_assert(0 == network_mysqld_proto_append_int8(packet, length));
-	g_assert(packet->len == 1);
-	g_assert(length == network_mysqld_proto_get_int8(packet, &off));
+	length = 0; packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert(0 == network_mysqld_proto_append_int8(packet.data, length));
+	g_assert(packet.data->len == 1);
+	g_assert(length == network_mysqld_proto_get_int8(&packet));
 
-	length = 0; off = 0;
-	g_string_truncate(packet, off);
-	g_assert(0 == network_mysqld_proto_append_int16(packet, length));
-	g_assert(packet->len == 2);
-	g_assert(length == network_mysqld_proto_get_int16(packet, &off));
+	length = 0; packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert(0 == network_mysqld_proto_append_int16(packet.data, length));
+	g_assert(packet.data->len == 2);
+	g_assert(length == network_mysqld_proto_get_int16(&packet));
 
-	length = 0; off = 0;
-	g_string_truncate(packet, off);
-	g_assert(0 == network_mysqld_proto_append_int32(packet, length));
-	g_assert(packet->len == 4);
-	g_assert(length == network_mysqld_proto_get_int32(packet, &off));
+	length = 0; packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert(0 == network_mysqld_proto_append_int32(packet.data, length));
+	g_assert(packet.data->len == 4);
+	g_assert(length == network_mysqld_proto_get_int32(&packet));
 
-	g_string_free(packet, TRUE);
+	g_string_free(packet.data, TRUE);
 }
 /*@}*/
 
@@ -128,17 +129,18 @@ void test_mysqld_handshake(void) {
 		"\0\0\0\0\0\0\0\0\0\0\0\0\0"
 		"vV,s#PLjSA+Q"
 		"\0";
-	GString *packet;
 	network_mysqld_auth_challenge *shake;
+	network_packet packet;
 
 	shake = network_mysqld_auth_challenge_new();
 	
-	packet = g_string_new(NULL);
-	g_string_append_len(packet, raw_packet, sizeof(raw_packet) - 1);
+	packet.data = g_string_new(NULL);
+	packet.offset = 0;
+	g_string_append_len(packet.data, raw_packet, sizeof(raw_packet) - 1);
 
-	g_assert(packet->len == 78);
+	g_assert(packet.data->len == 78);
 
-	g_assert(0 == network_mysqld_proto_get_auth_challenge(packet, shake));
+	g_assert(0 == network_mysqld_proto_get_auth_challenge(&packet, shake));
 
 	g_assert(shake->server_version == 50045);
 	g_assert(shake->thread_id == 119);
@@ -159,8 +161,17 @@ void test_mysqld_handshake(void) {
 	g_assert(shake->challenge->len == 20);
 	g_assert(0 == memcmp(shake->challenge->str, "\"L;!3|8@vV,s#PLjSA+Q", shake->challenge->len));
 
+	/* ... and back */
+	g_string_truncate(packet.data, 0);
+	g_string_append_len(packet.data, C("J\0\0\0"));
+	network_mysqld_proto_append_auth_challenge(packet.data, shake);
+
+	g_assert_cmpint(packet.data->len, ==, sizeof(raw_packet) - 1);
+
+	g_assert(0 == memcmp(packet.data->str, raw_packet, packet.data->len));
+
 	network_mysqld_auth_challenge_free(shake);
-	g_string_free(packet, TRUE);
+	g_string_free(packet.data, TRUE);
 }
 
 void test_mysqld_auth_empty_pw(void) {

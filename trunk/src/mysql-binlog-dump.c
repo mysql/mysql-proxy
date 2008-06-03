@@ -18,50 +18,6 @@
 #include "network-mysqld-proto.h"
 #include "network-mysqld-binlog.h"
 
-#if 1 
-static void dump_str(const char *msg, const unsigned char *s, size_t len) {
-	GString *hex;
-	size_t i;
-		
-       	hex = g_string_new(NULL);
-
-	for (i = 0; i < len; i++) {
-		g_string_append_printf(hex, "%02x", s[i]);
-
-		if ((i + 1) % 16 == 0) {
-			int j;
-			g_string_append(hex, "  ");
-			for (j = i - 15; j <= i; j++) {
-				g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
-			}
-			g_string_append(hex, "\n  ");
-		} else {
-			g_string_append_c(hex, ' ');
-		}
-	}
-
-	if (i % 16 != 0) {
-		/* fill up the line */
-		int j;
-
-		for (j = 0; j < 16 - (i % 16); j++) {
-			g_string_append(hex, "   ");
-		}
-
-		g_string_append(hex, " ");
-		for (j = i - (len % 16); j < i; j++) {
-			g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
-		}
-	}
-
-	g_debug("(%s) %"G_GSIZE_FORMAT" bytes:\n  %s", 
-			msg, 
-			len,
-			hex->str);
-
-	g_string_free(hex, TRUE);
-}
-#endif
 
 typedef struct {
 	MYSQL_FIELD *fielddef;
@@ -123,30 +79,30 @@ int network_mysqld_proto_field_get(network_packet *packet,
 	switch ((guchar)field->fielddef->type) {
 	case MYSQL_TYPE_TIMESTAMP: /* int4store */
 	case MYSQL_TYPE_LONG:
-		field->data.i = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		field->data.i = network_mysqld_proto_get_int32(packet);
 		break;
 
 	case MYSQL_TYPE_DATETIME: /* int8store */
 	case MYSQL_TYPE_LONGLONG:
-		field->data.i = network_mysqld_proto_get_int64(packet->data, &(packet->offset));
+		field->data.i = network_mysqld_proto_get_int64(packet);
 		break;
 	case MYSQL_TYPE_INT24:     
 	case MYSQL_TYPE_DATE:      /* int3store, a newdate, old-data is 4 byte */
-		field->data.i = network_mysqld_proto_get_int24(packet->data, &(packet->offset));
+		field->data.i = network_mysqld_proto_get_int24(packet);
 		break;
 	case MYSQL_TYPE_SHORT:     
-		field->data.i = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+		field->data.i = network_mysqld_proto_get_int16(packet);
 		break;
 	case MYSQL_TYPE_TINY:     
-		field->data.i = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		field->data.i = network_mysqld_proto_get_int8(packet);
 		break;
 	case MYSQL_TYPE_ENUM:
 		switch (field->fielddef->max_length) {
 		case 1:
-			field->data.i = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+			field->data.i = network_mysqld_proto_get_int8(packet);
 			break;
 		case 2:
-			field->data.i = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+			field->data.i = network_mysqld_proto_get_int16(packet);
 			break;
 		default:
 			g_error("%s: enum-length = %lu", 
@@ -157,8 +113,8 @@ int network_mysqld_proto_field_get(network_packet *packet,
 		break;
 	case MYSQL_TYPE_BLOB:
 		if (field->fielddef->max_length == 2) {
-			guint64 length = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
-			field->data.s = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), length);
+			guint64 length = network_mysqld_proto_get_int16(packet);
+			field->data.s = network_mysqld_proto_get_string_len(packet, length);
 		} else {
 			g_error("%s: blob-length = %lu", 
 					G_STRLOC,
@@ -169,11 +125,11 @@ int network_mysqld_proto_field_get(network_packet *packet,
 	case MYSQL_TYPE_VAR_STRING:
 	case MYSQL_TYPE_STRING:
 		if (field->fielddef->max_length < 256) {
-			guint64 length = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
-			field->data.s = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), length);
+			guint64 length = network_mysqld_proto_get_int8(packet);
+			field->data.s = network_mysqld_proto_get_string_len(packet, length);
 		} else {
-			guint64 length = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
-			field->data.s = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), length);
+			guint64 length = network_mysqld_proto_get_int16(packet);
+			field->data.s = network_mysqld_proto_get_string_len(packet, length);
 		}
 
 		break;
@@ -196,7 +152,7 @@ int network_mysqld_proto_field_get(network_packet *packet,
 		size += decimal_full_blocks * digits_per_bytes[9] + digits_per_bytes[decimal_last_block_digits];
 		size += scale_full_blocks   * digits_per_bytes[9] + digits_per_bytes[scale_last_block_digits];
 
-		dump_str(G_STRLOC, packet->data->str, packet->data->len);
+		g_debug_hexdump(G_STRLOC, packet->data->str, packet->data->len);
 #if 0
 		g_critical("%s: don't know how to decode NEWDECIMAL(%lu, %u) at offset %u (%d)",
 				G_STRLOC,
@@ -206,10 +162,10 @@ int network_mysqld_proto_field_get(network_packet *packet,
 				size
 				);
 #endif
-		network_mysqld_proto_skip(packet->data, &(packet->offset), size);
+		network_mysqld_proto_skip(packet, size);
 		break; }
 	default:
-		dump_str(G_STRLOC, packet->data->str, packet->data->len);
+		g_debug_hexdump(G_STRLOC, packet->data->str, packet->data->len);
 		g_error("%s: unknown field-type to fetch: %d",
 				G_STRLOC,
 				field->fielddef->type);
@@ -447,7 +403,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 		row_packet.data = &row;
 		row_packet.offset = 0;
 
-		dump_str(G_STRLOC " (used colums)", event->event.row_event.used_columns, event->event.row_event.used_columns_len);
+		g_debug_hexdump(G_STRLOC " (used colums)", event->event.row_event.used_columns, event->event.row_event.used_columns_len);
 
 		do {
 			GPtrArray *pre_fields, *post_fields = NULL;
@@ -455,7 +411,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 			gchar *post_bits = NULL, *pre_bits;
 
 			pre_bits = network_mysqld_proto_get_string_len(
-					(&row_packet)->data, &(row_packet.offset), event->event.row_event.null_bits_len);
+					&row_packet, event->event.row_event.null_bits_len);
 
 			pre_fields = network_mysqld_proto_fields_new_full(tbl->fields, 
 					pre_bits, 
@@ -467,7 +423,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 
 			if (event->event_type == UPDATE_ROWS_EVENT) {
 				post_bits = network_mysqld_proto_get_string_len(
-						(&row_packet)->data, &(row_packet.offset), event->event.row_event.null_bits_len);
+						&row_packet, event->event.row_event.null_bits_len);
 		
 				post_fields = network_mysqld_proto_fields_new_full(tbl->fields, 
 					post_bits, 
@@ -848,9 +804,9 @@ int replicate_binlog_dump_file(
 		g_assert_cmpint(packet->data->len, ==, event->event_size);
 		
 		if (network_mysqld_proto_get_binlog_event(packet, binlog, event)) {
-			dump_str(G_STRLOC, packet->data->str + 19, packet->data->len - 19);
+			g_debug_hexdump(G_STRLOC, packet->data->str + 19, packet->data->len - 19);
 		} else if (network_mysqld_binlog_event_print(binlog, event)) {
-			dump_str(G_STRLOC, packet->data->str + 19, packet->data->len - 19);
+			g_debug_hexdump(G_STRLOC, packet->data->str + 19, packet->data->len - 19);
 			/* ignore it */
 		}
 	

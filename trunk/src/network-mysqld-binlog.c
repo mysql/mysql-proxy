@@ -125,19 +125,19 @@ int network_mysqld_proto_get_binlog_status(network_packet *packet) {
 	gint8 ok;
 
 	/* on the network we have a length and packet-number of 4 bytes */
-	ok = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+	ok = network_mysqld_proto_get_int8(packet);
 	g_return_val_if_fail(ok == 0, -1);
 
 	return 0;
 }
 
 int network_mysqld_proto_get_binlog_event_header(network_packet *packet, network_mysqld_binlog_event *event) {
-	event->timestamp  = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
-	event->event_type = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
-	event->server_id  = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
-	event->event_size = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
-	event->log_pos    = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
-	event->flags      = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+	event->timestamp  = network_mysqld_proto_get_int32(packet);
+	event->event_type = network_mysqld_proto_get_int8(packet);
+	event->server_id  = network_mysqld_proto_get_int32(packet);
+	event->event_size = network_mysqld_proto_get_int32(packet);
+	event->log_pos    = network_mysqld_proto_get_int32(packet);
+	event->flags      = network_mysqld_proto_get_int16(packet);
 
 	return 0;
 }
@@ -150,69 +150,69 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 
 	switch ((guchar)event->event_type) {
 	case QUERY_EVENT:
-		event->event.query_event.thread_id   = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
-		event->event.query_event.exec_time   = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
-		event->event.query_event.db_name_len = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
-		event->event.query_event.error_code  = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+		event->event.query_event.thread_id   = network_mysqld_proto_get_int32(packet);
+		event->event.query_event.exec_time   = network_mysqld_proto_get_int32(packet);
+		event->event.query_event.db_name_len = network_mysqld_proto_get_int8(packet);
+		event->event.query_event.error_code  = network_mysqld_proto_get_int16(packet);
 
 		/* 5.0 has more flags */
 		if (packet->data->len > packet->offset) {
 			guint16 var_size = 0;
 
-			var_size    = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+			var_size    = network_mysqld_proto_get_int16(packet);
 			if (var_size) {
 				/* skip the variable size part for now */
-				network_mysqld_proto_skip(packet->data, &(packet->offset), var_size);
+				network_mysqld_proto_skip(packet, var_size);
 			}
 	
 			/* default db has <db_name_len> chars */
-			event->event.query_event.db_name = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), 
+			event->event.query_event.db_name = network_mysqld_proto_get_string_len(packet, 
 					event->event.query_event.db_name_len);
-			network_mysqld_proto_skip(packet->data, &(packet->offset), 1); /* the \0 */
+			network_mysqld_proto_skip(packet, 1); /* the \0 */
 	
-			event->event.query_event.query = network_mysqld_proto_get_string_len(packet->data, &(packet->offset), 
+			event->event.query_event.query = network_mysqld_proto_get_string_len(packet, 
 					packet->data->len - packet->offset);
 		}
 
 		break;
 	case ROTATE_EVENT:
-		event->event.rotate_event.binlog_pos = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
-		network_mysqld_proto_skip(packet->data, &(packet->offset), 4);
+		event->event.rotate_event.binlog_pos = network_mysqld_proto_get_int32(packet);
+		network_mysqld_proto_skip(packet, 4);
 		event->event.rotate_event.binlog_file = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset), 
+				packet, 
 				packet->data->len - packet->offset);
 		break;
 	case STOP_EVENT:
 		/* is empty */
 		break;
 	case FORMAT_DESCRIPTION_EVENT:
-		event->event.format_event.binlog_version = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+		event->event.format_event.binlog_version = network_mysqld_proto_get_int16(packet);
 		event->event.format_event.master_version = network_mysqld_proto_get_string_len( /* NUL-term string */
-				packet->data, &(packet->offset), ST_SERVER_VER_LEN);
-		event->event.format_event.created_ts = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+				packet, ST_SERVER_VER_LEN);
+		event->event.format_event.created_ts = network_mysqld_proto_get_int32(packet);
 
 		/* the header length may change in the future, for now we assume it is 19 */
-		event->event.format_event.log_header_len = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		event->event.format_event.log_header_len = network_mysqld_proto_get_int8(packet);
 		g_assert_cmpint(event->event.format_event.log_header_len, ==, 19);
 
 		/* there is some funky event-permutation going on */
 		event->event.format_event.perm_events_len = packet->data->len - packet->offset;
 		event->event.format_event.perm_events = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset), packet->data->len - packet->offset);
+				packet, packet->data->len - packet->offset);
 		
 		break;
 	case USER_VAR_EVENT:
-		event->event.user_var_event.name_len = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		event->event.user_var_event.name_len = network_mysqld_proto_get_int32(packet);
 		event->event.user_var_event.name = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset),
+				packet,
 				event->event.user_var_event.name_len);
 
-		event->event.user_var_event.is_null = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
-		event->event.user_var_event.type = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
-		event->event.user_var_event.charset = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
-		event->event.user_var_event.value_len = network_mysqld_proto_get_int32(packet->data, &(packet->offset));
+		event->event.user_var_event.is_null = network_mysqld_proto_get_int8(packet);
+		event->event.user_var_event.type = network_mysqld_proto_get_int8(packet);
+		event->event.user_var_event.charset = network_mysqld_proto_get_int32(packet);
+		event->event.user_var_event.value_len = network_mysqld_proto_get_int32(packet);
 		event->event.user_var_event.value = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset),
+				packet,
 				event->event.user_var_event.value_len);
 		break;
 	case TABLE_MAP_EVENT: /* 19 */
@@ -221,29 +221,29 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 		 *
 		 * no, we don't want to know
 		 */
-		event->event.table_map_event.table_id = network_mysqld_proto_get_int48(packet->data, &(packet->offset)); /* 6 bytes */
-		event->event.table_map_event.flags = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+		event->event.table_map_event.table_id = network_mysqld_proto_get_int48(packet); /* 6 bytes */
+		event->event.table_map_event.flags = network_mysqld_proto_get_int16(packet);
 
-		event->event.table_map_event.db_name_len = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		event->event.table_map_event.db_name_len = network_mysqld_proto_get_int8(packet);
 		event->event.table_map_event.db_name = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset),
+				packet,
 				event->event.table_map_event.db_name_len);
-		network_mysqld_proto_skip(packet->data, &(packet->offset), 1); /* this should be NUL */
+		network_mysqld_proto_skip(packet, 1); /* this should be NUL */
 
-		event->event.table_map_event.table_name_len = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
+		event->event.table_map_event.table_name_len = network_mysqld_proto_get_int8(packet);
 		event->event.table_map_event.table_name = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset),
+				packet,
 				event->event.table_map_event.table_name_len);
-		network_mysqld_proto_skip(packet->data, &(packet->offset), 1); /* this should be NUL */
+		network_mysqld_proto_skip(packet, 1); /* this should be NUL */
 
-		event->event.table_map_event.columns_len = network_mysqld_proto_get_lenenc_int(packet->data, &(packet->offset));
+		event->event.table_map_event.columns_len = network_mysqld_proto_get_lenenc_int(packet);
 		event->event.table_map_event.columns = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset),
+				packet,
 				event->event.table_map_event.columns_len);
 
-		event->event.table_map_event.metadata_len = network_mysqld_proto_get_lenenc_int(packet->data, &(packet->offset));
+		event->event.table_map_event.metadata_len = network_mysqld_proto_get_lenenc_int(packet);
 		event->event.table_map_event.metadata = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset),
+				packet,
 				event->event.table_map_event.metadata_len);
 
 		/**
@@ -252,7 +252,7 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 
 		event->event.table_map_event.null_bits_len = (int)((event->event.table_map_event.columns_len+7)/8);
 		event->event.table_map_event.null_bits = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset),
+				packet,
 				event->event.table_map_event.null_bits_len);
 
 		g_assert_cmpint(packet->data->len, ==, packet->offset); /* this should be the full packet */
@@ -260,20 +260,20 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 	case DELETE_ROWS_EVENT: /* 25 */
 	case UPDATE_ROWS_EVENT: /* 24 */
 	case WRITE_ROWS_EVENT:  /* 23 */
-		event->event.row_event.table_id = network_mysqld_proto_get_int48(packet->data, &(packet->offset)); /* 6 bytes */
-		event->event.row_event.flags = network_mysqld_proto_get_int16(packet->data, &(packet->offset));
+		event->event.row_event.table_id = network_mysqld_proto_get_int48(packet); /* 6 bytes */
+		event->event.row_event.flags = network_mysqld_proto_get_int16(packet);
 		
-		event->event.row_event.columns_len = network_mysqld_proto_get_lenenc_int(packet->data, &(packet->offset));
+		event->event.row_event.columns_len = network_mysqld_proto_get_lenenc_int(packet);
 
 		/* a bit-mask of used-fields (m_cols.bitmap) */
 		event->event.row_event.used_columns_len = (int)((event->event.row_event.columns_len+7)/8);
 		event->event.row_event.used_columns = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset),
+				packet,
 				event->event.row_event.used_columns_len);
 
 		if (event->event_type == UPDATE_ROWS_EVENT) {
 			/* the before image */
-			network_mysqld_proto_skip(packet->data, &(packet->offset), event->event.row_event.used_columns_len);
+			network_mysqld_proto_skip(packet, event->event.row_event.used_columns_len);
 		}
 
 		/* null-bits for all the columns */
@@ -286,17 +286,17 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 		 */
 		event->event.row_event.row_len = packet->data->len - packet->offset;
 		event->event.row_event.row = network_mysqld_proto_get_string_len(
-				packet->data, &(packet->offset),
+				packet,
 				event->event.row_event.row_len);
 		
 		break;
 	case INTVAR_EVENT:
-		event->event.intvar.type = network_mysqld_proto_get_int8(packet->data, &(packet->offset));
-		event->event.intvar.value = network_mysqld_proto_get_int64(packet->data, &(packet->offset));
+		event->event.intvar.type = network_mysqld_proto_get_int8(packet);
+		event->event.intvar.value = network_mysqld_proto_get_int64(packet);
 
 		break;
 	case XID_EVENT:
-		event->event.xid.xid_id = network_mysqld_proto_get_int64(packet->data, &(packet->offset));
+		event->event.xid.xid_id = network_mysqld_proto_get_int64(packet);
 		break;
 	default:
 		g_critical("%s: unhandled binlog-event: %d", G_STRLOC, event->event_type);
@@ -421,8 +421,8 @@ int network_mysqld_binlog_event_tablemap_get(
 			/* byte 0: real_type 
 			 * byte 1: field-length
 			 */
-			field->type  = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-			field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
+			field->type  = network_mysqld_proto_get_int8(&metadata_packet);
+			field->max_length = network_mysqld_proto_get_int8(&metadata_packet);
 
 			break;
 		case MYSQL_TYPE_VARCHAR: /* 15 (VARCHAR) */
@@ -430,13 +430,13 @@ int network_mysqld_binlog_event_tablemap_get(
 			/* 2 byte length (int2store)
 			 */
 			field->type = col_type;
-			field->max_length = network_mysqld_proto_get_int16(metadata_packet.data, &(metadata_packet.offset));
+			field->max_length = network_mysqld_proto_get_int16(&metadata_packet);
 			break;
 		case MYSQL_TYPE_BLOB: /* 252 */
 			field->type = col_type;
 
 			/* the packlength (1 .. 4) */
-			field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
+			field->max_length = network_mysqld_proto_get_int8(&metadata_packet);
 			break;
 		case MYSQL_TYPE_NEWDECIMAL:
 		case MYSQL_TYPE_DECIMAL:
@@ -445,24 +445,24 @@ int network_mysqld_binlog_event_tablemap_get(
 			 * byte 0: precisions
 			 * byte 1: decimals
 			 */
-			field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-			field->decimals = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
+			field->max_length = network_mysqld_proto_get_int8(&metadata_packet);
+			field->decimals = network_mysqld_proto_get_int8(&metadata_packet);
 			break;
 		case MYSQL_TYPE_DOUBLE:
 		case MYSQL_TYPE_FLOAT:
 			field->type = col_type;
 			/* pack-length */
-			field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
+			field->max_length = network_mysqld_proto_get_int8(&metadata_packet);
 			break;
 		case MYSQL_TYPE_ENUM:
 			/* real-type (ENUM|SET)
 			 * pack-length
 			 */
-			field->type  = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
-			field->max_length = network_mysqld_proto_get_int8(metadata_packet.data, &(metadata_packet.offset));
+			field->type  = network_mysqld_proto_get_int8(&metadata_packet);
+			field->max_length = network_mysqld_proto_get_int8(&metadata_packet);
 			break;
 		case MYSQL_TYPE_BIT:
-			network_mysqld_proto_skip(metadata_packet.data, &(metadata_packet.offset), 2);
+			network_mysqld_proto_skip(&metadata_packet, 2);
 			break;
 		case MYSQL_TYPE_DATE:
 		case MYSQL_TYPE_DATETIME:
