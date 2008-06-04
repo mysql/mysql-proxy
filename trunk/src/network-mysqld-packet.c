@@ -50,6 +50,7 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 	switch (query->state) {
 	case PARSE_COM_QUERY_INIT:
 		status = network_mysqld_proto_get_int8(packet);
+		packet->offset--; /* only peek at the next byte */
 
 		switch (status) {
 		case MYSQLD_PACKET_ERR: /* e.g. SELECT * FROM dual -> ERROR 1096 (HY000): No tables used */
