@@ -1841,6 +1841,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	if (network_mysqld_proto_get_auth_challenge(&packet, challenge)) {
 		recv_sock->packet_len = PACKET_LEN_UNSET;
 		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+		network_mysqld_auth_challenge_free(challenge);
 
 		return NETWORK_SOCKET_ERROR;
 	}
@@ -1866,6 +1867,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 
 		recv_sock->packet_len = PACKET_LEN_UNSET;
 		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+		network_mysqld_auth_challenge_free(challenge);
 
 		return NETWORK_SOCKET_ERROR;
 	default:
@@ -1876,6 +1878,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	challenge_packet = g_string_new(NULL);
 	network_mysqld_proto_append_auth_challenge(challenge_packet, challenge);
 	network_mysqld_queue_append(send_sock->send_queue, S(challenge_packet), recv_sock->packet_id);
+
+	g_string_free(challenge_packet, TRUE);
+	network_mysqld_auth_challenge_free(challenge);
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
@@ -1996,6 +2001,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	auth = network_mysqld_auth_response_new();
 
 	if (network_mysqld_proto_get_auth_response(&packet, auth)) {
+		network_mysqld_auth_response_free(auth);
 		return NETWORK_SOCKET_ERROR;
 	}
 
@@ -2110,6 +2116,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+	network_mysqld_auth_response_free(auth);
 
 	return NETWORK_SOCKET_SUCCESS;
 }
@@ -2565,6 +2572,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	g_assert(send_sock);
 
 	network_mysqld_queue_append(send_sock->send_queue, S(inj->query), 0);
+
+	network_mysqld_con_reset_command_response_state(con);
 
 	con->state = CON_STATE_SEND_QUERY;
 

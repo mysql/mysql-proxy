@@ -638,6 +638,23 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 }
 
 /**
+ * reset the command-response parsing
+ *
+ * some commands needs state information and we have to 
+ * reset the parsing as soon as we add a new command to the send-queue
+ */
+void network_mysqld_con_reset_command_response_state(network_mysqld_con *con) {
+	con->parse.command = -1;
+	if (con->parse.data && con->parse.data_free) {
+		con->parse.data_free(con->parse.data);
+
+		con->parse.data = NULL;
+		con->parse.data_free = NULL;
+	}
+}
+
+
+/**
  * handle the different states of the MySQL protocol
  *
  * @param event_fd     fd on which the event was fired
@@ -1065,13 +1082,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			}
 
-			con->parse.command = -1;
-			if (con->parse.data && con->parse.data_free) {
-				con->parse.data_free(con->parse.data);
-
-				con->parse.data = NULL;
-				con->parse.data_free = NULL;
-			}
+			network_mysqld_con_reset_command_response_state(con);
 
 			break; }
 		case CON_STATE_SEND_QUERY:

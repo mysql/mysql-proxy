@@ -9,6 +9,7 @@
 #include "glib-ext.h"
 
 #define C(x) x, sizeof(x) - 1
+#define S(x) x->str, x->len
 
 #define TIME_DIFF_US(t2, t1) \
 ((t2.tv_sec - t1.tv_sec) * 1000000.0 + (t2.tv_usec - t1.tv_usec))
@@ -259,28 +260,25 @@ static int proxy_resultset_fields_get(lua_State *L) {
  */
 static int proxy_resultset_rows_iter(lua_State *L) {
 	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, lua_upvalueindex(1));
-	guint32 off = NET_HEADER_SIZE; /* skip the packet-len and sequence-number */
-	network_packet *packet;
+	network_packet packet;
 	GPtrArray *fields = res->fields;
 	gsize i;
-	guint8 status;
+	gint8 status;
     
 	GList *chunk = res->row;
     
 	if (chunk == NULL) return 0;
 
-	packet = network_packet_new();
-	packet->data = chunk->data;
+	packet.data = chunk->data;
+	packet.offset = 0;
 
-	network_mysqld_proto_skip_network_header(packet);
+	network_mysqld_proto_skip_network_header(&packet);
 
-	status = network_mysqld_proto_get_int8(packet);
+	status = network_mysqld_proto_get_int8(&packet);
     
 	/* if we find the 2nd EOF packet we are done */
-	if (status == (guint8)MYSQLD_PACKET_EOF &&
-	    packet->data->len < 10) {
-		network_packet_free(packet);
-
+	if (status == MYSQLD_PACKET_EOF &&
+	    packet.data->len < 10) {
 		return 0;
 	}
     
@@ -290,34 +288,31 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	 *
 	 * see mysql-test/t/select.test
 	 *  */
-	if (status == (guint8)MYSQLD_PACKET_ERR) {
-		network_packet_free(packet);
+	if (status == MYSQLD_PACKET_ERR) {
 		return 0;
 	}
-    
+
+	packet.offset--; /* well, either it is ERR, EOF or a length-encoded field-length, parse it again */
+
 	lua_newtable(L);
     
 	for (i = 0; i < fields->len; i++) {
 		guint64 field_len;
         
-		g_assert(off <= packet->data->len + NET_HEADER_SIZE);
-        
-		field_len = network_mysqld_proto_get_lenenc_int(packet);
-        
+		field_len = network_mysqld_proto_get_lenenc_int(&packet);
+
 		if (field_len == 251) { /** @todo use constant */
 			lua_pushnil(L);
-			
-			off += 0;
 		} else {
 			/**
 			 * @todo we only support fields in the row-iterator < 16M (packet-len)
 			 */
-			g_assert(field_len <= packet->data->len + NET_HEADER_SIZE);
-			g_assert(off + field_len <= packet->data->len + NET_HEADER_SIZE);
+			g_assert_cmpint(field_len, <=, packet.data->len);
+			g_assert_cmpint(packet.offset + field_len, <=, packet.data->len);
             
-			lua_pushlstring(L, packet->data->str + off, field_len);
-            
-			off += field_len;
+			lua_pushlstring(L, packet.data->str + packet.offset, field_len);
+
+			network_mysqld_proto_skip(&packet, field_len);
 		}
         
 		/* lua starts its tables at 1 */
@@ -325,8 +320,6 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	}
     
 	res->row = res->row->next;
-
-	network_packet_free(packet);
     
 	return 1;
 }
