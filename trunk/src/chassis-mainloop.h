@@ -43,7 +43,7 @@ CHASSIS_API void chassis_free(chassis *chas);
  *
  * can be called directly or as gthread_* functions 
  */
-CHASSIS_API void *chassis_mainloop(void *user_data);
+CHASSIS_API int chassis_mainloop(void *user_data);
 
 CHASSIS_API void chassis_set_shutdown(void);
 CHASSIS_API gboolean chassis_is_shutdown(void);

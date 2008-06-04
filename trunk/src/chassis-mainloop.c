@@ -109,7 +109,7 @@ static void chassis_init_libevent(chassis *chas) {
 	chas->event_base  = event_init();
 }
 
-void *chassis_mainloop(void *_chas) {
+int chassis_mainloop(void *_chas) {
 	chassis *chas = _chas;
 	guint i;
 	struct event ev_sigterm, ev_sigint;
@@ -125,7 +125,7 @@ void *chassis_mainloop(void *_chas) {
 	if ( err != 0 ) {
 		/* Tell the user that we could not find a usable */
 		/* WinSock DLL.                                  */
-		return NULL;
+		return err;	/* err is positive */
 	}
 #endif
 	/* init the event-handlers */
@@ -137,7 +137,7 @@ void *chassis_mainloop(void *_chas) {
 
 		g_assert(p->apply_config);
 		if (0 != p->apply_config(chas, p->config)) {
-			return NULL;
+			return -1;
 		}
 	}
 
@@ -174,6 +174,6 @@ void *chassis_mainloop(void *_chas) {
 	signal_del(&ev_sigterm);
 	signal_del(&ev_sigint);
 
-	return NULL;
+	return 0;
 }
 
