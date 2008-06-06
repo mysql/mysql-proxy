@@ -8,6 +8,10 @@
 #include <fcntl.h>
 #ifndef WIN32
 #include <unistd.h> /* close */
+/* define eventlog types when not on windows, saves code below */
+#define EVENTLOG_ERROR_TYPE	0x0001
+#define EVENTLOG_WARNING_TYPE	0x0002
+#define EVENTLOG_INFORMATION_TYPE	0x0004
 #else
 #include <windows.h>
 #include <io.h>
@@ -25,18 +29,20 @@
 #define S(x) x->str, x->len
 
 /**
- * log everything to the stdout for now
+ * the mapping of our internal log levels various log systems
  */
 const struct {
 	char *name;
 	GLogLevelFlags lvl;
-} log_lvl_map[] = {
-	{ "error", G_LOG_LEVEL_ERROR },
-	{ "critical", G_LOG_LEVEL_CRITICAL },
-	{ "warning", G_LOG_LEVEL_WARNING },
-	{ "message", G_LOG_LEVEL_MESSAGE },
-	{ "info", G_LOG_LEVEL_INFO },
-	{ "debug", G_LOG_LEVEL_DEBUG },
+	int syslog_lvl;
+	int win_evtype;
+} log_lvl_map[] = {	/* syslog levels are different to the glib ones */
+	{ "error", G_LOG_LEVEL_ERROR,		LOG_CRIT,		EVENTLOG_ERROR_TYPE},
+	{ "critical", G_LOG_LEVEL_CRITICAL, LOG_ERR,		EVENTLOG_ERROR_TYPE},
+	{ "warning", G_LOG_LEVEL_WARNING,	LOG_WARNING,	EVENTLOG_WARNING_TYPE},
+	{ "message", G_LOG_LEVEL_MESSAGE,	LOG_NOTICE,		EVENTLOG_INFORMATION_TYPE},
+	{ "info", G_LOG_LEVEL_INFO,			LOG_INFO,		EVENTLOG_INFORMATION_TYPE},
+	{ "debug", G_LOG_LEVEL_DEBUG,		LOG_DEBUG,		EVENTLOG_INFORMATION_TYPE},
 
 	{ NULL, 0 }
 };
@@ -90,7 +96,14 @@ void chassis_log_free(chassis_log *log) {
 	if (!log) return;
 
 	chassis_log_close(log);
-
+#ifdef _WIN32
+	if (log->event_source_handle) {
+		if (!DeregisterEventSource(log->event_source_handle)) {
+			int err = GetLastError();
+			g_critical("unhandled error-code (%d) for DeregisterEventSource()", err);
+		}
+	}
+#endif
 	g_string_free(log->log_ts_str, TRUE);
 	g_string_free(log->last_msg, TRUE);
 
@@ -124,18 +137,20 @@ static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 		}
 #ifdef HAVE_SYSLOG_H
 	} else if (log->use_syslog) {
-		int syslog_lvl;
-		/* ERROR and CRITICAL have a different order/meaning in syslog */
-		switch (log_level) {
-		case G_LOG_LEVEL_ERROR: syslog_lvl = LOG_CRIT; break;
-		case G_LOG_LEVEL_CRITICAL: syslog_lvl = LOG_ERR; break;
-		case G_LOG_LEVEL_WARNING: syslog_lvl = LOG_WARNING; break;
-		case G_LOG_LEVEL_MESSAGE: syslog_lvl = LOG_NOTICE; break;
-		case G_LOG_LEVEL_INFO: syslog_lvl = LOG_INFO; break;
-		case G_LOG_LEVEL_DEBUG: syslog_lvl = LOG_DEBUG; break;
-		default: syslog_lvl = LOG_ERR;
-		}
-		syslog(syslog_lvl, "%s", str->str);
+		syslog(log_lvl_map[log_level].syslog_lvl, "%s", str->str);
+#endif
+#ifdef _WIN32
+	} else if (log->use_windows_applog && log->event_source_handle) {
+		ReportEvent(log->event_source_handle,
+					log_lvl_map[log_level].win_evtype,
+					0, /* category, we don't have that yet */
+					log_lvl_map[log_level].win_evtype, /* event indentifier, one of MSG_ERROR (0x01), MSG_WARNING(0x02), MSG_INFO(0x04) */
+					NULL,
+					1, /* number of strings to be substituted */
+					0, /* no event specific data */
+					str->str,	/* the actual log message, always the message we came up with, we don't localize using Windows message files*/
+					);
+	}
 #endif
 	} else {
 		write(STDERR_FILENO, S(str));
@@ -216,4 +231,5 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 
 	g_static_mutex_unlock(&log_mutex);
 }
+
 

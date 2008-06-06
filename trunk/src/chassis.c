@@ -125,6 +125,14 @@ volatile int agent_rotate_logs = 0;
 volatile sig_atomic_t agent_rotate_logs = 0;
 #endif
 
+#ifdef _WIN32
+static char **shell_argv;
+static int shell_argc;
+static int win32_running_as_service = 0;
+static SERVICE_STATUS agent_service_status;
+static SERVICE_STATUS_HANDLE agent_service_status_handle = 0;
+#endif
+
 #ifndef _WIN32
 static void sighup_handler(int sig) {
 	switch (sig) {
@@ -132,7 +140,6 @@ static void sighup_handler(int sig) {
 	}
 }
 #endif
-
 
 /**
  * turn a GTimeVal into string
@@ -186,10 +193,140 @@ static void daemonize(void) {
 }
 #endif
 
+#ifdef _WIN32
+/* win32 service */
+
+void agent_service_set_state(DWORD new_state, int wait_msec) {
+	DWORD status;
+	
+	g_assert(agent_service_status_handle);
+	
+	switch(new_state) {
+		case SERVICE_START_PENDING:
+		case SERVICE_STOP_PENDING:
+			agent_service_status.dwWaitHint = wait_msec;
+			
+			if (agent_service_status.dwCurrentState == new_state) {
+				agent_service_status.dwCheckPoint++;
+			} else {
+				agent_service_status.dwCheckPoint = 0;
+			}
+			
+			break;
+		default:
+			agent_service_status.dwWaitHint = 0;
+			break;
+	}
+	
+	agent_service_status.dwCurrentState = new_state;
+	
+	if (!SetServiceStatus (agent_service_status_handle, &agent_service_status)) {
+		status = GetLastError();
+	}
+}
+
+/**
+ the event-handler for the service
+ 
+ the SCM will send us events from time to time which we acknoledge
+ */
+
+void WINAPI agent_service_ctrl(DWORD Opcode) {
+	
+	switch(Opcode) {
+		case SERVICE_CONTROL_SHUTDOWN:
+		case SERVICE_CONTROL_STOP:
+			agent_service_set_state(SERVICE_STOP_PENDING, 0);
+			
+			chassis_set_shutdown(); /* exit the main-loop */
+			
+			break;
+		default:
+			agent_service_set_state(Opcode, 0);
+			break;
+	}
+	
+	return;
+}
+
+/**
+ * trampoline us into the real main_cmdline
+ */
+void WINAPI agent_service_start(DWORD argc, LPTSTR *argv) {
+	
+	/* tell the service controller that we are alive */
+	agent_service_status.dwCurrentState       = SERVICE_START_PENDING;
+	agent_service_status.dwCheckPoint         = 0;
+	agent_service_status.dwServiceType        = SERVICE_WIN32_OWN_PROCESS;
+	agent_service_status.dwControlsAccepted   = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
+	agent_service_status.dwWin32ExitCode      = NO_ERROR;
+	agent_service_status.dwServiceSpecificExitCode = 0;
+	
+	agent_service_status_handle = RegisterServiceCtrlHandler("MerlinAgent", agent_service_ctrl); 
+	
+	if (agent_service_status_handle == (SERVICE_STATUS_HANDLE)0) {
+		g_critical("RegisterServiceCtrlHandler failed");
+		return; 
+	}
+	
+	agent_service_set_state(SERVICE_START_PENDING, 1000);
+	
+	/* jump into the actual main */
+	main_cmdline(shell_argc, shell_argv);
+}
+
+/**
+ * Determine whether we are called as a service and set that up.
+ * Then call main_cmdline to do the real work.
+ */
+int main_win32(int argc, char **argv) {
+	WSADATA wsaData;
+
+	SERVICE_TABLE_ENTRY dispatch_tab[] = {
+		{ "MerlinAgent", agent_service_start },
+		{ NULL, NULL } 
+	};
+
+	if (0 != WSAStartup(MAKEWORD( 1, 1 ), &wsaData)) {
+		g_critical("WSAStartup failed to initialize the socket library.\n");
+
+		return -1;
+	}
+
+	/* save the arguments because the service controller will clobber them */
+	shell_argc = argc;
+	shell_argv = argv;
+	/* speculate that we are running as a service, reset to 0 on error */
+	win32_running_as_service = 1;
+	
+	if (!StartServiceCtrlDispatcher(dispatch_tab)) {
+		int err = GetLastError();
+		
+		switch(err) {
+				case ERROR_FAILED_SERVICE_CONTROLLER_CONNECT:
+				/* we weren't called as a service, carry on with the cmdline handling */
+				win32_running_as_service = 0;
+				return main_cmdline(shell_argc, shell_argv);
+			case ERROR_SERVICE_ALREADY_RUNNING:
+				g_critical("service is already running, shutting down");
+				return 0;
+			default:
+				g_critical("unhandled error-code (%d) for StartServiceCtrlDispatcher(), shutting down", err);
+				return -1;
+		}
+	}
+	return 0;
+}
+#endif
 
 #define GETTEXT_PACKAGE "mysql-proxy"
 
-int main(int argc, char **argv) {
+/**
+ * This is the "real" main which is called both on Windows and UNIX platforms.
+ * For the Windows service case, this will also handle the notifications and set
+ * up the logging support appropriately.
+ */
+int main_cmdline(int argc, char **argv) {
 	chassis *srv;
 	
 	/* read the command-line options */
@@ -295,7 +432,19 @@ int main(int argc, char **argv) {
 
 	log = chassis_log_init();
 	log->min_lvl = G_LOG_LEVEL_MESSAGE; /* display messages while parsing or loading plugins */
-	
+
+#ifdef _WIN32
+	if (win32_running_as_service) {
+		log->use_windows_applog = TRUE;
+		log->event_source_handle = RegisterEventSource(NULL, "mysql-monitor-agent");	/* TODO: get the actual executable name here */
+		if (!log->event_source_handle) {
+			int err = GetLastError();
+			g_critical("unhandled error-code (%d) for RegisterEventSource(), shutting down", err);
+			exit_code = EXIT_FAILURE;
+			goto exit_nicely;
+		}
+	}
+#endif
 	g_log_set_default_handler(chassis_log_func, log);
 
 	srv = chassis_init();
@@ -593,6 +742,9 @@ exit_nicely:
 	 * to schedule timers otherwise, causing an infinite loop in cleanup
 	 */
 	chassis_set_shutdown();
+#ifdef _WIN32
+	if (win32_running_as_service) agent_service_set_state(SERVICE_STOP_PENDING, 0);
+#endif
 	
 	if (keyfile) g_key_file_free(keyfile);
 	if (default_file) g_free(default_file);
@@ -613,7 +765,23 @@ exit_nicely:
 	}
 
 	chassis_log_free(log);
-
+	
+#ifdef _WIN32
+	if (win32_running_as_service) agent_service_set_state(SERVICE_STOPPED, 0);
+#endif
+	
 	return exit_code;
 }
 
+/**
+ * On Windows we first look if we are started as a service and 
+ * set that up if appropriate.
+ * We eventually fall down through to main_cmdline, even on Windows.
+ */
+int main(int argc, char **argv) {
+#ifdef WIN32
+	return main_win32(argc, argv);
+#else
+	return main_cmdline(argc, argv);
+#endif
+}
