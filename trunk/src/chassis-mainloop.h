@@ -30,6 +30,8 @@ struct chassis {
 
 	GPtrArray *modules;                       /**< array(chassis_plugin) */
 
+	gchar *base_dir;				/**< base directory for all relative paths referenced */
+
 	chassis_private *priv;
 	void (*priv_shutdown)(chassis *chas, chassis_private *priv);
 	void (*priv_free)(chassis *chas, chassis_private *priv);
@@ -47,5 +49,6 @@ CHASSIS_API int chassis_mainloop(void *user_data);
 
 CHASSIS_API void chassis_set_shutdown(void);
 CHASSIS_API gboolean chassis_is_shutdown(void);
+CHASSIS_API gboolean chassis_resolve_path(chassis *chas, gchar **filename);
 
 #endif

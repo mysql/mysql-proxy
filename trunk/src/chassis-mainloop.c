@@ -82,6 +82,7 @@ void chassis_free(chassis *chas) {
 	}
 #endif
 	
+	if (chas->base_dir) g_free(chas->base_dir);
 	g_free(chas);
 }
 
@@ -96,6 +97,30 @@ gboolean chassis_is_shutdown() {
 
 static void sigterm_handler(int G_GNUC_UNUSED fd, short G_GNUC_UNUSED event_type, void G_GNUC_UNUSED *_data) {
 	chassis_set_shutdown();
+}
+
+/**
+ * Helper function to correctly take into account the users base-dir setting for
+ * paths that might be relative.
+ * Note: Because this function potentially frees the pointer to gchar* that's passed in and cannot lock
+ *       on that, it is _not_ threadsafe. You have to ensure threadsafety yourself!
+ * @returns TRUE if it modified the filename, FALSE if it didn't
+ */
+gboolean chassis_resolve_path(chassis *chas, gchar **filename) {
+	gchar *new_path = NULL;
+
+	/* nothing to do if we don't have a base_dir setting */
+	g_assert(chas);
+	if (!chas->base_dir) return FALSE;if (!filename) return FALSE;
+	
+	/* don't even look at absolute paths */
+	g_assert(*filename);
+	if (g_path_is_absolute(*filename)) return FALSE;
+	
+	new_path = g_build_filename(chas->base_dir, G_DIR_SEPARATOR_S, *filename, NULL);
+	g_free(*filename);
+	*filename = new_path;
+	return TRUE;
 }
 
 /**
