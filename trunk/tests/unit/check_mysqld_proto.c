@@ -284,6 +284,7 @@ void test_mysqld_auth_with_pw(void) {
 	network_mysqld_auth_response_free(auth);
 
 	g_string_free(packet, TRUE);
+	g_string_free(challenge, TRUE);
 }
 
 void test_mysqld_binlog_events(void) {
@@ -418,6 +419,59 @@ void test_mysqld_binlog_events(void) {
 	network_mysqld_binlog_free(binlog);
 }
 
+void t_auth_response_new() {
+	network_mysqld_auth_response *shake;
+
+	shake = network_mysqld_auth_response_new();
+
+	network_mysqld_auth_response_free(shake);
+}
+
+void t_mysqld_get_auth_response(void) {
+	const char raw_packet[] = 
+		":\0\0\1"
+		"\205\246\3\0"
+		"\0\0\0\1"
+		"\10"
+		"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+		"root\0"
+		"\24\241\304\260>\255\1:F,\256\337K\323\340\4\273\354I\256\204"
+		;
+
+	network_mysqld_auth_response *auth;
+	network_packet packet;
+
+	auth = network_mysqld_auth_response_new();
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+	
+	network_mysqld_proto_skip_network_header(&packet); /* packet-header */
+
+	network_mysqld_proto_get_auth_response(&packet, auth);
+
+	g_assert(auth->username);
+	g_assert_cmpint(auth->username->len, ==, 4);
+	g_assert_cmpstr(auth->username->str, ==, "root");
+
+	g_assert_cmpuint(auth->capabilities, ==,
+		CLIENT_LONG_PASSWORD |
+	       	CLIENT_LONG_FLAG |
+		CLIENT_LOCAL_FILES | 
+		CLIENT_PROTOCOL_41 |
+		CLIENT_INTERACTIVE |
+		CLIENT_TRANSACTIONS |
+		CLIENT_SECURE_CONNECTION |
+		CLIENT_MULTI_STATEMENTS |
+		CLIENT_MULTI_RESULTS); 
+	g_assert_cmpuint(auth->max_packet_size, ==, 1 << 24);
+	g_assert_cmpuint(auth->charset        , ==, 8);
+
+	network_mysqld_auth_response_free(auth);
+
+	g_string_free(packet.data, TRUE);
+}
+
+
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
@@ -432,6 +486,8 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/mysqld-proto-pw", test_mysqld_auth_with_pw);
 	
 	g_test_add_func("/core/mysqld-proto-binlog-event", test_mysqld_binlog_events);
+	g_test_add_func("/core/mysqld-proto-auth-response-new", t_auth_response_new);
+	g_test_add_func("/core/mysqld-proto-get-auth-response", t_mysqld_get_auth_response);
 
 	return g_test_run();
 }

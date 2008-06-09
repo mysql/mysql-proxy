@@ -222,6 +222,7 @@ chassis_private *network_mysqld_priv_init(void) {
 
 	priv->cons = g_ptr_array_new();
 	priv->sc = lua_scope_init();
+	priv->backends  = network_backends_new();
 
 	return priv;
 }
@@ -245,6 +246,8 @@ void network_mysqld_priv_free(chassis *chas, chassis_private *priv) {
 	if (!priv) return;
 
 	g_ptr_array_free(priv->cons, TRUE);
+
+	network_backends_free(priv->backends);
 
 	lua_scope_free(priv->sc);
 
@@ -834,7 +837,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			}
 
-			if (recv_sock->mysqld_version > 50113 && recv_sock->mysqld_version < 50118) {
+			if (recv_sock->challenge &&
+			    recv_sock->challenge->server_version > 50113 && recv_sock->challenge->server_version < 50118) {
 				/**
 				 * Bug #25371
 				 *

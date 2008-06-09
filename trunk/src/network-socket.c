@@ -185,10 +185,6 @@ network_socket *network_socket_init() {
 	s->packet_len = PACKET_LEN_UNSET;
 
 	s->default_db = g_string_new(NULL);
-	s->username   = g_string_new(NULL);
-	s->scrambled_password = g_string_new(NULL);
-	s->scramble_buf = g_string_new(NULL);
-	s->auth_handshake_packet = g_string_new(NULL);
 	s->fd           = -1;
 
 	return s;
@@ -201,6 +197,9 @@ void network_socket_free(network_socket *s) {
 	network_queue_free(s->recv_queue);
 	network_queue_free(s->recv_queue_raw);
 
+	if (s->response) network_mysqld_auth_response_free(s->response);
+	if (s->challenge) network_mysqld_auth_challenge_free(s->challenge);
+
 	if (s->addr.str) {
 		g_free(s->addr.str);
 	}
@@ -211,11 +210,7 @@ void network_socket_free(network_socket *s) {
 		closesocket(s->fd);
 	}
 
-	g_string_free(s->scramble_buf, TRUE);
-	g_string_free(s->auth_handshake_packet, TRUE);
-	g_string_free(s->username,   TRUE);
 	g_string_free(s->default_db, TRUE);
-	g_string_free(s->scrambled_password, TRUE);
 
 	g_free(s);
 }
@@ -566,6 +561,79 @@ network_socket_retval_t network_socket_write(network_socket *con, int send_chunk
 }
 
 
+network_address *network_address_new() {
+	network_address *addr;
+
+	addr = g_new0(network_address, 1);
+
+	return addr;
+}
+
+void network_address_free(network_address *addr) {
+	if (!addr) return;
+
+	g_free(addr);
+}
+
+static network_socket_retval_t network_address_set_address_ip(network_address *addr, const gchar *address, guint port) {
+	if (port == 0) {
+		return NETWORK_SOCKET_ERROR;
+	}
+
+	if (port > 65535) {
+		return NETWORK_SOCKET_ERROR;
+	}
+
+	memset(&addr->addr.ipv4, 0, sizeof(struct sockaddr_in));
+
+	if (strlen(address) == 0 || 
+	    0 == strcmp("0.0.0.0", address)) {
+		/* no ip */
+		addr->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
+	} else {
+		struct hostent *he;
+
+		he = gethostbyname(address);
+
+		if (NULL == he)  {
+			return NETWORK_SOCKET_ERROR;
+		}
+
+		g_assert(he->h_addrtype == AF_INET);
+		g_assert(he->h_length == sizeof(struct in_addr));
+
+		memcpy(&(addr->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
+	}
+
+	addr->addr.ipv4.sin_family = AF_INET;
+	addr->addr.ipv4.sin_port = htons(port);
+	addr->len = sizeof(struct sockaddr_in);
+
+	if (addr->str) g_free(addr->str);
+	addr->str = g_strdup_printf("%s:%d", address, port);
+
+	return NETWORK_SOCKET_SUCCESS;
+}
+
+network_socket_retval_t network_address_set_address_un(network_address *addr, gchar *address) {
+#ifdef HAVE_SYS_UN_H
+	if (strlen(address) >= sizeof(addr->addr.un.sun_path) - 1) {
+		g_critical("unix-path is too long: %s", address);
+		return NETWORK_SOCKET_ERROR;
+	}
+
+	addr->addr.un.sun_family = AF_UNIX;
+	strcpy(addr->addr.un.sun_path, address);
+	addr->len = sizeof(struct sockaddr_un);
+	
+	if (addr->str) g_free(addr->str);
+	addr->str = g_strdup(address);
+
+	return NETWORK_SOCKET_SUCCESS;
+#else
+	return NETWORK_SOCKET_ERROR;
+#endif
+}
 
 /**
  * translate a address-string into a network_address structure
@@ -581,71 +649,26 @@ network_socket_retval_t network_socket_write(network_socket *con, int send_chunk
  */
 network_socket_retval_t network_address_set_address(network_address *addr, gchar *address) {
 	gchar *s;
-	guint port;
 
 	/* split the address:port */
-	if (NULL != (s = strchr(address, ':'))) {
-		port = strtoul(s + 1, NULL, 10);
+	if (address[0] == '/') {
+		return network_address_set_address_un(addr, address);
+	} else if (NULL != (s = strchr(address, ':'))) {
+		network_socket_retval_t ret;
+		char *ip_address = g_strndup(address, s - address);
 
-		if (port == 0) {
-			g_critical("<ip>:<port>, port is invalid or 0, has to be > 0, got '%s'", address);
-			return NETWORK_SOCKET_ERROR;
-		}
-		if (port > 65535) {
-			g_critical("<ip>:<port>, port is too large, has to be < 65536, got '%s'", address);
+		guint port = strtoul(s + 1, NULL, 10);
 
-			return NETWORK_SOCKET_ERROR;
-		}
+		ret = network_address_set_address_ip(addr, ip_address, port);
 
-		memset(&addr->addr.ipv4, 0, sizeof(struct sockaddr_in));
+		g_free(ip_address);
 
-		if (address == s || 
-		    0 == strcmp("0.0.0.0", address)) {
-			/* no ip */
-			addr->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
-		} else {
-			struct hostent *he;
-
-			*s = '\0';
-			he = gethostbyname(address);
-			*s = ':';
-
-			if (NULL == he)  {
-				g_error("resolving proxy-address '%s' failed: ", address);
-			}
-
-			g_assert(he->h_addrtype == AF_INET);
-			g_assert(he->h_length == sizeof(struct in_addr));
-
-			memcpy(&(addr->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
-		}
-
-		addr->addr.ipv4.sin_family = AF_INET;
-		addr->addr.ipv4.sin_port = htons(port);
-		addr->len = sizeof(struct sockaddr_in);
-
-		addr->str = g_strdup(address);
-#ifdef HAVE_SYS_UN_H
-	} else if (address[0] == '/') {
-		if (strlen(address) >= sizeof(addr->addr.un.sun_path) - 1) {
-			g_critical("unix-path is too long: %s", address);
-			return NETWORK_SOCKET_ERROR;
-		}
-
-		addr->addr.un.sun_family = AF_UNIX;
-		strcpy(addr->addr.un.sun_path, address);
-		addr->len = sizeof(struct sockaddr_un);
-		addr->str = g_strdup(address);
-#endif
-	} else {
-		/* might be a unix socket */
-		g_critical("%s.%d: network_mysqld_con_set_address(%s) failed: address has to be <ip>:<port> for TCP or a absolute path starting with / for Unix sockets", 
-				__FILE__, __LINE__,
-				address);
-		return NETWORK_SOCKET_ERROR;
+		return ret;
+	} else { /* perhaps it is a plain IP address, lets add the default-port */
+		return network_address_set_address_ip(addr, address, 3306);
 	}
 
-	return NETWORK_SOCKET_SUCCESS;
+	g_assert_not_reached();
 }
 
 
@@ -669,3 +692,4 @@ network_socket_retval_t network_address_resolve_address(network_address *addr) {
 	return NETWORK_SOCKET_SUCCESS;
 
 }
+

@@ -126,6 +126,33 @@ void test_network_queue_pop_string() {
 	network_queue_free(q);
 }
 
+
+void t_network_address_new() {
+	network_address *addr;
+
+	addr = network_address_new();
+
+	network_address_free(addr);
+}
+
+void t_network_address_set() {
+	network_address *addr;
+
+	addr = network_address_new();
+
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:3306"), ==, NETWORK_SOCKET_SUCCESS);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1"), ==, NETWORK_SOCKET_SUCCESS);
+
+	/* should fail */	
+	g_assert_cmpint(network_address_set_address(addr, "500.0.0.1"), ==, NETWORK_SOCKET_ERROR);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:0"), ==, NETWORK_SOCKET_ERROR);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:65536"), ==, NETWORK_SOCKET_ERROR);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:-1"), ==, NETWORK_SOCKET_ERROR);
+
+	network_address_free(addr);
+}
+
+
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
@@ -134,6 +161,8 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/network_queue_append", test_network_queue_append);
 	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
 	g_test_add_func("/core/network_queue_pop_string", test_network_queue_pop_string);
+	g_test_add_func("/core/network_address_new", t_network_address_new);
+	g_test_add_func("/core/network_address_set", t_network_address_set);
 
 	return g_test_run();
 }

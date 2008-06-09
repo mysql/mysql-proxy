@@ -18,6 +18,8 @@
 #include "network-mysqld-proto.h"
 #include "network-mysqld-binlog.h"
 
+#define S(x) x->str, x->len
+
 
 typedef struct {
 	MYSQL_FIELD *fielddef;
@@ -75,6 +77,7 @@ void network_mysqld_proto_field_free(network_mysqld_proto_field *field) {
 
 int network_mysqld_proto_field_get(network_packet *packet, 
 		network_mysqld_proto_field *field) {
+	guint64 length;
 
 	switch ((guchar)field->fielddef->type) {
 	case MYSQL_TYPE_TIMESTAMP: /* int4store */
@@ -112,14 +115,28 @@ int network_mysqld_proto_field_get(network_packet *packet,
 		}
 		break;
 	case MYSQL_TYPE_BLOB:
-		if (field->fielddef->max_length == 2) {
-			guint64 length = network_mysqld_proto_get_int16(packet);
-			field->data.s = network_mysqld_proto_get_string_len(packet, length);
-		} else {
+		switch (field->fielddef->max_length) {
+		case 1:
+			length = network_mysqld_proto_get_int8(packet);
+			break;
+		case 2:
+			length = network_mysqld_proto_get_int16(packet);
+			break;
+		case 3:
+			length = network_mysqld_proto_get_int24(packet);
+			break;
+		case 4:
+			length = network_mysqld_proto_get_int32(packet);
+			break;
+		default:
+			/* unknown blob-length */
+			g_debug_hexdump(G_STRLOC, S(packet->data));
 			g_error("%s: blob-length = %lu", 
 					G_STRLOC,
 					field->fielddef->max_length);
+			break;
 		}
+		field->data.s = network_mysqld_proto_get_string_len(packet, length);
 		break;
 	case MYSQL_TYPE_VARCHAR:
 	case MYSQL_TYPE_VAR_STRING:
@@ -152,7 +169,9 @@ int network_mysqld_proto_field_get(network_packet *packet,
 		size += decimal_full_blocks * digits_per_bytes[9] + digits_per_bytes[decimal_last_block_digits];
 		size += scale_full_blocks   * digits_per_bytes[9] + digits_per_bytes[scale_last_block_digits];
 
-		g_debug_hexdump(G_STRLOC, packet->data->str, packet->data->len);
+#if 0
+		g_debug_hexdump(G_STRLOC " (NEWDECIMAL)", packet->data->str, packet->data->len);
+#endif
 #if 0
 		g_critical("%s: don't know how to decode NEWDECIMAL(%lu, %u) at offset %u (%d)",
 				G_STRLOC,
@@ -402,8 +421,9 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 
 		row_packet.data = &row;
 		row_packet.offset = 0;
-
+#if 0
 		g_debug_hexdump(G_STRLOC " (used colums)", event->event.row_event.used_columns, event->event.row_event.used_columns_len);
+#endif
 
 		do {
 			GPtrArray *pre_fields, *post_fields = NULL;
@@ -616,7 +636,9 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 			default:
 				break;
 			}
+#if 0
 			g_print("-- %s:\n%s\n\n", G_STRLOC, out->str);
+#endif
 
 			g_string_free(out, TRUE);
 

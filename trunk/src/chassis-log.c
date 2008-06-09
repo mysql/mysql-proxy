@@ -21,6 +21,14 @@
 
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
+#else
+/* placeholder values for platforms not having syslog support */
+#define LOG_CRIT	0
+#define LOG_ERR	0
+#define LOG_WARNING	0
+#define LOG_NOTICE	0
+#define LOG_INFO	0
+#define LOG_DEBUG	0
 #endif
 
 #include "sys-pedantic.h"
@@ -141,6 +149,9 @@ static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 #endif
 #ifdef _WIN32
 	} else if (log->use_windows_applog && log->event_source_handle) {
+		char *log_messages[1];
+		
+		log_messages[0] = str->str;
 		ReportEvent(log->event_source_handle,
 					log_lvl_map[log_level].win_evtype,
 					0, /* category, we don't have that yet */
@@ -148,9 +159,8 @@ static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 					NULL,
 					1, /* number of strings to be substituted */
 					0, /* no event specific data */
-					str->str,	/* the actual log message, always the message we came up with, we don't localize using Windows message files*/
-					);
-	}
+					log_messages,	/* the actual log message, always the message we came up with, we don't localize using Windows message files*/
+					NULL);
 #endif
 	} else {
 		write(STDERR_FILENO, S(str));

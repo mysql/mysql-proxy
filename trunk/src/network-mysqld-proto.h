@@ -105,6 +105,7 @@ NETWORK_API network_mysqld_auth_challenge *network_mysqld_auth_challenge_new(voi
 NETWORK_API void network_mysqld_auth_challenge_free(network_mysqld_auth_challenge *shake);
 NETWORK_API int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysqld_auth_challenge *shake);
 NETWORK_API int network_mysqld_proto_append_auth_challenge(GString *packet, network_mysqld_auth_challenge *shake);
+NETWORK_API void network_mysqld_auth_challenge_set_challenge(network_mysqld_auth_challenge *shake);
 
 typedef struct {
 	guint32  capabilities;
@@ -120,5 +121,6 @@ NETWORK_API void network_mysqld_auth_response_free(network_mysqld_auth_response 
 NETWORK_API int network_mysqld_proto_scramble(GString *response, GString *challenge, const char *password);
 NETWORK_API int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_auth_response *auth);
 NETWORK_API int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysqld_auth_response *auth);
+NETWORK_API network_mysqld_auth_response *network_mysqld_auth_response_copy(network_mysqld_auth_response *src);
 
 #endif

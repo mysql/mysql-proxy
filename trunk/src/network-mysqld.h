@@ -35,6 +35,7 @@
 #include "chassis-mainloop.h"
 #include "sys-pedantic.h"
 #include "lua-scope.h"
+#include "backend.h"
 
 
 typedef struct network_mysqld_con network_mysqld_con; /* forward declaration */
@@ -162,6 +163,8 @@ struct chassis_private {
 	GPtrArray *cons;                          /**< array(network_mysqld_con) */
 
 	lua_scope *sc;
+
+	network_backends_t *backends;
 };
 
 NETWORK_API int network_mysqld_init(chassis *srv);

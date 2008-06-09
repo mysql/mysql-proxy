@@ -206,10 +206,10 @@ network_connection_pool_entry *network_connection_pool_add(network_connection_po
 	g_debug("%s: (add) adding socket to pool for user '%s' -> %p", G_STRLOC, sock->username->str, sock);
 #endif
 
-	if (NULL == (conns = g_hash_table_lookup(pool->users, sock->username))) {
+	if (NULL == (conns = g_hash_table_lookup(pool->users, sock->response->username))) {
 		conns = g_queue_new();
 
-		g_hash_table_insert(pool->users, g_string_dup(sock->username), conns);
+		g_hash_table_insert(pool->users, g_string_dup(sock->response->username), conns);
 	}
 
 	g_queue_push_tail(conns, entry);
@@ -224,7 +224,7 @@ void network_connection_pool_remove(network_connection_pool *pool, network_conne
 	network_socket *sock = entry->sock;
 	GQueue *conns;
 
-	if (NULL == (conns = g_hash_table_lookup(pool->users, sock->username))) {
+	if (NULL == (conns = g_hash_table_lookup(pool->users, sock->response->username))) {
 		return;
 	}
 

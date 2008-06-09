@@ -41,15 +41,18 @@ typedef struct {
 NETWORK_API backend_t *backend_init();
 NETWORK_API void backend_free(backend_t *b);
 
-/**
- * Retrieve the backend pool from the proxy plugin, if it is loaded.
- *
- * @param[in] chas A pointer to the global chassis struct
- *
- * @return A pointer array to the backend_t structs
- * @retval NULL if the proxy plugin is not loaded or not uninitialized
- */
-NETWORK_API GPtrArray* get_proxy_backend_pool(chassis *chas);
+typedef struct {
+	GPtrArray *backends;
+	
+	GTimeVal backend_last_check;
+} network_backends_t;
+
+NETWORK_API network_backends_t *network_backends_new();
+NETWORK_API void network_backends_free(network_backends_t *);
+NETWORK_API int network_backends_add(network_backends_t *backends, /* const */ gchar *address, backend_type_t type);
+NETWORK_API int network_backends_check(network_backends_t *backends);
+NETWORK_API backend_t * network_backends_get(network_backends_t *backends, gint ndx);
+NETWORK_API guint network_backends_count(network_backends_t *backends);
 
 #endif /* _BACKEND_H_ */
 

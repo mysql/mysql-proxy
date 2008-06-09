@@ -12,6 +12,7 @@
  * - g_list_string_free()
  */
 
+#define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
 
 /**
@@ -126,11 +127,11 @@ void g_debug_hexdump(const char *msg, const unsigned char *s, size_t len) {
 
 		if ((i + 1) % 16 == 0) {
 			int j;
-			g_string_append(hex, "  ");
+			g_string_append_len(hex, C("  "));
 			for (j = i - 15; j <= i; j++) {
 				g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
 			}
-			g_string_append(hex, "\n  ");
+			g_string_append_len(hex, C("\n  "));
 		} else {
 			g_string_append_c(hex, ' ');
 		}
@@ -141,10 +142,10 @@ void g_debug_hexdump(const char *msg, const unsigned char *s, size_t len) {
 		int j;
 
 		for (j = 0; j < 16 - (i % 16); j++) {
-			g_string_append(hex, "   ");
+			g_string_append_len(hex, C("   "));
 		}
 
-		g_string_append(hex, " ");
+		g_string_append_len(hex, C(" "));
 		for (j = i - (len % 16); j < i; j++) {
 			g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
 		}

@@ -1,51 +1,12 @@
+#include <sys/types.h>
+
 /**
  * replication 
  */
-
+#include "glib-ext.h"
 #include "network-mysqld-binlog.h"
 
-static void dump_str(const char *msg, const unsigned char *s, size_t len) {
-	GString *hex;
-	size_t i;
-		
-       	hex = g_string_new(NULL);
-
-	for (i = 0; i < len; i++) {
-		g_string_append_printf(hex, "%02x", s[i]);
-
-		if ((i + 1) % 16 == 0) {
-			int j;
-			g_string_append(hex, "  ");
-			for (j = i - 15; j <= i; j++) {
-				g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
-			}
-			g_string_append(hex, "\n  ");
-		} else {
-			g_string_append_c(hex, ' ');
-		}
-	}
-
-	if (i % 16 != 0) {
-		/* fill up the line */
-		int j;
-
-		for (j = 0; j < 16 - (i % 16); j++) {
-			g_string_append(hex, "   ");
-		}
-
-		g_string_append(hex, " ");
-		for (j = i - (len % 16); j < i; j++) {
-			g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
-		}
-	}
-
-	g_debug("(%s) %"G_GSIZE_FORMAT" bytes:\n  %s", 
-			msg, 
-			len,
-			hex->str);
-
-	g_string_free(hex, TRUE);
-}
+#define S(x) x->str, x->len
 
 network_mysqld_table *network_mysqld_table_new() {
 	network_mysqld_table *tbl;
@@ -486,8 +447,8 @@ int network_mysqld_binlog_event_tablemap_get(
 	}
 
 	if (metadata_packet.offset != metadata_packet.data->len) {
-		dump_str(G_STRLOC, event->event.table_map_event.columns, event->event.table_map_event.columns_len);
-		dump_str(G_STRLOC, event->event.table_map_event.metadata, event->event.table_map_event.metadata_len);
+		g_debug_hexdump(G_STRLOC, event->event.table_map_event.columns, event->event.table_map_event.columns_len);
+		g_debug_hexdump(G_STRLOC, event->event.table_map_event.metadata, event->event.table_map_event.metadata_len);
 	}
 	g_assert_cmpint(metadata_packet.offset, ==, metadata_packet.data->len);
 

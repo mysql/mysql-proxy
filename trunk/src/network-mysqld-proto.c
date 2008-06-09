@@ -2,6 +2,8 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+
 #include "network-mysqld-proto.h"
 
 #include "sys-pedantic.h"
@@ -195,11 +197,8 @@ guint64 network_mysqld_proto_get_int_len(network_packet *packet, gsize size) {
 	int shift;
 	guint64 r = 0;
 
-	g_assert(packet->offset < packet->data->len);
-	if (packet->offset + size > packet->data->len) {
-		CRASHME();
-	}
-	g_assert(packet->offset + size <= packet->data->len);
+	g_assert_cmpint(packet->offset, <, packet->data->len);
+	g_assert_cmpint(packet->offset + size, <=, packet->data->len);
 
 	for (i = 0, shift = 0; i < size; i++, shift += 8) {
 		r += (unsigned char)(packet->data->str[packet->offset + i]) << shift;
@@ -694,6 +693,21 @@ void network_mysqld_auth_challenge_free(network_mysqld_auth_challenge *shake) {
 	g_free(shake);
 }
 
+void network_mysqld_auth_challenge_set_challenge(network_mysqld_auth_challenge *shake) {
+	guint i;
+
+	/* 20 chars */
+
+	g_string_set_size(shake->challenge, 21);
+
+	for (i = 0; i < 20; i++) {
+		shake->challenge->str[i] = (94.0 * (rand() / (RAND_MAX + 1.0))) + 33; /* 33 - 127 are printable characters */
+	}
+
+	shake->challenge->len = 20;
+	shake->challenge->str[shake->challenge->len] = '\0';
+}
+
 int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysqld_auth_challenge *shake) {
 	int maj, min, patch;
 	gchar *scramble_1, *scramble_2;
@@ -824,7 +838,6 @@ void network_mysqld_auth_response_free(network_mysqld_auth_response *auth) {
 
 int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysqld_auth_response *auth) {
 	/* extract the default db from it */
-	network_mysqld_proto_skip_network_header(packet); /* packet-header */
 
 	/*
 	 * @\0\0\1
@@ -862,6 +875,22 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 	}
 
 	return 0;
+}
+
+network_mysqld_auth_response *network_mysqld_auth_response_copy(network_mysqld_auth_response *src) {
+	network_mysqld_auth_response *dst;
+
+	if (!src) return NULL;
+
+	dst = network_mysqld_auth_response_new();
+	dst->capabilities    = src->capabilities;
+	dst->max_packet_size = src->max_packet_size;
+	dst->charset         = src->charset;
+	g_string_assign_len(dst->username, S(src->username));
+	g_string_assign_len(dst->response, S(src->response));
+	g_string_assign_len(dst->database, S(src->database));
+
+	return dst;
 }
 
 /**
@@ -942,10 +971,13 @@ int network_mysqld_proto_scramble(GString *response, GString *challenge, const c
 		response->str[i] = (guchar)response->str[i] ^ (guchar)step1->str[i];
 	}
 
+	g_string_free(step1, TRUE);
+	g_string_free(step2, TRUE);
 #else
 	/* we don't know how to encrypt, so fake it */
-	g_string_set_size(response, 20);
+	g_string_set_size(response, 21);
 	for (i = 0; i < 20; i++) response->str[i] = '\0';
+	response->str[20] = '\0';
 #endif
 	return 0;
 }

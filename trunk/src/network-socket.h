@@ -40,6 +40,8 @@
 #include <glib.h>
 #include <event.h>
 
+#include "network-mysqld-proto.h"
+
 typedef enum {
 	NETWORK_SOCKET_SUCCESS,
 	NETWORK_SOCKET_WAIT_FOR_EVENT,
@@ -90,17 +92,10 @@ typedef struct {
 	 *
 	 * all server-side only
 	 */
-	guint32 mysqld_version;  /**< numberic version of the version string */
-	guint32 thread_id;       /**< connection-id, set in the handshake packet */
-	GString *scramble_buf;   /**< the 21byte scramble-buf */
-	GString *username;       /**< username of the authed connection */
-	GString *scrambled_password;  /**< scrambled_pass used to auth */
+	network_mysqld_auth_challenge *challenge;
+	network_mysqld_auth_response  *response;
 
-	/**
-	 * store the auth-handshake packet to simulate a login
-	 */
-	GString *auth_handshake_packet;
-	int is_authed;           /** did a client already authed this connection */
+	gboolean is_authed;           /** did a client already authed this connection */
 
 	/**
 	 * store the default-db of the socket
@@ -126,6 +121,8 @@ NETWORK_API network_socket_retval_t network_socket_set_non_blocking(network_sock
 NETWORK_API network_socket_retval_t network_socket_connect(network_socket *con);
 NETWORK_API network_socket_retval_t network_socket_bind(network_socket *con);
 
+NETWORK_API network_address *network_address_new(void);
+NETWORK_API void network_address_free(network_address *);
 NETWORK_API network_socket_retval_t network_address_set_address(network_address *addr, gchar *address);
 NETWORK_API network_socket_retval_t network_address_resolve_address(network_address *addr);
 

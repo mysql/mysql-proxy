@@ -75,6 +75,5 @@ NETWORK_API void injection_free(injection *i);
 
 NETWORK_API void proxy_getqueuemetatable(lua_State *L);
 NETWORK_API void proxy_getinjectionmetatable(lua_State *L);
-NETWORK_API void proxy_getmetatable(lua_State *L, const luaL_reg *methods);
 
 #endif /* _QUERY_HANDLING_H_ */

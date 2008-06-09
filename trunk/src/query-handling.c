@@ -7,6 +7,7 @@
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"
 #include "glib-ext.h"
+#include "lua-env.h"
 
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
@@ -14,27 +15,6 @@
 #define TIME_DIFF_US(t2, t1) \
 ((t2.tv_sec - t1.tv_sec) * 1000000.0 + (t2.tv_usec - t1.tv_usec))
 
-
-/**
- * emulate luaL_newmetatable() with lightuserdata instead of strings
- */
-void proxy_getmetatable(lua_State *L, const luaL_reg *methods) {
-	lua_pushlightuserdata(L, (luaL_reg *)methods);
-	lua_gettable(L, LUA_REGISTRYINDEX);
-    
-	if (lua_isnil(L, -1)) {
-		/* not found */
-		lua_pop(L, 1);
-        
-		lua_newtable(L);
-		luaL_register(L, NULL, methods);
-        
-		lua_pushlightuserdata(L, (luaL_reg *)methods);
-		lua_pushvalue(L, -2);
-		lua_settable(L, LUA_REGISTRYINDEX);
-	}
-	g_assert(lua_istable(L, -1));
-}
 
 /**
  * Initialize an injection struct.
@@ -64,14 +44,6 @@ void injection_free(injection *i) {
 	if (i->query) g_string_free(i->query, TRUE);
     
 	g_free(i);
-}
-
-/**
- * check pass through the userdata as is
- */
-static void *luaL_checkself (lua_State *L) {
-    /** @todo: actually check here */
-	return lua_touserdata(L, 1);
 }
 
 static int proxy_queue_append(lua_State *L) {
