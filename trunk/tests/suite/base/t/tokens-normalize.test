@@ -1,0 +1,22 @@
+# Testing tokens.
+# This test checks basic token recognition
+select 1;
+## functions 
+select count(*) from mysql.user;
+## non-functions
+create table t1 (id int) engine = myisam;
+## comments 
+/* comment */select /*! 1 */;
+## a mysql version specific comment
+select /*!50000 1 + */ 1;
+## user-variables
+SELECT @i := 1;
+### special literals
+## some literals are "keywords" if the appear at the start
+## ... and literals if they aren't
+COMMIT;
+ROLLBACK;
+START TRANSACTION;
+BEGIN;
+## ... but if it is not the first token, it is a literal
+CREATE TABLE commit ( id int );

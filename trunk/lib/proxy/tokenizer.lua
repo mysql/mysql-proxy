@@ -23,14 +23,52 @@ function normalize(tokens)
 	-- see http://www.lua.org/pil/11.6.html for more
 	--
 	local stack = {}
+	-- literals that are SQL commands if they appear at the start
+	-- (all uppercase)
+	local literal_keywords = {
+		["COMMIT"] = { },
+		["ROLLBACK"] = { },
+		["BEGIN"] = { },
+		["START"] = { "TRANSACTION" },
+	}
 
 	for i = 1, #tokens do
 		local token = tokens[i]
 
 		-- normalize the query
 		if token["token_name"] == "TK_COMMENT" then
+		elseif token["token_name"] == "TK_COMMENT_MYSQL" then
+			-- a /*!... */ comment
+			--
+			-- we can't look into the comment as we don't know which server-version
+			-- we will talk to, pass it on verbatimly
+			table.insert(stack, "/*!" ..token.text .. "*/ ")
 		elseif token["token_name"] == "TK_LITERAL" then
-			table.insert(stack, "`" .. token.text .. "` ")
+			if token.text:sub(1, 1) == "@" then
+				-- append session variables as is
+				table.insert(stack, token.text .. " ")
+			elseif #stack == 0 then -- nothing is on the stack yet
+				local u_text = token.text:upper()
+
+				if literal_keywords[u_text] then
+					table.insert(stack, u_text .. " ")
+				else
+					table.insert(stack, "`" .. token.text .. "` ")
+				end
+			elseif #stack == 1 then
+				local u_text = token.text:upper()
+
+				local starting_keyword = stack[1]:sub(1, -2)
+
+				if literal_keywords[starting_keyword] and
+				   literal_keywords[starting_keyword][1] == u_text then
+					table.insert(stack, u_text .. " ")
+				else
+					table.insert(stack, "`" .. token.text .. "` ")
+				end
+			else
+				table.insert(stack, "`" .. token.text .. "` ")
+			end
 		elseif token["token_name"] == "TK_STRING" or
 		       token["token_name"] == "TK_INTEGER" or
 		       token["token_name"] == "TK_FLOAT" then
