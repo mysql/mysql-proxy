@@ -661,6 +661,9 @@ int main_cmdline(int argc, char **argv) {
 
 		close(fd);
 	}
+#ifdef _WIN32
+	agent_service_set_state(SERVICE_RUNNING, 0);
+#endif
 
 	if (chassis_mainloop(srv)) {
 		/* looks like we failed */
