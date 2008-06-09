@@ -4,6 +4,7 @@
 #include <signal.h>
 #include <string.h>
 #include <errno.h>
+#include <stdio.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -16,6 +17,7 @@
 #include <glib.h>
 #include "chassis-plugin.h"
 #include "chassis-mainloop.h"
+#include "chassis-log.h"
 
 #ifdef _WIN32
 static volatile int signal_shutdown;
@@ -99,6 +101,17 @@ static void sigterm_handler(int G_GNUC_UNUSED fd, short G_GNUC_UNUSED event_type
 	chassis_set_shutdown();
 }
 
+static void sighup_handler(int G_GNUC_UNUSED fd, short G_GNUC_UNUSED event_type, void *_data) {
+	chassis *chas = _data;
+
+	g_message("received a SIGHUP, rotating logfile"); /* this should go into the old logfile */
+
+	chassis_log_set_logrotate(chas->log);
+	
+	g_message("rotated logfile"); /* ... and this into the new one */
+}
+
+
 /**
  * Helper function to correctly take into account the users base-dir setting for
  * paths that might be relative.
@@ -142,7 +155,7 @@ static void chassis_init_libevent(chassis *chas) {
 int chassis_mainloop(void *_chas) {
 	chassis *chas = _chas;
 	guint i;
-	struct event ev_sigterm, ev_sigint;
+	struct event ev_sigterm, ev_sigint, ev_sighup;
 
 #ifdef _WIN32
 	WORD wVersionRequested;
@@ -180,6 +193,14 @@ int chassis_mainloop(void *_chas) {
 	event_base_set(chas->event_base, &ev_sigint);
 	signal_add(&ev_sigint, NULL);
 
+#ifdef SIGHUP
+	signal_set(&ev_sighup, SIGHUP, sighup_handler, chas);
+	event_base_set(chas->event_base, &ev_sighup);
+	if (signal_add(&ev_sighup, NULL)) {
+		g_critical("%s: signal_add(SIGHUP) failed", G_STRLOC);
+	}
+#endif
+
 	/**
 	 * check once a second if we shall shutdown the proxy
 	 */
@@ -203,6 +224,7 @@ int chassis_mainloop(void *_chas) {
 
 	signal_del(&ev_sigterm);
 	signal_del(&ev_sigint);
+	signal_del(&ev_sighup);
 
 	return 0;
 }

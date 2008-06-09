@@ -21,6 +21,7 @@
 #include <event.h>     /* struct event_base */
 
 #include "chassis-exports.h"
+#include "chassis-log.h"
 
 typedef struct chassis_private chassis_private;
 typedef struct chassis chassis;
@@ -35,6 +36,8 @@ struct chassis {
 	chassis_private *priv;
 	void (*priv_shutdown)(chassis *chas, chassis_private *priv);
 	void (*priv_free)(chassis *chas, chassis_private *priv);
+
+	chassis_log *log;
 };
 
 CHASSIS_API chassis *chassis_init(void);

@@ -114,31 +114,12 @@
 #include "chassis-keyfile.h"
 #include "chassis-mainloop.h"
 
-/**
- * map SIGHUP to log->rotate_logs = true
- *
- * NOTE: signal handlers have to be volatile sig_atomic_t 
- */
-#ifdef _WIN32
-volatile int agent_rotate_logs = 0;
-#else
-volatile sig_atomic_t agent_rotate_logs = 0;
-#endif
-
 #ifdef _WIN32
 static char **shell_argv;
 static int shell_argc;
 static int win32_running_as_service = 0;
 static SERVICE_STATUS agent_service_status;
 static SERVICE_STATUS_HANDLE agent_service_status_handle = 0;
-#endif
-
-#ifndef _WIN32
-static void sighup_handler(int sig) {
-	switch (sig) {
-	case SIGHUP: agent_rotate_logs = 1; break;
-	}
-}
 #endif
 
 /**
@@ -358,6 +339,8 @@ int main_cmdline(int argc, char **argv) {
 	g_log_set_default_handler(chassis_log_func, log);
 
 	srv = chassis_init();
+	srv->log = log; /* we need the log structure for the log-rotation */
+
 	/* assign the mysqld part to the */
 	network_mysqld_init(srv);
 
@@ -470,6 +453,8 @@ int main_cmdline(int argc, char **argv) {
 			goto exit_nicely;
 		}
 	}
+
+	g_message("%s started", PACKAGE_STRING); /* add tag to the logfile (after we opened the logfile) */
 
 
 	/* handle log-level after the config-file is read, just in case it is specified in the file */
@@ -677,6 +662,9 @@ exit_nicely:
 	 * to schedule timers otherwise, causing an infinite loop in cleanup
 	 */
 	chassis_set_shutdown();
+	
+	g_message("shutting down normally"); /* add a tag to the logfile */
+
 #ifdef _WIN32
 	if (win32_running_as_service) agent_service_set_state(SERVICE_STOP_PENDING, 0);
 #endif

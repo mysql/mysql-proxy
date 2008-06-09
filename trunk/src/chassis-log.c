@@ -5,6 +5,7 @@
 #endif
 
 #include <string.h>
+#include <stdio.h>
 #include <fcntl.h>
 #ifndef WIN32
 #include <unistd.h> /* close */
@@ -193,21 +194,20 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 		}
 	}
 
-	if (-1 != log->log_file_fd) {
-		if (log->rotate_logs) {
-			chassis_log_update_timestamp(log);
-			g_string_append(log->log_ts_str, ": (message) received a SIGHUP, closing logfile\n");
-			write(log->log_file_fd, log->log_ts_str->str, log->log_ts_str->len);
-
-			chassis_log_close(log);
-			chassis_log_open(log);
-		}
-	}
-
 	if (log->last_msg->len > 0 &&
 	    0 == strcmp(log->last_msg->str, message)) {
 		is_duplicate = TRUE;
 	}
+
+	if (-1 != log->log_file_fd) {
+		if (log->rotate_logs) {
+			chassis_log_close(log);
+			chassis_log_open(log);
+
+			is_duplicate = FALSE; /* after a log-rotation always dump the queue */
+		}
+	}
+
 
 	if (!is_duplicate ||
 	    log->last_msg_count > 100 ||
@@ -237,9 +237,12 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 		log->last_msg_count++;
 	}
 
-	log->rotate_logs = 0;
+	log->rotate_logs = FALSE;
 
 	g_static_mutex_unlock(&log_mutex);
 }
 
+void chassis_log_set_logrotate(chassis_log *log) {
+	log->rotate_logs = TRUE;
+}
 
