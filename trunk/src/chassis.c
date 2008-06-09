@@ -182,6 +182,8 @@ static void daemonize(void) {
 void agent_service_set_state(DWORD new_state, int wait_msec) {
 	DWORD status;
 	
+	/* safeguard against a missing if(win32_running_as_service) in other code */
+	if (!win32_running_as_service) return;
 	g_assert(agent_service_status_handle);
 	
 	switch(new_state) {
@@ -647,7 +649,7 @@ int main_cmdline(int argc, char **argv) {
 		close(fd);
 	}
 #ifdef _WIN32
-	agent_service_set_state(SERVICE_RUNNING, 0);
+	if (win32_running_as_service) agent_service_set_state(SERVICE_RUNNING, 0);
 #endif
 
 	if (chassis_mainloop(srv)) {
