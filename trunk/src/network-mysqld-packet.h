@@ -36,6 +36,9 @@ typedef struct {
 	guint64 insert_id;
 
 	gboolean was_resultset;
+
+	guint64 rows;
+	guint64 bytes;
 } network_mysqld_com_query_result_t;
 
 NETWORK_API network_mysqld_com_query_result_t *network_mysqld_com_query_result_new(void);

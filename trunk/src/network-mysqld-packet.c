@@ -156,6 +156,8 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 		case MYSQLD_PACKET_NULL: /* the first field might be a NULL */
 			break;
 		default:
+			query->rows++;
+			query->bytes += packet->data->len;
 			break;
 		}
 		break;

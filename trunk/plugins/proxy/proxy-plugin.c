@@ -1187,6 +1187,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		 * */
 
 		if (inj) {
+			if (con->parse.command == COM_QUERY) {
+				network_mysqld_com_query_result_t *com_query = con->parse.data;
+
+				inj->bytes = com_query->bytes;
+				inj->rows  = com_query->rows;
+			}
 			g_get_current_time(&(inj->ts_read_query_result_last));
 		}
 
