@@ -111,13 +111,18 @@ gboolean chassis_resolve_path(chassis *chas, gchar **filename) {
 
 	/* nothing to do if we don't have a base_dir setting */
 	g_assert(chas);
-	if (!chas->base_dir) return FALSE;if (!filename) return FALSE;
+	if (!chas->base_dir ||
+		!filename ||
+		!*filename)
+		return FALSE;
 	
 	/* don't even look at absolute paths */
-	g_assert(*filename);
 	if (g_path_is_absolute(*filename)) return FALSE;
 	
 	new_path = g_build_filename(chas->base_dir, G_DIR_SEPARATOR_S, *filename, NULL);
+	
+	g_debug("%s.%d: adjusting relative path (%s) to base_dir (%s). New path: %s", __FILE__, __LINE__, *filename, chas->base_dir, new_path);
+
 	g_free(*filename);
 	*filename = new_path;
 	return TRUE;
