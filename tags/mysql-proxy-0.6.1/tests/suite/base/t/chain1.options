@@ -1,2 +1,0 @@
-chain_proxy('chain1a.lua','chain1b.lua')
-

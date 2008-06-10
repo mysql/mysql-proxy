@@ -1,6 +1,0 @@
-0.5.0 - 2007-06-19
-
-  * added GPLv2 headers to the build
-  * added automake/autoconf support
-  * added cmake support
-

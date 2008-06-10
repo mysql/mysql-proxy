@@ -1,6 +1,0 @@
-## we try to inject a packet into the protocol and steal 
-## the /etc/passwd
-## 
-## sadly the client closes the connection to the server for some reason
-## otherwise we could make it a TODO testcase
-SELECT LOCAL("/etc/passwd");
