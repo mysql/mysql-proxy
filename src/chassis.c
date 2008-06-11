@@ -309,8 +309,7 @@ int main_cmdline(int argc, char **argv) {
 # if defined(LIBDIR)
 	if (!g_getenv(LUA_CPATH)) {
 #  if _WIN32
-		g_setenv(LUA_CPATH, 
-				LIBDIR "/?.dll", 1);
+		_putenv(LUA_CPATH "=!/?.dll");
 #  else
 		g_setenv(LUA_CPATH, 
 				LIBDIR "/?.so", 1);
