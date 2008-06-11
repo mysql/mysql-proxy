@@ -21,14 +21,14 @@
 @echo Using dependencies from %DEPS_PATH%
 @echo Using %GENERATOR%
 
-@echo Checking for NSIS...
-@reg query HKLM\Software\NSIS /v VersionMajor
-@IF %ERRORLEVEL% NEQ 0 (GOTO NONSIS)
-@GOTO NSISOK
+@rem echo Checking for NSIS...
+@rem reg query HKLM\Software\NSIS /v VersionMajor
+@rem IF %ERRORLEVEL% NEQ 0 (GOTO NONSIS)
+@rem GOTO NSISOK
 
-:NONSIS
-@echo using internal NSIS installation
-@SET CLEANUP_NSIS=1
+@rem :NONSIS
+@rem echo using internal NSIS installation
+@rem SET CLEANUP_NSIS=1
 
 @rem reg add HKLM\Software\NSIS /ve /t REG_SZ /d %NSISDIR% /f
 @rem reg add HKLM\Software\NSIS /v VersionMajor /t REG_DWORD /d 00000002 /f
@@ -39,9 +39,9 @@
 @GOTO ENDNSIS
 
 :NSISOK
-@echo found existing NSIS installation
-@SET CLEANUP_NSIS=0
-@GOTO ENDNSIS
+@rem echo found existing NSIS installation
+@rem SET CLEANUP_NSIS=0
+@rem GOTO ENDNSIS
 
 :ENDNSIS
 
@@ -80,12 +80,12 @@ nmake
 
 :CLEANUP
 
-@IF %CLEANUP_NSIS% EQU 1 (GOTO REMOVEKEYS)
-@echo leaving existing keys untouched
+@rem IF %CLEANUP_NSIS% EQU 1 (GOTO REMOVEKEYS)
+@rem echo leaving existing keys untouched
 @GOTO END
 
 :REMOVEKEYS
-@echo removing temporary NSIS registry entries
+@rem echo removing temporary NSIS registry entries
 @rem reg delete HKLM\Software\NSIS /va /f
 
 :END
