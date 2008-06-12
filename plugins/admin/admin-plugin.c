@@ -487,7 +487,7 @@ static GOptionEntry * network_mysqld_admin_plugin_get_options(chassis_plugin_con
 		{ "admin-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the admin-server (default: :4041)", "<host:port>" },
 		{ "admin-username",           0, 0, G_OPTION_ARG_STRING, NULL, "username to allow to log in (default: root)", "<string>" },
 		{ "admin-password",           0, 0, G_OPTION_ARG_STRING, NULL, "password to allow to log in (default: )", "<string>" },
-		{ "admin-lua-script",         0, 0, G_OPTION_ARG_STRING, NULL, "script to execute by the admin plugin", "<filename>" },
+		{ "admin-lua-script",         0, 0, G_OPTION_ARG_FILENAME, NULL, "script to execute by the admin plugin", "<filename>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};

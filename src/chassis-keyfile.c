@@ -23,6 +23,7 @@ int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, G
 		gsize len = 0;
 
 		switch (entry->arg) {
+		case G_OPTION_ARG_FILENAME:
 		case G_OPTION_ARG_STRING: 
 			/* is this option set already */
 			if (NULL == entry->arg_data || NULL != *(gchar **)(entry->arg_data)) break;
@@ -33,6 +34,7 @@ int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, G
 				*(gchar **)(entry->arg_data) = g_strchomp(arg_string);
 			}
 			break;
+		case G_OPTION_ARG_FILENAME_ARRAY:
 		case G_OPTION_ARG_STRING_ARRAY: 
 			/* is this option set already */
 			if (NULL == entry->arg_data || NULL != *(gchar ***)(entry->arg_data)) break;

@@ -516,7 +516,7 @@ static GOptionEntry * network_mysqld_replicant_plugin_get_options(chassis_plugin
 		{ "replicant-master-address",            0, 0, G_OPTION_ARG_STRING, NULL, "... (default: :4040)", "<host:port>" },
 		{ "replicant-username",                  0, 0, G_OPTION_ARG_STRING, NULL, "username", "" },
 		{ "replicant-password",                  0, 0, G_OPTION_ARG_STRING, NULL, "password", "" },
-		{ "replicant-read-binlogs",              0, 0, G_OPTION_ARG_FILENAME_ARRAY, NULL, "password", "" },
+		{ "replicant-read-binlogs",              0, 0, G_OPTION_ARG_FILENAME_ARRAY, NULL, "binlog files", "" },
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 

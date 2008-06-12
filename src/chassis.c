@@ -437,10 +437,17 @@ int main_cmdline(int argc, char **argv) {
 			goto exit_nicely;
 		}
 		
-		/* copy it in case plugins need to use it */
+		/*
+		 * some plugins cannot see the chassis struct from the point
+		 * where they open files, hence we must make it available
+		 */
 		srv->base_dir = g_strdup(base_dir);
 
-		/* fix our own global file names, if they are relative */
+		/* 
+		 * these are used before we gathered all the options
+		 * from the plugins, thus we need to fix them up before
+		 * dealing with all the rest.
+		 */
 		chassis_resolve_path(srv, &log->log_filename);
 		chassis_resolve_path(srv, &pid_file);
 		chassis_resolve_path(srv, &plugin_dir);
@@ -588,6 +595,35 @@ int main_cmdline(int argc, char **argv) {
 					goto exit_nicely;
 				}
 			}
+			/* check for relative paths among the newly added options
+			 * and resolve them to an absolute path if we have base-dir
+			 */
+			if (srv->base_dir) {
+				int entry_idx;
+				for (entry_idx = 0; config_entries[entry_idx].long_name; entry_idx++) {
+					GOptionEntry entry = config_entries[entry_idx];
+					
+					switch(entry.arg) {
+					case G_OPTION_ARG_FILENAME: {
+						gchar **data = entry.arg_data;
+						chassis_resolve_path(srv, data);
+						break;
+					}
+					case G_OPTION_ARG_FILENAME_ARRAY: {
+						gchar ***data = entry.arg_data;
+						gchar **files = *data;
+						if (NULL != files) {
+							gint i;
+							for (i = 0; files[i]; i++) chassis_resolve_path(srv, &files[i]);
+						}
+						break;
+					}
+					default:
+						/* ignore other option types */
+						break;
+					}
+				}
+			}
 		}
 	}
 
@@ -613,8 +649,7 @@ int main_cmdline(int argc, char **argv) {
 		exit_code = EXIT_FAILURE;
 		goto exit_nicely;
 	}
-
-
+	
 #ifndef _WIN32	
 	signal(SIGPIPE, SIG_IGN);
 

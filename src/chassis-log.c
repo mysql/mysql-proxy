@@ -53,7 +53,7 @@ const struct {
 	{ "info", G_LOG_LEVEL_INFO,			LOG_INFO,		EVENTLOG_INFORMATION_TYPE},
 	{ "debug", G_LOG_LEVEL_DEBUG,		LOG_DEBUG,		EVENTLOG_INFORMATION_TYPE},
 
-	{ NULL, 0 }
+	{ NULL, 0, 0, 0 }
 };
 
 chassis_log *chassis_log_init(void) {
