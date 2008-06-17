@@ -462,9 +462,6 @@ int main_cmdline(int argc, char **argv) {
 		}
 	}
 
-	g_message("%s started", PACKAGE_STRING); /* add tag to the logfile (after we opened the logfile) */
-
-
 	/* handle log-level after the config-file is read, just in case it is specified in the file */
 	if (log_level) {
 		if (0 != chassis_log_set_level(log, log_level)) {
@@ -682,6 +679,12 @@ int main_cmdline(int argc, char **argv) {
 
 		close(fd);
 	}
+
+	/* the message has to be _after_ the g_option_content_parse() to 
+	 * hide from the output if the --help is asked for
+	 */
+	g_message("%s started", PACKAGE_STRING); /* add tag to the logfile (after we opened the logfile) */
+
 #ifdef _WIN32
 	if (win32_running_as_service) agent_service_set_state(SERVICE_RUNNING, 0);
 #endif
@@ -699,7 +702,9 @@ exit_nicely:
 	 */
 	chassis_set_shutdown();
 	
-	g_message("shutting down normally"); /* add a tag to the logfile */
+	if (!print_version) {
+		g_message("shutting down normally"); /* add a tag to the logfile */
+	}
 
 #ifdef _WIN32
 	if (win32_running_as_service) agent_service_set_state(SERVICE_STOP_PENDING, 0);
