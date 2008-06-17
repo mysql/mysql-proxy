@@ -955,7 +955,7 @@ int main(int argc, char **argv) {
 	option_ctx = g_option_context_new("- MySQL Binlog Dump");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
 	g_option_context_add_main_entries(option_ctx, main_entries, GETTEXT_PACKAGE);
-	g_option_context_set_help_enabled(option_ctx, FALSE);
+	g_option_context_set_help_enabled(option_ctx, TRUE);
 
 	/**
 	 * parse once to get the basic options like --defaults-file and --version
