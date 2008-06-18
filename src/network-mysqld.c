@@ -677,7 +677,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		int b = -1;
 
 		if (ioctl(event_fd, FIONREAD, &b)) {
-			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, strerror(errno));
+			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, g_strerror(errno));
 
 			con->state = CON_STATE_ERROR;
 		} else if (b != 0) {

@@ -386,7 +386,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(cli_connect_server) {
 			/* getsockopt failed */
 			g_critical("%s.%d: getsockopt(%s) failed: %s", 
 					__FILE__, __LINE__,
-					con->server->addr.str, strerror(errno));
+					con->server->addr.str, g_strerror(errno));
 			return RET_ERROR;
 		}
 
@@ -396,7 +396,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(cli_connect_server) {
 		default:
 			g_critical("%s.%d: connect(%s) failed: %s", 
 					__FILE__, __LINE__,
-					con->server->addr.str, strerror(so_error));
+					con->server->addr.str, g_strerror(so_error));
 			return RET_ERROR;
 		}
 	} else {

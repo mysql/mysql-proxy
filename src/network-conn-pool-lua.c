@@ -164,7 +164,7 @@ static void network_mysqld_con_idle_handle(int event_fd, short events, void *use
 		 *        up to now we just ignore it
 		 */
 		if (ioctlsocket(event_fd, FIONREAD, &b)) {
-			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, strerror(errno));
+			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, g_strerror(errno));
 		} else if (b != 0) {
 			g_critical("ioctl(%d, FIONREAD, ...) said there is something to read, oops: %d", event_fd, b);
 		} else {

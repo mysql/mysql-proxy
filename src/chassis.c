@@ -666,7 +666,7 @@ int main_cmdline(int argc, char **argv) {
 			g_critical("%s.%d: open(%s) failed: %s", 
 					__FILE__, __LINE__,
 					pid_file,
-					strerror(errno));
+					g_strerror(errno));
 
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;

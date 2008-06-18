@@ -237,7 +237,7 @@ network_socket_retval_t network_socket_set_non_blocking(network_socket *sock) {
 #endif
 		g_critical("%s.%d: set_non_blocking() failed: %s (%d)", 
 				__FILE__, __LINE__,
-				strerror(errno), errno);
+				g_strerror(errno), errno);
 		return NETWORK_SOCKET_ERROR;
 	}
 	return NETWORK_SOCKET_SUCCESS;
@@ -267,7 +267,7 @@ network_socket_retval_t network_socket_connect(network_socket * con) {
 #endif
 		g_critical("%s.%d: socket(%s) failed: %s (%d)", 
 				__FILE__, __LINE__,
-				con->addr.str, strerror(errno), errno);
+				con->addr.str, g_strerror(errno), errno);
 		return -1;
 	}
 
@@ -293,7 +293,7 @@ network_socket_retval_t network_socket_connect(network_socket * con) {
 			g_critical("%s.%d: connect(%s) failed: %s (%d)", 
 					__FILE__, __LINE__,
 					con->addr.str,
-					strerror(errno), errno);
+					g_strerror(errno), errno);
 			return -1;
 		}
 	}
@@ -330,7 +330,7 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 	if (-1 == (con->fd = socket(con->addr.addr.ipv4.sin_family, SOCK_STREAM, 0))) {
 		g_critical("%s.%d: socket(%s) failed: %s", 
 				__FILE__, __LINE__,
-				con->addr.str, strerror(errno));
+				con->addr.str, g_strerror(errno));
 		return NETWORK_SOCKET_ERROR;
 	}
 
@@ -341,14 +341,14 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 		g_critical("%s.%d: bind(%s) failed: %s", 
 				__FILE__, __LINE__,
 				con->addr.str,
-				strerror(errno));
+				g_strerror(errno));
 		return NETWORK_SOCKET_ERROR;
 	}
 
 	if (-1 == listen(con->fd, 8)) {
 		g_critical("%s.%d: listen() failed: %s",
 				__FILE__, __LINE__,
-				strerror(errno));
+				g_strerror(errno));
 		return NETWORK_SOCKET_ERROR;
 	}
 
@@ -379,7 +379,7 @@ network_socket_retval_t network_socket_read(network_socket *sock) {
 			case EAGAIN:     
 				return NETWORK_SOCKET_WAIT_FOR_EVENT;
 			default:
-				g_debug("%s: recv() failed: %s (errno=%d)", G_STRLOC, strerror(errno), errno);
+				g_debug("%s: recv() failed: %s (errno=%d)", G_STRLOC, g_strerror(errno), errno);
 				return NETWORK_SOCKET_ERROR;
 			}
 		} else if (len == 0) {
@@ -461,7 +461,7 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
 			g_message("%s.%d: writev(%s, ...) failed: %s", 
 					__FILE__, __LINE__, 
 					con->addr.str, 
-					strerror(errno));
+					g_strerror(errno));
 			return NETWORK_SOCKET_ERROR;
 		}
 	} else if (len == 0) {
@@ -526,7 +526,7 @@ static network_socket_retval_t network_socket_write_send(network_socket *con, in
 						G_STRLOC, 
 						con->addr.str, 
 						s->len - con->send_queue->offset, 
-						strerror(errno));
+						g_strerror(errno));
 				return NETWORK_SOCKET_ERROR;
 			}
 		} else if (len == 0) {

@@ -1316,7 +1316,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 			/* getsockopt failed */
 			g_critical("%s.%d: getsockopt(%s) failed: %s", 
 					__FILE__, __LINE__,
-					con->server->addr.str, strerror(errno));
+					con->server->addr.str, g_strerror(errno));
 			return NETWORK_SOCKET_ERROR;
 		}
 
@@ -1326,7 +1326,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		default:
 			g_message("%s.%d: connect(%s) failed: %s. Retrying with different backend.", 
 					__FILE__, __LINE__,
-					con->server->addr.str, strerror(so_error));
+					con->server->addr.str, g_strerror(so_error));
 
 			/* mark the backend as being DOWN and retry with a different one */
 			st->backend->state = BACKEND_STATE_DOWN;
