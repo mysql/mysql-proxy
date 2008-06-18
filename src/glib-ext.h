@@ -18,6 +18,7 @@ CHASSIS_API gpointer g_hash_table_lookup_const(GHashTable *h, const gchar *name,
 CHASSIS_API GString *g_string_dup(GString *);
 
 CHASSIS_API gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len);
+CHASSIS_API gboolean g_string_equal_ci(const GString *a, const GString *b);
 
 CHASSIS_API int g_string_get_time(GString *s, GTimeVal *gt);
 CHASSIS_API int g_string_get_current_time(GString *s);
