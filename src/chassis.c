@@ -256,7 +256,7 @@ int main_cmdline(int argc, char **argv) {
 	GOptionEntry main_entries[] = 
 	{
 		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
-		{ "base-dir",                 0, 0, G_OPTION_ARG_STRING, NULL, "Base directory to prepend to relative paths in the config", "<absolute path>" },
+		{ "basedir",                  0, 0, G_OPTION_ARG_STRING, NULL, "Base directory to prepend to relative paths in the config", "<absolute path>" },
 		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
 		{ "plugin-dir",               0, 0, G_OPTION_ARG_STRING, NULL, "path to the plugins", "<path>" },
 		{ "plugins",                  0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "plugins to load", "<name>" },
@@ -427,12 +427,12 @@ int main_cmdline(int argc, char **argv) {
 
 	/* handle base_dir if set */
 	if (base_dir) {
-		/* base-dir must be an absolute path, doesn't make sense otherwise */
+		/* --basedir must be an absolute path, doesn't make sense otherwise */
 		if (!g_path_is_absolute(base_dir)) {
 			/* TODO: here we have a problem, because our logging support is not yet set up.
 			   What do we do on Windows when called as a service?
 			 */
-			g_critical("base-dir option must be an absolute path, but was %s", base_dir);
+			g_critical("--basedir option must be an absolute path, but was %s", base_dir);
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;
 		}
@@ -593,7 +593,7 @@ int main_cmdline(int argc, char **argv) {
 				}
 			}
 			/* check for relative paths among the newly added options
-			 * and resolve them to an absolute path if we have base-dir
+			 * and resolve them to an absolute path if we have --basedir
 			 */
 			if (srv->base_dir) {
 				int entry_idx;
