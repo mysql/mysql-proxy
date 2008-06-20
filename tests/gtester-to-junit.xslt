@@ -20,7 +20,7 @@
             <xsl:attribute name="name">
                 <xsl:value-of select="translate(@path, '/-', '_')"/>
             </xsl:attribute>
-            <xsl:if test="./status[@result='failure']">
+            <xsl:if test="./status[@result='failed']">
                 <failure>
                     <xsl:apply-templates select="./error"/>
                 </failure>
@@ -44,7 +44,7 @@
                 <xsl:value-of select="count(/gtester/testbinary/testcase)"/>
             </xsl:attribute>
             <xsl:attribute name="failures">
-                <xsl:value-of select="count(/gtester/testbinary/testcase/status[@result=&quot;failure&quot;])"/>
+                <xsl:value-of select="count(/gtester/testbinary/testcase/status[@result=&quot;failed&quot;])"/>
             </xsl:attribute>
 <xsl:text>
 </xsl:text>
