@@ -101,7 +101,6 @@
 
 #include <glib.h>
 #include <gmodule.h>
-#include <glib/gstdio.h>
 
 #ifdef HAVE_LUA_H
 #include <lua.h>
@@ -735,8 +734,6 @@ exit_nicely:
 #ifdef _WIN32
 	if (win32_running_as_service) agent_service_set_state(SERVICE_STOPPED, 0);
 #endif
-	/* do not leave a stale pid file around after we exit */
-	g_unlink(pid_file);
 
 	return exit_code;
 }
