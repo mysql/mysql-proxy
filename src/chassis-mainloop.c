@@ -224,8 +224,9 @@ int chassis_mainloop(void *_chas) {
 
 	signal_del(&ev_sigterm);
 	signal_del(&ev_sigint);
+#ifdef SIGHUP
 	signal_del(&ev_sighup);
-
+#endif
 	return 0;
 }
 
