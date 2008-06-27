@@ -423,35 +423,54 @@ int main_cmdline(int argc, char **argv) {
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;
 		}
-	}
+    }
 
-	/* handle base_dir if set */
-	if (base_dir) {
-		/* --basedir must be an absolute path, doesn't make sense otherwise */
-		if (!g_path_is_absolute(base_dir)) {
-			/* TODO: here we have a problem, because our logging support is not yet set up.
-			   What do we do on Windows when called as a service?
-			 */
-			g_critical("--basedir option must be an absolute path, but was %s", base_dir);
-			exit_code = EXIT_FAILURE;
-			goto exit_nicely;
-		}
+	/* find our installation directory if no basedir was given
+	 * this is necessary for finding files when we daemonize
+	 */
+	if (!base_dir) {
+        gchar *absolute_path;
+        gchar *bin_dir;
 		
-		/*
-		 * some plugins cannot see the chassis struct from the point
-		 * where they open files, hence we must make it available
-		 */
-		srv->base_dir = g_strdup(base_dir);
+        if (g_path_is_absolute(argv[0])) {
+            absolute_path = g_strdup(argv[0]); /* No need to dup, just to get free right */
+        } else {
+            absolute_path = g_find_program_in_path(argv[0]);
+            if (absolute_path == NULL)
+                g_critical("can't find myself (%s) in PATH", argv[0]);
+        }
+        bin_dir = g_path_get_dirname(absolute_path);
+        base_dir = g_path_get_dirname(bin_dir);
 
-		/* 
-		 * these are used before we gathered all the options
-		 * from the plugins, thus we need to fix them up before
-		 * dealing with all the rest.
-		 */
-		chassis_resolve_path(srv, &log->log_filename);
-		chassis_resolve_path(srv, &pid_file);
-		chassis_resolve_path(srv, &plugin_dir);
+		/* don't free base_dir, because we need it later */
+		g_free(absolute_path);
+        g_free(bin_dir);
 	}
+	
+	/* --basedir must be an absolute path, doesn't make sense otherwise */
+	if (!g_path_is_absolute(base_dir)) {
+		/* TODO: here we have a problem, because our logging support is not yet set up.
+		   What do we do on Windows when called as a service?
+		 */
+		g_critical("--basedir option must be an absolute path, but was %s", base_dir);
+		exit_code = EXIT_FAILURE;
+		goto exit_nicely;
+	}
+
+	/*
+	 * some plugins cannot see the chassis struct from the point
+	 * where they open files, hence we must make it available
+	 */
+	srv->base_dir = g_strdup(base_dir);
+
+	/* 
+	 * these are used before we gathered all the options
+	 * from the plugins, thus we need to fix them up before
+	 * dealing with all the rest.
+	 */
+	chassis_resolve_path(srv, &log->log_filename);
+	chassis_resolve_path(srv, &pid_file);
+	chassis_resolve_path(srv, &plugin_dir);
 
 	if (log->log_filename) {
 		if (0 == chassis_log_open(log)) {
@@ -475,29 +494,15 @@ int main_cmdline(int argc, char **argv) {
 		log->min_lvl = G_LOG_LEVEL_CRITICAL;
 	}
 
-        /* Lets find the plugin directory relative the executable path */
-        if (!plugin_dir) {
-          gchar *absolute_path;
-          gchar *bin_dir, *top_dir;
-          if (g_path_is_absolute(argv[0])) {
-            absolute_path = g_strdup(argv[0]);  /* No need to dup, just to get free right */
-          } else {
-            absolute_path = g_find_program_in_path(argv[0]);
-            if (absolute_path == NULL)
-              g_critical("can't find myself (%s) in PATH",argv[0]);
-          }
-          bin_dir = g_path_get_dirname(absolute_path);
-          top_dir = g_path_get_dirname(bin_dir);
-/* for Win32 the default plugin dir is bin/ and not lib/package_name */
+    /* Lets find the plugin directory relative the executable path */
+    if (!plugin_dir) {
+        /* for Win32 the default plugin dir is bin/ and not lib/package_name */
 #ifdef WIN32
-          plugin_dir = g_strconcat(top_dir, G_DIR_SEPARATOR_S, "bin", NULL);
+        plugin_dir = g_strconcat(srv->base_dir, G_DIR_SEPARATOR_S, "bin", NULL);
 #else
-          plugin_dir = g_strconcat(top_dir, G_DIR_SEPARATOR_S, "lib", G_DIR_SEPARATOR_S, PACKAGE, NULL);
+        plugin_dir = g_strconcat(srv->base_dir, G_DIR_SEPARATOR_S, "lib", G_DIR_SEPARATOR_S, PACKAGE, NULL);
 #endif
-          g_free(absolute_path);
-          g_free(bin_dir);
-          g_free(top_dir);
-        }
+    }
 
 	/* if not plugins are specified, load admin and proxy */
 	if (!plugin_names) {
