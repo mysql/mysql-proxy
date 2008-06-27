@@ -99,6 +99,8 @@ PROXY_MASTER_PIDFILE  	= lfs.currentdir() .. "/mysql-proxy-test-master.pid"
 PROXY_SLAVE_PIDFILE   	= lfs.currentdir() .. "/mysql-proxy-test-slave.pid"
 PROXY_CHAIN_PIDFILE   	= lfs.currentdir() .. "/mysql-proxy-test-chain.pid"
 PROXY_BACKEND_PIDFILE 	= lfs.currentdir() .. "/mysql-proxy-test-backend.pid"
+PROXY_TEST_BASEDIR		= lfs.currentdir()
+
 DEFAULT_SCRIPT_FILENAME	 = "/tmp/dummy.lua"
 default_proxy_options = {
 	["proxy-backend-addresses"] = MYSQL_HOST .. ":" .. MYSQL_PORT,
@@ -107,6 +109,7 @@ default_proxy_options = {
 	["pid-file"]				= PROXY_PIDFILE,
 	["proxy-lua-script"]		= DEFAULT_SCRIPT_FILENAME,
 	["plugin-dir"]			= PROXY_LIBPATH,
+	["basedir"]					= PROXY_TEST_BASEDIR,
 	}
 
 default_master_options = {
@@ -116,6 +119,7 @@ default_master_options = {
 	["pid-file"]				= PROXY_MASTER_PIDFILE,
 	["proxy-lua-script"]		= DEFAULT_SCRIPT_FILENAME,
 	["plugin-dir"]			= PROXY_LIBPATH,
+	["basedir"]					= PROXY_TEST_BASEDIR,
 	}
 
 default_slave_options = {
@@ -125,7 +129,9 @@ default_slave_options = {
 	["pid-file"]				= PROXY_SLAVE_PIDFILE,
 	["proxy-lua-script"]		= DEFAULT_SCRIPT_FILENAME,
 	["plugin-dir"]			= PROXY_LIBPATH,
+	["basedir"]					= PROXY_TEST_BASEDIR,
 	}
+
 
 tests_to_skip = {}
 local tests_to_skip_filename = 'tests_to_skip.lua' 
@@ -650,6 +656,7 @@ function chain_proxy (first_lua_script, second_lua_script, use_replication)
 			["pid-file"]				= PROXY_CHAIN_PIDFILE,
 			["proxy-lua-script"]		= first_lua_script or DEFAULT_SCRIPT_FILENAME,
 			["plugin-dir"]			= PROXY_LIBPATH,
+			["basedir"]					= PROXY_TEST_BASEDIR,
 	}
 	-- 
 	-- if replication was not started, then it is started here
@@ -667,6 +674,7 @@ function chain_proxy (first_lua_script, second_lua_script, use_replication)
 			["pid-file"]				= PROXY_PIDFILE,
 			["proxy-lua-script"]		= second_lua_script or DEFAULT_SCRIPT_FILENAME,
 			["plugin-dir"]			= PROXY_LIBPATH,
+			["basedir"]					= PROXY_TEST_BASEDIR,
 	}
 	start_proxy('first_proxy', first_proxy_options) 
 	start_proxy('second_proxy',second_proxy_options) 
