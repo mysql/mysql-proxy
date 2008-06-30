@@ -550,6 +550,7 @@ static int network_mysqld_admin_plugin_apply_config(chassis *chas, chassis_plugi
 G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
 	p->name         = g_strdup("admin");
+	p->version		= g_strdup("0.7.0");
 
 	p->init         = network_mysqld_admin_plugin_init;
 	p->get_options  = network_mysqld_admin_plugin_get_options;

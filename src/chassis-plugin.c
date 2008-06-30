@@ -68,6 +68,12 @@ chassis_plugin *chassis_plugin_load(const gchar *name) {
 
 	/* if the plugins haven't set p->name provide our own name */
 	if (!p->name) p->name = g_strdup(name);
+	/* set dummy version number if the plugin doesn't provide a real one */
+	if (!p->version) {
+		g_critical("plugin '%s' doesn't set a version number, refusing to load this plugin", name);
+		chassis_plugin_free(p);
+		return NULL;
+	}
 
 	return p;
 }

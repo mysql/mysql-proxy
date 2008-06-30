@@ -104,6 +104,7 @@
 
 #ifdef HAVE_LUA_H
 #include <lua.h>
+#include <stdio.h>
 #endif
 
 #include "network-mysqld.h"
@@ -141,7 +142,6 @@ static gchar * g_timeval_string(GTimeVal *t1, GString *str) {
 
 	return str->str;
 }
-
 
 
 #ifndef _WIN32
@@ -228,6 +228,7 @@ int main_cmdline(int argc, char **argv) {
 	int print_version = 0;
 	int daemon_mode = 0;
 	gchar *base_dir = NULL;
+	int auto_base_dir = 0;	/**< distinguish between user supplied basedir and automatically discovered one */
 	const gchar *check_str = NULL;
 	chassis_plugin *p;
 	gchar *pid_file = NULL;
@@ -391,18 +392,18 @@ int main_cmdline(int argc, char **argv) {
 		}
 	}
 
+	/* print the main version number here, but don't exit
+	 * we check for print_version again, after loading the plugins (if any)
+	 * and print their version numbers, too. then we exit cleanly.
+	 */
 	if (print_version) {
 		printf("%s\r\n", PACKAGE_STRING); 
 		printf("  glib2: %d.%d.%d\r\n", GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
 #ifdef HAVE_EVENT_H
 		printf("  libevent: %s\r\n", event_get_version());
 #endif
-
-		exit_code = EXIT_SUCCESS;
-		goto exit_nicely;
 	}
-
-
+	
 	/* add the other options which can also appear in the configfile */
 	g_option_context_add_main_entries(option_ctx, main_entries, GETTEXT_PACKAGE);
 
@@ -441,14 +442,15 @@ int main_cmdline(int argc, char **argv) {
 		}
 		bin_dir = g_path_get_dirname(absolute_path);
 		base_dir = g_path_get_dirname(bin_dir);
-
+		auto_base_dir = 1;
+		
 		/* don't free base_dir, because we need it later */
 		g_free(absolute_path);
 		g_free(bin_dir);
 	}
 	
 	/* --basedir must be an absolute path, doesn't make sense otherwise */
-	if (!g_path_is_absolute(base_dir)) {
+	if (!auto_base_dir && !g_path_is_absolute(base_dir)) {
 		/* TODO: here we have a problem, because our logging support is not yet set up.
 		   What do we do on Windows when called as a service?
 		 */
@@ -561,6 +563,14 @@ int main_cmdline(int argc, char **argv) {
 		
 		p = chassis_plugin_load(plugin_filename);
 		g_free(plugin_filename);
+        
+		if (print_version && p) {
+			if (0 == strcmp(plugin_names[i], p->name)) {
+                printf("  %s: %s\r\n", p->name, p->version);
+			} else {
+                printf("  %s(%s): %s\r\n", p->name, plugin_names[i], p->version);
+			}
+		}
 		
 		if (NULL == p) {
 			g_critical("setting --plugin-dir=<dir> might help");
@@ -626,6 +636,12 @@ int main_cmdline(int argc, char **argv) {
 				}
 			}
 		}
+	}
+
+	/* if we only print the version numbers, exit and don't do any more work */
+	if (print_version) {
+		exit_code = EXIT_SUCCESS;
+		goto exit_nicely;
 	}
 
 	/* we know about the options now, lets parse them */

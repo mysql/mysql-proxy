@@ -538,6 +538,7 @@ int plugin_init(chassis_plugin *p) {
 	/* append the our init function to the init-hook-list */
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
 	p->name         = g_strdup("cli");
+	p->version		= g_strdup("0.7.0");
 
 	p->init         = network_mysqld_cli_plugin_init;
 	p->get_options  = network_mysqld_cli_plugin_get_options;

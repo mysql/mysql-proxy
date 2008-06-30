@@ -824,6 +824,7 @@ int network_mysqld_replicant_plugin_apply_config(chassis G_GNUC_UNUSED *chas, ch
 G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
 	p->name         = g_strdup("replicant");
+	p->version		= g_strdup("0.7.0");
 	/* append the our init function to the init-hook-list */
 
 	p->init         = network_mysqld_replicant_plugin_init;

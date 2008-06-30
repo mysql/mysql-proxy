@@ -9,8 +9,8 @@
 #include "chassis-mainloop.h"
 #include "chassis-exports.h"
 
-/* current magic is 0.7.0-2 */
-#define CHASSIS_PLUGIN_MAGIC 0x00070002L
+/* current magic is 0.7.0-3 */
+#define CHASSIS_PLUGIN_MAGIC 0x00070003L
 
 typedef struct chassis_plugin_config chassis_plugin_config;
 
@@ -18,6 +18,7 @@ typedef struct chassis_plugin {
 	long      magic;    /**< a magic token to verify that the plugin API matches */
 
 	gchar    *name;     /**< the name of the plugin as defined */
+	gchar    *version;  /**< the plugin's version number */
 	GModule  *module;   /**< the plugin handle when loaded */
 	chassis_plugin_config *config;  /**< contains the plugin-specific config data */
 
