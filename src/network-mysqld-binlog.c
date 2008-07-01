@@ -363,6 +363,7 @@ int network_mysqld_binlog_event_tablemap_get(
 	for (i = 0; i < event->event.table_map_event.columns_len; i++) {
 		MYSQL_FIELD *field = network_mysqld_proto_fielddef_new();
 		enum enum_field_types col_type;
+		guint8 byte0;
 
 		guint byteoffset = i / 8;
 		guint bitoffset = i % 8;
@@ -379,11 +380,36 @@ int network_mysqld_binlog_event_tablemap_get(
 		 * */
 		switch ((guchar)col_type) {
 		case MYSQL_TYPE_STRING: /* 254 (CHAR) */
-			/* byte 0: real_type 
+			/**
+			 * due to #37426 the encoding is a bit tricky in 5.1.26+
+			 * as we need at least 10 bits to encode the max-field-length
+			 *
+			 * < 5.1.26
+			 *
+			 *   byte0      byte1
+			 *   xxxx xxxx  .... ....  real-type
+			 *   .... ....  xxxx xxxx  field-length
+			 *   7       0  7       0
+			 *
+			 * >= 5.1.26
+			 *   byte0      byte1
+			 *   xx11 xxxx  .... ....  real-type
+			 *   ..xx ....  xxxx xxxx  field-length
+			 *   7       0  7       0
+			 * 
+			 */
+
+			/* byte 0: real_type + upper bits of field-length (see #37426)
 			 * byte 1: field-length
 			 */
-			field->type  = network_mysqld_proto_get_int8(&metadata_packet);
+			byte0  = network_mysqld_proto_get_int8(&metadata_packet);
 			field->max_length = network_mysqld_proto_get_int8(&metadata_packet);
+
+			if ((byte0 & 0x30) != 0x30) {
+				/* a long CHAR() field */
+				field->max_length |= (((byte0 & 0x30) ^ 0x30) << 4);
+				field->type = byte0 | 0x30; /* see #37426 */
+			}
 
 			break;
 		case MYSQL_TYPE_VARCHAR: /* 15 (VARCHAR) */
