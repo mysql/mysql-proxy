@@ -28,7 +28,7 @@ function dirname(filename)
 	
 	attr = assert(lfs.attributes(dirname))
 
-	assert(attr.mode == "directory")
+	assert(attr.mode == "directory", "dirname("..filename..") failed: is ".. attr.mode)
 
 	return dirname
 end
@@ -694,11 +694,13 @@ file_empty(DEFAULT_SCRIPT_FILENAME)
 -- otherwise execute all tests we can find
 if #arg then
 	for i, a in ipairs(arg) do
-		local stat = lfs.attributes(a)
+		local stat = assert(lfs.attributes(a))
 
 		if file_exists(a .. '/' .. tests_to_skip_filename) then
 			assert(loadfile(a .. '/' .. tests_to_skip_filename))()
 		end
+
+		-- if it is a directory, execute all of them
 		if stat.mode == "directory" then
 			for file in lfs.dir(a .. "/t/") do
 				local testname = file:match("(.+\.test)$")
@@ -728,7 +730,10 @@ if #arg then
 				end
 			end
 		else 
-			exitcode, skipped = run_test(a)
+			-- otherwise just this one test
+			--
+			-- FIXME: base/ is hard-coded for now
+			exitcode, skipped = run_test(a, "base/")
 			num_skipped = num_skipped + skipped
 		end
 	end
