@@ -223,6 +223,7 @@ network_socket *network_connection_pool_lua_swap(network_mysqld_con *con, int ba
 	network_socket *send_sock;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	chassis_private *g = con->srv->priv;
+	GString empty_username = { C(""), 0 };
 
 	/*
 	 * we can only change to another backend if the backend is already
@@ -243,7 +244,7 @@ network_socket *network_connection_pool_lua_swap(network_mysqld_con *con, int ba
 	g_debug("%s: (swap) check if we have a connection for this user in the pool '%s'", G_STRLOC, con->client->username->str);
 #endif
 	if (NULL == (send_sock = network_connection_pool_get(backend->pool, 
-					con->client->response->username,
+					con->client->response ? con->client->response->username : &empty_username,
 					con->client->default_db))) {
 		/**
 		 * no connections in the pool

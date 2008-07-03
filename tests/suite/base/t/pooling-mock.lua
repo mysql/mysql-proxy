@@ -1,4 +1,9 @@
-
+---
+-- test if connection pooling works
+--
+-- by comparing the statement-ids and the connection ids we can 
+-- track if the ro-pooling script was reusing a connection
+--
 function packet_auth(fields)
 	fields = fields or { }
 	return "\010" ..             -- proto version
@@ -18,7 +23,20 @@ function packet_auth(fields)
 		"\000"                -- challenge - part II
 end
 
+-- will be called once after connect
+stmt_id = 0
+conn_id = 0
+
 function connect_server()
+	-- the first connection inits the global counter
+	if not proxy.global.conn_id then
+		proxy.global.conn_id = 0
+	end
+	proxy.global.conn_id = proxy.global.conn_id + 1
+
+	-- set our connection id
+	conn_id = proxy.global.conn_id
+
 	-- emulate a server
 	proxy.response = {
 		type = proxy.MYSQLD_PACKET_RAW,
@@ -29,9 +47,6 @@ function connect_server()
 	return proxy.PROXY_SEND_RESULT
 end
 
--- will be called once after connect
-counter = 0
-
 function read_query(packet)
 	if packet:byte() ~= proxy.COM_QUERY then
 		proxy.response = {
@@ -40,7 +55,8 @@ function read_query(packet)
 		return proxy.PROXY_SEND_RESULT
 	end
 
-	counter = counter + 1
+	-- query-counter for this connection
+	stmt_id = stmt_id + 1
 
 	local query = packet:sub(2) 
 	if query == 'SELECT counter' then
@@ -48,9 +64,10 @@ function read_query(packet)
 			type = proxy.MYSQLD_PACKET_OK,
 			resultset = {
 				fields = {
-					{ name = 'counter' },
+					{ name = 'conn_id' },
+					{ name = 'stmt_id' },
 				},
-				rows = { { tostring(counter) } }
+				rows = { { tostring(conn_id), tostring(stmt_id) } }
 			}
 		}
 	else
