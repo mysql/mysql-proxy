@@ -1,0 +1,19 @@
+connect (conn1,127.0.0.1,root,,,14040); 
+SELECT counter;
+disconnect conn1;
+
+connect (conn2,127.0.0.1,root,,,14040); 
+SELECT counter;
+disconnect conn2;
+
+connect (conn3,127.0.0.1,root,,,14040); 
+SELECT counter;
+disconnect conn3;
+
+connect (conn4,127.0.0.1,root,,,14040); 
+SELECT counter;
+disconnect conn4;
+
+connect (conn5,127.0.0.1,root,,,14040); 
+SELECT counter;
+disconnect conn5;
