@@ -39,12 +39,16 @@ function read_query(packet)
 	elseif packet:sub(2) == "PROCKILL" then
 		proxy.queries:append(proxy.COM_PROCESS_KILL, string.char(proxy.COM_PROCESS_KILL))
 		return proxy.PROXY_SEND_QUERY
+	elseif packet:sub(2) == "SETOPT" then
+		proxy.queries:append(proxy.COM_SET_OPTION, string.char(proxy.COM_SET_OPTION))
+		return proxy.PROXY_SEND_QUERY
 	end
 end
 
 function read_query_result(inj)
 
 	if inj.id == proxy.COM_SHUTDOWN or
+	   inj.id == proxy.COM_SET_OPTION or
 	   inj.id == proxy.COM_DEBUG then
 		-- translate the EOF packet from the COM_SHUTDOWN into a OK packet
 		-- to match the needs of the COM_QUERY we got
