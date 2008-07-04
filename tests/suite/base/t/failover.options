@@ -1,0 +1,2 @@
+chain_proxy('failover-mock.lua','failover-test.lua')
+

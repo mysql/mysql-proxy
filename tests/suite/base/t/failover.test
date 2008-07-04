@@ -1,0 +1,9 @@
+-- test that everything still works
+SELECT 1;
+-- now kill the backend and wait until it is down
+COMMIT SUICIDE;
+real_sleep 1;
+
+-- ... and this should fail now as the backend is gone
+-- error 2013
+SELECT 1;

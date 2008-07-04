@@ -1,0 +1,6 @@
+SELECT 1;
+1
+1
+COMMIT SUICIDE;
+SELECT 1;
+ERROR HY000: Lost connection to MySQL server during query
