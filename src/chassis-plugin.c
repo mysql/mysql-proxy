@@ -25,6 +25,7 @@ chassis_plugin *chassis_plugin_init(void) {
 void chassis_plugin_free(chassis_plugin *p) {
 	if (p->name) g_free(p->name);
 	if (p->module) g_module_close(p->module);
+	if (p->version) g_free(p->version);
 
 	g_free(p);
 }
