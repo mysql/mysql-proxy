@@ -1123,6 +1123,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					/* init the parser for the commands */
 					switch (con->parse.command) {
 					case COM_QUERY:
+					case COM_PROCESS_INFO:
 					case COM_STMT_EXECUTE:
 						con->parse.data = network_mysqld_com_query_result_new();
 						con->parse.data_free = (GDestroyNotify)network_mysqld_com_query_result_free;

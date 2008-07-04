@@ -383,6 +383,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		break;
 	case COM_STMT_RESET:
 	case COM_PING:
+	case COM_TIME:
 	case COM_PROCESS_KILL:
 		status = network_mysqld_proto_get_int8(packet);
 
@@ -392,9 +393,9 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 			is_finished = 1;
 			break;
 		default:
-			g_error("%s.%d: COM_(0x%02x) should be (ERR|OK), got %02x",
+			g_error("%s.%d: COM_(0x%02x) should be (ERR|OK), got 0x%02x",
 					__FILE__, __LINE__,
-					con->parse.command, status);
+					con->parse.command, (guint8)status);
 			break;
 		}
 		break;
@@ -404,13 +405,14 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		status = network_mysqld_proto_get_int8(packet);
 
 		switch (status) {
+		case MYSQLD_PACKET_ERR: /* COM_DEBUG may not have the right permissions */
 		case MYSQLD_PACKET_EOF:
 			is_finished = 1;
 			break;
 		default:
-			g_error("%s.%d: COM_(0x%02x) should be EOF, got %02x",
+			g_error("%s.%d: COM_(0x%02x) should be EOF, got x%02x",
 					__FILE__, __LINE__,
-					con->parse.command, status);
+					con->parse.command, (guint8)status);
 			break;
 		}
 		break;
@@ -464,6 +466,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		is_finished = network_mysqld_proto_get_com_stmt_prepare_result(packet, con->parse.data);
 		break;
 	case COM_STMT_EXECUTE:
+	case COM_PROCESS_INFO:
 	case COM_QUERY:
 		is_finished = network_mysqld_proto_get_com_query_result(packet, con->parse.data);
 		break;
