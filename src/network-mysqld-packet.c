@@ -54,6 +54,8 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 	int is_finished = 0;
 	guint8 status;
 	int err = 0;
+	network_mysqld_eof_packet_t *eof_packet;
+	network_mysqld_ok_packet_t *ok_packet;
 
 	/**
 	 * if we get a OK in the first packet there will be no result-set
@@ -67,8 +69,8 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 		case MYSQLD_PACKET_ERR: /* e.g. SELECT * FROM dual -> ERROR 1096 (HY000): No tables used */
 			is_finished = 1;
 			break;
-		case MYSQLD_PACKET_OK: { /* e.g. DELETE FROM tbl */
-			network_mysqld_ok_packet_t *ok_packet = network_mysqld_ok_packet_new();
+		case MYSQLD_PACKET_OK:  /* e.g. DELETE FROM tbl */
+			ok_packet = network_mysqld_ok_packet_new();
 
 			err = err || network_mysqld_proto_get_ok_packet(packet, ok_packet);
 
@@ -88,7 +90,7 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 
 			network_mysqld_ok_packet_free(ok_packet);
 
-			break; }
+			break;
 		case MYSQLD_PACKET_NULL:
 			/* OH NO, LOAD DATA INFILE :) */
 			query->state = PARSE_COM_QUERY_LOAD_DATA;
@@ -97,9 +99,11 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 
 			break;
 		case MYSQLD_PACKET_EOF:
-			g_error("%s.%d: COM_QUERY packet should not be (NULL|EOF), got: %02x",
-					__FILE__, __LINE__,
+			g_critical("%s: COM_QUERY packet should not be (EOF), got: 0x%02x",
+					G_STRLOC,
 					status);
+
+			err = 1;
 
 			break;
 		default:
@@ -109,16 +113,18 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 		}
 		break;
 	case PARSE_COM_QUERY_FIELD:
-		err = err || network_mysqld_proto_get_int8(packet, &status);
+		err = err || network_mysqld_proto_peek_int8(packet, &status);
 		if (err) break;
 
 		switch (status) {
 		case MYSQLD_PACKET_ERR:
 		case MYSQLD_PACKET_OK:
 		case MYSQLD_PACKET_NULL:
-			g_error("%s.%d: COM_QUERY should not be (OK|NULL|ERR), got: %02x",
-					__FILE__, __LINE__,
+			g_critical("%s: COM_QUERY should not be (OK|NULL|ERR), got: 0x%02x",
+					G_STRLOC,
 					status);
+
+			err = 1;
 
 			break;
 		case MYSQLD_PACKET_EOF:
@@ -126,11 +132,19 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 			/**
 			 * in 5.0 we have CURSORs which have no rows, just a field definition
 			 */
-			if (packet->data->str[NET_HEADER_SIZE + 3] & SERVER_STATUS_CURSOR_EXISTS) {
-				is_finished = 1;
-			} else {
-				query->state = PARSE_COM_QUERY_RESULT;
+			eof_packet = network_mysqld_eof_packet_new();
+
+			err = err || network_mysqld_proto_get_eof_packet(packet, eof_packet);
+
+			if (!err) {
+				if (eof_packet->server_status & SERVER_STATUS_CURSOR_EXISTS) {
+					is_finished = 1;
+				} else {
+					query->state = PARSE_COM_QUERY_RESULT;
+				}
 			}
+
+			network_mysqld_eof_packet_free(eof_packet);
 #else
 			query->state = PARSE_COM_QUERY_RESULT;
 #endif
@@ -146,17 +160,23 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 		switch (status) {
 		case MYSQLD_PACKET_EOF:
 			if (packet->data->len == 9) {
-				err = err || network_mysqld_proto_get_int16(packet, &query->warning_count);
-				err = err || network_mysqld_proto_get_int16(packet, &query->server_status);
-				if (err) break;
+				eof_packet = network_mysqld_eof_packet_new();
 
-				query->was_resultset = 1;
+				err = err || network_mysqld_proto_get_eof_packet(packet, eof_packet);
 
-				if (query->server_status & SERVER_MORE_RESULTS_EXISTS) {
-					query->state = PARSE_COM_QUERY_INIT;
-				} else {
-					is_finished = 1;
+				if (!err) {
+					query->was_resultset = 1;
+					query->server_status = eof_packet->server_status;
+					query->warning_count = eof_packet->warnings;
+
+					if (query->server_status & SERVER_MORE_RESULTS_EXISTS) {
+						query->state = PARSE_COM_QUERY_INIT;
+					} else {
+						is_finished = 1;
+					}
 				}
+
+				network_mysqld_eof_packet_free(eof_packet);
 			}
 
 			break;
@@ -190,19 +210,22 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 		case MYSQLD_PACKET_ERR:
 		case MYSQLD_PACKET_EOF:
 		default:
-			g_error("%s.%d: COM_QUERY,should be (OK), got: %02x",
-					__FILE__, __LINE__,
+			g_critical("%s: COM_QUERY,should be (OK), got: 0x%02x",
+					G_STRLOC,
 					status);
 
+			err = 1;
 
 			break;
 		}
 
 		break;
 	default:
-		g_error("%s.%d: unknown state in COM_QUERY: %d", 
-				__FILE__, __LINE__,
+		g_critical("%s: unknown state in COM_QUERY: %d", 
+				G_STRLOC,
 				query->state);
+		err = 1;
+		break;
 	}
 
 	if (err) return -1;
@@ -382,6 +405,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 	guint8 status;
 	int is_finished = 0;
 	int err = 0;
+	network_mysqld_eof_packet_t *eof_packet;
 	
 	err = err || network_mysqld_proto_skip_network_header(packet);
 	if (err) return -1;
@@ -481,9 +505,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		if (err) return -1;
 
 		switch (status) {
-		case MYSQLD_PACKET_EOF: {
-			network_mysqld_eof_packet_t *eof_packet;
-
+		case MYSQLD_PACKET_EOF: 
 			eof_packet = network_mysqld_eof_packet_new();
 
 			err = err || network_mysqld_proto_get_eof_packet(packet, eof_packet);
@@ -496,7 +518,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 
 			network_mysqld_eof_packet_free(eof_packet);
 
-			break; }
+			break; 
 		case MYSQLD_PACKET_ERR:
 			is_finished = 1;
 			break;
