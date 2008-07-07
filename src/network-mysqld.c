@@ -256,10 +256,16 @@ void network_mysqld_priv_free(chassis *chas, chassis_private *priv) {
 }
 
 int network_mysqld_init(chassis *srv) {
+	lua_State *L;
 	srv->priv_free = network_mysqld_priv_free;
 	srv->priv_shutdown = network_mysqld_priv_shutdown;
 	srv->priv      = network_mysqld_priv_init();
 
+	/* store the pointer to the chassis in the Lua registry */
+	L = srv->priv->sc->L;
+	lua_pushlightuserdata(L, (void*)srv);
+	lua_setfield(L, LUA_REGISTRYINDEX, "chassis");
+	
 	return 0;
 }
 
