@@ -25,6 +25,7 @@
 #include "glib-ext.h"
 
 #include "network-mysqld.h"
+#include "network-mysqld-packet.h"
 #include "network-mysqld-lua.h"
 
 #include "network-conn-pool.h"

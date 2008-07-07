@@ -82,4 +82,75 @@ NETWORK_API int network_mysqld_proto_get_com_init_db_result(network_packet *pack
 NETWORK_API int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld_con *con);
 NETWORK_API GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields);
 
+typedef struct {
+	guint64 affected_rows;
+	guint64 insert_id;
+	guint16 server_status;
+	guint16 warnings;
+
+	gchar *msg;
+} network_mysqld_ok_packet_t;
+
+NETWORK_API network_mysqld_ok_packet_t *network_mysqld_ok_packet_new(void);
+NETWORK_API void network_mysqld_ok_packet_free(network_mysqld_ok_packet_t *udata);
+
+NETWORK_API int network_mysqld_proto_get_ok_packet(network_packet *packet, network_mysqld_ok_packet_t *ok_packet);
+NETWORK_API int network_mysqld_proto_append_ok_packet(GString *packet, network_mysqld_ok_packet_t *ok_packet);
+
+typedef struct {
+	GString *errmsg;
+	GString *sqlstate;
+
+	guint16 errcode;
+} network_mysqld_err_packet_t;
+
+NETWORK_API network_mysqld_err_packet_t *network_mysqld_err_packet_new(void);
+NETWORK_API void network_mysqld_err_packet_free(network_mysqld_err_packet_t *udata);
+
+NETWORK_API int network_mysqld_proto_get_err_packet(network_packet *packet, network_mysqld_err_packet_t *err_packet);
+NETWORK_API int network_mysqld_proto_append_err_packet(GString *packet, network_mysqld_err_packet_t *err_packet);
+
+typedef struct {
+	guint16 server_status;
+	guint16 warnings;
+} network_mysqld_eof_packet_t;
+
+NETWORK_API network_mysqld_eof_packet_t *network_mysqld_eof_packet_new(void);
+NETWORK_API void network_mysqld_eof_packet_free(network_mysqld_eof_packet_t *udata);
+
+NETWORK_API int network_mysqld_proto_get_eof_packet(network_packet *packet, network_mysqld_eof_packet_t *eof_packet);
+NETWORK_API int network_mysqld_proto_append_eof_packet(GString *packet, network_mysqld_eof_packet_t *eof_packet);
+
+struct network_mysqld_auth_challenge {
+	guint8    protocol_version;
+	gchar    *server_version_str;
+	guint32   server_version;
+	guint32   thread_id;
+	GString  *challenge;
+	guint16   capabilities;
+	guint8    charset;
+	guint16   server_status;
+};
+
+NETWORK_API network_mysqld_auth_challenge *network_mysqld_auth_challenge_new(void);
+NETWORK_API void network_mysqld_auth_challenge_free(network_mysqld_auth_challenge *shake);
+NETWORK_API int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysqld_auth_challenge *shake);
+NETWORK_API int network_mysqld_proto_append_auth_challenge(GString *packet, network_mysqld_auth_challenge *shake);
+NETWORK_API void network_mysqld_auth_challenge_set_challenge(network_mysqld_auth_challenge *shake);
+
+struct network_mysqld_auth_response {
+	guint32  capabilities;
+	guint32  max_packet_size;
+	guint8   charset;
+	GString *username;
+	GString *response;
+	GString *database;
+};
+
+NETWORK_API network_mysqld_auth_response *network_mysqld_auth_response_new(void);
+NETWORK_API void network_mysqld_auth_response_free(network_mysqld_auth_response *auth);
+NETWORK_API int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_auth_response *auth);
+NETWORK_API int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysqld_auth_response *auth);
+NETWORK_API network_mysqld_auth_response *network_mysqld_auth_response_copy(network_mysqld_auth_response *src);
+
 #endif

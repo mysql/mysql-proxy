@@ -74,10 +74,10 @@ PROXY_PORT		  	= os.getenv("PROXY_PORT")		   or "14040"
 PROXY_MASTER_PORT   = os.getenv("PROXY_MASTER_PORT")	or "14050"
 PROXY_SLAVE_PORT	= os.getenv("PROXY_SLAVE_PORT")	 	or "14060"
 PROXY_CHAIN_PORT	= os.getenv("PROXY_CHAIN_PORT")	 	or "14070"
-ADMIN_PORT		  	= os.getenv("ADMIN_PORT")		   	or "14041"
-ADMIN_MASTER_PORT   = os.getenv("ADMIN_MASTER_PORT")	or "14051"
-ADMIN_SLAVE_PORT	= os.getenv("ADMIN_SLAVE_PORT")	 	or "14061"
-ADMIN_CHAIN_PORT	= os.getenv("ADMIN_CHAIN_PORT")	 	or "14071"
+ADMIN_PORT		  	= os.getenv("ADMIN_PORT")		   	or "14045"
+ADMIN_MASTER_PORT   = os.getenv("ADMIN_MASTER_PORT")	or "14055"
+ADMIN_SLAVE_PORT	= os.getenv("ADMIN_SLAVE_PORT")	 	or "14065"
+ADMIN_CHAIN_PORT	= os.getenv("ADMIN_CHAIN_PORT")	 	or "14075"
 -- local PROXY_TMP_LUASCRIPT = os.getenv("PROXY_TMP_LUASCRIPT") or "/tmp/proxy.tmp.lua"
 
 local srcdir		 = os.getenv("srcdir")		 	or testdir .. "/"
@@ -216,8 +216,18 @@ function options_tostring(tbl, sep)
 
 	local s = ""
 	for k, v in pairs(tbl) do
-		local enc_value = v:gsub("\\", "\\\\"):gsub("\"", "\\\"")
-		s = s .. "--" .. k .. "=\"" .. enc_value .. "\" "
+		local values
+		-- if the value is a table, repeat the option
+		if type(v) == "table" then
+			values = v
+		else
+			values = { v }
+		end
+
+		for tk, tv in pairs(values) do
+			local enc_value = tv:gsub("\\", "\\\\"):gsub("\"", "\\\"")
+			s = s .. "--" .. k .. "=\"" .. enc_value .. "\" "
+		end
 	end
 	-- print_verbose(" option: " .. s)
 
@@ -645,30 +655,54 @@ end
 -- default backend server, and the second one (with default ports)
 -- is pointing at the first proxy
 --
--- @param first_lua_script
+--   client -> proxy -> backend_proxy -> [ mysql-backend ]
+--
+-- usually we use it to mock a server with a lua script (...-mock.lua) and
+-- the script under test in the proxy (...-test.lua)
+--
+-- in case you want to start several backend_proxies, just provide a array
+-- as first param
+--
+-- @param backend_lua_script
 -- @param second_lua_script 
 -- @param use_replication uses a master proxy as backend 
-function chain_proxy (first_lua_script, second_lua_script, use_replication)
-	first_proxy_options = {
+function chain_proxy (backend_lua_scripts, second_lua_script, use_replication)
+	local backends = { }
+
+	if type(backend_lua_scripts) == "table" then
+		backends = backend_lua_scripts
+	else
+		backends = { backend_lua_scripts }
+	end
+
+	local backend_addresses = { }
+
+	for i, backend_lua_script in ipairs(backends) do
+		backend_addresses[i] = PROXY_HOST .. ":" .. (PROXY_CHAIN_PORT + i - 1)
+
+		backend_proxy_options = {
 			["proxy-backend-addresses"] = MYSQL_HOST .. ":" .. MYSQL_PORT,
-			["proxy-address"]		   = PROXY_HOST .. ":" .. PROXY_CHAIN_PORT,
-			["admin-address"]		   = PROXY_HOST .. ":" .. ADMIN_CHAIN_PORT,
-			["pid-file"]				= PROXY_CHAIN_PIDFILE,
-			["proxy-lua-script"]		= first_lua_script or DEFAULT_SCRIPT_FILENAME,
+			["proxy-address"]		   = backend_addresses[i],
+			["admin-address"]		   = PROXY_HOST .. ":" .. (ADMIN_CHAIN_PORT + i - 1),
+			["pid-file"]				= PROXY_CHAIN_PIDFILE .. i,
+			["proxy-lua-script"]		= backend_lua_script or DEFAULT_SCRIPT_FILENAME,
 			["plugin-dir"]			= PROXY_LIBPATH,
 			["basedir"]					= PROXY_TEST_BASEDIR,
-	}
-	-- 
-	-- if replication was not started, then it is started here
-	--
-	if use_replication and (use_replication == true) then
-		if (proxy_list['master'] == nil) then
-			simulate_replication()
+		}
+		-- 
+		-- if replication was not started, then it is started here
+		--
+		if use_replication and (use_replication == true) then
+			if (proxy_list['master'] == nil) then
+				simulate_replication()
+			end
+			backend_proxy_options["proxy-backend-addresses"] = PROXY_HOST .. ':' .. PROXY_MASTER_PORT
 		end
-		first_proxy_options["proxy-backend-addresses"] = PROXY_HOST .. ':' .. PROXY_MASTER_PORT
+		start_proxy('backend_proxy' .. i, backend_proxy_options) 
 	end
+
 	second_proxy_options = {
-			["proxy-backend-addresses"] = MYSQL_HOST .. ":" .. PROXY_CHAIN_PORT ,
+			["proxy-backend-addresses"] = backend_addresses ,
 			["proxy-address"]		   	= PROXY_HOST .. ":" .. PROXY_PORT,
 			["admin-address"]		   	= PROXY_HOST .. ":" .. ADMIN_PORT,
 			["pid-file"]				= PROXY_PIDFILE,
@@ -676,7 +710,6 @@ function chain_proxy (first_lua_script, second_lua_script, use_replication)
 			["plugin-dir"]			= PROXY_LIBPATH,
 			["basedir"]					= PROXY_TEST_BASEDIR,
 	}
-	start_proxy('first_proxy', first_proxy_options) 
 	start_proxy('second_proxy',second_proxy_options) 
 end
 

@@ -400,12 +400,16 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	network_socket *recv_sock, *send_sock;
 	network_mysqld_auth_challenge *challenge;
 	GString *challenge_packet;
+	int err = 0;
 
 	send_sock = con->client;
 	recv_sock = con->server;
 
  	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
 	packet.offset = 0;
+	
+	err = err || network_mysqld_proto_skip_network_header(&packet);
+	if (err) NETWORK_SOCKET_ERROR;
 
 	challenge = network_mysqld_auth_challenge_new();
 	if (network_mysqld_proto_get_auth_challenge(&packet, challenge)) {
@@ -578,18 +582,22 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		 */
 		if (!con->server) {
 			GString *auth_resp_packet;
+			network_mysqld_ok_packet_t *ok_packet;
 
 			con->state = CON_STATE_SEND_AUTH_RESULT;
 		
 			chunk->data = NULL;
 
 			auth_resp_packet = g_string_new(NULL);
+			ok_packet = network_mysqld_ok_packet_new();
+			ok_packet->server_status = SERVER_STATUS_AUTOCOMMIT;
 
-			network_mysqld_proto_append_ok_packet(auth_resp_packet, 0, 0, 2 /* we should track this flag in the pool */, 0);
+			network_mysqld_proto_append_ok_packet(auth_resp_packet, ok_packet);
 
 			network_mysqld_queue_append(recv_sock->send_queue, 
 					S(auth_resp_packet), 2);
 
+			network_mysqld_ok_packet_free(ok_packet);
 			g_string_free(auth_resp_packet, TRUE);
 
 			break;
@@ -639,9 +647,25 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 				if (!g_string_equal(con->client->response->username, con->server->response->username) ||
 				    !g_string_equal(con->client->response->response, con->server->response->response)) {
-					network_mysqld_proto_append_error_packet(auth_resp, C("(proxy-pool) login failed"), ER_ACCESS_DENIED_ERROR, "28000");
+					network_mysqld_err_packet_t *err_packet;
+
+					err_packet = network_mysqld_err_packet_new();
+					g_string_assign_len(err_packet->errmsg, C("(proxy-pool) login failed"));
+					g_string_assign_len(err_packet->sqlstate, C("28000"));
+					err_packet->errcode = ER_ACCESS_DENIED_ERROR;
+
+					network_mysqld_proto_append_err_packet(auth_resp, err_packet);
+
+					network_mysqld_err_packet_free(err_packet);
 				} else {
-					network_mysqld_proto_append_ok_packet(auth_resp, 0, 0, 2 /* we should track this flag in the pool */, 0);
+					network_mysqld_ok_packet_t *ok_packet;
+
+					ok_packet = network_mysqld_ok_packet_new();
+					ok_packet->server_status = SERVER_STATUS_AUTOCOMMIT;
+
+					network_mysqld_proto_append_ok_packet(auth_resp, ok_packet);
+					
+					network_mysqld_ok_packet_free(ok_packet);
 				}
 
 				network_mysqld_queue_append(recv_sock->send_queue, 

@@ -102,6 +102,7 @@ static int network_mysqld_resultset_master_status(chassis *UNUSED_PARAM(chas), n
 	network_socket *sock = con->client;
 	plugin_con_state *st = con->plugin_con_state;
 	GPtrArray *fields;
+	int err = 0;
 
 	/* scan the resultset */
 	chunk = sock->send_queue->chunks->head;
@@ -112,19 +113,20 @@ static int network_mysqld_resultset_master_status(chassis *UNUSED_PARAM(chas), n
 	/* a data row */
 	while (NULL != (chunk = chunk->next)) {
 		network_packet packet;
-		gint8 status;
+		guint8 status;
 
 		packet.data = chunk->data;
 		packet.offset = 0;
 
-		status = network_mysqld_proto_get_int8(&packet);
+		err = err || network_mysqld_proto_get_int8(&packet, &status);
 
 		/* if we find the 2nd EOF packet we are done */
 		if (status == MYSQLD_PACKET_EOF &&
 		    packet.data->len < 10) break;
 
 		for (i = 0; i < fields->len; i++) {
-			guint64 field_len = network_mysqld_proto_get_lenenc_int(&packet);
+			guint64 field_len;
+			err = err || network_mysqld_proto_get_lenenc_int(&packet, &field_len);
 
 			if (i == 0) {
 				g_assert(field_len > 0);
@@ -132,7 +134,7 @@ static int network_mysqld_resultset_master_status(chassis *UNUSED_PARAM(chas), n
 				
 				if (st->binlog_file) g_free(st->binlog_file);
 
-				st->binlog_file = network_mysqld_proto_get_string_len(&packet, field_len);
+				err = err || network_mysqld_proto_get_string_len(&packet, &st->binlog_file, field_len);
 			} else if (i == 1) {
 				/* is a string */
 				gchar *num;
@@ -141,10 +143,10 @@ static int network_mysqld_resultset_master_status(chassis *UNUSED_PARAM(chas), n
 
 				st->binlog_pos = 0;
 
-				num = network_mysqld_proto_get_string_len(&packet, field_len);
+				err = err || network_mysqld_proto_get_string_len(&packet, &num, field_len);
 				st->binlog_pos = g_ascii_strtoull(num, NULL, 10);
 			} else {
-				network_mysqld_proto_skip(&packet, field_len);
+				err = err || network_mysqld_proto_skip(&packet, field_len);
 			}
 		}
 
@@ -152,7 +154,7 @@ static int network_mysqld_resultset_master_status(chassis *UNUSED_PARAM(chas), n
 				st->binlog_file, st->binlog_pos);
 	}
 
-	return 0;
+	return err ? -1 : 0;
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
@@ -163,6 +165,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 	network_mysqld_auth_challenge *shake;
 	network_mysqld_auth_response  *auth;
 	GString *auth_packet;
+	int err = 0;
 	
 	recv_sock = con->server;
 	send_sock = con->server;
@@ -182,6 +185,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 
 		return NETWORK_SOCKET_ERROR;
 	}
+
+	err = err || network_mysqld_proto_skip_network_header(&packet);
+	if (err) NETWORK_SOCKET_ERROR;
 
 	shake = network_mysqld_auth_challenge_new();
 	network_mysqld_proto_get_auth_challenge(&packet, shake);
@@ -238,7 +244,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 
 	/* the auth should be fine */
-	switch (packet->str[NET_HEADER_SIZE + 0]) {
+	switch ((guint8)packet->str[NET_HEADER_SIZE + 0]) {
 	case MYSQLD_PACKET_ERR:
 		g_assert(packet->str[NET_HEADER_SIZE + 3] == '#');
 
@@ -299,7 +305,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 	network_socket *recv_sock, *send_sock;
 	int is_finished = 0;
 	plugin_con_state *st = con->plugin_con_state;
-	gint8 status;
+	guint8 status;
+	int err = 0;
 
 	recv_sock = con->server;
 	send_sock = con->client;
@@ -324,9 +331,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 	case COM_BINLOG_DUMP:
 		packet.offset = 0;
 
-		network_mysqld_proto_skip_network_header(&packet);
-
-		status = network_mysqld_proto_get_int8(&packet);
+		err = err || network_mysqld_proto_skip_network_header(&packet);
+		err = err || network_mysqld_proto_get_int8(&packet, &status);
 
 		switch (status) {
 		case MYSQLD_PACKET_OK: {
@@ -528,48 +534,6 @@ static GOptionEntry * network_mysqld_replicant_plugin_get_options(chassis_plugin
 	
 	return config_entries;
 }
-
-#if 1 
-static void dump_str(const char *msg, const unsigned char *s, size_t len) {
-	GString *hex;
-	size_t i;
-		
-       	hex = g_string_new(NULL);
-
-	for (i = 0; i < len; i++) {
-		g_string_append_printf(hex, "%02x", s[i]);
-
-		if ((i + 1) % 16 == 0) {
-			int j;
-			g_string_append(hex, "  ");
-			for (j = i - 15; j <= i; j++) {
-				g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
-			}
-			g_string_append(hex, "\n  ");
-		} else {
-			g_string_append_c(hex, ' ');
-		}
-	}
-
-	if (i % 16 != 0) {
-		/* fill up the line */
-		int j;
-
-		for (j = 0; j < 16 - (i % 16); j++) {
-			g_string_append(hex, "   ");
-		}
-
-		g_string_append(hex, " ");
-		for (j = i - (len % 16); j <= i; j++) {
-			g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
-		}
-	}
-
-	g_message("(%s):\n  %s", msg, hex->str);
-
-	g_string_free(hex, TRUE);
-}
-#endif
 
 int network_mysqld_binlog_event_print(network_mysqld_binlog_event *event) {
 	guint i;
@@ -777,7 +741,7 @@ int replicate_binlog_dump_file(const char *filename) {
 		g_assert_cmpint(packet->data->len, ==, event->event_size);
 		
 		if (network_mysqld_proto_get_binlog_event(packet, binlog, event)) {
-			dump_str(G_STRLOC, packet->data->str + 19, packet->data->len - 19);
+			g_debug_hexdump(G_STRLOC, packet->data->str + 19, packet->data->len - 19);
 		} else if (network_mysqld_binlog_event_print(event)) {
 			/* ignore it */
 		}

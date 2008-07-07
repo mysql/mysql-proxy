@@ -3,6 +3,7 @@
 #include <glib.h>
 
 #include "network-conn-pool.h"
+#include "network-mysqld-packet.h"
 #include "glib-ext.h"
 #include "sys-pedantic.h"
 

@@ -60,6 +60,7 @@
 
 #include "network-socket.h"
 #include "network-mysqld-proto.h"
+#include "network-mysqld-packet.h"
 
 network_queue *network_queue_init() {
 	network_queue *queue;

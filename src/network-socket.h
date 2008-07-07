@@ -40,8 +40,6 @@
 #include <glib.h>
 #include <event.h>
 
-#include "network-mysqld-proto.h"
-
 typedef enum {
 	NETWORK_SOCKET_SUCCESS,
 	NETWORK_SOCKET_WAIT_FOR_EVENT,
@@ -70,6 +68,9 @@ typedef struct {
 
 	socklen_t len;
 } network_address;
+
+typedef struct network_mysqld_auth_challenge network_mysqld_auth_challenge;
+typedef struct network_mysqld_auth_response network_mysqld_auth_response;
 
 typedef struct {
 	int fd;             /**< socket-fd */

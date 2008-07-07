@@ -17,6 +17,7 @@
 #include "lua-env.h"
 
 #include "network-mysqld.h"
+#include "network-mysqld-proto.h"
 #include "network-mysqld-lua.h"
 #include "network-socket-lua.h"
 #include "network-backend-lua.h"

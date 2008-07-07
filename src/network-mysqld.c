@@ -163,6 +163,7 @@
 #include "network-conn-pool.h"
 #include "chassis-mainloop.h"
 #include "lua-scope.h"
+#include "glib-ext.h"
 
 #ifdef HAVE_WRITEV
 #define USE_BUFFERED_NETIO 
@@ -362,12 +363,20 @@ int network_mysqld_queue_append(network_queue *queue, const char *data, size_t l
  */
 int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings ) {
 	GString *packet = g_string_new(NULL);
+	network_mysqld_ok_packet_t *ok_packet;
 
-	network_mysqld_proto_append_ok_packet(packet, affected_rows, insert_id, server_status, warnings);
+	ok_packet = network_mysqld_ok_packet_new();
+	ok_packet->affected_rows = affected_rows;
+	ok_packet->insert_id     = insert_id;
+	ok_packet->server_status = server_status;
+	ok_packet->warnings      = warnings;
+
+	network_mysqld_proto_append_ok_packet(packet, ok_packet);
 	
 	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
 
 	g_string_free(packet, TRUE);
+	network_mysqld_ok_packet_free(ok_packet);
 
 	return 0;
 }
@@ -401,13 +410,20 @@ int network_mysqld_con_send_ok(network_socket *con) {
  */
 int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate) {
 	GString *packet;
-	
-	packet = g_string_sized_new(10 + errmsg_len);
+	network_mysqld_err_packet_t *err_packet;
 
-	network_mysqld_proto_append_error_packet(packet, errmsg, errmsg_len, errorcode, sqlstate);
+	packet = g_string_sized_new(10 + errmsg_len);
+	
+	err_packet = network_mysqld_err_packet_new();
+	err_packet->errcode = errorcode;
+	if (errmsg) g_string_assign_len(err_packet->errmsg, errmsg, errmsg_len);
+	if (sqlstate) g_string_assign_len(err_packet->sqlstate, sqlstate, strlen(sqlstate));
+
+	network_mysqld_proto_append_err_packet(packet, err_packet);
 
 	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
 
+	network_mysqld_err_packet_free(err_packet);
 	g_string_free(packet, TRUE);
 
 	return 0;

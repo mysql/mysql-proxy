@@ -53,31 +53,31 @@
  * @return the decoded number
  *
  */
-guint64 network_mysqld_proto_get_lenenc_int(network_packet *packet) {
+int network_mysqld_proto_get_lenenc_int(network_packet *packet, guint64 *v) {
 	guint off = packet->offset;
 	guint64 ret = 0;
 	unsigned char *bytestream = (unsigned char *)packet->data->str;
 
-	g_assert_cmpint(off, <, packet->data->len);
+	g_return_val_if_fail(off < packet->data->len, -1);
 	
 	if (bytestream[off] < 251) { /* */
 		ret = bytestream[off];
 	} else if (bytestream[off] == 251) { /* NULL in row-data */
 		ret = bytestream[off];
 	} else if (bytestream[off] == 252) { /* 2 byte length*/
-		g_assert(off + 2 < packet->data->len);
+		g_return_val_if_fail(off + 2 < packet->data->len, -1);
 		ret = (bytestream[off + 1] << 0) | 
 			(bytestream[off + 2] << 8) ;
 		off += 2;
 	} else if (bytestream[off] == 253) { /* 3 byte */
-		g_assert(off + 3 < packet->data->len);
+		g_return_val_if_fail(off + 3 < packet->data->len, -1);
 		ret = (bytestream[off + 1]   <<  0) | 
 			(bytestream[off + 2] <<  8) |
 			(bytestream[off + 3] << 16);
 
 		off += 3;
 	} else if (bytestream[off] == 254) { /* 8 byte */
-		g_assert(off + 8 < packet->data->len);
+		g_return_val_if_fail(off + 8 < packet->data->len, -1);
 		ret = (bytestream[off + 5] << 0) |
 			(bytestream[off + 6] << 8) |
 			(bytestream[off + 7] << 16) |
@@ -92,81 +92,21 @@ guint64 network_mysqld_proto_get_lenenc_int(network_packet *packet) {
 
 		off += 8;
 	} else {
-		g_error("%s.%d: bytestream[%d] is %d", 
-			__FILE__, __LINE__,
+		/* if we hit this place we complete have no idea about the protocol */
+		g_critical("%s: bytestream[%d] is %d", 
+			G_STRLOC,
 			off, bytestream[off]);
+
+		return -1;
 	}
 	off += 1;
 
 	packet->offset = off;
 
-	return ret;
-}
-
-/**
- * decode a OK packet from the network packet
- */
-int network_mysqld_proto_get_ok_packet(network_packet *packet, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg) {
-	guint64 dest;
-	guint field_count;
-
-	field_count = network_mysqld_proto_get_int8(packet);
-	g_assert(field_count == 0);
-
-	dest = network_mysqld_proto_get_lenenc_int(packet); if (affected) *affected = dest;
-	dest = network_mysqld_proto_get_lenenc_int(packet); if (insert_id) *insert_id = dest;
-
-	dest = network_mysqld_proto_get_int16(packet);      if (server_status) *server_status = dest;
-	dest = network_mysqld_proto_get_int16(packet);      if (warning_count) *warning_count = dest;
-
-	if (msg) *msg = NULL;
+	*v = ret;
 
 	return 0;
 }
-
-int network_mysqld_proto_append_ok_packet(GString *packet, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings) {
-	network_mysqld_proto_append_int8(packet, 0); /* no fields */
-	network_mysqld_proto_append_lenenc_int(packet, affected_rows);
-	network_mysqld_proto_append_lenenc_int(packet, insert_id);
-	network_mysqld_proto_append_int16(packet, server_status); /* autocommit */
-	network_mysqld_proto_append_int16(packet, warnings); /* no warnings */
-
-	return 0;
-}
-
-/**
- * create a ERR packet
- *
- * @note the sqlstate has to match the SQL standard. If no matching SQL state is known, leave it at NULL
- *
- * @param packet      network packet
- * @param errmsg      the error message
- * @param errmsg_len  byte-len of the error-message
- * @param errorcode   mysql error-code we want to send
- * @param sqlstate    if none-NULL, 5-char SQL state to send, if NULL, default SQL state is used
- *
- * @return 0 on success
- */
-int network_mysqld_proto_append_error_packet(GString *packet, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate) {
-	network_mysqld_proto_append_int8(packet, 0xff); /* ERR */
-	network_mysqld_proto_append_int16(packet, errorcode); /* errorcode */
-	g_string_append_c(packet, '#');
-	if (!sqlstate) {
-		g_string_append_len(packet, C("07000"));
-	} else {
-		g_string_append_len(packet, sqlstate, 5);
-	}
-
-	if (errmsg_len < 512) {
-		g_string_append_len(packet, errmsg, errmsg_len);
-	} else {
-		/* truncate the err-msg */
-		g_string_append_len(packet, errmsg, 512);
-	}
-
-	return 0;
-}
-
 
 /**
  * skip bytes in the network packet
@@ -178,10 +118,12 @@ int network_mysqld_proto_append_error_packet(GString *packet, const char *errmsg
  * @param size   bytes to skip
  *
  */
-void network_mysqld_proto_skip(network_packet *packet, gsize size) {
-	g_assert_cmpint(packet->offset + size, <=, packet->data->len);
+int network_mysqld_proto_skip(network_packet *packet, gsize size) {
+	if (packet->offset + size > packet->data->len) return -1;
 	
 	packet->offset += size;
+
+	return 0;
 }
 
 /**
@@ -192,21 +134,68 @@ void network_mysqld_proto_skip(network_packet *packet, gsize size) {
  * @param size   byte-len of the integer to decode
  * @return a the decoded integer
  */
-guint64 network_mysqld_proto_get_int_len(network_packet *packet, gsize size) {
+int network_mysqld_proto_peek_int_len(network_packet *packet, guint64 *v, gsize size) {
 	gsize i;
 	int shift;
-	guint64 r = 0;
+	guint32 r_l = 0, r_h = 0;
+	guchar *bytes = (guchar *)packet->data->str + packet->offset;
 
-	g_assert_cmpint(packet->offset, <, packet->data->len);
-	g_assert_cmpint(packet->offset + size, <=, packet->data->len);
-
-	for (i = 0, shift = 0; i < size; i++, shift += 8) {
-		r += (unsigned char)(packet->data->str[packet->offset + i]) << shift;
+	if (packet->offset > packet->data->len) {
+		return -1;
 	}
+	if (packet->offset + size > packet->data->len) {
+		return -1;
+	}
+
+	/**
+	 * for some reason left-shift > 32 leads to negative numbers 
+	 */
+	for (i = 0, shift = 0; 
+			i < size && i < 4; 
+			i++, shift += 8, bytes++) {
+		r_l |= ((*bytes) << shift);
+	}
+
+	for (shift = 0;
+			i < size; 
+			i++, shift += 8, bytes++) {
+		r_h |= ((*bytes) << shift);
+	}
+
+	*v = (((guint64)r_h << 32) | r_l);
+
+	return 0;
+}
+
+int network_mysqld_proto_get_int_len(network_packet *packet, guint64 *v, gsize size) {
+	int err = 0;
+
+	err = err || network_mysqld_proto_peek_int_len(packet, v, size);
+
+	if (err) return -1;
 
 	packet->offset += size;
 
-	return r;
+	return 0;
+}
+/**
+ * get a 8-bit integer from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return a the decoded integer
+ * @see network_mysqld_proto_get_int_len()
+ */
+int network_mysqld_proto_get_int8(network_packet *packet, guint8 *v) {
+	guint64 v64;
+
+	if (network_mysqld_proto_get_int_len(packet, &v64, 1)) return -1;
+
+	g_assert_cmpint(v64 & 0xff, ==, v64); /* check that we really only got one byte back */
+
+	*v = v64 & 0xff;
+
+	return 0;
 }
 
 /**
@@ -217,9 +206,18 @@ guint64 network_mysqld_proto_get_int_len(network_packet *packet, gsize size) {
  * @return a the decoded integer
  * @see network_mysqld_proto_get_int_len()
  */
-guint8 network_mysqld_proto_get_int8(network_packet *packet) {
-	return network_mysqld_proto_get_int_len(packet, 1);
+int network_mysqld_proto_peek_int8(network_packet *packet, guint8 *v) {
+	guint64 v64;
+
+	if (network_mysqld_proto_peek_int_len(packet, &v64, 1)) return -1;
+
+	g_assert_cmpint(v64 & 0xff, ==, v64); /* check that we really only got one byte back */
+
+	*v = v64 & 0xff;
+
+	return 0;
 }
+
 
 /**
  * get a 16-bit integer from the network packet
@@ -229,8 +227,16 @@ guint8 network_mysqld_proto_get_int8(network_packet *packet) {
  * @return a the decoded integer
  * @see network_mysqld_proto_get_int_len()
  */
-guint16 network_mysqld_proto_get_int16(network_packet *packet) {
-	return network_mysqld_proto_get_int_len(packet, 2);
+int network_mysqld_proto_get_int16(network_packet *packet, guint16 *v) {
+	guint64 v64;
+
+	if (network_mysqld_proto_get_int_len(packet, &v64, 2)) return -1;
+
+	g_assert_cmpint(v64 & 0xffff, ==, v64); /* check that we really only got two byte back */
+
+	*v = v64 & 0xffff;
+
+	return 0;
 }
 
 /**
@@ -241,8 +247,16 @@ guint16 network_mysqld_proto_get_int16(network_packet *packet) {
  * @return a the decoded integer
  * @see network_mysqld_proto_get_int_len()
  */
-guint32 network_mysqld_proto_get_int24(network_packet *packet) {
-	return network_mysqld_proto_get_int_len(packet, 3);
+int network_mysqld_proto_get_int24(network_packet *packet, guint32 *v) {
+	guint64 v64;
+
+	if (network_mysqld_proto_get_int_len(packet, &v64, 3)) return -1;
+
+	g_assert_cmpint(v64 & 0x00ffffff, ==, v64); /* check that we really only got two byte back */
+
+	*v = v64 & 0x00ffffff;
+
+	return 0;
 }
 
 
@@ -254,8 +268,14 @@ guint32 network_mysqld_proto_get_int24(network_packet *packet) {
  * @return a the decoded integer
  * @see network_mysqld_proto_get_int_len()
  */
-guint32 network_mysqld_proto_get_int32(network_packet *packet) {
-	return network_mysqld_proto_get_int_len(packet, 4);
+int network_mysqld_proto_get_int32(network_packet *packet, guint32 *v) {
+	guint64 v64;
+
+	if (network_mysqld_proto_get_int_len(packet, &v64, 4)) return -1;
+
+	*v = v64 & 0xffffffff;
+
+	return 0;
 }
 
 /**
@@ -266,8 +286,14 @@ guint32 network_mysqld_proto_get_int32(network_packet *packet) {
  * @return a the decoded integer
  * @see network_mysqld_proto_get_int_len()
  */
-guint64 network_mysqld_proto_get_int48(network_packet *packet) {
-	return network_mysqld_proto_get_int_len(packet, 6);
+int network_mysqld_proto_get_int48(network_packet *packet, guint64 *v) {
+	guint64 v64;
+
+	if (network_mysqld_proto_get_int_len(packet, &v64, 6)) return -1;
+
+	*v = v64;
+
+	return 0;
 }
 
 /**
@@ -278,8 +304,8 @@ guint64 network_mysqld_proto_get_int48(network_packet *packet) {
  * @return a the decoded integer
  * @see network_mysqld_proto_get_int_len()
  */
-guint64 network_mysqld_proto_get_int64(network_packet *packet) {
-	return network_mysqld_proto_get_int_len(packet, 8);
+int network_mysqld_proto_get_int64(network_packet *packet, guint64 *v) {
+	return network_mysqld_proto_get_int_len(packet, v, 8);
 }
 
 /**
@@ -290,16 +316,23 @@ guint64 network_mysqld_proto_get_int64(network_packet *packet) {
  * @param len    length of the string
  * @return the string (allocated) or NULL of len is 0
  */
-gchar *network_mysqld_proto_get_string_len(network_packet *packet, gsize len) {
+int network_mysqld_proto_get_string_len(network_packet *packet, gchar **s, gsize len) {
 	gchar *str;
 
-	if (len == 0) return NULL;
+	if (len == 0) {
+		*s = NULL;
+		return 0;
+	}
 
-	g_assert_cmpint(packet->offset, <, packet->data->len);
+	if (packet->offset > packet->data->len) {
+		return -1;
+	}
 	if (packet->offset + len > packet->data->len) {
-		g_error("%s: packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, 
+		g_critical("%s: packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, 
 				G_STRLOC,
 				packet->offset, len, packet->data->len);
+
+		return -1;
 	}
 
 	if (len) {
@@ -312,7 +345,9 @@ gchar *network_mysqld_proto_get_string_len(network_packet *packet, gsize len) {
 
 	packet->offset += len;
 
-	return str;
+	*s = str;
+
+	return 0;
 }
 
 /**
@@ -325,22 +360,24 @@ gchar *network_mysqld_proto_get_string_len(network_packet *packet, gsize len) {
  * @return the string
  * @see network_mysqld_proto_get_string_len(), network_mysqld_proto_get_lenenc_int()
  */
-gchar *network_mysqld_proto_get_lenenc_string(network_packet *packet, guint64 *_len) {
+int network_mysqld_proto_get_lenenc_string(network_packet *packet, gchar **s, guint64 *_len) {
 	guint64 len;
 
 	if (packet->offset >= packet->data->len) {
 		g_debug_hexdump(G_STRLOC, S(packet->data));
-		CRASHME();
+		return -1;
 	}	
-	g_assert_cmpint(packet->offset, <, packet->data->len);
+	if (packet->offset >= packet->data->len) {
+		return -1;
+	}
 
-	len = network_mysqld_proto_get_lenenc_int(packet);
+	if (network_mysqld_proto_get_lenenc_int(packet, &len)) return -1;
 	
-	g_assert_cmpint(packet->offset + len, <=, packet->data->len);
+	if (packet->offset + len > packet->data->len) return -1;
 
 	if (_len) *_len = len;
 	
-	return network_mysqld_proto_get_string_len(packet, len);
+	return network_mysqld_proto_get_string_len(packet, s, len);
 }
 
 /**
@@ -351,27 +388,34 @@ gchar *network_mysqld_proto_get_lenenc_string(network_packet *packet, guint64 *_
  * @return       the string
  * @see network_mysqld_proto_get_string_len()
  */
-gchar *network_mysqld_proto_get_string(network_packet *packet) {
-	guint len;
-	gchar *r = NULL;
+int network_mysqld_proto_get_string(network_packet *packet, gchar **s) {
+	guint64 len;
+	int err = 0;
 
 	for (len = 0; packet->offset + len < packet->data->len && *(packet->data->str + packet->offset + len); len++);
 
-	g_assert(*(packet->data->str + packet->offset + len) == '\0'); /* this has to be a \0 */
+	if (*(packet->data->str + packet->offset + len) != '\0') {
+		/* this has to be a \0 */
+		return -1;
+	}
 
 	if (len > 0) {
-		g_assert(packet->offset < packet->data->len);
-		g_assert(packet->offset + len <= packet->data->len);
+		if (packet->offset >= packet->data->len) {
+			return -1;
+		}
+		if (packet->offset + len > packet->data->len) {
+			return -1;
+		}
 
 		/**
 		 * copy the string w/o the NUL byte 
 		 */
-		r = network_mysqld_proto_get_string_len(packet, len);
+		err = err || network_mysqld_proto_get_string_len(packet, s, len);
 	}
 
-	packet->offset += 1;
+	err = err || network_mysqld_proto_skip(packet, 1);
 
-	return r;
+	return err ? -1 : 0;
 }
 
 
@@ -384,7 +428,7 @@ gchar *network_mysqld_proto_get_string(network_packet *packet) {
  * @param out    a GString which carries the string
  * @return       a pointer to the string in out
  */
-gchar *network_mysqld_proto_get_gstring_len(network_packet *packet, gsize len, GString *out) {
+int network_mysqld_proto_get_gstring_len(network_packet *packet, gsize len, GString *out) {
 	g_string_truncate(out, 0);
 
 	if (len) {
@@ -397,7 +441,7 @@ gchar *network_mysqld_proto_get_gstring_len(network_packet *packet, gsize len, G
 		packet->offset += len;
 	}
 
-	return out->str;
+	return 0;
 }
 
 /**
@@ -410,9 +454,9 @@ gchar *network_mysqld_proto_get_gstring_len(network_packet *packet, gsize len, G
  *
  * @see network_mysqld_proto_get_gstring_len()
  */
-gchar *network_mysqld_proto_get_gstring(network_packet *packet, GString *out) {
-	guint len;
-	gchar *r = NULL;
+int network_mysqld_proto_get_gstring(network_packet *packet, GString *out) {
+	guint64 len;
+	int err = 0;
 
 	for (len = 0; packet->offset + len < packet->data->len && *(packet->data->str + packet->offset + len); len++);
 
@@ -422,13 +466,13 @@ gchar *network_mysqld_proto_get_gstring(network_packet *packet, GString *out) {
 		g_assert(packet->offset < packet->data->len);
 		g_assert(packet->offset + len <= packet->data->len);
 
-		r = network_mysqld_proto_get_gstring_len(packet, len, out);
+		err = err || network_mysqld_proto_get_gstring_len(packet, len, out);
 	}
 
 	/* skip the \0 */
-	packet->offset += 1;
+	err = err || network_mysqld_proto_skip(packet, 1);
 
-	return r;
+	return err ? -1 : 0;
 }
 
 /**
@@ -441,12 +485,14 @@ gchar *network_mysqld_proto_get_gstring(network_packet *packet, GString *out) {
  *
  * @see network_mysqld_proto_get_gstring_len(), network_mysqld_proto_get_lenenc_int()
  */
-gchar *network_mysqld_proto_get_lenenc_gstring(network_packet *packet, GString *out) {
+int network_mysqld_proto_get_lenenc_gstring(network_packet *packet, GString *out) {
 	guint64 len;
+	int err = 0;
 
-	len = network_mysqld_proto_get_lenenc_int(packet);
+	err = err || network_mysqld_proto_get_lenenc_int(packet, &len);
+	err = err || network_mysqld_proto_get_gstring_len(packet, len, out);
 
-	return network_mysqld_proto_get_gstring_len(packet, len, out);
+	return err ? -1 : 0;
 }
 
 /**
@@ -643,7 +689,7 @@ static int network_mysqld_proto_append_int_len(GString *packet, guint64 num, gsi
  * @see network_mysqld_proto_append_int_len()
  */
 int network_mysqld_proto_append_int8(GString *packet, guint8 num) {
-	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
+	return network_mysqld_proto_append_int_len(packet, num, 1);
 }
 
 /**
@@ -655,8 +701,21 @@ int network_mysqld_proto_append_int8(GString *packet, guint8 num) {
  * @see network_mysqld_proto_append_int_len()
  */
 int network_mysqld_proto_append_int16(GString *packet, guint16 num) {
-	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
+	return network_mysqld_proto_append_int_len(packet, num, 2);
 }
+
+/**
+ * encode 24-bit integer in to a network packet
+ *
+ * @param packet  the MySQL network packet
+ * @param num     integer to encode
+ *
+ * @see network_mysqld_proto_append_int_len()
+ */
+int network_mysqld_proto_append_int24(GString *packet, guint32 num) {
+	return network_mysqld_proto_append_int_len(packet, num, 3);
+}
+
 
 /**
  * encode 32-bit integer in to a network packet
@@ -667,255 +726,34 @@ int network_mysqld_proto_append_int16(GString *packet, guint16 num) {
  * @see network_mysqld_proto_append_int_len()
  */
 int network_mysqld_proto_append_int32(GString *packet, guint32 num) {
-	return network_mysqld_proto_append_int_len(packet, num, sizeof(num));
+	return network_mysqld_proto_append_int_len(packet, num, 4);
 }
 
 /**
- * high-level functions
+ * encode 48-bit integer in to a network packet
+ *
+ * @param packet  the MySQL network packet
+ * @param num     integer to encode
+ *
+ * @see network_mysqld_proto_append_int_len()
  */
-
-network_mysqld_auth_challenge *network_mysqld_auth_challenge_new() {
-	network_mysqld_auth_challenge *shake;
-
-	shake = g_new0(network_mysqld_auth_challenge, 1);
-	
-	shake->challenge = g_string_new("");
-
-	return shake;
+int network_mysqld_proto_append_int48(GString *packet, guint64 num) {
+	return network_mysqld_proto_append_int_len(packet, num, 6);
 }
 
-void network_mysqld_auth_challenge_free(network_mysqld_auth_challenge *shake) {
-	if (!shake) return;
-
-	if (shake->server_version_str) g_free(shake->server_version_str);
-	if (shake->challenge)          g_string_free(shake->challenge, TRUE);
-
-	g_free(shake);
-}
-
-void network_mysqld_auth_challenge_set_challenge(network_mysqld_auth_challenge *shake) {
-	guint i;
-
-	/* 20 chars */
-
-	g_string_set_size(shake->challenge, 21);
-
-	for (i = 0; i < 20; i++) {
-		shake->challenge->str[i] = (94.0 * (rand() / (RAND_MAX + 1.0))) + 33; /* 33 - 127 are printable characters */
-	}
-
-	shake->challenge->len = 20;
-	shake->challenge->str[shake->challenge->len] = '\0';
-}
-
-int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysqld_auth_challenge *shake) {
-	int maj, min, patch;
-	gchar *scramble_1, *scramble_2;
-	guint8 status;
-
-	network_mysqld_proto_skip_network_header(packet);
-
-	status = network_mysqld_proto_get_int8(packet);
-	switch (status) {
-	case 0xff:
-		return -1;
-	case 0x0a:
-		break;
-	default:
-		g_critical("%s: unknown protocol", G_STRLOC);
-		return -1;
-	}
-
-	shake->server_version_str = network_mysqld_proto_get_string(packet);
-
-	if (3 != sscanf(shake->server_version_str, "%d.%d.%d%*s", &maj, &min, &patch)) {
-		/* can't parse the protocol */
-
-		g_critical("%s: protocol 10, but version number not parsable", G_STRLOC);
-
-		return -1;
-	}
-
-	/**
-	 * out of range 
-	 */
-	if (min   < 0 || min   > 100 ||
-	    patch < 0 || patch > 100 ||
-	    maj   < 0 || maj   > 10) {
-		g_critical("%s: protocol 10, but version number out of range", G_STRLOC);
-
-		return -1;
-	}
-
-	shake->server_version = 
-		maj * 10000 +
-		min *   100 +
-		patch;
-
-	shake->thread_id = network_mysqld_proto_get_int32(packet);
-
-	/**
-	 * get the scramble buf
-	 *
-	 * 8 byte here and some the other 12 somewhen later
-	 */	
-	scramble_1 = network_mysqld_proto_get_string_len(packet, 8);
-
-	network_mysqld_proto_skip(packet, 1);
-
-	shake->capabilities  = network_mysqld_proto_get_int16(packet);
-	shake->charset       = network_mysqld_proto_get_int8(packet);
-	shake->status        = network_mysqld_proto_get_int16(packet);
-	
-	network_mysqld_proto_skip(packet, 13);
-	
-	scramble_2 = network_mysqld_proto_get_string_len(packet, 12);
-	network_mysqld_proto_skip(packet, 1);
-
-	/**
-	 * scramble_1 + scramble_2 == scramble
-	 *
-	 * a len-encoded string
-	 */
-
-	g_string_truncate(shake->challenge, 0);
-	g_string_append_len(shake->challenge, scramble_1, 8);
-	g_string_append_len(shake->challenge, scramble_2, 12);
-
-	g_free(scramble_1);
-	g_free(scramble_2);
-
-	return 0;
-}
-
-int network_mysqld_proto_append_auth_challenge(GString *packet, network_mysqld_auth_challenge *shake) {
-	guint i;
-
-	network_mysqld_proto_append_int8(packet, 0x0a);
-	g_string_append(packet, shake->server_version_str);
-	network_mysqld_proto_append_int8(packet, 0x00);
-	network_mysqld_proto_append_int32(packet, shake->thread_id);
-	g_string_append_len(packet, shake->challenge->str, 8);
-	network_mysqld_proto_append_int8(packet, 0x00); /* filler */
-	network_mysqld_proto_append_int16(packet, shake->capabilities);
-	network_mysqld_proto_append_int8(packet, shake->charset);
-	network_mysqld_proto_append_int16(packet, shake->status);
-
-	for (i = 0; i < 13; i++) {
-		network_mysqld_proto_append_int8(packet, 0x00);
-	}
-
-	g_string_append_len(packet, shake->challenge->str + 8, 12);
-	network_mysqld_proto_append_int8(packet, 0x00);
-	
-	return 0;
-}
-
-network_mysqld_auth_response *network_mysqld_auth_response_new() {
-	network_mysqld_auth_response *auth;
-
-	auth = g_new0(network_mysqld_auth_response, 1);
-
-	/* we have to make sure scramble->buf is not-NULL to get
-	 * the "empty string" and not a "NULL-string"
-	 */
-	auth->response = g_string_new("");
-	auth->username = g_string_new("");
-	auth->database = g_string_new("");
-
-	return auth;
-}
-
-void network_mysqld_auth_response_free(network_mysqld_auth_response *auth) {
-	if (!auth) return;
-
-	if (auth->response)          g_string_free(auth->response, TRUE);
-	if (auth->username)          g_string_free(auth->username, TRUE);
-	if (auth->database)          g_string_free(auth->database, TRUE);
-
-	g_free(auth);
-}
-
-int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysqld_auth_response *auth) {
-	/* extract the default db from it */
-
-	/*
-	 * @\0\0\1
-	 *  \215\246\3\0 - client-flags
-	 *  \0\0\0\1     - max-packet-len
-	 *  \10          - charset-num
-	 *  \0\0\0\0
-	 *  \0\0\0\0
-	 *  \0\0\0\0
-	 *  \0\0\0\0
-	 *  \0\0\0\0
-	 *  \0\0\0       - fillers
-	 *  root\0       - username
-	 *  \24          - len of the scrambled buf
-	 *    ~    \272 \361 \346
-	 *    \211 \353 D    \351
-	 *    \24  \243 \223 \257
-	 *    \0   ^    \n   \254
-	 *    t    \347 \365 \244
-	 *  
-	 *  world\0
-	 */
-
-	auth->capabilities    = network_mysqld_proto_get_int32(packet);
-	auth->max_packet_size = network_mysqld_proto_get_int32(packet);
-	auth->charset         = network_mysqld_proto_get_int8(packet);
-
-	network_mysqld_proto_skip(packet, 23);
-	
-	network_mysqld_proto_get_gstring(packet, auth->username);
-	network_mysqld_proto_get_lenenc_gstring(packet, auth->response);
-
-	if (packet->offset != packet->data->len) {
-		network_mysqld_proto_get_gstring(packet, auth->database);
-	}
-
-	return 0;
-}
-
-network_mysqld_auth_response *network_mysqld_auth_response_copy(network_mysqld_auth_response *src) {
-	network_mysqld_auth_response *dst;
-
-	if (!src) return NULL;
-
-	dst = network_mysqld_auth_response_new();
-	dst->capabilities    = src->capabilities;
-	dst->max_packet_size = src->max_packet_size;
-	dst->charset         = src->charset;
-	g_string_assign_len(dst->username, S(src->username));
-	g_string_assign_len(dst->response, S(src->response));
-	g_string_assign_len(dst->database, S(src->database));
-
-	return dst;
-}
 
 /**
- * append the auth struct to the mysqld packet
+ * encode 64-bit integer in to a network packet
+ *
+ * @param packet  the MySQL network packet
+ * @param num     integer to encode
+ *
+ * @see network_mysqld_proto_append_int_len()
  */
-int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_auth_response *auth) {
-	int i;
-
-	network_mysqld_proto_append_int32(packet, auth->capabilities);
-	network_mysqld_proto_append_int32(packet, auth->max_packet_size); /* max-allowed-packet */
-	
-	network_mysqld_proto_append_int8(packet, auth->charset); /* charset */
-
-	for (i = 0; i < 23; i++) { /* filler */
-		network_mysqld_proto_append_int8(packet, 0x00);
-	}
-
-	g_string_append(packet, auth->username->str);
-	network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
-
-	/* scrambled password */
-	network_mysqld_proto_append_lenenc_string_len(packet, auth->response->str, auth->response->len);
-
-	return 0;
+int network_mysqld_proto_append_int64(GString *packet, guint64 num) {
+	return network_mysqld_proto_append_int_len(packet, num, 8);
 }
+
 
 /**
  * generate the response to the server challenge
@@ -997,9 +835,7 @@ void network_packet_free(network_packet *packet) {
 }
 
 int network_mysqld_proto_skip_network_header(network_packet *packet) {
-	network_mysqld_proto_skip(packet, NET_HEADER_SIZE);
-
-	return 0;
+	return network_mysqld_proto_skip(packet, NET_HEADER_SIZE);
 }
 
 /*@}*/

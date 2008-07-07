@@ -1,2 +1,3 @@
-chain_proxy('failover-mock.lua','failover-test.lua')
+-- start two backends with the same script
+chain_proxy({ 'failover-mock.lua', 'failover-mock.lua' }, 'failover-test.lua')
 

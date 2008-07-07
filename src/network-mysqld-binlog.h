@@ -151,15 +151,15 @@ typedef struct {
 			guint64 table_id;
 			guint16 flags;
 
-			guint32 db_name_len;
+			guint8 db_name_len;
 			gchar *db_name;
-			guint32 table_name_len;
+			guint8 table_name_len;
 			gchar *table_name;
 
-			guint32 columns_len;
+			guint64 columns_len;
 			gchar *columns;
 
-			guint32 metadata_len;
+			guint64 metadata_len;
 			gchar *metadata;
 
 			guint32 null_bits_len;
@@ -170,7 +170,7 @@ typedef struct {
 			guint64 table_id;
 			guint16 flags;
 			
-			guint32 columns_len;
+			guint64 columns_len;
 
 			guint32 used_columns_len;
 			gchar *used_columns;

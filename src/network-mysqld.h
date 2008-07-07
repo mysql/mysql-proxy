@@ -119,7 +119,7 @@ struct network_mysqld_con {
 
 	int is_listen_socket;
 
-	gint8 auth_result_state;
+	guint8 auth_result_state;
 
 	struct {
 		guint32 len;

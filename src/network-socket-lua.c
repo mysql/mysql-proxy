@@ -5,6 +5,7 @@
 #include "glib-ext.h"
 
 #include "network-socket.h"
+#include "network-mysqld-packet.h"
 #include "network-socket-lua.h"
 
 #define C(x) x, sizeof(x) - 1

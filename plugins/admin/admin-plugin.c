@@ -8,6 +8,7 @@
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
+#include "network-mysqld-packet.h"
 #include "network-mysqld-lua.h"
 
 #include "sys-pedantic.h"
@@ -150,7 +151,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_con_init) {
 	challenge->server_version     = 50099;
 	challenge->charset            = 0x08; /* latin1 */
 	challenge->capabilities       = CLIENT_PROTOCOL_41 | CLIENT_SECURE_CONNECTION | CLIENT_LONG_PASSWORD;
-	challenge->status             = SERVER_STATUS_AUTOCOMMIT;
+	challenge->server_status      = SERVER_STATUS_AUTOCOMMIT;
 	challenge->thread_id          = 1;
 
 	network_mysqld_auth_challenge_set_challenge(challenge); /* generate a random challenge */

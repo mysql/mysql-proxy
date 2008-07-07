@@ -25,12 +25,12 @@
 #endif
 
 #define MYSQLD_PACKET_OK   (0)
-#define MYSQLD_PACKET_RAW  (-6) /* used for proxy.response.type only */
-#define MYSQLD_PACKET_NULL (-5) /* 0xfb */
-                                /* 0xfc */
-                                /* 0xfd */
-#define MYSQLD_PACKET_EOF  (-2) /* 0xfe */
-#define MYSQLD_PACKET_ERR  (-1) /* 0xff */
+#define MYSQLD_PACKET_RAW  (0xfa) /* used for proxy.response.type only */
+#define MYSQLD_PACKET_NULL (0xfb) /* 0xfb */
+                                  /* 0xfc */
+                                  /* 0xfd */
+#define MYSQLD_PACKET_EOF  (0xfe) /* 0xfe */
+#define MYSQLD_PACKET_ERR  (0xff) /* 0xff */
 
 #define PACKET_LEN_UNSET   (0xffffffff)
 #define PACKET_LEN_MAX     (0x00ffffff)
@@ -46,36 +46,38 @@ NETWORK_API void network_packet_free(network_packet *packet);
 
 
 
-NETWORK_API void network_mysqld_proto_skip(network_packet *packet, gsize size);
+NETWORK_API int network_mysqld_proto_skip(network_packet *packet, gsize size);
 NETWORK_API int network_mysqld_proto_skip_network_header(network_packet *packet);
 
-NETWORK_API guint64 network_mysqld_proto_get_int_len(network_packet *packet, gsize size);
+NETWORK_API int network_mysqld_proto_get_int_len(network_packet *packet, guint64 *v, gsize size);
 
-NETWORK_API guint8 network_mysqld_proto_get_int8(network_packet *packet);
-NETWORK_API guint16 network_mysqld_proto_get_int16(network_packet *packet);
-NETWORK_API guint32 network_mysqld_proto_get_int24(network_packet *packet);
-NETWORK_API guint32 network_mysqld_proto_get_int32(network_packet *packet);
-NETWORK_API guint64 network_mysqld_proto_get_int48(network_packet *packet);
-NETWORK_API guint64 network_mysqld_proto_get_int64(network_packet *packet);
+NETWORK_API int network_mysqld_proto_get_int8(network_packet *packet, guint8 *v);
+NETWORK_API int network_mysqld_proto_get_int16(network_packet *packet, guint16 *v);
+NETWORK_API int network_mysqld_proto_get_int24(network_packet *packet, guint32 *v);
+NETWORK_API int network_mysqld_proto_get_int32(network_packet *packet, guint32 *v);
+NETWORK_API int network_mysqld_proto_get_int48(network_packet *packet, guint64 *v);
+NETWORK_API int network_mysqld_proto_get_int64(network_packet *packet, guint64 *v);
+
+NETWORK_API int network_mysqld_proto_peek_int_len(network_packet *packet, guint64 *v, gsize size);
+NETWORK_API int network_mysqld_proto_peek_int8(network_packet *packet, guint8 *v);
 
 NETWORK_API int network_mysqld_proto_append_int8(GString *packet, guint8 num);
 NETWORK_API int network_mysqld_proto_append_int16(GString *packet, guint16 num);
+NETWORK_API int network_mysqld_proto_append_int24(GString *packet, guint32 num);
 NETWORK_API int network_mysqld_proto_append_int32(GString *packet, guint32 num);
+NETWORK_API int network_mysqld_proto_append_int48(GString *packet, guint64 num);
+NETWORK_API int network_mysqld_proto_append_int64(GString *packet, guint64 num);
 
 
-NETWORK_API gchar *network_mysqld_proto_get_lenenc_string(network_packet *packet, guint64 *_len);
-NETWORK_API gchar *network_mysqld_proto_get_string_len(network_packet *packet, gsize len);
-NETWORK_API gchar *network_mysqld_proto_get_string(network_packet *packet);
+NETWORK_API int network_mysqld_proto_get_lenenc_string(network_packet *packet, gchar **s, guint64 *_len);
+NETWORK_API int network_mysqld_proto_get_string_len(network_packet *packet, gchar **s, gsize len);
+NETWORK_API int network_mysqld_proto_get_string(network_packet *packet, gchar **s);
 
-NETWORK_API gchar *network_mysqld_proto_get_lenenc_gstring(network_packet *packet, GString *out);
-NETWORK_API gchar *network_mysqld_proto_get_gstring_len(network_packet *packet, gsize len, GString *out);
-NETWORK_API gchar *network_mysqld_proto_get_gstring(network_packet *packet, GString *out);
+NETWORK_API int network_mysqld_proto_get_lenenc_gstring(network_packet *packet, GString *out);
+NETWORK_API int network_mysqld_proto_get_gstring_len(network_packet *packet, gsize len, GString *out);
+NETWORK_API int network_mysqld_proto_get_gstring(network_packet *packet, GString *out);
 
-NETWORK_API guint64 network_mysqld_proto_get_lenenc_int(network_packet *packet);
-
-NETWORK_API int network_mysqld_proto_get_ok_packet(network_packet *packet, guint64 *affected, guint64 *insert_id, int *server_status, int *warning_count, char **msg);
-NETWORK_API int network_mysqld_proto_append_ok_packet(GString *packet, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings);
-NETWORK_API int network_mysqld_proto_append_error_packet(GString *packet, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate);
+NETWORK_API int network_mysqld_proto_get_lenenc_int(network_packet *packet, guint64 *v);
 
 NETWORK_API MYSQL_FIELD *network_mysqld_proto_fielddef_new(void);
 NETWORK_API void network_mysqld_proto_fielddef_free(MYSQL_FIELD *fielddef);
@@ -90,37 +92,6 @@ NETWORK_API int network_mysqld_proto_append_lenenc_int(GString *packet, guint64 
 NETWORK_API int network_mysqld_proto_append_lenenc_string_len(GString *packet, const char *s, guint64 len);
 NETWORK_API int network_mysqld_proto_append_lenenc_string(GString *packet, const char *s);
 
-typedef struct {
-	guint8    protocol_version;
-	gchar    *server_version_str;
-	guint32   server_version;
-	guint32   thread_id;
-	GString  *challenge;
-	guint16   capabilities;
-	guint8    charset;
-	guint16   status;
-} network_mysqld_auth_challenge;
-
-NETWORK_API network_mysqld_auth_challenge *network_mysqld_auth_challenge_new(void);
-NETWORK_API void network_mysqld_auth_challenge_free(network_mysqld_auth_challenge *shake);
-NETWORK_API int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysqld_auth_challenge *shake);
-NETWORK_API int network_mysqld_proto_append_auth_challenge(GString *packet, network_mysqld_auth_challenge *shake);
-NETWORK_API void network_mysqld_auth_challenge_set_challenge(network_mysqld_auth_challenge *shake);
-
-typedef struct {
-	guint32  capabilities;
-	guint32  max_packet_size;
-	guint8   charset;
-	GString *username;
-	GString *response;
-	GString *database;
-} network_mysqld_auth_response;
-
-NETWORK_API network_mysqld_auth_response *network_mysqld_auth_response_new(void);
-NETWORK_API void network_mysqld_auth_response_free(network_mysqld_auth_response *auth);
 NETWORK_API int network_mysqld_proto_scramble(GString *response, GString *challenge, const char *password);
-NETWORK_API int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_auth_response *auth);
-NETWORK_API int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysqld_auth_response *auth);
-NETWORK_API network_mysqld_auth_response *network_mysqld_auth_response_copy(network_mysqld_auth_response *src);
 
 #endif

@@ -235,7 +235,8 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	network_packet packet;
 	GPtrArray *fields = res->fields;
 	gsize i;
-	gint8 status;
+	guint8 status;
+	int err = 0;
     
 	GList *chunk = res->row;
     
@@ -246,7 +247,7 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 
 	network_mysqld_proto_skip_network_header(&packet);
 
-	status = network_mysqld_proto_get_int8(&packet);
+	err = err || network_mysqld_proto_get_int8(&packet, &status);
     
 	/* if we find the 2nd EOF packet we are done */
 	if (status == MYSQLD_PACKET_EOF &&
@@ -271,7 +272,8 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	for (i = 0; i < fields->len; i++) {
 		guint64 field_len;
         
-		field_len = network_mysqld_proto_get_lenenc_int(&packet);
+		err = err || network_mysqld_proto_get_lenenc_int(&packet, &field_len);
+		if (err) luaL_error(L, "%s: row-data is invalid", G_STRLOC);
 
 		if (field_len == 251) { /** @todo use constant */
 			lua_pushnil(L);
@@ -307,7 +309,7 @@ static int parse_resultset_fields(proxy_resultset_t *res) {
     
 	if (res->fields) return 0;
     
-	switch (packet->str[NET_HEADER_SIZE]) {
+	switch ((guint8)packet->str[NET_HEADER_SIZE]) {
         case MYSQLD_PACKET_OK:
         case MYSQLD_PACKET_ERR:
             res->qstat.query_status = packet->str[NET_HEADER_SIZE];

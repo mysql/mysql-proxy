@@ -116,9 +116,10 @@ GString * g_string_assign_len(GString *s, const char *str, gsize str_len) {
 	return g_string_append_len(s, str, str_len);
 }
 
-void g_debug_hexdump(const char *msg, const unsigned char *s, size_t len) {
+void g_debug_hexdump(const char *msg, const void *_s, size_t len) {
 	GString *hex;
 	size_t i;
+	const unsigned char *s = _s;
 		
        	hex = g_string_new(NULL);
 
@@ -151,7 +152,7 @@ void g_debug_hexdump(const char *msg, const unsigned char *s, size_t len) {
 		}
 	}
 
-	g_critical("(%s) %"G_GSIZE_FORMAT" bytes:\n  %s", 
+	g_message("(%s) %"G_GSIZE_FORMAT" bytes:\n  %s", 
 			msg, 
 			len,
 			hex->str);
