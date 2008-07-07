@@ -373,12 +373,18 @@ int network_mysqld_proto_get_com_init_db(
 	return is_finished;
 }
 
+/**
+ * @return -1 on error, 
+ *          0 is not finished, 
+ *          1 for the last packet 
+ */
 int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld_con *con) {
 	guint8 status;
 	int is_finished = 0;
 	int err = 0;
 	
 	err = err || network_mysqld_proto_skip_network_header(packet);
+	if (err) return -1;
 						
 	/* forward the response to the client */
 	switch (con->parse.command) {
@@ -388,6 +394,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		 * - ERR (in 5.1.12+ + a duplicate ERR)
 		 */
 		err = err || network_mysqld_proto_get_int8(packet, &status);
+		if (err) return -1;
 
 		switch (status) {
 		case MYSQLD_PACKET_ERR:
@@ -413,6 +420,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 	case COM_REGISTER_SLAVE:
 	case COM_PROCESS_KILL:
 		err = err || network_mysqld_proto_get_int8(packet, &status);
+		if (err) return -1;
 
 		switch (status) {
 		case MYSQLD_PACKET_ERR:
@@ -430,6 +438,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 	case COM_SET_OPTION:
 	case COM_SHUTDOWN:
 		err = err || network_mysqld_proto_get_int8(packet, &status);
+		if (err) return -1;
 
 		switch (status) {
 		case MYSQLD_PACKET_ERR: /* COM_DEBUG may not have the right permissions */
@@ -446,6 +455,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 
 	case COM_FIELD_LIST:
 		err = err || network_mysqld_proto_get_int8(packet, &status);
+		if (err) return -1;
 
 		/* we transfer some data and wait for the EOF */
 		switch (status) {
@@ -467,17 +477,26 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 #if MYSQL_VERSION_ID >= 50000
 	case COM_STMT_FETCH:
 		/*  */
-		err = err || network_mysqld_proto_get_int8(packet, &status);
+		err = err || network_mysqld_proto_peek_int8(packet, &status);
+		if (err) return -1;
 
 		switch (status) {
-		case MYSQLD_PACKET_EOF:
-			if (packet->data->str[NET_HEADER_SIZE + 3] & SERVER_STATUS_LAST_ROW_SENT) {
-				is_finished = 1;
+		case MYSQLD_PACKET_EOF: {
+			network_mysqld_eof_packet_t *eof_packet;
+
+			eof_packet = network_mysqld_eof_packet_new();
+
+			err = err || network_mysqld_proto_get_eof_packet(packet, eof_packet);
+			if (!err) {
+				if ((eof_packet->server_status & SERVER_STATUS_LAST_ROW_SENT) ||
+				    (eof_packet->server_status & SERVER_STATUS_CURSOR_EXISTS)) {
+					is_finished = 1;
+				}
 			}
-			if (packet->data->str[NET_HEADER_SIZE + 3] & SERVER_STATUS_CURSOR_EXISTS) {
-				is_finished = 1;
-			}
-			break;
+
+			network_mysqld_eof_packet_free(eof_packet);
+
+			break; }
 		case MYSQLD_PACKET_ERR:
 			is_finished = 1;
 			break;
@@ -508,11 +527,14 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		is_finished = 1;
 		break;
 	default:
-		g_error("%s.%d: COM_(0x%02x) is not handled", 
-				__FILE__, __LINE__,
+		g_critical("%s: COM_(0x%02x) is not handled", 
+				G_STRLOC,
 				con->parse.command);
+		err = 1;
 		break;
 	}
+
+	if (err) return -1;
 
 	return is_finished;
 }

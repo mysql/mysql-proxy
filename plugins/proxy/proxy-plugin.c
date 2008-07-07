@@ -1198,6 +1198,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
 
 	is_finished = network_mysqld_proto_get_query_result(&packet, con);
+	if (is_finished == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
 
 	network_queue_append(send_sock->send_queue, packet.data);
 

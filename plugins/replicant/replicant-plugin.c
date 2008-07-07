@@ -187,14 +187,19 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 	}
 
 	err = err || network_mysqld_proto_skip_network_header(&packet);
-	if (err) NETWORK_SOCKET_ERROR;
+	if (err) return NETWORK_SOCKET_ERROR;
 
 	shake = network_mysqld_auth_challenge_new();
-	network_mysqld_proto_get_auth_challenge(&packet, shake);
+	err = err || network_mysqld_proto_get_auth_challenge(&packet, shake);
 
 	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
+	
+	if (err) {
+		network_mysqld_auth_challenge_free(shake);
+		return NETWORK_SOCKET_ERROR;
+	}
 
 	/* build the auth packet */
 	auth_packet = g_string_new(NULL);
@@ -225,10 +230,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
-	GString *packet;
-	GList *chunk;
 	network_socket *recv_sock;
 	network_socket *send_sock = NULL;
+	network_packet packet;
+	guint8 status;
+	int err = 0;
 
 	const char query_packet[] = 
 		"\x03"                    /* COM_QUERY */
@@ -237,39 +243,53 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 
 	recv_sock = con->server;
 
-	chunk = recv_sock->recv_queue->chunks->tail;
-	packet = chunk->data;
+	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
+	packet.offset = 0;
 
 	/* we aren't finished yet */
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
+	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) {
+		return NETWORK_SOCKET_SUCCESS;
+	}
+
+	err = err || network_mysqld_proto_skip_network_header(&packet);
+	err = err || network_mysqld_proto_peek_int8(&packet, &status);
+	if (err) return NETWORK_SOCKET_ERROR;
 
 	/* the auth should be fine */
-	switch ((guint8)packet->str[NET_HEADER_SIZE + 0]) {
-	case MYSQLD_PACKET_ERR:
-		g_assert(packet->str[NET_HEADER_SIZE + 3] == '#');
+	switch (status) {
+	case MYSQLD_PACKET_ERR: {
+		network_mysqld_err_packet_t *err_packet;
 
-		g_critical("%s.%d: error: %d", 
-				__FILE__, __LINE__,
-				packet->str[NET_HEADER_SIZE + 1] | (packet->str[NET_HEADER_SIZE + 2] << 8));
+		err_packet = network_mysqld_err_packet_new();
 
-		return NETWORK_SOCKET_ERROR;
+		err = err || network_mysqld_proto_get_err_packet(&packet, err_packet);
+
+		if (!err) {
+			g_critical("%s: repclient_read_auth_result() failed: %s (errno = %d)", 
+					G_STRLOC,
+					err_packet->errmsg->len ? err_packet->errmsg->str : "",
+					err_packet->errcode);
+		}
+
+		network_mysqld_err_packet_free(err_packet);
+
+		return NETWORK_SOCKET_ERROR; }
 	case MYSQLD_PACKET_OK: 
 		break; 
 	default:
-		g_error("%s.%d: packet should be (OK|ERR), got: %02x",
-				__FILE__, __LINE__,
-				packet->str[NET_HEADER_SIZE + 0]);
+		g_critical("%s: packet should be (OK|ERR), got: 0x%02x",
+				G_STRLOC,
+				status);
 
 		return NETWORK_SOCKET_ERROR;
 	} 
 
-	g_string_free(chunk->data, TRUE);
 	recv_sock->packet_len = PACKET_LEN_UNSET;
 
-	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
 	send_sock = con->server;
-	network_mysqld_queue_append(send_sock->send_queue, query_packet, sizeof(query_packet) - 1, 0);
+	network_mysqld_queue_append(send_sock->send_queue, C(query_packet), 0);
 
 	con->state = CON_STATE_SEND_QUERY;
 
@@ -326,6 +346,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 #endif						
 
 	is_finished = network_mysqld_proto_get_query_result(&packet, con);
+	if (is_finished == -1) return NETWORK_SOCKET_ERROR;
 
 	switch (con->parse.command) {
 	case COM_BINLOG_DUMP:
@@ -572,7 +593,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog_event *event) {
 				event->event.table_map_event.db_name ? event->event.table_map_event.db_name : "(null)",
 				event->event.table_map_event.table_name ? event->event.table_map_event.table_name : "(null)"
 			 );
-		g_message("%s: (table-definition) columns = %d",
+		g_message("%s: (table-definition) columns = %"G_GUINT64_FORMAT,
 				G_STRLOC,
 				event->event.table_map_event.columns_len
 			 );
