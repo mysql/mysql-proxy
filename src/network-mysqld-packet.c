@@ -644,7 +644,7 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 
 	err = err || network_mysqld_proto_get_int8(&packet, &field_count); /* the byte after the net-header is a EOF */
-	err = err || (field_count == MYSQLD_PACKET_EOF);
+	err = err || (field_count != MYSQLD_PACKET_EOF);
 
 	if (err) return NULL;
     
