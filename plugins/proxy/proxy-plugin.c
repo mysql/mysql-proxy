@@ -409,7 +409,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	packet.offset = 0;
 	
 	err = err || network_mysqld_proto_skip_network_header(&packet);
-	if (err) NETWORK_SOCKET_ERROR;
+	if (err) return NETWORK_SOCKET_ERROR;
 
 	challenge = network_mysqld_auth_challenge_new();
 	if (network_mysqld_proto_get_auth_challenge(&packet, challenge)) {
