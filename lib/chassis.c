@@ -182,7 +182,6 @@ static void remap_print(lua_State *L) {
 
 LUAEXT_API int luaopen_chassis (lua_State *L) {
 	luaL_register (L, "chassis", chassislib);
-	g_critical("luaopen_chassis");
 	set_info (L);
 	remap_print(L);
 	return 1;
