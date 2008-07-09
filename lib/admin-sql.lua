@@ -116,7 +116,21 @@ function read_query(packet)
 	elseif packet:sub(2) == "FETCH1" then
 		proxy.queries:append(proxy.COM_STMT_FETCH, string.char(proxy.COM_STMT_FETCH) .. "\001\000\000\000" .. "\128\000\000\000")
 		return proxy.PROXY_SEND_QUERY
-
+	elseif packet:sub(2) == "FLIST" then
+		proxy.queries:append(proxy.COM_FIELD_LIST, string.char(proxy.COM_FIELD_LIST))
+		return proxy.PROXY_SEND_QUERY
+	elseif packet:sub(2) == "FLIST1" then
+		proxy.queries:append(proxy.COM_FIELD_LIST, string.char(proxy.COM_FIELD_LIST) .. "t1\000id\000\000\000")
+		return proxy.PROXY_SEND_QUERY
+	elseif packet:sub(2) == "TDUMP" then
+		proxy.queries:append(proxy.COM_TABLE_DUMP, string.char(proxy.COM_TABLE_DUMP))
+		return proxy.PROXY_SEND_QUERY
+	elseif packet:sub(2) == "TDUMP1" then
+		proxy.queries:append(proxy.COM_TABLE_DUMP, string.char(proxy.COM_TABLE_DUMP) .. "\004test\002t1")
+		return proxy.PROXY_SEND_QUERY
+	elseif packet:sub(2) == "TDUMP2" then
+		proxy.queries:append(proxy.COM_TABLE_DUMP, string.char(proxy.COM_TABLE_DUMP) .. "\004test\002t2")
+		return proxy.PROXY_SEND_QUERY
 	end
 end
 
@@ -137,6 +151,8 @@ function read_query_result(inj)
 	   inj.id == proxy.COM_BINLOG_DUMP or
 	   inj.id == proxy.COM_STMT_PREPARE or
 	   inj.id == proxy.COM_STMT_FETCH or
+	   inj.id == proxy.COM_FIELD_LIST or
+	   inj.id == proxy.COM_TABLE_DUMP or
 	   inj.id == proxy.COM_DEBUG then
 		-- translate the EOF packet from the COM_SHUTDOWN into a OK packet
 		-- to match the needs of the COM_QUERY we got
