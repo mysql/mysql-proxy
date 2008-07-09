@@ -154,7 +154,7 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 		}
 		break;
 	case PARSE_COM_QUERY_RESULT:
-		err = err || network_mysqld_proto_get_int8(packet, &status);
+		err = err || network_mysqld_proto_peek_int8(packet, &status);
 		if (err) break;
 
 		switch (status) {
