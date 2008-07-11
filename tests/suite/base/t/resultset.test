@@ -1,1 +1,6 @@
+# this should just pass
+SELECT 1;
+# this one should fail with a parse-error
+--error 1064
+SELECT ;
 test_res_blob;
