@@ -23,17 +23,17 @@ typedef struct {
 	/**
 	 * the content of the OK packet 
 	 */
-	int server_status;
-	int warning_count;
+	guint16 server_status;
+	guint16 warning_count;
 	guint64 affected_rows;
 	guint64 insert_id;
     
-	int was_resultset;                      /**< if set, affected_rows and insert_id are ignored */
+	gboolean was_resultset;                      /**< if set, affected_rows and insert_id are ignored */
     
 	/**
 	 * MYSQLD_PACKET_OK or MYSQLD_PACKET_ERR
 	 */	
-	int query_status;
+	guint8 query_status;
 } query_status;
 
 typedef struct {
