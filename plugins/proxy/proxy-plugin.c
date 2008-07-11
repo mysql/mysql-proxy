@@ -540,24 +540,28 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) 
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	/* read auth from client */
 	network_packet packet;
-	GList *chunk;
 	network_socket *recv_sock, *send_sock;
 	chassis_plugin_config *config = con->config;
 	network_mysqld_auth_response *auth;
+	int err = 0;
+	gboolean free_client_packet = TRUE;
 
 	recv_sock = con->client;
 	send_sock = con->server;
 
-	chunk = recv_sock->recv_queue->chunks->tail;
-
-	packet.data = chunk->data;
+ 	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
 	packet.offset = 0;
 
 	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS; /* we are not finished yet */
 
+	err = err || network_mysqld_proto_skip_network_header(&packet);
+	if (err) return NETWORK_SOCKET_ERROR;
+
 	auth = network_mysqld_auth_response_new();
 
-	if (network_mysqld_proto_get_auth_response(&packet, auth)) {
+	err = err || network_mysqld_proto_get_auth_response(&packet, auth);
+
+	if (err) {
 		network_mysqld_auth_response_free(auth);
 		return NETWORK_SOCKET_ERROR;
 	}
@@ -571,10 +575,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	 */
 	switch (proxy_lua_read_auth(con)) {
 	case PROXY_SEND_RESULT:
+	g_debug("%s", G_STRLOC);
 		con->state = CON_STATE_SEND_AUTH_RESULT;
-
-		g_string_free(packet.data, TRUE);
-		chunk->data = NULL;
 
 		break;
 	case PROXY_NO_DECISION:
@@ -586,8 +588,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 			con->state = CON_STATE_SEND_AUTH_RESULT;
 		
-			chunk->data = NULL;
-
 			auth_resp_packet = g_string_new(NULL);
 			ok_packet = network_mysqld_ok_packet_new();
 			ok_packet->server_status = SERVER_STATUS_AUTOCOMMIT;
@@ -674,23 +674,26 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 				g_string_free(auth_resp, TRUE);
 			}
-
-			/* free the packet as we don't forward it */
-			g_string_free(packet.data, TRUE);
-			chunk->data = NULL;
 		} else {
 			network_queue_append(send_sock->send_queue, packet.data);
 			con->state = CON_STATE_SEND_AUTH;
+
+			free_client_packet = FALSE; /* the packet.data is now part of the send-queue, don't free it further down */
 		}
 
 		break;
 	default:
-		g_error("%s.%d: ... ", __FILE__, __LINE__);
+		g_assert_not_reached();
 		break;
 	}
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
-	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
+	if (free_client_packet) {
+		g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
+	} else {
+		/* just remove the link to the packet, the packet itself is part of the next queue already */
+		g_queue_pop_tail(recv_sock->recv_queue->chunks);
+	}
 
 	return NETWORK_SOCKET_SUCCESS;
 }
