@@ -53,6 +53,13 @@ function read_query(packet)
 				}
 			}
 		}
+	elseif query == 'affected_rows' then
+		-- we need a long string, more than 255 chars
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			affected_rows = 2,
+			insert_id = 10
+		}
 	else
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_ERR,
