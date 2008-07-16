@@ -4,3 +4,4 @@ SELECT 1;
 --error 1064
 SELECT ;
 test_res_blob;
+INSERT INTO test.t1 VALUES ( 1 );

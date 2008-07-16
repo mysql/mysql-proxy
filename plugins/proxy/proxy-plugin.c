@@ -207,7 +207,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_co
 			*inj_p = inj;
 
 			inj->result_queue = con->client->send_queue->chunks;
-			inj->qstat = st->injected.qstat;
 
 			proxy_getinjectionmetatable(L);
 			lua_setmetatable(L, -2);
@@ -1220,6 +1219,14 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 
 				inj->bytes = com_query->bytes;
 				inj->rows  = com_query->rows;
+
+				/* INSERTs have a affected_rows */
+				if (!com_query->was_resultset) {
+					inj->qstat.affected_rows = com_query->affected_rows;
+					inj->qstat.insert_id     = com_query->insert_id;
+				}
+				inj->qstat.server_status = com_query->server_status;
+				inj->qstat.warning_count = com_query->warning_count;
 			}
 			g_get_current_time(&(inj->ts_read_query_result_last));
 		}

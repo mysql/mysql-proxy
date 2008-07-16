@@ -53,7 +53,7 @@ function read_query(packet)
 				}
 			}
 		}
-	elseif query == 'affected_rows' then
+	elseif query == 'INSERT INTO test.t1 VALUES ( 1 )' then
 		-- we need a long string, more than 255 chars
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_OK,
