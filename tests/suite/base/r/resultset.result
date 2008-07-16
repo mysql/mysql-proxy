@@ -9,3 +9,6 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 INSERT INTO test.t1 VALUES ( 1 );
 affected_rows	insert_id
 2	10
+SELECT error_msg();
+errcode	errmsg	sqlstate
+1064	returning SQL-state 42000 and error-code 1064	42000

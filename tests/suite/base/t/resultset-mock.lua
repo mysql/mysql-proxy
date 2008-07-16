@@ -60,6 +60,14 @@ function read_query(packet)
 			affected_rows = 2,
 			insert_id = 10
 		}
+	elseif query == 'SELECT error_msg()' then
+		-- we need a long string, more than 255 chars
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_ERR,
+			errmsg = "returning SQL-state 42000 and error-code 1064",
+			sqlstate = "42000",
+			errcode = 1064
+		}
 	else
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_ERR,

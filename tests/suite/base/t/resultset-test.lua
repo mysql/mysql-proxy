@@ -1,4 +1,5 @@
 local chassis = require("chassis")
+local proto   = require("mysql.proto")
 
 local my_lovely_packet
 
@@ -47,6 +48,30 @@ function read_query_result(inj)
 			return proxy.PROXY_SEND_RESULT
 		end
 	elseif status == proxy.MYSQLD_PACKET_ERR then
+		if inj.query == string.char(proxy.COM_QUERY) .. "SELECT error_msg()" then
+			-- convert a OK packet with affected rows into a resultset
+			assert(res.raw)
+			local err = proto.from_err_packet(res.raw)
+
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_OK,
+				resultset = {
+					fields = { 
+						{ name = "errcode",
+						  type = proxy.MYSQL_TYPE_STRING },
+						{ name = "errmsg",
+						  type = proxy.MYSQL_TYPE_STRING },
+						{ name = "sqlstate",
+						  type = proxy.MYSQL_TYPE_STRING },
+					},
+					rows = {
+						{ err.errcode, err.errmsg, err.sqlstate }
+					}
+				}
+			}
+			return proxy.PROXY_SEND_RESULT
+		end
+
 	else
 		assert(false, ("res.query_status is %d, expected %d or %d"):format(
 			res.query_status,
