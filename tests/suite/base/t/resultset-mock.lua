@@ -53,6 +53,21 @@ function read_query(packet)
 				}
 			}
 		}
+	elseif query == 'SELECT row_count(1), bytes()' then
+		-- we need a long string, more than 255 chars
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = { 
+				fields = { 
+					{ name = "f1" },
+					{ name = "f2" },
+				},
+				rows = {
+					{ "1", "2" },
+					{ "1", "2" },
+				}
+			}
+		}
 	elseif query == 'INSERT INTO test.t1 VALUES ( 1 )' then
 		-- we need a long string, more than 255 chars
 		proxy.response = {

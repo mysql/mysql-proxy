@@ -12,3 +12,6 @@ affected_rows	insert_id
 SELECT error_msg();
 errcode	errmsg	sqlstate
 1064	returning SQL-state 42000 and error-code 1064	42000
+SELECT row_count(1), bytes();
+row_count	bytes
+2	16

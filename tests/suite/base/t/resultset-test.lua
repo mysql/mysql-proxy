@@ -46,6 +46,24 @@ function read_query_result(inj)
 				}
 			}
 			return proxy.PROXY_SEND_RESULT
+		elseif inj.query == string.char(proxy.COM_QUERY) .. "SELECT row_count(1), bytes()" then
+			-- convert a OK packet with affected rows into a resultset
+			assert(res.affected_rows == nil)
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_OK,
+				resultset = {
+					fields = { 
+						{ name = "row_count",
+						  type = proxy.MYSQL_TYPE_LONG },
+						{ name = "bytes",
+						  type = proxy.MYSQL_TYPE_LONG },
+					},
+					rows = {
+						{ res.row_count, res.bytes }
+					}
+				}
+			}
+			return proxy.PROXY_SEND_RESULT
 		end
 	elseif status == proxy.MYSQLD_PACKET_ERR then
 		if inj.query == string.char(proxy.COM_QUERY) .. "SELECT error_msg()" then
