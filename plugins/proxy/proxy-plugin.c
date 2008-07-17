@@ -1219,6 +1219,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 
 				inj->bytes = com_query->bytes;
 				inj->rows  = com_query->rows;
+				inj->qstat.was_resultset = com_query->was_resultset;
 
 				/* INSERTs have a affected_rows */
 				if (!com_query->was_resultset) {
