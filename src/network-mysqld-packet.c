@@ -1091,7 +1091,7 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 	err = err || network_mysqld_proto_get_lenenc_gstring(packet, auth->response);
 
 	if (packet->offset != packet->data->len) {
-		err = err || network_mysqld_proto_get_gstring_len(packet, packet->data->len - packet->offset, auth->database);
+		err = err || network_mysqld_proto_get_gstring_len(packet, packet->data->len - packet->offset - 1, auth->database);
 	}
 
 	return err ? -1 : 0;
