@@ -1091,7 +1091,13 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 	err = err || network_mysqld_proto_get_lenenc_gstring(packet, auth->response);
 
 	if (packet->offset != packet->data->len) {
-		err = err || network_mysqld_proto_get_gstring_len(packet, packet->data->len - packet->offset - 1, auth->database);
+		/* database is optional and may include a trailing \0 char */
+		err = err || network_mysqld_proto_get_gstring_len(packet, packet->data->len - packet->offset, auth->database);
+
+		if (auth->database->len > 0 && 
+		    (auth->database->str[auth->database->len - 1] == '\0')) {
+			auth->database->len--;
+		}
 	}
 
 	return err ? -1 : 0;
@@ -1117,7 +1123,10 @@ int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_au
 
 	/* scrambled password */
 	network_mysqld_proto_append_lenenc_string_len(packet, S(auth->response));
-	if (auth->database->len) g_string_append_len(packet, S(auth->database));
+	if (auth->database->len) {
+		g_string_append_len(packet, S(auth->database));
+		network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
+	}
 
 	return 0;
 }

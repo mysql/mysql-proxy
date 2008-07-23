@@ -160,7 +160,7 @@ assert(true == pcall(
 
 local response_packet = proto.to_response_packet({ username = "foobar", database = "db" })
 assert(type(response_packet) == "string")
-assert(#response_packet == 42, ("expected 42, got %d"):format(#response_packet))
+assert(#response_packet == 43, ("expected 43, got %d"):format(#response_packet))
 local tbl = proto.from_response_packet(response_packet)
 assert(type(tbl) == "table")
 assert(tbl.username == "foobar", ("expected 'foobar', got %s"):format(tostring(tbl.username)))
