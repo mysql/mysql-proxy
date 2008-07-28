@@ -11,33 +11,31 @@
 
 module("proxy.auto-config", package.seeall)
 
-local tokenizer = require("proxy.tokenizer")
+local l = require("lpeg")
 
+---
+--  
 local function parse_value(fld, token)
 	local t = type(fld)
 	local errmsg
 
 	if t == "boolean" then
-		if token.token_name == "TK_INTEGER" then
-			return (token.text ~= "0")
-		elseif token.token_name == "TK_SQL_FALSE" then
-			return false
-		elseif token.token_name == "TK_SQL_TRUE" then
-			return true
+		if token[1] == "boolean" then
+			return token[2] == "true" and true and false
 		else
-			return nil, "(auto-config) expected a boolean, got " .. token.token_name
+			return nil, "(auto-config) expected a boolean, got " .. token[1]
 		end
 	elseif t == "number" then
-		if token.token_name == "TK_INTEGER" then
-			return tonumber(token.text)
+		if token[1] == "number" then
+			return tonumber(token[2])
 		else
-			return nil, "(auto-config) expected a number, got " .. token.token_name
+			return nil, "(auto-config) expected a number, got " .. token[1]
 		end
 	elseif t == "string" then
-		if token.token_name == "TK_STRING" then
-			return tostring(token.text)
+		if token[1] == "string" then
+			return tostring(token[2])
 		else
-			return nil, "(auto-config) expected a string, got " .. token.token_name
+			return nil, "(auto-config) expected a string, got " .. token[1]
 		end
 	else
 		return nil, "(auto-config) type: " .. t .. " isn't handled yet" 
@@ -45,6 +43,78 @@ local function parse_value(fld, token)
 	
 	return nil, "(auto-config) should not be reached"
 end
+
+---
+-- transform a table into loadable string
+local function tbl2str(tbl, indent)
+	local s = ""
+	indent = indent or "" -- set a default
+
+	for k, v in pairs(tbl) do
+		s = s .. indent .. ("[%q] --[[%s]]-- = "):format(k, type(k))
+		if type(v) == "table" then
+			s = s .. "{\n" .. tbl2str(v, indent .. "  ") .. indent .. "}"
+		elseif type(v) == "string" then
+			s = s .. ("%q"):format(v)
+		else
+			s = s .. tostring(v)
+		end
+		s = s .. ",\n"
+	end
+
+	return s
+end
+
+
+---
+-- turn a string into a case-insensitive lpeg-pattern
+--
+local function lpeg_ci_str(s)
+	local p
+
+	for i = 1, #s do
+		local c = s:sub(i, i)
+
+		local lp = l.S(c:upper() .. c:lower() )
+
+		if p then
+			p = p * lp
+		else
+			p = lp
+		end
+	end
+
+	return p
+end
+
+
+local WS     = l.S(" \t\n")
+
+local PROXY  = lpeg_ci_str("PROXY") * WS^1
+local SHOW   = lpeg_ci_str("SHOW") * WS^1
+local SET    = lpeg_ci_str("SET") * WS^1
+local GLOBAL = lpeg_ci_str("GLOBAL") * WS^1
+local CONFIG = lpeg_ci_str("CONFIG")
+local SAVE   = lpeg_ci_str("SAVE") * WS^1
+local LOAD   = lpeg_ci_str("LOAD") * WS^1
+local INTO   = lpeg_ci_str("INTO") * WS^1
+local FROM   = lpeg_ci_str("FROM") * WS^1
+local DOT    = l.P(".")
+local EQ     = WS^0 * l.P("=") * WS^0
+local literal = l.R("az", "AZ") ^ 1
+local string_quoted  = l.P("\"") * ( 1 - l.P("\"") )^0 * l.P("\"") -- /".*"/
+local digit  = l.R("09")       -- [0-9]
+local number = (l.P("-") + "") * digit^1         -- [0-9]+
+local bool   = l.P("true") + l.P("false")
+
+local l_proxy = l.Ct(PROXY * 
+	((SHOW / "SHOW" * CONFIG) +
+	 (SET  / "SET"  * GLOBAL * l.C(literal) * DOT * l.C(literal) * EQ * 
+	 	l.Ct( l.Cc("string") * l.C(string_quoted) + 
+		      l.Cc("number") * l.C(number) + 
+		      l.Cc("boolean") * l.C(bool) )) +
+	 (SAVE / "SAVE" * CONFIG * WS^1 * INTO * l.C(string_quoted)) +
+	 (LOAD / "LOAD" * CONFIG * WS^1 * FROM * l.C(string_quoted))) * -1)
 
 function handle(tbl, cmd)
 	---
@@ -65,221 +135,105 @@ function handle(tbl, cmd)
 
 	-- don't try to tokenize log SQL queries
 	if #cmd.query > 128 then return nil end
+
+	local tokens = l_proxy:match(cmd.query)
+
+	if not tokens then 
+		return nil
+	end
 	
-	local tokens     = assert(tokenizer.tokenize(cmd.query))
-	local is_error = false
-	local error_is_fatal = false
-	local error_msg = nil
-	local cmd_set_module = nil
-	local cmd_set_option = nil
+	-- print(tbl2str(tokens))
+	
+	if tokens[1] == "SET" then
+		if not tbl[tokens[2]] then
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_ERR,
+				errmsg = "module not known"
+			}
+		elseif not tbl[tokens[2]][tokens[3]] then
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_ERR,
+				errmsg = "option not know"
+			}
+		else
+			-- do the assignment
+			local val, errmsg = parse_value(tbl[tokens[2]][tokens[3]], tokens[4])
 
-	local commands = {
-		{ -- PROXY SET ... 
-			{ type = "TK_LITERAL", func = function (tk) 
-				local is_proxy = (tk.text:upper() == "PROXY")
-
-				return is_proxy
-			end },
-			{ type = "TK_SQL_SET" },
-			{ type = "TK_LITERAL", func = function (tk) 
-				error_is_fatal = true
-
-				return tk.text:upper() == "GLOBAL"
-			end },
-			{ type = "TK_LITERAL", func = function (tk) 
-				if type(tbl[tk.text]) ~= "table" then
-					return false, ("SET failed, proxy.global.config.%s isn't known"):format(tk.text)
-				end
-
-				cmd_set_module = tk.text
-				return true
-			end },
-			{ type = "TK_DOT" },
-			{ type = "TK_LITERAL", func = function (tk) 
-				if tbl[cmd_set_module][tk.text] == nil then
-					return false, ("SET failed, proxy.global.config.%s.%s isn't known"):format(
-						cmd_set_module,
-						tk.text)
-				end
-				cmd_set_option = tk.text
-				return true
-			end },
-			{ type = "TK_EQ" },
-			{ func = function (tk) 
-				-- do the assignment
-				local val, errmsg = parse_value(tbl[cmd_set_module][cmd_set_option], tk)
-
-				if val == nil then
-					return false, errmsg
-				end
-				tbl[cmd_set_module][cmd_set_option] = val
-
-				return true
-			end },
-		},
-		{ -- PROXY SHOW CONFIG
-			{ type = "TK_LITERAL", func = function (tk)
-				return tk.text:upper() == "PROXY"
-			end },
-			{ type = "TK_SQL_SHOW", func = function(tk) 
-				error_is_fatal = true
-				return true
-			end },
-			{ type = "TK_LITERAL", func = function (tk) 
-				if tk.text:upper() ~= "CONFIG" then
-					return false
-				end
-
-				local rows = { }
-
-				for mod, options in pairs(tbl) do
-					for option, val in pairs(options) do
-						rows[#rows + 1] = { mod, option, tostring(val), type(val) }
-					end
-				end
-
+			if not val then
+				proxy.response = {
+					type = proxy.MYSQLD_PACKET_ERR,
+					errmsg = errmsg
+				}
+			else
+				tbl[tokens[2]][tokens[3]] = val
+				
 				proxy.response = {
 					type = proxy.MYSQLD_PACKET_OK,
-					resultset = {
-						fields = {
-							{ name = "module", type = proxy.MYSQL_TYPE_STRING },
-							{ name = "option", type = proxy.MYSQL_TYPE_STRING },
-							{ name = "value", type = proxy.MYSQL_TYPE_STRING },
-							{ name = "type", type = proxy.MYSQL_TYPE_STRING },
-						},
-						rows = rows
-					}
+					affected_rows = 1
 				}
-					
-				return true
-			end },
-		},
-		{ -- PROXY SAVE CONFIG INTO "<filename>"
-			{ type = "TK_LITERAL", func = function (tk)
-				return tk.text:upper() == "PROXY"
-			end },
-			{ type = "TK_LITERAL", func = function (tk)
-				return tk.text:upper() == "SAVE"
-			end },
-			{ type = "TK_LITERAL", func = function (tk) 
-				error_is_fatal = true
 
-				return tk.text:upper() == "CONFIG" 
-			end },
-			{ type = "TK_SQL_INTO" },
-			{ type = "TK_STRING", func = function (tk)
-				-- save the config into this filename
-				local filename = tk.text
-
-				return tbl:save(filename)
-			end },
-		},
-		["PROXY LOAD CONFIG"] = { -- PROXY LOAD CONFIG FROM "<filename>"
-			{ type = "TK_LITERAL", func = function (tk)
-				return tk.text:upper() == "PROXY"
-			end },
-			{ type = "TK_SQL_LOAD" },
-			{ type = "TK_LITERAL", func = function (tk) 
-				error_is_fatal = true
-
-				return tk.text:upper() == "CONFIG" 
-			end },
-			{ type = "TK_SQL_FROM" },
-			{ type = "TK_STRING", func = function (tk)
-				-- save the config into this filename
-				local filename = tk.text
-
-				return tbl:load(filename)
-			end },
-		},
-
-	}
-
-	for cmd_key, sql_command in pairs(commands) do
-		is_error = false
-		error_is_fatal = false
-		error_msg = nil
-
-		for tk_key, cmd_token in ipairs(sql_command) do
-			local sql_token = tokens[tk_key]
-
-			if not sql_token then
-				-- not enough tokens in the cmdline
-				is_error = true
-				error_msg = ("command too short: %s"):format(cmd.query)
-				break
 			end
+		end
+	elseif tokens[1] == "SHOW" then
+		local rows = { }
 
-			if cmd_token.type and cmd_token.type ~= sql_token.token_name then
-				-- the tk-type is enforced
-				is_error = true
-				error_msg = ("[%s].token[%d] types didn't matched: %s != %s (%s)"):format(
-					cmd_key,
-					tk_key,
-					cmd_token.type,
-					sql_token.token_name, 
-					sql_token.text)
-				break
-			end
-
-			if cmd_token.func then
-				local check_res, check_errmsg = cmd_token.func(sql_token)
-
-				if not check_res then
-					is_error = true
-					error_msg = check_errmsg or ("parse error at '%s' in '%s'"):format(
-						sql_token.text,
-						cmd.query)
-					break
-				end
+		for mod, options in pairs(tbl) do
+			for option, val in pairs(options) do
+				rows[#rows + 1] = { mod, option, tostring(val), type(val) }
 			end
 		end
 
-		if is_error and error_is_fatal then
-			-- we got a fatal error, don't continue with parsing
-			break
-		end
-
-		if not is_error then
-			-- command was parsed successful
-			break
-		end
-	end
-
-	if is_error and error_is_fatal then
 		proxy.response = {
-			type = proxy.MYSQLD_PACKET_ERR,
-			errmsg = error_msg or "(auto-config) parsing query failed, but not error-msg was set"
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = {
+				fields = {
+					{ name = "module", type = proxy.MYSQL_TYPE_STRING },
+					{ name = "option", type = proxy.MYSQL_TYPE_STRING },
+					{ name = "value", type = proxy.MYSQL_TYPE_STRING },
+					{ name = "type", type = proxy.MYSQL_TYPE_STRING },
+				},
+				rows = rows
+			}
 		}
-	elseif is_error then
-		-- looks like we matched no statement
-		return nil 
+	elseif tokens[1] == "SAVE" then
+		-- save the config into this filename
+		local filename = tokens[2]
+
+		local ret, errmsg =  tbl:save(filename)
+		
+		if ret then
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_OK,
+				affected_rows = 0
+			}
+		else
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_ERR,
+				errmsg = errmsg
+			}
+		end
+
+	elseif tokens[1] == "LOAD" then
+		local filename = tokens[2]
+
+		local ret, errmsg =  tbl:load(filename)
+
+		if ret then
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_OK,
+				affected_rows = 0
+			}
+		else
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_ERR,
+				errmsg = errmsg
+			}
+		end
 	else
-		proxy.response.type = proxy.MYSQLD_PACKET_OK
+		assert(false)
 	end
 
 	return proxy.PROXY_SEND_RESULT
-end
-
----
--- transform a table into loadable string
-local function tbl2str(tbl, indent)
-	local s = ""
-	indent = indent or "" -- set a default
-
-	for k, v in pairs(tbl) do
-		s = s .. indent .. ("[%q] = "):format(k)
-		if type(v) == "table" then
-			s = s .. "{\n" .. tbl2str(v, indent .. "  ") .. indent .. "}"
-		elseif type(v) == "string" then
-			s = s .. ("%q"):format(v)
-		else
-			s = s .. tostring(v)
-		end
-		s = s .. ",\n"
-	end
-
-	return s
 end
 
 function save(tbl, filename)
