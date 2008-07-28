@@ -1,29 +1,13 @@
 
-function packet_auth(fields)
-	fields = fields or { }
-	return "\010" ..             -- proto version
-		(fields.version or "5.0.45-proxy") .. -- version
-		"\000" ..             -- term-null
-		"\001\000\000\000" .. -- thread-id
-		"\065\065\065\065" ..
-		"\065\065\065\065" .. -- challenge - part I
-		"\000" ..             -- filler
-		"\001\130" ..         -- server cap (long pass, 4.1 proto)
-		"\008" ..             -- charset
-		"\002\000" ..         -- status
-		("\000"):rep(13) ..   -- filler
-		"\065\065\065\065"..
-		"\065\065\065\065"..
-		"\065\065\065\065"..
-		"\000"                -- challenge - part II
-end
+local proto = assert(require("mysql.proto"))
+local tokenizer = assert(require("mysql.tokenizer"))
 
 function connect_server()
 	-- emulate a server
 	proxy.response = {
 		type = proxy.MYSQLD_PACKET_RAW,
 		packets = {
-			packet_auth()
+			proto.to_challenge_packet({})
 		}
 	}
 	return proxy.PROXY_SEND_RESULT
@@ -48,7 +32,7 @@ function read_query( packet )
     -- Keep them commented if using inside the test suite
     -- counter = counter + 1
     -- if counter < 3 then return end
-    local tokens = proxy.tokenize(query)
+    local tokens = tokenizer.tokenize(query)
     proxy.response.type = proxy.MYSQLD_PACKET_OK
     proxy.response.resultset = {
         fields = {

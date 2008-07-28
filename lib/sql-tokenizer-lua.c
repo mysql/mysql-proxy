@@ -7,7 +7,6 @@
 #define S(x) x->str, x->len
 
 #include "sql-tokenizer.h"
-#include "sql-tokenizer-lua.h"
 
 static int proxy_tokenize_token_get(lua_State *L) {
 	sql_token *token = *(sql_token **)luaL_checkself(L); 
@@ -80,7 +79,7 @@ static int proxy_tokenize_gc(lua_State *L) {
 }
 
 
-int sql_tokenizer_lua_getmetatable(lua_State *L) {
+static int sql_tokenizer_lua_getmetatable(lua_State *L) {
 	static const struct luaL_reg methods[] = {
 		{ "__index", proxy_tokenize_get },
 		{ "__len",   proxy_tokenize_len },
@@ -110,4 +109,36 @@ int proxy_tokenize(lua_State *L) {
 	return 1;
 }
 
+/*
+** Assumes the table is on top of the stack.
+*/
+static void set_info (lua_State *L) {
+	lua_pushliteral (L, "_COPYRIGHT");
+	lua_pushliteral (L, "Copyright (C) 2008 MySQL AB");
+	lua_settable (L, -3);
+	lua_pushliteral (L, "_DESCRIPTION");
+	lua_pushliteral (L, "a simple tokenizer for mysql.*");
+	lua_settable (L, -3);
+	lua_pushliteral (L, "_VERSION");
+	lua_pushliteral (L, "LuaMySQLTokenizer 0.1");
+	lua_settable (L, -3);
+}
+
+
+static const struct luaL_reg mysql_tokenizerlib[] = {
+	{"tokenize", proxy_tokenize},
+	{NULL, NULL},
+};
+
+#if defined(_WIN32)
+# define LUAEXT_API __declspec(dllexport)
+#else
+# define LUAEXT_API extern
+#endif
+
+LUAEXT_API int luaopen_mysql_tokenizer (lua_State *L) {
+	luaL_register (L, "tokenizer", mysql_tokenizerlib);
+	set_info (L);
+	return 1;
+}
 

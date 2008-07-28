@@ -4,6 +4,8 @@
 
 --]]
 
+require("mysql.tokenizer")
+
 module("proxy.tokenizer", package.seeall)
 
 ---
@@ -89,7 +91,7 @@ end
 -- this function is only a wrapper and exists mostly
 -- for constancy and documentation reasons
 function tokenize(packet)
-	return proxy.tokenize(packet)
+	return tokenizer.tokenize(packet)
 end
 
 ---

@@ -54,8 +54,6 @@
  *   - basic socket struct 
  * - network-mysqld-table.c
  *   - internal tables to select from on the admin interface (to be removed) 
- * - \ref sql-tokenizer.h "sql-tokenizer.y"
- *   - a flex based tokenizer for MySQL's SQL dialect (no parser) 
  * - network-conn-pool.c
  *   - a connection pool for server connections 
  */

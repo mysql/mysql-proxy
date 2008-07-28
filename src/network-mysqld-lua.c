@@ -23,7 +23,6 @@
 #include "network-backend-lua.h"
 #include "network-conn-pool.h"
 #include "network-conn-pool-lua.h"
-#include "sql-tokenizer-lua.h"
 
 #define C(x) x, sizeof(x) - 1
 
@@ -342,14 +341,6 @@ int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char
 
 
 	lua_setfield(L, -2, "queries"); /* proxy.queries = <userdata> */
-
-	/**
-	 * export internal functions 
-	 *
-	 * @note: might be moved into a lua-c-lib instead
-	 */
-	lua_pushcfunction(L, proxy_tokenize);
-	lua_setfield(L, -2, "tokenize");
 
 	/**
 	 * proxy.connection is (mostly) read-only
