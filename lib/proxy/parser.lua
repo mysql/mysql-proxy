@@ -28,7 +28,9 @@ function get_tables(tokens)
 
 	local tables = {}
 
-	for i, token in ipairs(tokens) do
+	for i = 1, #tokens do
+		local token = tokens[i]
+
 		-- print(i .. " token: " .. token["token_name"])
 		if token["token_name"] == "TK_COMMENT" or
 		   token["token_name"] == "TK_UNKNOWN" then
