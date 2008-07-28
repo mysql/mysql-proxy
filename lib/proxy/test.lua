@@ -123,17 +123,17 @@ function ProxyBaseTest:setDefaultScope()
 		COM_DAEMON = 29,
 
 		MYSQLD_PACKET_OK = 0,
+		MYSQLD_PACKET_EOF = 254,
+		MYSQLD_PACKET_ERR = 255,
 
-		tokenize = function ()
-			error("proxy.tokenize() is only fake, you need to implement it")
-		end,
+		MYSQL_TYPE_STRING = 254,
 
 		response = { }
 	}
 	
 	-- make access to the proxy.* strict
 	setmetatable(proxy, {
-		__index = function (tbl, key) error(("proxy.[%s] is unknown"):format(key)) end
+		__index = function (tbl, key) error(("proxy.[%s] is unknown, please adjust the mock here"):format(key)) end
 	})
 
 	_G.proxy           = proxy
