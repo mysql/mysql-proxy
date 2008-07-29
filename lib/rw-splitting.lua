@@ -201,7 +201,8 @@ function read_query( packet )
 			is_in_select_calc_found_rows = false
 			local is_insert_id = false
 
-			for i, token in ipairs(tokens) do
+			for i = 1, #tokens do
+				local token = tokens[i]
 				-- SQL_CALC_FOUND_ROWS + FOUND_ROWS() have to be executed 
 				-- on the same connection
 				-- print("token: " .. token.token_name)
