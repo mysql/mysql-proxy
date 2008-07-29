@@ -31,6 +31,8 @@ DEBUG = DEBUG + 0
 
 local xtab_version = '0.1.3'
 
+local tokenizer = require("proxy.tokenizer")
+
 --[[
    error status for the xtab sequence
    if an error happens in a query before the last one,
@@ -165,7 +167,7 @@ function read_query( packet )
     -- simple tokeninzing the query, looking for accepted pattern
     --
     local option, table_name, row_field, col_field , op, op_col , summary
-    local query_tokens = proxy.tokenize(query)
+    local query_tokens = tokenizer.tokenize(query)
     local START_TOKEN = 0
 
     if  ( query_tokens[1]['text']:lower() == 'xtab' )

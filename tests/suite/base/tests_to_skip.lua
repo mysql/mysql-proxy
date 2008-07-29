@@ -12,8 +12,7 @@ tests_to_skip = {
         ['bug_35669']   = 'not fixed yet',
         ['bug_30867']   = 'needs backends',
         ['load_multi']   = 'needs backends',
-        ['xtab1']   = 'needs backends',
-        ['xtab2']   = 'needs backends',
+        ['xtab2']   = 'works, but needs a real mysql-server',
         ['select_affected_rows']   = 'needs backends',
 
 }

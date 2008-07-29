@@ -1,0 +1,2 @@
+chain_proxy('xtab1-mock.lua','xtab1-test.lua')
+
