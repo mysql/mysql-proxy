@@ -25,6 +25,20 @@ function TestScript:testNormalize()
 	assertEquals(norm_query, "SET `GLOBAL` `unknown` . `unknown` = ? ")
 end
 
+---
+-- test if we can access the fields step-by-step and out-of-range
+function TestScript:testFields()
+	local cmd = command.parse(string.char(proxy.COM_QUERY) .. "FOO BAR")
+
+	local tokens = tokenizer.tokenize(cmd.query);
+
+	assertEquals(tokens[0], nil)
+	assertEquals(tokens[1].text, "FOO")
+	assertEquals(tokens[2].text, "BAR")
+	assertEquals(tokens[3], nil)
+end
+
+
 
 ---
 -- the test suite runner
