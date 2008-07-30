@@ -648,6 +648,9 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 			con->state = CON_STATE_READ_QUERY;
 		}
 		break;
+    case CON_STATE_ERROR:
+        g_debug("%s.%d: not executing plugin function in state CON_STATE_ERROR", __FILE__, __LINE__);
+        return NETWORK_SOCKET_SUCCESS;
 	default:
 		g_error("%s.%d: unhandled state: %d", 
 				__FILE__, __LINE__,
@@ -836,7 +839,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
-				g_error("%s.%d: plugin_call(CON_STATE_CONNECT_SERVER) returned an error", __FILE__, __LINE__);
+				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_HANDSHAKE) returned an error", __FILE__, __LINE__);
 				break;
 			}
 
@@ -1344,7 +1347,12 @@ void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 
 	network_socket_set_non_blocking(client_con->client);
 
-	network_address_resolve_address(&(client_con->client->addr));
+	
+	if (network_address_resolve_address(&(client_con->client->addr)) != NETWORK_SOCKET_SUCCESS) {
+        g_message("%s.%d: resolving address failed, closing connection", __FILE__, __LINE__);
+		network_mysqld_con_free(client_con);
+        return;
+	}
 
 	/**
 	 * inherit the config to the new connection 

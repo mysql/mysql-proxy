@@ -607,7 +607,11 @@ function start_proxy(proxy_name, proxy_options)
 
 	-- remove the old pid-file if it exists
 	os.remove(proxy_options['pid-file'])
-
+	-- if we are supposed to listen on a UNIX socket, remove it first, because we don't clean it up on exit!
+	-- TODO: fix the code, instead of hacking around here! Bug#38415
+	if proxy_options['proxy-address'] == '/tmp/mysql-proxy-test.sock' then
+		os.remove(proxy_options['proxy-address'])
+	end
 	-- os.execute("head " .. proxy_options['proxy-lua-script'])
 	assert(os.execute( 'LUA_PATH="' .. INCLUDE_PATH  .. '"  ' ..
 		PROXY_TRACE .. " " .. PROXY_BINPATH .. " " ..

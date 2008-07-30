@@ -675,8 +675,8 @@ network_socket_retval_t network_address_set_address(network_address *addr, gchar
 
 
 network_socket_retval_t network_address_resolve_address(network_address *addr) {
-	/* resolve the peer-addr if necessary */
-	if (addr->len > 0) return NETWORK_SOCKET_SUCCESS;
+	/* resolve the peer-addr if we haven't done so yet */
+	if (addr->str) return NETWORK_SOCKET_SUCCESS;
 
 	switch (addr->addr.common.sa_family) {
 	case AF_INET:
@@ -684,10 +684,16 @@ network_socket_retval_t network_address_resolve_address(network_address *addr) {
 				inet_ntoa(addr->addr.ipv4.sin_addr),
 				addr->addr.ipv4.sin_port);
 		break;
+	case AF_UNIX:
+		addr->str = g_strdup(addr->addr.un.sun_path);
+		break;
 	default:
-		g_critical("%s.%d: can't convert addr-type %d into a string", 
-				 __FILE__, __LINE__, 
-				 addr->addr.common.sa_family);
+        if (addr->addr.common.sa_family > AF_MAX)
+            g_debug("%s.%d: ignoring invalid sa_family %d", __FILE__, __LINE__, addr->addr.common.sa_family);
+        else
+            g_warning("%s.%d: can't convert addr-type %d into a string",
+				      __FILE__, __LINE__, 
+				      addr->addr.common.sa_family);
 		return NETWORK_SOCKET_ERROR;
 	}
 

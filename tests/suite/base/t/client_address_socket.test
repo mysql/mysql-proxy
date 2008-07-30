@@ -1,0 +1,2 @@
+connect (proxy_socket, , , , , , /tmp/mysql-proxy-test.sock);
+SELECT 1;
