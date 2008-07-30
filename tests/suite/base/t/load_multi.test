@@ -1,7 +1,7 @@
-pload /tmp/lm2.lua;
+pload base/t/lm2.lua;
 connect (conn1,127.0.0.1,$MYSQL_USER,$MYSQL_PASSWORD,test,$PROXY_PORT,);
 select pload status;
-pload /tmp/lm1.lua;
+pload base/t/lm1.lua;
 connection conn1;
 select 'first' as info;
 select pload status;
@@ -18,8 +18,8 @@ select pload status;
 connection default;
 disconnect conn1;
 disconnect conn2;
-pload /tmp/lm3.lua;
+pload base/t/lm3.lua;
 select 1000;
-punload /tmp/lm3.lua;
+punload base/t/lm3.lua;
 select 1000;
 

@@ -1,12 +1,12 @@
-pload /tmp/lm2.lua;
+pload base/t/lm2.lua;
 info
-module "/tmp/lm2.lua" loaded
+module "base/t/lm2.lua" loaded
 select pload status;
 function	hits
 read_query2	1
-pload /tmp/lm1.lua;
+pload base/t/lm1.lua;
 info
-module "/tmp/lm1.lua" loaded
+module "base/t/lm1.lua" loaded
 select 'first' as info;
 info
 first
@@ -37,14 +37,14 @@ read_auth_result1	2
 read_handshake1	2
 read_query2	8
 connect_server1	2
-pload /tmp/lm3.lua;
+pload base/t/lm3.lua;
 info
-module "/tmp/lm3.lua" loaded
+module "base/t/lm3.lua" loaded
 select 1000;
 result
 one thousand
-punload /tmp/lm3.lua;
-/tmp/lm3.lua
+punload base/t/lm3.lua;
+base/t/lm3.lua
 unloaded
 select 1000;
 1000
