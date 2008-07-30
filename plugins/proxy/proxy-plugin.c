@@ -127,7 +127,6 @@ typedef int socklen_t;
 
 #include "proxy-plugin.h"
 
-#include "sql-tokenizer.h"
 #include "lua-load-factory.h"
 
 #define C(x) x, sizeof(x) - 1
