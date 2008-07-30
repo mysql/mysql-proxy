@@ -312,6 +312,7 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 %%
 
 	/** comments */
+"--"\r?\n       comment_token_id = TK_COMMENT;       sql_token_append(tokens, comment_token_id, "");
 "/*"		comment_token_id = TK_COMMENT;       sql_token_append(tokens, comment_token_id, ""); BEGIN(COMMENT);
 "/*!"		comment_token_id = TK_COMMENT_MYSQL; sql_token_append(tokens, comment_token_id, ""); BEGIN(COMMENT);
 "--"[[:blank:]]		comment_token_id = TK_COMMENT; sql_token_append(tokens, comment_token_id, ""); BEGIN(LINECOMMENT);

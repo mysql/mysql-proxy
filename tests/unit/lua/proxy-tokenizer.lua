@@ -38,6 +38,21 @@ function TestScript:testFields()
 	assertEquals(tokens[3], nil)
 end
 
+---
+-- test if empty -- comments are detected
+function TestScript:testComments()
+	local cmd = command.parse(string.char(proxy.COM_QUERY) .. "--\nSELECT 1\n")
+
+	local tokens = tokenizer.tokenize(cmd.query)
+	
+	assertEquals(tokens[1].token_name, "TK_COMMENT")
+	assertEquals(tokens[1].text, "")
+	assertEquals(tokens[2].token_name, "TK_SQL_SELECT")
+	assertEquals(tokens[2].text, "SELECT")
+	assertEquals(tokens[3].token_name, "TK_INTEGER")
+	assertEquals(tokens[3].text, "1")
+end
+
 
 
 ---
