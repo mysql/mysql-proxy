@@ -171,7 +171,7 @@ void t_eof_packet_append(void) {
 
 	g_assert_cmpint(0, ==, network_mysqld_proto_append_eof_packet(packet->data, eof_packet));
 	g_assert_cmpint(5, ==, packet->data->len);
-	g_assert_cmpint(0, ==, memcmp(packet->data->str, C("\xfe\x02\x00\x01\x00")));
+	g_assert_cmpint(0, ==, memcmp(packet->data->str, C("\xfe\x01\x00\x02\x00")));
 	
 	network_mysqld_eof_packet_free(eof_packet);
 

@@ -839,8 +839,8 @@ int network_mysqld_proto_get_eof_packet(network_packet *packet, network_mysqld_e
 		return -1;
 	}
 
-	err = err || network_mysqld_proto_get_int16(packet, &server_status);
 	err = err || network_mysqld_proto_get_int16(packet, &warning_count);
+	err = err || network_mysqld_proto_get_int16(packet, &server_status);
 
 	if (!err) {
 		eof_packet->server_status = server_status;
@@ -852,8 +852,8 @@ int network_mysqld_proto_get_eof_packet(network_packet *packet, network_mysqld_e
 
 int network_mysqld_proto_append_eof_packet(GString *packet, network_mysqld_eof_packet_t *eof_packet) {
 	network_mysqld_proto_append_int8(packet, MYSQLD_PACKET_EOF); /* no fields */
-	network_mysqld_proto_append_int16(packet, eof_packet->server_status); /* autocommit */
 	network_mysqld_proto_append_int16(packet, eof_packet->warnings); /* no warnings */
+	network_mysqld_proto_append_int16(packet, eof_packet->server_status); /* autocommit */
 
 	return 0;
 }
