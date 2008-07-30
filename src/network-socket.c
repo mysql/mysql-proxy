@@ -684,9 +684,11 @@ network_socket_retval_t network_address_resolve_address(network_address *addr) {
 				inet_ntoa(addr->addr.ipv4.sin_addr),
 				addr->addr.ipv4.sin_port);
 		break;
+#ifdef HAVE_SYS_UN_H
 	case AF_UNIX:
 		addr->str = g_strdup(addr->addr.un.sun_path);
 		break;
+#endif
 	default:
         if (addr->addr.common.sa_family > AF_MAX)
             g_debug("%s.%d: ignoring invalid sa_family %d", __FILE__, __LINE__, addr->addr.common.sa_family);
