@@ -567,6 +567,7 @@ network_address *network_address_new() {
 	network_address *addr;
 
 	addr = g_new0(network_address, 1);
+	addr->len = sizeof(addr->addr.common);
 
 	return addr;
 }
@@ -703,3 +704,43 @@ network_socket_retval_t network_address_resolve_address(network_address *addr) {
 
 }
 
+/**
+ * check if the host-part of the address is equal
+ */
+gboolean network_address_is_local(network_address *dst_addr, network_address *src_addr) {
+	if (src_addr->addr.common.sa_family != dst_addr->addr.common.sa_family) {
+		g_message("%s: is-local family %d != %d",
+				G_STRLOC,
+				src_addr->addr.common.sa_family,
+				dst_addr->addr.common.sa_family
+				);
+		return FALSE;
+	}
+
+	switch (src_addr->addr.common.sa_family) {
+	case AF_INET:
+		/* inet_ntoa() returns a pointer to a static buffer
+		 * we can't call it twice in the same function-call */
+
+		g_debug("%s: is-local src: %s(:%d) =? ...",
+				G_STRLOC,
+				inet_ntoa(src_addr->addr.ipv4.sin_addr),
+				ntohs(src_addr->addr.ipv4.sin_port));
+
+		g_debug("%s: is-local dst: %s(:%d)",
+				G_STRLOC,
+				inet_ntoa(dst_addr->addr.ipv4.sin_addr),
+				ntohs(dst_addr->addr.ipv4.sin_port)
+				);
+
+		return (dst_addr->addr.ipv4.sin_addr.s_addr == src_addr->addr.ipv4.sin_addr.s_addr);
+#ifdef HAVE_SYS_UN_H
+	case AF_UNIX:
+		/* we are always local */
+		return TRUE;
+#endif
+	default:
+		g_critical("%s: sa_family = %d", G_STRLOC, src_addr->addr.common.sa_family);
+		return FALSE;
+	}
+}

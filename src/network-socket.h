@@ -126,6 +126,7 @@ NETWORK_API network_address *network_address_new(void);
 NETWORK_API void network_address_free(network_address *);
 NETWORK_API network_socket_retval_t network_address_set_address(network_address *addr, gchar *address);
 NETWORK_API network_socket_retval_t network_address_resolve_address(network_address *addr);
+NETWORK_API gboolean network_address_is_local(network_address *dst_addr, network_address *src_addr);
 
 #endif
 
