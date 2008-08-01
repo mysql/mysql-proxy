@@ -268,6 +268,58 @@ void network_mysqld_proto_fields_free(GPtrArray *fields) {
 }
 
 struct {
+	enum Log_event_type type;
+	const char *name;
+} event_type_name[] = {
+#define V(x) x, #x
+	{ V(UNKNOWN_EVENT) },
+	{ V(START_EVENT_V3) },
+	{ V(QUERY_EVENT) },
+	{ V(STOP_EVENT) },
+	{ V(ROTATE_EVENT) },
+	{ V(INTVAR_EVENT) },
+	{ V(LOAD_EVENT) },
+	{ V(SLAVE_EVENT) },
+	{ V(CREATE_FILE_EVENT) },
+	{ V(APPEND_BLOCK_EVENT) },
+	{ V(EXEC_LOAD_EVENT) },
+	{ V(DELETE_FILE_EVENT) },
+	{ V(NEW_LOAD_EVENT) },
+	{ V(RAND_EVENT) },
+	{ V(USER_VAR_EVENT) },
+	{ V(FORMAT_DESCRIPTION_EVENT) },
+	{ V(XID_EVENT) },
+	{ V(BEGIN_LOAD_QUERY_EVENT) },
+	{ V(EXECUTE_LOAD_QUERY_EVENT) },
+	{ V(TABLE_MAP_EVENT ) },
+	{ V(PRE_GA_WRITE_ROWS_EVENT ) },
+	{ V(PRE_GA_UPDATE_ROWS_EVENT ) },
+	{ V(PRE_GA_DELETE_ROWS_EVENT ) },
+	{ V(WRITE_ROWS_EVENT ) },
+	{ V(UPDATE_ROWS_EVENT ) },
+	{ V(DELETE_ROWS_EVENT ) },
+	{ V(INCIDENT_EVENT) },
+
+#undef V
+	{ 0, NULL }
+};
+
+const char *network_mysqld_binlog_get_eventname(enum Log_event_type type) {
+	static const char *unknown_type = "UNKNOWN";
+	guint i;
+
+	for (i = 0; event_type_name[i].name; i++) {
+		if ((guchar)event_type_name[i].type == (guchar)type) return event_type_name[i].name;
+	}
+
+	g_critical("%s: event-type %d isn't known yet", 
+			G_STRLOC,
+			type);
+
+	return unknown_type;
+}
+
+struct {
 	enum enum_field_types type;
 	const char *name;
 } field_type_name[] = {
@@ -819,10 +871,12 @@ int replicate_binlog_dump_file(
 			break;
 		}
 
-		g_print("-- %s: (--binlog-start-pos=%ld (next event at %"G_GUINT32_FORMAT"))\n",
+		g_print("-- %s: (--binlog-start-pos=%ld (next event at %"G_GUINT32_FORMAT")) event = %s (%d)\n",
 				G_STRLOC,
 				binlog_pos,
-				event->log_pos
+				event->log_pos,
+				network_mysqld_binlog_get_eventname(event->event_type),
+				event->event_type
 				);
 	
 		binlog_pos += 19;
