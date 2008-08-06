@@ -273,7 +273,12 @@ static int lua_proto_append_response_packet (lua_State *L) {
 	LUA_IMPORT_STR(auth_response, response);
 	LUA_IMPORT_STR(auth_response, database);
 
-	network_mysqld_proto_append_auth_response(packet, auth_response);
+	if (network_mysqld_proto_append_auth_response(packet, auth_response)) {
+		network_mysqld_auth_response_free(auth_response);
+
+		luaL_error(L, "to_response_packet() failed");
+		return 0;
+	}
 
 	lua_pushlstring(L, S(packet));
 	
