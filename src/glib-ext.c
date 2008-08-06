@@ -124,6 +124,9 @@ void g_debug_hexdump(const char *msg, const void *_s, size_t len) {
        	hex = g_string_new(NULL);
 
 	for (i = 0; i < len; i++) {
+		if (i % 16 == 0) {
+			g_string_append_printf(hex, "[%04x]  ", i);
+		}
 		g_string_append_printf(hex, "%02x", s[i]);
 
 		if ((i + 1) % 16 == 0) {
