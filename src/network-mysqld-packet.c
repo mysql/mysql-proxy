@@ -575,6 +575,7 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 	guint8 field_count;
 	guint i;
 	int err = 0;
+	guint32 capabilities = CLIENT_PROTOCOL_41;
     
 	/*
 	 * read(6, "\1\0\0\1", 4)                  = 4
@@ -610,23 +611,32 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 		err = err || network_mysqld_proto_skip_network_header(&packet);
  
 		field = network_mysqld_proto_fielddef_new();
-        
-		err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->catalog, NULL);
-		err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->db, NULL);
-		err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->table, NULL);
-		err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->org_table, NULL);
-		err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->name, NULL);
-		err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->org_name, NULL);
-        
-		err = err || network_mysqld_proto_skip(&packet, 1); /* filler */
-        
-		err = err || network_mysqld_proto_get_int16(&packet, &field->charsetnr);
-		err = err || network_mysqld_proto_get_int32(&packet, &field->length);
-		err = err || network_mysqld_proto_get_int8(&packet, &field->type);
-		err = err || network_mysqld_proto_get_int16(&packet, &field->flags);
-		err = err || network_mysqld_proto_get_int8(&packet, &field->decimals);
-        
-		err = err || network_mysqld_proto_skip(&packet, 2); /* filler */
+
+		if (capabilities & CLIENT_PROTOCOL_41) {
+			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->catalog, NULL);
+			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->db, NULL);
+			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->table, NULL);
+			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->org_table, NULL);
+			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->name, NULL);
+			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->org_name, NULL);
+	        
+			err = err || network_mysqld_proto_skip(&packet, 1); /* filler */
+	        
+			err = err || network_mysqld_proto_get_int16(&packet, &field->charsetnr);
+			err = err || network_mysqld_proto_get_int32(&packet, &field->length);
+			err = err || network_mysqld_proto_get_int8(&packet, &field->type);
+			err = err || network_mysqld_proto_get_int16(&packet, &field->flags);
+			err = err || network_mysqld_proto_get_int8(&packet, &field->decimals);
+	        
+			err = err || network_mysqld_proto_skip(&packet, 2); /* filler */
+		} else {
+			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->table, NULL);
+			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->name, NULL);
+			err = err || network_mysqld_proto_get_int32(&packet, &field->length);
+			err = err || network_mysqld_proto_get_int8(&packet, &field->type);
+			err = err || network_mysqld_proto_get_int16(&packet, &field->flags);
+			err = err || network_mysqld_proto_get_int8(&packet, &field->decimals);
+		}
         
 		g_ptr_array_add(fields, field);
 
@@ -672,7 +682,8 @@ void network_mysqld_ok_packet_free(network_mysqld_ok_packet_t *ok_packet) {
 int network_mysqld_proto_get_ok_packet(network_packet *packet, network_mysqld_ok_packet_t *ok_packet) {
 	guint8 field_count;
 	guint64 affected, insert_id;
-	guint16 server_status, warning_count;
+	guint16 server_status, warning_count = 0;
+	guint32 capabilities = CLIENT_PROTOCOL_41;
 
 	int err = 0;
 
@@ -689,7 +700,9 @@ int network_mysqld_proto_get_ok_packet(network_packet *packet, network_mysqld_ok
 	err = err || network_mysqld_proto_get_lenenc_int(packet, &affected);
 	err = err || network_mysqld_proto_get_lenenc_int(packet, &insert_id);
 	err = err || network_mysqld_proto_get_int16(packet, &server_status);
-	err = err || network_mysqld_proto_get_int16(packet, &warning_count);
+	if (capabilities & CLIENT_PROTOCOL_41) {
+		err = err || network_mysqld_proto_get_int16(packet, &warning_count);
+	}
 
 	if (!err) {
 		ok_packet->affected_rows = affected;
@@ -702,11 +715,15 @@ int network_mysqld_proto_get_ok_packet(network_packet *packet, network_mysqld_ok
 }
 
 int network_mysqld_proto_append_ok_packet(GString *packet, network_mysqld_ok_packet_t *ok_packet) {
+	guint32 capabilities = CLIENT_PROTOCOL_41;
+
 	network_mysqld_proto_append_int8(packet, 0); /* no fields */
 	network_mysqld_proto_append_lenenc_int(packet, ok_packet->affected_rows);
 	network_mysqld_proto_append_lenenc_int(packet, ok_packet->insert_id);
 	network_mysqld_proto_append_int16(packet, ok_packet->server_status); /* autocommit */
-	network_mysqld_proto_append_int16(packet, ok_packet->warnings); /* no warnings */
+	if (capabilities & CLIENT_PROTOCOL_41) {
+		network_mysqld_proto_append_int16(packet, ok_packet->warnings); /* no warnings */
+	}
 
 	return 0;
 }
@@ -737,6 +754,7 @@ int network_mysqld_proto_get_err_packet(network_packet *packet, network_mysqld_e
 	guint8 field_count, marker;
 	guint16 errcode;
 	gchar *sqlstate = NULL, *errmsg = NULL;
+	guint32 capabilities = CLIENT_PROTOCOL_41;
 
 	int err = 0;
 
@@ -751,9 +769,11 @@ int network_mysqld_proto_get_err_packet(network_packet *packet, network_mysqld_e
 	}
 
 	err = err || network_mysqld_proto_get_int16(packet, &errcode);
-	err = err || network_mysqld_proto_get_int8(packet, &marker);
-	err = err || (marker != '#');
-	err = err || network_mysqld_proto_get_string_len(packet, &sqlstate, 5);
+	if (capabilities & CLIENT_PROTOCOL_41) {
+		err = err || network_mysqld_proto_get_int8(packet, &marker);
+		err = err || (marker != '#');
+		err = err || network_mysqld_proto_get_string_len(packet, &sqlstate, 5);
+	}
 	if (packet->offset < packet->data->len) {
 		err = err || network_mysqld_proto_get_string_len(packet, &errmsg, packet->data->len - packet->offset);
 	}
@@ -787,14 +807,17 @@ int network_mysqld_proto_get_err_packet(network_packet *packet, network_mysqld_e
  */
 int network_mysqld_proto_append_err_packet(GString *packet, network_mysqld_err_packet_t *err_packet) {
 	int errmsg_len;
+	guint32 capabilities = CLIENT_PROTOCOL_41;
 
 	network_mysqld_proto_append_int8(packet, 0xff); /* ERR */
 	network_mysqld_proto_append_int16(packet, err_packet->errcode); /* errorcode */
-	g_string_append_c(packet, '#');
-	if (err_packet->sqlstate && (err_packet->sqlstate->len > 0)) {
-		g_string_append_len(packet, err_packet->sqlstate->str, 5);
-	} else {
-		g_string_append_len(packet, C("07000"));
+	if (capabilities & CLIENT_PROTOCOL_41) {
+		g_string_append_c(packet, '#');
+		if (err_packet->sqlstate && (err_packet->sqlstate->len > 0)) {
+			g_string_append_len(packet, err_packet->sqlstate->str, 5);
+		} else {
+			g_string_append_len(packet, C("07000"));
+		}
 	}
 
 	errmsg_len = err_packet->errmsg->len;
@@ -826,6 +849,7 @@ int network_mysqld_proto_get_eof_packet(network_packet *packet, network_mysqld_e
 	guint8 field_count;
 	guint64 affected, insert_id;
 	guint16 server_status, warning_count;
+	guint32 capabilities = CLIENT_PROTOCOL_41;
 
 	int err = 0;
 
@@ -839,21 +863,29 @@ int network_mysqld_proto_get_eof_packet(network_packet *packet, network_mysqld_e
 		return -1;
 	}
 
-	err = err || network_mysqld_proto_get_int16(packet, &warning_count);
-	err = err || network_mysqld_proto_get_int16(packet, &server_status);
-
-	if (!err) {
-		eof_packet->server_status = server_status;
-		eof_packet->warnings      = warning_count;
+	if (capabilities & CLIENT_PROTOCOL_41) {
+		err = err || network_mysqld_proto_get_int16(packet, &warning_count);
+		err = err || network_mysqld_proto_get_int16(packet, &server_status);
+		if (!err) {
+			eof_packet->server_status = server_status;
+			eof_packet->warnings      = warning_count;
+		}
+	} else {
+		eof_packet->server_status = 0;
+		eof_packet->warnings      = 0;
 	}
 
 	return err ? -1 : 0;
 }
 
 int network_mysqld_proto_append_eof_packet(GString *packet, network_mysqld_eof_packet_t *eof_packet) {
+	guint32 capabilities = CLIENT_PROTOCOL_41;
+
 	network_mysqld_proto_append_int8(packet, MYSQLD_PACKET_EOF); /* no fields */
-	network_mysqld_proto_append_int16(packet, eof_packet->warnings); /* no warnings */
-	network_mysqld_proto_append_int16(packet, eof_packet->server_status); /* autocommit */
+	if (capabilities & CLIENT_PROTOCOL_41) {
+		network_mysqld_proto_append_int16(packet, eof_packet->warnings); /* no warnings */
+		network_mysqld_proto_append_int16(packet, eof_packet->server_status); /* autocommit */
+	}
 
 	return 0;
 }
@@ -941,8 +973,10 @@ int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysq
 	
 	err = err || network_mysqld_proto_skip(packet, 13);
 	
-	err = err || network_mysqld_proto_get_string_len(packet, &scramble_2, 12);
-	err = err || network_mysqld_proto_skip(packet, 1);
+	if (shake->capabilities & CLIENT_SECURE_CONNECTION) {
+		err = err || network_mysqld_proto_get_string_len(packet, &scramble_2, 12);
+		err = err || network_mysqld_proto_skip(packet, 1);
+	}
 
 	if (!err) {
 		/* process the data */
@@ -980,7 +1014,7 @@ int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysq
 	
 		g_string_truncate(shake->challenge, 0);
 		g_string_append_len(shake->challenge, scramble_1, 8);
-		g_string_append_len(shake->challenge, scramble_2, 12);
+		if (scramble_2) g_string_append_len(shake->challenge, scramble_2, 12); /* in old-password, no 2nd scramble */
 	}
 
 	if (scramble_1) g_free(scramble_1);
@@ -1041,6 +1075,7 @@ network_mysqld_auth_response *network_mysqld_auth_response_new() {
 	auth->response = g_string_new("");
 	auth->username = g_string_new("");
 	auth->database = g_string_new("");
+	auth->capabilities = CLIENT_SECURE_CONNECTION | CLIENT_PROTOCOL_41;
 
 	return auth;
 }
@@ -1057,6 +1092,7 @@ void network_mysqld_auth_response_free(network_mysqld_auth_response *auth) {
 
 int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysqld_auth_response *auth) {
 	int err = 0;
+	guint16 l_cap;
 	/* extract the default db from it */
 
 	/*
@@ -1081,23 +1117,41 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 	 *  world\0
 	 */
 
-	err = err || network_mysqld_proto_get_int32(packet, &auth->capabilities);
-	err = err || network_mysqld_proto_get_int32(packet, &auth->max_packet_size);
-	err = err || network_mysqld_proto_get_int8(packet, &auth->charset);
 
-	err = err || network_mysqld_proto_skip(packet, 23);
+	/* 4.0 uses 2 byte, 4.1+ uses 4 bytes, but the proto-flag is in the lower 2 bytes */
+	err = err || network_mysqld_proto_peek_int16(packet, &l_cap);
+	if (err) return -1;
+
+	if (l_cap & CLIENT_PROTOCOL_41) {
+		err = err || network_mysqld_proto_get_int32(packet, &auth->capabilities);
+		err = err || network_mysqld_proto_get_int32(packet, &auth->max_packet_size);
+		err = err || network_mysqld_proto_get_int8(packet, &auth->charset);
+
+		err = err || network_mysqld_proto_skip(packet, 23);
 	
-	err = err || network_mysqld_proto_get_gstring(packet, auth->username);
-	err = err || network_mysqld_proto_get_lenenc_gstring(packet, auth->response);
-
-	if (packet->offset != packet->data->len) {
-		/* database is optional and may include a trailing \0 char */
-		err = err || network_mysqld_proto_get_gstring_len(packet, packet->data->len - packet->offset, auth->database);
-
-		if (auth->database->len > 0 && 
-		    (auth->database->str[auth->database->len - 1] == '\0')) {
-			auth->database->len--;
+		err = err || network_mysqld_proto_get_gstring(packet, auth->username);
+		if (auth->capabilities & CLIENT_SECURE_CONNECTION) {
+			err = err || network_mysqld_proto_get_lenenc_gstring(packet, auth->response);
+		} else {
+			err = err || network_mysqld_proto_get_gstring(packet, auth->response);
 		}
+
+		if (packet->offset != packet->data->len) {
+			/* database is optional and may include a trailing \0 char */
+			err = err || network_mysqld_proto_get_gstring_len(packet, packet->data->len - packet->offset, auth->database);
+
+			if (auth->database->len > 0 && 
+			    (auth->database->str[auth->database->len - 1] == '\0')) {
+				auth->database->len--;
+			}
+		}
+	} else {
+		err = err || network_mysqld_proto_get_int16(packet, &l_cap);
+		err = err || network_mysqld_proto_get_int24(packet, &auth->max_packet_size);
+		err = err || network_mysqld_proto_get_gstring(packet, auth->username);
+		err = err || network_mysqld_proto_get_gstring(packet, auth->response);
+
+		auth->capabilities = l_cap;
 	}
 
 	return err ? -1 : 0;
@@ -1108,6 +1162,11 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
  */
 int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_auth_response *auth) {
 	int i;
+
+	if (!(auth->capabilities & CLIENT_PROTOCOL_41)) {
+		g_critical("%s: auth-capatilities = 0x%08x (require CLIENT_PROTOCOL_41)", G_STRLOC, auth->capabilities);
+		return -1;
+	}
 
 	network_mysqld_proto_append_int32(packet, auth->capabilities);
 	network_mysqld_proto_append_int32(packet, auth->max_packet_size); /* max-allowed-packet */

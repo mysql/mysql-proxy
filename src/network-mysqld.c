@@ -941,6 +941,9 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
+			case NETWORK_SOCKET_ERROR:
+				con->state = CON_STATE_SEND_ERROR;
+				break;
 			default:
 				g_critical("%s.%d: plugin_call(CON_STATE_READ_AUTH) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
 				con->state = CON_STATE_ERROR;

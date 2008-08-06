@@ -1,2 +1,4 @@
---error 2013
-connect(proto40,root,,,14040)
+SELECT thread_id();
+--error 2007
+connect(proto40,127.0.0.1,root,,,14040);
+

@@ -1,7 +1,8 @@
 ---
 -- test if we handle connects to a pre-4.1 server nicely
 --
---
+local proto = require("mysql.proto")
+
 function packet_auth_40()
 	return
 		"\010\052\046\048\046\050\056\045\100\101\098\117\103\045\108\111" ..
@@ -11,11 +12,7 @@ function packet_auth_40()
 end
 
 function packet_auth_50()
-	return
-		"\010\052\046\048\046\050\056\045\100\101\098\117\103\045\108\111" ..
-		"\103\000\005\000\000\000\036\106\107\090\096\086\107\059\000\044" ..
-		"\032\008\002\000\000\000\000\000\000\000\000\000\000\000\000\000" ..
-		"\000\065\065\065\065\065\065\065\065\065\065\065\065\000"
+	return proto.to_challenge_packet({})
 end
 
 
@@ -28,7 +25,10 @@ function connect_server()
 		proxy.response.packets = { packet_auth_50() }
 	else
 		proxy.response.packets = { packet_auth_40() }
+
 	end
+	this_connection_id = proxy.global.connects
+	proxy.global.connects = proxy.global.connects + 1
 	return proxy.PROXY_SEND_RESULT
 end
 
@@ -41,7 +41,19 @@ function read_query(packet)
 	end
 
 	local query = packet:sub(2) 
-	if true then
+	if query == "SELECT thread_id()" then
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = {
+				fields = { 
+					{ name = "thread_id" },
+				},
+				rows = {
+					{ this_connection_id },
+				}
+			}
+		}
+	else
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_ERR,
 			errmsg = "(mysql-40-mock) " .. query

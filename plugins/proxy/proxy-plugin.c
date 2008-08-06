@@ -563,6 +563,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		network_mysqld_auth_response_free(auth);
 		return NETWORK_SOCKET_ERROR;
 	}
+	if (!(auth->capabilities & CLIENT_PROTOCOL_41)) {
+		network_mysqld_queue_append(con->client->send_queue, C("\xff\xd7\x07" "4.0 protocol is not supported"), con->client->packet_id + 1);
+		return NETWORK_SOCKET_ERROR;
+	}
 
  	con->client->response = auth;
 
@@ -573,7 +577,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	 */
 	switch (proxy_lua_read_auth(con)) {
 	case PROXY_SEND_RESULT:
-	g_debug("%s", G_STRLOC);
 		con->state = CON_STATE_SEND_AUTH_RESULT;
 
 		break;
