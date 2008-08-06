@@ -240,6 +240,27 @@ int network_mysqld_proto_get_int16(network_packet *packet, guint16 *v) {
 }
 
 /**
+ * get a 16-bit integer from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return a the decoded integer
+ * @see network_mysqld_proto_get_int_len()
+ */
+int network_mysqld_proto_peek_int16(network_packet *packet, guint16 *v) {
+	guint64 v64;
+
+	if (network_mysqld_proto_peek_int_len(packet, &v64, 2)) return -1;
+
+	g_assert_cmpint(v64 & 0xffff, ==, v64); /* check that we really only got two byte back */
+
+	*v = v64 & 0xffff;
+
+	return 0;
+}
+
+
+/**
  * get a 24-bit integer from the network packet
  *
  * @param packet the MySQL network packet

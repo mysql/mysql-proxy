@@ -60,6 +60,7 @@ NETWORK_API int network_mysqld_proto_get_int64(network_packet *packet, guint64 *
 
 NETWORK_API int network_mysqld_proto_peek_int_len(network_packet *packet, guint64 *v, gsize size);
 NETWORK_API int network_mysqld_proto_peek_int8(network_packet *packet, guint8 *v);
+NETWORK_API int network_mysqld_proto_peek_int16(network_packet *packet, guint16 *v);
 NETWORK_API int network_mysqld_proto_find_int8(network_packet *packet, guint8 c, guint *pos);
 
 NETWORK_API int network_mysqld_proto_append_int8(GString *packet, guint8 num);
