@@ -630,12 +630,32 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 	        
 			err = err || network_mysqld_proto_skip(&packet, 2); /* filler */
 		} else {
+			guint8 len;
+
+			/* see protocol.cc Protocol::send_fields */
+
 			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->table, NULL);
 			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->name, NULL);
-			err = err || network_mysqld_proto_get_int32(&packet, &field->length);
+			err = err || network_mysqld_proto_get_int8(&packet, &len);
+			err = err || (len != 3);
+			err = err || network_mysqld_proto_get_int24(&packet, &field->length);
+			err = err || network_mysqld_proto_get_int8(&packet, &len);
+			err = err || (len != 1);
 			err = err || network_mysqld_proto_get_int8(&packet, &field->type);
-			err = err || network_mysqld_proto_get_int16(&packet, &field->flags);
-			err = err || network_mysqld_proto_get_int8(&packet, &field->decimals);
+			err = err || network_mysqld_proto_get_int8(&packet, &len);
+			if (len == 3) { /* the CLIENT_LONG_FLAG is set */
+				err = err || network_mysqld_proto_get_int16(&packet, &field->flags);
+				err = err || network_mysqld_proto_get_int8(&packet, &field->decimals);
+			} else if (len == 2) {
+				guint8 flags = 0;
+				err = err || network_mysqld_proto_get_int8(&packet, &flags);
+				err = err || network_mysqld_proto_get_int8(&packet, &field->decimals);
+
+				field->flags = flags;
+			} else {
+				/* well */
+			}
+
 		}
         
 		g_ptr_array_add(fields, field);
