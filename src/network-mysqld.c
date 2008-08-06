@@ -648,9 +648,9 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 			con->state = CON_STATE_READ_QUERY;
 		}
 		break;
-    case CON_STATE_ERROR:
-        g_debug("%s.%d: not executing plugin function in state CON_STATE_ERROR", __FILE__, __LINE__);
-        return NETWORK_SOCKET_SUCCESS;
+	case CON_STATE_ERROR:
+		g_debug("%s.%d: not executing plugin function in state CON_STATE_ERROR", __FILE__, __LINE__);
+		return NETWORK_SOCKET_SUCCESS;
 	default:
 		g_error("%s.%d: unhandled state: %d", 
 				__FILE__, __LINE__,
@@ -771,7 +771,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			break;
 		case CON_STATE_CONNECT_SERVER:
-            switch ((retval = plugin_call(srv, con, con->state))) {
+			switch ((retval = plugin_call(srv, con, con->state))) {
 			case NETWORK_SOCKET_SUCCESS:
 
 				/**
@@ -813,9 +813,11 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				con->state = CON_STATE_SEND_ERROR;
 				break;
 			default:
-				g_error("%s: hook for CON_STATE_CONNECT_SERVER return invalid return code: %d", 
+				g_critical("%s: hook for CON_STATE_CONNECT_SERVER return invalid return code: %d", 
 						G_STRLOC, 
 						retval);
+
+				con->state = CON_STATE_ERROR;
 				
 				break;
 			}
@@ -839,9 +841,12 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
-				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_HANDSHAKE) returned an error", __FILE__, __LINE__);
+				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_HANDSHAKE) returned an error", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				break;
 			}
+
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
@@ -858,7 +863,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 				break;
 			default:
-				g_error("%s.%d: ...", __FILE__, __LINE__);
+				g_critical("%s.%d: ...", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				break;
 			}
 
@@ -896,11 +902,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			}
 
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
+
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_SEND_HANDSHAKE) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				g_critical("%s.%d: plugin_call(CON_STATE_SEND_HANDSHAKE) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				break;
 			}
 
@@ -922,15 +931,19 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
-				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH) returned an error", __FILE__, __LINE__);
-				return;
+				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH) returned an error", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
+				break;
 			}
+			
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_READ_AUTH) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				g_critical("%s.%d: plugin_call(CON_STATE_READ_AUTH) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				break;
 			}
 
@@ -951,12 +964,15 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 				break;
 			}
+			
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_SEND_AUTH) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				g_critical("%s.%d: plugin_call(CON_STATE_SEND_AUTH) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				break;
 			}
 
@@ -978,9 +994,11 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
-				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH_RESULT) returned an error", __FILE__, __LINE__);
-				return;
+				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH_RESULT) returned an error", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
+				break;
 			}
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			/**
 			 * depending on the result-set we have different exit-points
@@ -1022,12 +1040,15 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				con->state = CON_STATE_ERROR;
 				break;
 			}
+			
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: ...", __FILE__, __LINE__);
+				g_critical("%s.%d: ...", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				break;
 			}
 				
@@ -1043,15 +1064,19 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
-				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH_OLD_PASSWORD) returned an error", __FILE__, __LINE__);
+				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_AUTH_OLD_PASSWORD) returned an error", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				return;
 			}
+			
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_READ_AUTH_OLD_PASSWORD) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				g_critical("%s.%d: plugin_call(CON_STATE_READ_AUTH_OLD_PASSWORD) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				break;
 			}
 
@@ -1072,12 +1097,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				con->state = CON_STATE_ERROR;
 				break;
 			}
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: plugin_call(CON_STATE_SEND_AUTH_OLD_PASSWORD) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				g_critical("%s.%d: plugin_call(CON_STATE_SEND_AUTH_OLD_PASSWORD) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				break;
 			}
 
@@ -1097,9 +1124,11 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
-				g_error("%s.%d: network_mysqld_read(CON_STATE_READ_QUERY) returned an error", __FILE__, __LINE__);
+				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_QUERY) returned an error", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				return;
 			}
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
@@ -1186,6 +1215,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				con->state = CON_STATE_ERROR;
 				break;
 			}
+			
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			if (con->is_overlong_packet) {
 				con->state = CON_STATE_READ_QUERY;
@@ -1212,7 +1243,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				
 			break; 
 		case CON_STATE_READ_QUERY_RESULT: 
-            do {
+			do {
 				network_socket *recv_sock;
 
 				recv_sock = con->server;
@@ -1227,9 +1258,11 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					return;
 				case NETWORK_SOCKET_ERROR_RETRY:
 				case NETWORK_SOCKET_ERROR:
-					g_error("%s.%d: network_mysqld_read(CON_STATE_READ_QUERY_RESULT) returned an error", __FILE__, __LINE__);
-					return;
+					g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_QUERY_RESULT) returned an error", __FILE__, __LINE__);
+					con->state = CON_STATE_ERROR;
+					break;
 				}
+				if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 				switch (plugin_call(srv, con, con->state)) {
 				case NETWORK_SOCKET_SUCCESS:
@@ -1239,7 +1272,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					con->state = CON_STATE_ERROR;
 					break;
 				default:
-					g_error("%s.%d: ...", __FILE__, __LINE__);
+					g_critical("%s.%d: ...", __FILE__, __LINE__);
+					con->state = CON_STATE_ERROR;
 					break;
 				}
 
@@ -1249,7 +1283,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_SEND_QUERY_RESULT:
 			/**
 			 * send the query result-set to the client */
-            switch (network_mysqld_write(srv, con->client)) {
+			switch (network_mysqld_write(srv, con->client)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
@@ -1267,13 +1301,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 
 			/* if the write failed, don't call the plugin handlers */
-			if (con->state != CON_STATE_SEND_QUERY_RESULT) break;
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_error("%s.%d: ...", __FILE__, __LINE__);
+				g_critical("%s.%d: ...", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
 				break;
 			}
 
