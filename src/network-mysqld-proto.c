@@ -309,6 +309,36 @@ int network_mysqld_proto_get_int64(network_packet *packet, guint64 *v) {
 }
 
 /**
+ * find a 8-bit integer in the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param _off   offset into the packet
+ * @return a the decoded integer
+ * @see network_mysqld_proto_get_int_len()
+ */
+int network_mysqld_proto_find_int8(network_packet *packet, guint8 c, guint *pos) {
+	int err = 0;
+	guint off = packet->offset;
+
+	while (!err) {
+		guint8 _c;
+
+		err = err || network_mysqld_proto_get_int8(packet, &_c);
+		if (!err) {
+			if (c == _c) {
+				*pos = packet->offset - off;
+				break;
+			}
+		}
+	}
+
+	packet->offset = off;
+
+	return err;
+}
+
+
+/**
  * get a string from the network packet
  *
  * @param packet the MySQL network packet
