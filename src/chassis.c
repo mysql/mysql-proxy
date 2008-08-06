@@ -648,7 +648,19 @@ int main_cmdline(int argc, char **argv) {
 
 	/* handle unknown options */
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
-		g_critical("%s", gerr->message);
+		if (gerr->domain == G_OPTION_ERROR &&
+		    gerr->code == G_OPTION_ERROR_UNKNOWN_OPTION) {
+			g_critical("%s: %s (use --help to show all options)", 
+					G_STRLOC, 
+					gerr->message);
+		} else {
+			g_critical("%s: %s (code = %d, domain = %s)", 
+					G_STRLOC, 
+					gerr->message,
+					gerr->code,
+					g_quark_to_string(gerr->domain)
+					);
+		}
 		
 		exit_code = EXIT_FAILURE;
 		goto exit_nicely;
