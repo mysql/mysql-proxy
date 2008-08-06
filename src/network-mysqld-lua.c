@@ -803,7 +803,7 @@ int network_mysqld_con_lua_handle_proxy_response(network_mysqld_con *con, const 
 			g_message("%s.%d: proxy.response.packets isn't set in %s", __FILE__, __LINE__,
 					lua_script);
 
-			lua_pop(L, 3 + 1); /* fenv + proxy + response + nil */
+			lua_pop(L, 2 + 1); /* proxy + response + nil */
 
 			return -1;
 		} else if (!lua_istable(L, -1)) {
@@ -811,7 +811,7 @@ int network_mysqld_con_lua_handle_proxy_response(network_mysqld_con *con, const 
 					lua_typename(L, lua_type(L, -1)),
 					lua_script);
 
-			lua_pop(L, 3 + 1); /* fenv + proxy + response + packets */
+			lua_pop(L, 2 + 1); /* proxy + response + packets */
 			return -1;
 		}
 
