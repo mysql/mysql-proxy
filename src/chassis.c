@@ -105,6 +105,15 @@
 #include <stdio.h>
 #endif
 
+#ifdef HAVE_VALGRIND_VALGRIND_H
+#include <valgrind/valgrind.h>
+#endif
+
+#ifndef HAVE_VALGRIND_VALGRIND_H
+#define RUNNING_ON_VALGRIND 0
+#endif
+
+
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
 #include "sys-pedantic.h"
@@ -209,6 +218,11 @@ void agent_service_set_state(DWORD new_state, int wait_msec) {
 }
 #endif
 
+static void sigsegv_handler(int G_GNUC_UNUSED signum) {
+	g_on_error_stack_trace(g_get_prgname());
+
+	abort(); /* trigger a SIGABRT instead of just exiting */
+}
 
 /**
  * This is the "real" main which is called both on Windows and UNIX platforms.
@@ -217,7 +231,9 @@ void agent_service_set_state(DWORD new_state, int wait_msec) {
  */
 int main_cmdline(int argc, char **argv) {
 	chassis *srv;
-	
+#ifdef HAVE_SIGACTION
+	static struct sigaction sigsegv_sa;
+#endif
 	/* read the command-line options */
 	GOptionContext *option_ctx;
 	GError *gerr = NULL;
@@ -234,6 +250,7 @@ int main_cmdline(int argc, char **argv) {
 	gchar *default_file = NULL;
 	GOptionEntry *config_entries;
 	gchar **plugin_names = NULL;
+	guint invoke_dbg_on_crash = 0;
 
 	gchar *log_level = NULL;
 
@@ -262,6 +279,7 @@ int main_cmdline(int argc, char **argv) {
 		{ "log-level",                0, 0, G_OPTION_ARG_STRING, NULL, "log all messages of level ... or higer", "(error|warning|info|message|debug)" },
 		{ "log-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "log all messages in a file", "<file>" },
 		{ "log-use-syslog",           0, 0, G_OPTION_ARG_NONE, NULL, "log all messages to syslog", NULL },
+		{ "log-backtrace-on-crash",   0, 0, G_OPTION_ARG_NONE, NULL, "try to invoke debugger on crash", NULL },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -358,6 +376,7 @@ int main_cmdline(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(log_level);
 	main_entries[i++].arg_data  = &(log->log_filename);
 	main_entries[i++].arg_data  = &(log->use_syslog);
+	main_entries[i++].arg_data  = &(invoke_dbg_on_crash);
 
 	option_ctx = g_option_context_new("- MySQL App Shell");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
@@ -456,6 +475,21 @@ int main_cmdline(int argc, char **argv) {
 		exit_code = EXIT_FAILURE;
 		goto exit_nicely;
 	}
+
+#ifdef HAVE_SIGACTION
+	/* register the sigsegv interceptor */
+
+	g_set_prgname(argv[0]); /* for g_on_error_stack_frame() */
+
+	memset(&sigsegv_sa, 0, sizeof(sigsegv_sa));
+	sigsegv_sa.sa_handler = sigsegv_handler;
+	sigemptyset(&sigsegv_sa.sa_mask);
+
+	if (invoke_dbg_on_crash && !(RUNNING_ON_VALGRIND)) {
+		sigaction(SIGSEGV, &sigsegv_sa, NULL);
+	}
+#endif
+
 
 	/*
 	 * some plugins cannot see the chassis struct from the point
@@ -763,6 +797,14 @@ exit_nicely:
 	
 #ifdef _WIN32
 	if (win32_running_as_service) agent_service_set_state(SERVICE_STOPPED, 0);
+#endif
+
+#ifdef HAVE_SIGACTION
+	/* reset the handler */
+	sigsegv_sa.sa_handler = SIG_DFL;
+	if (invoke_dbg_on_crash && !(RUNNING_ON_VALGRIND)) {
+		sigaction(SIGSEGV, &sigsegv_sa, NULL);
+	}
 #endif
 
 	return exit_code;
