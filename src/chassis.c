@@ -534,7 +534,7 @@ int main_cmdline(int argc, char **argv) {
 		}
 	} else {
 		/* if it is not set, use "critical" as default */
-		log->min_lvl = G_LOG_LEVEL_CRITICAL;
+		log->min_lvl = G_LOG_LEVEL_WARNING;
 	}
 
 	/* if not plugins are specified, load admin and proxy */
