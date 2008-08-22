@@ -29,8 +29,14 @@ typedef struct {
 CHASSIS_API lua_scope *lua_scope_init(void);
 CHASSIS_API void lua_scope_free(lua_scope *sc);
 
-CHASSIS_API void lua_scope_get(lua_scope *sc);
-CHASSIS_API void lua_scope_release(lua_scope *sc);
+CHASSIS_API void lua_scope_get(lua_scope *sc, const char* pos);
+CHASSIS_API void lua_scope_release(lua_scope *sc, const char* pos);
+
+#define LOCK_LUA(sc) \
+	lua_scope_get(sc, G_STRLOC); 
+
+#define UNLOCK_LUA(sc) \
+	lua_scope_release(sc, G_STRLOC); 
 
 #ifdef HAVE_LUA_H
 CHASSIS_API lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name);

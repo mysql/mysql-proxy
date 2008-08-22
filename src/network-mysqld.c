@@ -208,12 +208,17 @@
  */
 network_socket_retval_t plugin_call_cleanup(chassis *srv, network_mysqld_con *con) {
 	NETWORK_MYSQLD_PLUGIN_FUNC(func) = NULL;
+	network_socket_retval_t retval = NETWORK_SOCKET_SUCCESS;
 
 	func = con->plugins.con_cleanup;
 	
-	if (!func) return NETWORK_SOCKET_SUCCESS;
+	if (!func) return retval;
 
-	return (*func)(srv, con);
+	LOCK_LUA(srv->priv->sc);
+	retval = (*func)(srv, con);
+	UNLOCK_LUA(srv->priv->sc);
+
+	return retval;
 }
 
 chassis_private *network_mysqld_priv_init(void) {
@@ -658,9 +663,9 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 	}
 	if (!func) return NETWORK_SOCKET_SUCCESS;
 
-	lua_scope_get(srv->priv->sc);
+	LOCK_LUA(srv->priv->sc);
 	ret = (*func)(srv, con);
-	lua_scope_release(srv->priv->sc);
+	UNLOCK_LUA(srv->priv->sc);
 
 	return ret;
 }

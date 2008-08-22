@@ -21,6 +21,8 @@
 #include "lua-load-factory.h"
 #include "lua-scope.h"
 
+static int proxy_lua_panic (lua_State *L);
+
 lua_scope *lua_scope_init(void) {
 	lua_scope *sc;
 
@@ -29,6 +31,7 @@ lua_scope *lua_scope_init(void) {
 #ifdef HAVE_LUA_H
 	sc->L = luaL_newstate();
 	luaL_openlibs(sc->L);
+	lua_atpanic(sc->L, proxy_lua_panic);
 #endif
 
 #ifdef HAVE_GTHREAD
@@ -64,9 +67,11 @@ void lua_scope_free(lua_scope *sc) {
 	g_free(sc);
 }
 
-void lua_scope_get(lua_scope *sc) {
+void lua_scope_get(lua_scope *sc, const char* pos) {
 #ifdef HAVE_GTHREAD
+/*	g_warning("%s: === waiting for lua-scope", pos); */
 	g_mutex_lock(sc->mutex);
+/*	g_warning("%s: +++ got lua-scope", pos); */
 #endif
 #ifdef HAVE_LUA_H
 	sc->L_top = lua_gettop(sc->L);
@@ -75,15 +80,16 @@ void lua_scope_get(lua_scope *sc) {
 	return;
 }
 
-void lua_scope_release(lua_scope *sc) {
+void lua_scope_release(lua_scope *sc, const char* pos) {
 #ifdef HAVE_LUA_H
 	if (lua_gettop(sc->L) != sc->L_top) {
-		g_critical("%s: lua-stack out of sync: is %d, should be %d", G_STRLOC, lua_gettop(sc->L), sc->L_top);
+		g_critical("%s: lua-stack out of sync: is %d, should be %d", pos, lua_gettop(sc->L), sc->L_top);
 	}
 #endif
 
 #ifdef HAVE_GTHREAD
 	g_mutex_unlock(sc->mutex);
+/*	g_warning("%s: --- released lua scope", pos); */
 #endif
 	return;
 }
@@ -329,11 +335,12 @@ void proxy_lua_dumptable(lua_State *L) {
 }
 
 /**
- * dump the state of the lua stack
+ * dump the types on the lua stack
  */
 void proxy_lua_dumpstack(lua_State *L) {
 	int i;
 	int top = lua_gettop(L);
+    if (top == 0) return;
 	for (i = 1; i <= top; i++) {
 		int t = lua_type(L, i);
 		switch (t) {
@@ -357,6 +364,39 @@ void proxy_lua_dumpstack(lua_State *L) {
 
 
 /**
+ * perform a verbose dump of the lua stack
+ */
+void proxy_lua_dumpstack_verbose(lua_State *L) {
+    int i;
+    int top = lua_gettop(L);
+    GString *stack_desc;
+    if (top == 0) {
+        fprintf(stderr, "[Empty stack]\n");
+        return;
+    }
+	stack_desc = g_string_sized_new(100);
+	for (i = 1; i <= top; i++) {
+		int t = lua_type(L, i);
+		switch (t) {
+			case LUA_TSTRING:
+                g_string_append_printf(stack_desc, "[%d] STRING %s\n", i, lua_tostring(L, i));
+				break;
+			case LUA_TBOOLEAN:
+                g_string_append_printf(stack_desc, "[%d] BOOL %s\n", i, lua_toboolean(L, i) ? "true" : "false");
+				break;
+			case LUA_TNUMBER:
+                g_string_append_printf(stack_desc, "[%d] NUMBER %g\n", i, lua_tonumber(L, i));
+				break;
+			default:
+                g_string_append_printf(stack_desc, "[%d] %s <cannot dump>\n", i, lua_typename(L, t));
+				break;
+		}
+	}
+	fprintf(stderr, "%s\n", stack_desc->str);
+	g_string_free(stack_desc, TRUE);
+}
+
+/**
  * print out information about the currently execute lua code
  */
 void proxy_lua_currentline(lua_State *L, int level) {
@@ -373,6 +413,18 @@ void proxy_lua_currentline(lua_State *L, int level) {
 	} else {
 		printf("level %d exceeds the current stack depth\n", level);
 	}
+}
+
+/**
+ * our own shiny panic function for Lua.
+ * The auxlib atpanic handler exits the application, which we don't want.
+ * Let's crash intentionally so we can get a coredump or be thrown into the debugger
+ */
+static int proxy_lua_panic (lua_State *L) {
+	char *null_ptr = NULL;
+	fprintf(stderr, "PANIC: unprotected error in call to Lua API (%s)\nIntentionally crashing this application!\n", lua_tostring(L, -1));
+	*null_ptr = 0;
+	return 0;
 }
 #endif
 
