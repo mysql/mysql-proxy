@@ -3,7 +3,7 @@
 
 #include <lua.h>
 
-#include "backend.h" /* query-status */
+#include "network-backend.h" /* query-status */
 #include "query-handling.h" /* query-status */
 
 #include "network-exports.h"

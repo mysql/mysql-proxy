@@ -26,15 +26,17 @@ typedef enum {
 
 typedef struct {
 	network_address addr;
-    
+   
 	backend_state_t state;   /**< UP or DOWN */
 	backend_type_t type;     /**< ReadWrite or ReadOnly */
-    
+
 	GTimeVal state_since;    /**< timestamp of the last state-change */
-    
+
 	network_connection_pool *pool; /**< the pool of open connections */
-    
+
 	guint connected_clients; /**< number of open connections to this backend for SQF */
+
+	GString *uuid;           /**< the UUID of the backend */
 } backend_t;
 
 

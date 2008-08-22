@@ -12,7 +12,7 @@
 #include <errno.h>
 
 
-#include "backend.h"
+#include "network-backend.h"
 #include "glib-ext.h"
 #include "lua-env.h"
 

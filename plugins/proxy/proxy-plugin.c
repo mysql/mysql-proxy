@@ -121,7 +121,7 @@ typedef int socklen_t;
 
 #include "sys-pedantic.h"
 #include "query-handling.h"
-#include "backend.h"
+#include "network-backend.h"
 #include "glib-ext.h"
 #include "lua-env.h"
 

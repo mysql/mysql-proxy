@@ -1,26 +1,28 @@
 /* Copyright (C) 2008 MySQL AB */ 
 
-#include "backend.h"
+#include "network-backend.h"
 #include "chassis-plugin.h"
 #include <glib.h>
 
 backend_t *backend_init() {
 	backend_t *b;
-    
+
 	b = g_new0(backend_t, 1);
-    
+
 	b->pool = network_connection_pool_init();
-    
+	b->uuid = g_string_new(NULL);
+
 	return b;
 }
 
 void backend_free(backend_t *b) {
 	if (!b) return;
-    
+
 	network_connection_pool_free(b->pool);
-    
+
 	if (b->addr.str) g_free(b->addr.str);
-    
+	if (b->uuid)     g_string_free(b->uuid, TRUE);
+
 	g_free(b);
 }
 

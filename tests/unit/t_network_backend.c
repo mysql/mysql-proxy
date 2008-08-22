@@ -1,6 +1,6 @@
 #include <glib.h>
 
-#include "backend.h"
+#include "network-backend.h"
 
 #if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1

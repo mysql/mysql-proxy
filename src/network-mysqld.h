@@ -35,7 +35,7 @@
 #include "chassis-mainloop.h"
 #include "sys-pedantic.h"
 #include "lua-scope.h"
-#include "backend.h"
+#include "network-backend.h"
 
 
 typedef struct network_mysqld_con network_mysqld_con; /* forward declaration */
