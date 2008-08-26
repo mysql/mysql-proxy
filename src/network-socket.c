@@ -417,6 +417,7 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
 	gint chunk_count;
 	gssize len;
 	int os_errno;
+	gint max_chunk_count;
 
 	if (send_chunks == 0) return NETWORK_SOCKET_SUCCESS;
 
@@ -424,7 +425,19 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
 	
 	if (chunk_count == 0) return NETWORK_SOCKET_SUCCESS;
 
-	chunk_count = chunk_count > sysconf(_SC_IOV_MAX) ? sysconf(_SC_IOV_MAX) : chunk_count;
+	max_chunk_count = sysconf(_SC_IOV_MAX);
+
+	if (max_chunk_count < 0) { /* option is unknown */
+#ifdef IOV_MAX
+		max_chunk_count = IOV_MAX; /* on older Linux'es */
+#else
+		g_assert_not_reached(); /* make sure we provide a work-around in case sysconf() fails on us */
+#endif
+	}
+
+	chunk_count = chunk_count > max_chunk_count ? max_chunk_count : chunk_count;
+
+	g_assert_cmpint(chunk_count, >, 0); /* make sure it is never negative */
 
 	iov = g_new0(struct iovec, chunk_count);
 
