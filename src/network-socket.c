@@ -428,7 +428,9 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
 	max_chunk_count = sysconf(_SC_IOV_MAX);
 
 	if (max_chunk_count < 0) { /* option is unknown */
-#ifdef IOV_MAX
+#if defined(UIO_MAXIOV)
+		max_chunk_count = UIO_MAXIOV; /* as defined in POSIX */
+#elif defined(IOV_MAX)
 		max_chunk_count = IOV_MAX; /* on older Linux'es */
 #else
 		g_assert_not_reached(); /* make sure we provide a work-around in case sysconf() fails on us */

@@ -10,6 +10,7 @@
 #include <mysql.h>
 #include <mysqld_error.h>
 #include <errno.h>
+#include <string.h>
 
 
 #include "network-backend.h"
