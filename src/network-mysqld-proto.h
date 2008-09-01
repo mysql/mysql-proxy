@@ -12,6 +12,12 @@
 
 #include "network-exports.h"
 /**
+ * 4.0 is missing too many things for us to support it, so we have to error out.
+ */
+#if MYSQL_VERSION_ID < 41000
+#error You need at least MySQL 4.1 to compile this software. 
+#endif
+/**
  * 4.1 uses other defines
  *
  * this should be one step to get closer to backward-compatibility
