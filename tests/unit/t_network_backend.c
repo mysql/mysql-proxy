@@ -14,7 +14,7 @@ void t_network_backends_new() {
 	backends = network_backends_new();
 	g_assert(backends);
 
-	g_assert_cmpint(backends->backends->len, ==, 0);
+	g_assert_cmpint(network_backends_count(backends), ==, 0);
 
 	/* free against a empty pool */
 	network_backends_free(backends);
@@ -35,27 +35,28 @@ void t_network_backends_add() {
 	backends = network_backends_new();
 	g_assert(backends);
 	
-	g_assert_cmpint(backends->backends->len, ==, 0);
+	g_assert_cmpint(network_backends_count(backends), ==, 0);
 
 	/* insert should work */
 	g_assert_cmpint(network_backends_add(backends, "127.0.0.1", BACKEND_TYPE_RW), ==, 0);
 	
-	g_assert_cmpint(backends->backends->len, ==, 1);
+	g_assert_cmpint(network_backends_count(backends), ==, 1);
 
 	/* is duplicate, should fail */
 	g_assert_cmpint(network_backends_add(backends, "127.0.0.1", BACKEND_TYPE_RW), !=, 0);
 	
-	g_assert_cmpint(backends->backends->len, ==, 1);
+	g_assert_cmpint(network_backends_count(backends), ==, 1);
 
 	/* unfolds to the same default */
 	g_assert_cmpint(network_backends_add(backends, "127.0.0.1:3306", BACKEND_TYPE_RW), !=, 0);
 	
-	g_assert_cmpint(backends->backends->len, ==, 1);
+	g_assert_cmpint(network_backends_count(backends), ==, 1);
 
 	network_backends_free(backends);
 }
 
 int main(int argc, char **argv) {
+	g_thread_init(NULL);
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
 
