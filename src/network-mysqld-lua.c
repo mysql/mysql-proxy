@@ -149,7 +149,7 @@ int network_mysqld_con_getmetatable(lua_State *L) {
  * @see lua_register_callback - for connection local setup
  */
 void network_mysqld_lua_setup_global(lua_State *L , chassis_private *g) {
-	GPtrArray **backends_p;
+	network_backends_t **backends_p;
 
 	int stack_top = lua_gettop(L);
 
@@ -180,8 +180,8 @@ void network_mysqld_lua_setup_global(lua_State *L , chassis_private *g) {
 	 */
 	lua_getfield(L, -1, "global");
 
-	backends_p = lua_newuserdata(L, sizeof(GPtrArray *));
-	*backends_p = g->backends->backends;
+	backends_p = lua_newuserdata(L, sizeof(network_backends_t *));
+	*backends_p = g->backends;
 
 	network_backends_lua_getmetatable(L);
 	lua_setmetatable(L, -2);          /* tie the metatable to the table   (sp -= 1) */

@@ -105,22 +105,15 @@ static int proxy_backends_get(lua_State *L) {
 	backend_t *backend; 
 	backend_t **backend_p;
 
-	GPtrArray *backend_pool = *(GPtrArray **)luaL_checkself(L);
+	network_backends_t *bs = *(network_backends_t **)luaL_checkself(L);
 	int backend_ndx = luaL_checkinteger(L, 2) - 1; /** lua is indexes from 1, C from 0 */
 	
 	/* check that we are in range for a _int_ */
-	if (backend_pool->len >= G_MAXINT) {
-		return 0;
-	}
-
-	if (backend_ndx < 0 ||
-	    backend_ndx >= (int)backend_pool->len) {
+	if (NULL == (backend = network_backends_get(bs, backend_ndx))) {
 		lua_pushnil(L);
 
 		return 1;
 	}
-
-	backend = backend_pool->pdata[backend_ndx];
 
 	backend_p = lua_newuserdata(L, sizeof(backend)); /* the table underneath proxy.global.backends[ndx] */
 	*backend_p = backend;
@@ -132,9 +125,9 @@ static int proxy_backends_get(lua_State *L) {
 }
 
 static int proxy_backends_len(lua_State *L) {
-	GPtrArray *backend_pool = *(GPtrArray **)luaL_checkself(L);
+	network_backends_t *bs = *(network_backends_t **)luaL_checkself(L);
 
-	lua_pushinteger(L, backend_pool->len);
+	lua_pushinteger(L, network_backends_count(bs));
 
 	return 1;
 }
