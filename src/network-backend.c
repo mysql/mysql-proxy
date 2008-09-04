@@ -32,6 +32,7 @@ network_backends_t *network_backends_new() {
 	bs = g_new0(network_backends_t, 1);
 
 	bs->backends = g_ptr_array_new();
+	bs->backends_mutex = g_mutex_new();
 
 	return bs;
 }
@@ -41,13 +42,16 @@ void network_backends_free(network_backends_t *bs) {
 
 	if (!bs) return;
 
+	g_mutex_lock(bs->backends_mutex);
 	for (i = 0; i < bs->backends->len; i++) {
 		backend_t *backend = bs->backends->pdata[i];
 		
 		backend_free(backend);
 	}
+	g_mutex_unlock(bs->backends_mutex);
 
 	g_ptr_array_free(bs->backends, TRUE);
+	g_mutex_free(bs->backends_mutex);
 
 	g_free(bs);
 }
@@ -55,6 +59,7 @@ void network_backends_free(network_backends_t *bs) {
 int network_backends_add(network_backends_t *bs, /* const */ gchar *address, backend_type_t type) {
 	backend_t *new_backend;
 	guint i;
+	gboolean is_known = FALSE;
 
 	new_backend = backend_init();
 	new_backend->type = type;
@@ -64,35 +69,38 @@ int network_backends_add(network_backends_t *bs, /* const */ gchar *address, bac
 	}
 
 	/* check if this backend is already known */
+	g_mutex_lock(bs->backends_mutex);
 	for (i = 0; i < bs->backends->len; i++) {
 		backend_t *old_backend = bs->backends->pdata[i];
 
 		if (0 == strcmp(old_backend->addr.str, new_backend->addr.str)) {
-
 			backend_free(new_backend);
 
-			return -1;
+			is_known = TRUE;
+			break;
 		}
 	}
 
 
-	g_ptr_array_add(bs->backends, new_backend);
+	if (!is_known) g_ptr_array_add(bs->backends, new_backend);
+	g_mutex_unlock(bs->backends_mutex);
 
-	return 0;
+	return is_known ? -1 : 0;
 }
 
-int network_backends_check(network_backends_t *backends) {
+int network_backends_check(network_backends_t *bs) {
 	GTimeVal now;
 	guint i;
 
 	g_get_current_time(&now);
 
 	/* check max(once a second) */
-	if (now.tv_sec - backends->backend_last_check.tv_sec < 1) return 0;
+	if (now.tv_sec - bs->backend_last_check.tv_sec < 1) return 0;
 
 	/* check once a second if we have to wakeup a connection */
-	for (i = 0; i < backends->backends->len; i++) {
-		backend_t *cur = backends->backends->pdata[i];
+	g_mutex_lock(bs->backends_mutex);
+	for (i = 0; i < bs->backends->len; i++) {
+		backend_t *cur = bs->backends->pdata[i];
 
 		if (cur->state != BACKEND_STATE_DOWN) continue;
 
@@ -107,18 +115,26 @@ int network_backends_check(network_backends_t *backends) {
 			cur->state_since = now;
 		}
 	}
+	g_mutex_unlock(bs->backends_mutex);
 
 	return 0;
 }
 
-backend_t *network_backends_get(network_backends_t *backends, gint ndx) {
+backend_t *network_backends_get(network_backends_t *bs, gint ndx) {
 	if (ndx < 0) return NULL;
-	if (ndx >= backends->backends->len) return NULL;
-		
-	return backends->backends->pdata[ndx];
+	if (ndx >= network_backends_count(bs)) return NULL;
+
+	/* FIXME: shouldn't we copy the backend or add ref-counting ? */	
+	return bs->backends->pdata[ndx];
 }
 
-guint network_backends_count(network_backends_t *backends) {
-	return backends->backends->len;
+guint network_backends_count(network_backends_t *bs) {
+	guint len;
+
+	g_mutex_lock(bs->backends_mutex);
+	len = bs->backends->len;
+	g_mutex_unlock(bs->backends_mutex);
+
+	return len;
 }
 
