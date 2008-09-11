@@ -165,6 +165,13 @@
 #include "lua-scope.h"
 #include "glib-ext.h"
 
+#if defined(HAVE_SYS_SDT_H) && defined(ENABLE_DTRACE)
+#include <sys/sdt.h>
+#include "proxy-dtrace-provider.h"
+#else
+#include "disable-dtrace.h"
+#endif
+
 #ifdef HAVE_WRITEV
 #define USE_BUFFERED_NETIO 
 #else
@@ -739,6 +746,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	 */
 	do {
 		ostate = con->state;
+		MYSQLPROXY_STATE_CHANGE(event_fd, events, con->state);
 		switch (con->state) {
 		case CON_STATE_ERROR:
 			/* we can't go on, close the connection */
