@@ -477,22 +477,26 @@ int network_mysqld_proto_get_string(network_packet *packet, gchar **s) {
  * @param _off   offset into the packet
  * @param len    bytes to copy
  * @param out    a GString which carries the string
- * @return       a pointer to the string in out
+ * @return       0 on success, -1 on error
  */
 int network_mysqld_proto_get_gstring_len(network_packet *packet, gsize len, GString *out) {
+	int err = 0;
+
+	if (!out) return -1;
+
 	g_string_truncate(out, 0);
 
-	if (len) {
-		g_assert(packet->offset < packet->data->len);
-		if (packet->offset + len > packet->data->len) {
-			g_error("packet-offset out of range: %u + "F_SIZE_T" > "F_SIZE_T, packet->offset, len, packet->data->len);
-		}
+	if (!len) return 0; /* nothing to copy */
 
+	err = err || (packet->offset >= packet->data->len); /* the offset is already too large */
+	err = err || (packet->offset + len > packet->data->len); /* offset would get too large */
+
+	if (!err) {
 		g_string_append_len(out, packet->data->str + packet->offset, len);
 		packet->offset += len;
 	}
 
-	return 0;
+	return err ? -1 : 0;
 }
 
 /**

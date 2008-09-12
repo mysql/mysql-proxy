@@ -1,9 +1,9 @@
--- this test 
--- * starts two backends
--- * sets and verifies IDs in the backends
--- * reconnects and verifies that the IDs are still in place
--- * stop the first backend and verifies that queries against it fail
--- * checks that new connects end up on the second backend
+# this test 
+# * starts two backends
+# * sets and verifies IDs in the backends
+# * reconnects and verifies that the IDs are still in place
+# * stop the first backend and verifies that queries against it fail
+# * checks that new connects end up on the second backend
 
 connect (conn1,127.0.0.1,root,,,14040);
 connect (conn2,127.0.0.1,root,,,14040);
@@ -18,16 +18,16 @@ GET ID;
 
 disconnect conn1;
 
--- check if we end up on the the right backend
+# check if we end up on the the right backend
 connect (conn1,127.0.0.1,root,,,14040);
 connection conn1;
 GET ID;
 
--- now kill the backend and wait until it is down
+# now kill the backend and wait until it is down
 COMMIT SUICIDE;
 real_sleep 1;
 
--- ... and this should fail now as the backend is gone
+# ... and this should fail now as the backend is gone
 -- error 2013
 GET ID;
 

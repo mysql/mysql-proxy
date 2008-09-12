@@ -1,0 +1,5 @@
+SELECT thread_id();
+thread_id
+0
+connect(127.0.0.1,root,,test,14040,/var/lib/mysql/mysql.sock);
+Got one of the listed errors

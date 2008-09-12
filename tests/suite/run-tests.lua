@@ -81,12 +81,13 @@ ADMIN_CHAIN_PORT	= os.getenv("ADMIN_CHAIN_PORT")	 	or "14075"
 -- local PROXY_TMP_LUASCRIPT = os.getenv("PROXY_TMP_LUASCRIPT") or "/tmp/proxy.tmp.lua"
 
 local srcdir		 = os.getenv("srcdir")		 	or testdir .. "/"
-local builddir	   = os.getenv("builddir")	   		or testdir .. "/../"
+local top_builddir	 = os.getenv("top_builddir")   		or testdir .. "/../"
+local builddir	         = os.getenv("builddir")	   	or testdir .. "/" -- same as srcdir by default
 
 local PROXY_TRACE	= os.getenv("PROXY_TRACE")		or ""	-- use it to inject strace or valgrind
 local PROXY_PARAMS   = os.getenv("PROXY_PARAMS")   	or ""	-- extra params
-local PROXY_BINPATH  = os.getenv("PROXY_BINPATH")  	or builddir .. "/src/mysql-proxy"
-PROXY_LIBPATH  = os.getenv("PROXY_LIBPATH")  	or builddir .. "/plugins/"
+local PROXY_BINPATH  = os.getenv("PROXY_BINPATH")  	or top_builddir .. "/src/mysql-proxy"
+PROXY_LIBPATH  = os.getenv("PROXY_LIBPATH")  	or top_builddir .. "/plugins/"
 
 local COVERAGE_LCOV  = os.getenv("COVERAGE_LCOV")
 
@@ -418,6 +419,8 @@ function after_test()
 end
 
 function alternative_execute (cmd)
+	print_verbose(cmd)
+
 	local fh = io.popen(cmd)
 	assert(fh, 'error executing '.. cmd)
 	local result = ''
@@ -472,7 +475,8 @@ function run_test(filename, basedir)
 			host	 = PROXY_HOST,
 			port	 = PROXY_PORT,
 			["test-file"] = basedir .. "/t/" .. testname .. ".test",
-			["result-file"] = basedir .. "/r/" .. testname .. ".result"
+			["result-file"] = basedir .. "/r/" .. testname .. ".result",
+			["logdir"] = builddir, -- the .result dir might not be writable
 		})
 	)
 	if USE_POPEN then

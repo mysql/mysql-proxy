@@ -311,6 +311,43 @@ void test_mysqld_binlog_events(void) {
 	network_mysqld_binlog_free(binlog);
 }
 
+void test_mysqld_proto_gstring_len(void) {
+	guint64 length;
+	network_packet packet;
+	GString *value = g_string_new(NULL);
+
+	packet.data = g_string_new(NULL);
+
+	/* we should be able to do more corner case testing
+	 *
+	 *
+	 */
+	length = 0; packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_gstring_len(&packet, 0, value));
+	g_assert_cmpint(0, ==, value->len);
+	g_assert_cmpint(0, !=, network_mysqld_proto_get_gstring_len(&packet, 1, value)); /* empty packet, we should fail */
+
+	g_string_append(packet.data, "012345");
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_gstring_len(&packet, 1, value)); /* get one byte ("0"), inc the offset */
+	g_assert_cmpint(1, ==, value->len);
+	g_assert_cmpstr("0", ==, value->str);
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_gstring_len(&packet, 1, value)); /*  */
+	g_assert_cmpint(1, ==, value->len);
+	g_assert_cmpstr("1", ==, value->str);
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_gstring_len(&packet, 4, value)); /*  */
+	g_assert_cmpint(4, ==, value->len);
+	g_assert_cmpstr("2345", ==, value->str);
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_gstring_len(&packet, 0, value)); /* empty fetch, shouldn't cause problems */
+	g_assert_cmpint(0, ==, value->len);
+	
+	g_assert_cmpint(0, !=, network_mysqld_proto_get_gstring_len(&packet, 1, value)); /* get a byte after the end of the packet */
+	
+	g_assert_cmpint(0, !=, network_mysqld_proto_get_gstring_len(&packet, 0, NULL)); /* empty fetch, shouldn't cause problems */
+
+	g_string_free(packet.data, TRUE);
+}
+
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
@@ -318,7 +355,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/mysqld-proto-header", test_mysqld_proto_header);
 	g_test_add_func("/core/mysqld-proto-lenenc-int", test_mysqld_proto_lenenc_int);
 	g_test_add_func("/core/mysqld-proto-int", test_mysqld_proto_int);
-	
+	g_test_add_func("/core/mysqld-proto-gstring-len", test_mysqld_proto_gstring_len);
 
 	g_test_add_func("/core/mysqld-proto-binlog-event", test_mysqld_binlog_events);
 
