@@ -24,6 +24,7 @@
 #include <syslog.h>
 #else
 /* placeholder values for platforms not having syslog support */
+#define LOG_USER	0   /* placeholder for user-level syslog facility */
 #define LOG_CRIT	0
 #define LOG_ERR	0
 #define LOG_WARNING	0
@@ -40,6 +41,8 @@
 /**
  * the mapping of our internal log levels various log systems
  */
+/* Attention: this needs to be adjusted should glib ever change its log level ordering */
+#define G_LOG_ERROR_POSITION 3
 const struct {
 	char *name;
 	GLogLevelFlags lvl;
@@ -146,17 +149,19 @@ static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 		}
 #ifdef HAVE_SYSLOG_H
 	} else if (log->use_syslog) {
-		syslog(log_lvl_map[log_level].syslog_lvl, "%s", str->str);
+		int log_index = g_bit_nth_lsf(log_level & G_LOG_LEVEL_MASK, -1) - G_LOG_ERROR_POSITION;
+		syslog(log_lvl_map[log_index].syslog_lvl, "%s", str->str);
 #endif
 #ifdef _WIN32
 	} else if (log->use_windows_applog && log->event_source_handle) {
 		char *log_messages[1];
-		
+		int log_index = g_bit_nth_lsf(log_level & G_LOG_LEVEL_MASK, -1) - G_LOG_ERROR_POSITION;
+
 		log_messages[0] = str->str;
 		ReportEvent(log->event_source_handle,
-					log_lvl_map[log_level].win_evtype,
+					log_lvl_map[log_index].win_evtype,
 					0, /* category, we don't have that yet */
-					log_lvl_map[log_level].win_evtype, /* event indentifier, one of MSG_ERROR (0x01), MSG_WARNING(0x02), MSG_INFO(0x04) */
+					log_lvl_map[log_index].win_evtype, /* event indentifier, one of MSG_ERROR (0x01), MSG_WARNING(0x02), MSG_INFO(0x04) */
 					NULL,
 					1, /* number of strings to be substituted */
 					0, /* no event specific data */

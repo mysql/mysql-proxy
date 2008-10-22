@@ -16,7 +16,7 @@
 --
 -- @see read_query_result
 function read_query( packet )
-  proxy.queries:append(1, packet )
+  proxy.queries:append(1, packet, {resultset_is_needed = true } )
 
   return proxy.PROXY_SEND_QUERY
 end

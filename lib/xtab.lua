@@ -269,7 +269,8 @@ function read_query( packet )
     --]]
     proxy.queries:append(xtab_id_before, 
         string.char(proxy.COM_QUERY) .. 
-        "set group_concat_max_len = 1024*1024" )
+        "set group_concat_max_len = 1024*1024",
+	{ resultset_is_needed = true })
 
     --[[
        If further queries need to be executed before the 
@@ -298,7 +299,8 @@ function read_query( packet )
             col_field, 
             table_name, 
             col_field
-        )
+        ),
+	{ resultset_is_needed = true }
     )
     return proxy.PROXY_SEND_QUERY
 end
@@ -382,7 +384,8 @@ function read_query_result(inj)
         --
         -- The XTAB query is executed
         --
-        proxy.queries:append(xtab_id_exec, string.char(proxy.COM_QUERY) .. xtab_query)
+        proxy.queries:append(xtab_id_exec, string.char(proxy.COM_QUERY) .. xtab_query,
+            { resultset_is_needed = true })
         print_debug (xtab_query, 2)
         return proxy.PROXY_IGNORE_RESULT
     end 

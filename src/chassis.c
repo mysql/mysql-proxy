@@ -516,12 +516,19 @@ int main_cmdline(int argc, char **argv) {
 	chassis_resolve_path(srv, &plugin_dir);
 
 	if (log->log_filename) {
+        gboolean turned_off_syslog = FALSE;
+        if (log->use_syslog) {
+            log->use_syslog = FALSE;
+            turned_off_syslog = TRUE;
+        }
 		if (0 == chassis_log_open(log)) {
 			g_critical("can't open log-file '%s': %s", log->log_filename, g_strerror(errno));
 
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;
 		}
+        if (turned_off_syslog)
+            g_warning("both log-file and log-use-syslog were given. turning off log-use-syslog, logging to %s", log->log_filename);
 	}
 
 	/* handle log-level after the config-file is read, just in case it is specified in the file */

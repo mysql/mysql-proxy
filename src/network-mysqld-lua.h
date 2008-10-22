@@ -4,7 +4,7 @@
 #include <lua.h>
 
 #include "network-backend.h" /* query-status */
-#include "query-handling.h" /* query-status */
+#include "network-injection.h" /* query-status */
 
 #include "network-exports.h"
 
@@ -23,7 +23,7 @@ NETWORK_API void network_mysqld_lua_setup_global(lua_State *L, chassis_private *
 
 typedef struct {
 	struct {
-		GQueue *queries;       /**< queries we want to executed */
+		network_injection_queue *queries;       /**< queries we want to executed */
 		query_status qstat;
 		int sent_resultset;    /**< make sure we send only one result back to the client */
 	} injected;

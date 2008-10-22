@@ -1,0 +1,13 @@
+#!/bin/sh
+
+## Jan's automated gdb-backtrace-generator
+# PROXY_TRACE="gdb --batch --command=/Users/jan/projects/in-bzr/mysql-lb/backtrace.gdb --args " \
+MYSQL_TEST_BIN="/usr/local/mysql/bin/mysqltest" \
+LUA_USER_PATH="@CMAKE_SOURCE_DIR@/lib/?.lua" \
+LUA_CPATH="@CMAKE_SOURCE_DIR@/build-lib/lib?@CMAKE_SHARED_LIBRARY_SUFFIX@" \
+top_builddir=@CMAKE_BINARY_DIR@ \
+builddir=@CMAKE_CURRENT_BINARY_DIR@ \
+srcdir=@CMAKE_CURRENT_SOURCE_DIR@/ \
+PROXY_LIBPATH=@CMAKE_SOURCE_DIR@/build/ \
+PROXY_BINPATH=@CMAKE_SOURCE_DIR@/build-src/mysql-proxy \
+exec $@

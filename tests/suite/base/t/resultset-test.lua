@@ -4,7 +4,7 @@ local proto   = require("mysql.proto")
 local my_lovely_packet
 
 function read_query(packet)
-	proxy.queries:append(1, packet)
+	proxy.queries:append(1, packet, { resultset_is_needed = true })
 
 	my_lovely_packet = packet
 

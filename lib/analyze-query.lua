@@ -212,11 +212,11 @@ function read_query(packet)
 		-- wrap the query in SHOW SESSION STATUS
 		--
 		-- note: not used yet
-		proxy.queries:append(2, string.char(proxy.COM_QUERY) .. "SHOW SESSION STATUS")
-		proxy.queries:append(1, packet)
-		proxy.queries:append(3, string.char(proxy.COM_QUERY) .. "SHOW SESSION STATUS")
+		proxy.queries:append(2, string.char(proxy.COM_QUERY) .. "SHOW SESSION STATUS", { resultset_is_needed = true })
+		proxy.queries:append(1, packet, { resultset_is_needed = true }) -- FIXME: this should work without it being set (inj.resultset.query_status)
+		proxy.queries:append(3, string.char(proxy.COM_QUERY) .. "SHOW SESSION STATUS", { resultset_is_needed = true })
 	else
-		proxy.queries:append(1, packet)
+		proxy.queries:append(1, packet, { resultset_is_needed = true }) -- FIXME: this one too
 	end
 
 	return proxy.PROXY_SEND_QUERY
@@ -297,12 +297,14 @@ function read_query_result(inj)
 		end
 
 		if log_query and config.auto_processlist then
-			proxy.queries:append(4, string.char(proxy.COM_QUERY) .. "SHOW FULL PROCESSLIST")
+			proxy.queries:append(4, string.char(proxy.COM_QUERY) .. "SHOW FULL PROCESSLIST",
+				{ resultset_is_needed = true })
 		end
 	
 		if log_query and config.auto_explain then
 			if tokens[1] and tokens[1].token_name == "TK_SQL_SELECT" then
-				proxy.queries:append(5, string.char(proxy.COM_QUERY) .. "EXPLAIN " .. inj.query:sub(2))
+				proxy.queries:append(5, string.char(proxy.COM_QUERY) .. "EXPLAIN " .. inj.query:sub(2),
+					{ resultset_is_needed = true })
 			end
 		end
 

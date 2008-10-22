@@ -36,16 +36,19 @@ typedef struct {
 	guint64 insert_id;
 
 	gboolean was_resultset;
+	gboolean binary_encoded;
 
 	guint64 rows;
 	guint64 bytes;
+
+	guint8  query_status;
 } network_mysqld_com_query_result_t;
 
 NETWORK_API network_mysqld_com_query_result_t *network_mysqld_com_query_result_new(void);
 NETWORK_API void network_mysqld_com_query_result_free(network_mysqld_com_query_result_t *udata);
 NETWORK_API int network_mysqld_com_query_result_track_state(network_packet *packet, network_mysqld_com_query_result_t *udata);
 NETWORK_API gboolean network_mysqld_com_query_result_is_load_data(network_mysqld_com_query_result_t *udata);
-NETWORK_API int network_mysqld_proto_get_com_query_result(network_packet *packet, network_mysqld_com_query_result_t *udata);
+NETWORK_API int network_mysqld_proto_get_com_query_result(network_packet *packet, network_mysqld_com_query_result_t *udata, gboolean use_binary_row_data);
 
 /**
  * tracking the response of a COM_STMT_PREPARE command

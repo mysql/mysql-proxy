@@ -120,7 +120,7 @@ typedef int socklen_t;
 #include "network-conn-pool-lua.h"
 
 #include "sys-pedantic.h"
-#include "query-handling.h"
+#include "network-injection.h"
 #include "network-backend.h"
 #include "glib-ext.h"
 #include "lua-env.h"
@@ -223,8 +223,18 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_co
 				lua_pop(L, 1);
 			}
 
+			if (!con->resultset_is_needed && (PROXY_NO_DECISION != ret)) {
+				/* if the user asks us to work on the resultset, but hasn't buffered it ... ignore the result */
+				g_critical("%s: read_query_result() in %s tries to modify the resultset, but hasn't asked to buffer it in proxy.query:append(..., { resultset_is_needed = true }). We ignore the change to the result-set.", 
+						G_STRLOC,
+						con->config->lua_script);
+
+				ret = PROXY_NO_DECISION;
+			}
+
 			switch (ret) {
 			case PROXY_SEND_RESULT:
+				g_assert_cmpint(con->resultset_is_needed, ==, TRUE); /* we can only replace the result, if we buffer it */
 				/**
 				 * replace the result-set the server sent us 
 				 */
@@ -256,7 +266,7 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_co
 					st->injected.sent_resultset++;
 					break;
 				}
-				g_warning("%s.%d: got asked to send a resultset, but ignoring it as we already have sent %d resultset(s). injection-id: %d",
+				g_critical("%s.%d: got asked to send a resultset, but ignoring it as we already have sent %d resultset(s). injection-id: %d",
 						__FILE__, __LINE__,
 						st->injected.sent_resultset,
 						inj->id);
@@ -266,6 +276,21 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_co
 				/* fall through */
 			case PROXY_IGNORE_RESULT:
 				/* trash the packets for the injection query */
+
+				if (!con->resultset_is_needed) {
+					/* we can only ignore the result-set if we haven't forwarded it to the client already
+					 *
+					 * we can end up here if the lua script loops and sends more than one query and is 
+					 * not buffering the resultsets. In that case we have to close the connection to
+					 * the client as we get out of sync ... actually, if that happens it is already
+					 * too late
+					 * */
+
+					g_critical("%s: we tried to send more than one resultset to the client, but didn't had them buffered. Now the client is out of sync may have closed the connection on us. Please use proxy.queries:append(..., { resultset_is_needed = true }); to fix this.");
+
+					break;
+				}
+
 				while ((packet = g_queue_pop_head(send_sock->send_queue->chunks))) g_string_free(packet, TRUE);
 
 				break;
@@ -278,7 +303,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_co
 
 				break;
 			}
-
 		} else if (lua_isnil(L, -1)) {
 			/* no function defined, let's send the result-set */
 			lua_pop(L, 1); /* pop the nil */
@@ -869,7 +893,9 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 
 	if (!config->profiling) return PROXY_SEND_QUERY;
 
-	if (packet->len < NET_HEADER_SIZE) return PROXY_SEND_QUERY; /* packet too short */
+	if (packet->len <= NET_HEADER_SIZE) return PROXY_SEND_QUERY; /* packet too short or zero-length packet */
+	
+	if (con->in_load_data_local_state) return PROXY_SEND_QUERY; /* don't try to intercept LOAD DATA LOCAL data packets */
 
 	command = packet->str[NET_HEADER_SIZE + 0];
 
@@ -892,7 +918,7 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 	/* reset the query status */
 	memset(&(st->injected.qstat), 0, sizeof(st->injected.qstat));
 	
-	while ((inj = g_queue_pop_head(st->injected.queries))) injection_free(inj);
+	network_injection_queue_reset(st->injected.queries);
 
 	/* ok, here we go */
 
@@ -1024,7 +1050,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	
 	packet = chunk->data;
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
+	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) {
+		g_warning("%s: malformed packet, simply sending it on. raw length != protocol length (%d != %d)", G_STRLOC, (int)packet->len, (int)recv_sock->packet_len + NET_HEADER_SIZE);
+		return NETWORK_SOCKET_SUCCESS;
+	};
 
 	con->parse.len = recv_sock->packet_len;
 
@@ -1051,6 +1080,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		send_sock->packet_id = recv_sock->packet_id;
 
 		network_queue_append(send_sock->send_queue, packet);
+		con->resultset_is_needed = FALSE; /* we don't want to buffer the result-set */
 
 		break;
 	case PROXY_SEND_RESULT: 
@@ -1063,6 +1093,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		injection *inj;
 
 		inj = g_queue_peek_head(st->injected.queries);
+		con->resultset_is_needed = inj->resultset_is_needed; /* let the lua-layer decide if we want to buffer the result or not */
 
 		/* there might be no query, if it was banned */
 		network_mysqld_queue_append(send_sock->send_queue, inj->query->str, inj->query->len, 0);
@@ -1081,6 +1112,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		con->state = CON_STATE_SEND_QUERY;
 	} else {
 		con->state = CON_STATE_SEND_QUERY_RESULT;
+		con->resultset_is_finished = TRUE; /* we don't have more too send */
 	}
 
 	return NETWORK_SOCKET_SUCCESS;
@@ -1123,11 +1155,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	/* if we don't have a backend, don't try to forward queries
 	 */
 	if (!send_sock) {
-		while ((inj = g_queue_pop_head(st->injected.queries))) {
-			g_debug_hexdump(G_STRLOC " proxy.queries:append() without a server-backend", S(inj->query));
-
-			injection_free(inj);
-		}
+		network_injection_queue_reset(st->injected.queries);
 	}
 
 	if (st->injected.queries->length == 0) {
@@ -1142,6 +1170,16 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	 * push the next one 
 	 */
 	inj = g_queue_peek_head(st->injected.queries);
+	con->resultset_is_needed = inj->resultset_is_needed;
+
+	if (!inj->resultset_is_needed && st->injected.sent_resultset > 0) {
+		/* we already sent a resultset to the client and the next query wants to forward it's result-set too, that can't work */
+		g_critical("%s: proxy.queries:append() in %s can only have one injected query without { resultset_is_needed = true } set. We close the client connection now.",
+				G_STRLOC,
+				con->config->lua_script);
+
+		return NETWORK_SOCKET_ERROR;
+	}
 
 	g_assert(inj);
 	g_assert(send_sock);
@@ -1204,6 +1242,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	is_finished = network_mysqld_proto_get_query_result(&packet, con);
 	if (is_finished == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
 
+	con->resultset_is_finished = is_finished;
+
 	network_queue_append(send_sock->send_queue, packet.data);
 
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
@@ -1216,12 +1256,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		 * */
 
 		if (inj) {
-			if (con->parse.command == COM_QUERY) {
+			if (con->parse.command == COM_QUERY || con->parse.command == COM_STMT_EXECUTE) {
 				network_mysqld_com_query_result_t *com_query = con->parse.data;
 
 				inj->bytes = com_query->bytes;
 				inj->rows  = com_query->rows;
 				inj->qstat.was_resultset = com_query->was_resultset;
+				inj->qstat.binary_encoded = com_query->binary_encoded;
 
 				/* INSERTs have a affected_rows */
 				if (!com_query->was_resultset) {
@@ -1230,6 +1271,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 				}
 				inj->qstat.server_status = com_query->server_status;
 				inj->qstat.warning_count = com_query->warning_count;
+				inj->qstat.query_status  = com_query->query_status;
 			}
 			g_get_current_time(&(inj->ts_read_query_result_last));
 		}
@@ -1240,10 +1282,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 
 		/**
 		 * if the send-queue is empty, we have nothing to send
-		 * and can read the next query */	
+		 * and can read the next query */
 		if (send_sock->send_queue->chunks) {
 			con->state = CON_STATE_SEND_QUERY_RESULT;
 		} else {
+			g_assert_cmpint(con->resultset_is_needed, ==, 1); /* we already forwarded the resultset, no way someone has flushed the resultset-queue */
+
 			con->state = CON_STATE_READ_QUERY;
 		}
 	}

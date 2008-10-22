@@ -7,6 +7,7 @@
 #ifndef _WIN32
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/uio.h> /* writev */
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -104,6 +105,8 @@ GString *network_queue_peek_string(network_queue *queue, gsize peek_len, GString
 	gsize we_want = peek_len;
 	GList *node;
 
+/* TODO: convert to DTrace probe
+	g_debug("[%s] looking for %d bytes, queue has %d", G_STRLOC, peek_len, queue->len); */
 	if (queue->len < peek_len) {
 		return NULL;
 	}
@@ -486,6 +489,7 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
 	}
 
 	con->send_queue->offset += len;
+	con->send_queue->len    -= len;
 
 	/* check all the chunks which we have sent out */
 	for (chunk = con->send_queue->chunks->head; chunk; ) {

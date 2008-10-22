@@ -3,6 +3,7 @@
 #include "network-backend.h"
 #include "chassis-plugin.h"
 #include <glib.h>
+#include <string.h>
 
 backend_t *backend_init() {
 	backend_t *b;

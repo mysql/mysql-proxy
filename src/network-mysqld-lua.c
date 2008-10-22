@@ -24,6 +24,7 @@
 #include "network-backend-lua.h"
 #include "network-conn-pool.h"
 #include "network-conn-pool-lua.h"
+#include "network-injection-lua.h"
 
 #define C(x) x, sizeof(x) - 1
 
@@ -32,18 +33,15 @@ network_mysqld_con_lua_t *network_mysqld_con_lua_new() {
 
 	st = g_new0(network_mysqld_con_lua_t, 1);
 
-	st->injected.queries = g_queue_new();
+	st->injected.queries = network_injection_queue_new();
 	
 	return st;
 }
 
 void network_mysqld_con_lua_free(network_mysqld_con_lua_t *st) {
-	injection *inj;
-
 	if (!st) return;
 
-	while ((inj = g_queue_pop_head(st->injected.queries))) injection_free(inj);
-	g_queue_free(st->injected.queries);
+	network_injection_queue_free(st->injected.queries);
 
 	g_free(st);
 }

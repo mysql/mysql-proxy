@@ -19,7 +19,7 @@ function read_query(packet)
 	-- let 80% fail
 	if math.random(10) <= 5 then return end
 
-	proxy.queries:append(1, string.char(proxy.COM_QUERY) .. "ROLLBACK")
+	proxy.queries:append(1, string.char(proxy.COM_QUERY) .. "ROLLBACK", { resultset_is_needed = true })
 
 	return proxy.PROXY_SEND_QUERY
 end

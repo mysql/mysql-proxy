@@ -25,31 +25,31 @@ function read_query(packet)
 	if packet:byte() ~= proxy.COM_QUERY then return end
 
 	if packet:sub(2) == "COMMIT SUICIDE" then
-		proxy.queries:append(proxy.COM_SHUTDOWN, string.char(proxy.COM_SHUTDOWN))
+		proxy.queries:append(proxy.COM_SHUTDOWN, string.char(proxy.COM_SHUTDOWN), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "PING" then
-		proxy.queries:append(proxy.COM_PING, string.char(proxy.COM_PING))
+		proxy.queries:append(proxy.COM_PING, string.char(proxy.COM_PING), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "STATISTICS" then
-		proxy.queries:append(proxy.COM_STATISTICS, string.char(proxy.COM_STATISTICS))
+		proxy.queries:append(proxy.COM_STATISTICS, string.char(proxy.COM_STATISTICS), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "PROCINFO" then
-		proxy.queries:append(proxy.COM_PROCESS_INFO, string.char(proxy.COM_PROCESS_INFO))
+		proxy.queries:append(proxy.COM_PROCESS_INFO, string.char(proxy.COM_PROCESS_INFO), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "TIME" then
-		proxy.queries:append(proxy.COM_TIME, string.char(proxy.COM_TIME))
+		proxy.queries:append(proxy.COM_TIME, string.char(proxy.COM_TIME), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "DEBUG" then
-		proxy.queries:append(proxy.COM_DEBUG, string.char(proxy.COM_DEBUG))
+		proxy.queries:append(proxy.COM_DEBUG, string.char(proxy.COM_DEBUG), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "PROCKILL" then
-		proxy.queries:append(proxy.COM_PROCESS_KILL, string.char(proxy.COM_PROCESS_KILL))
+		proxy.queries:append(proxy.COM_PROCESS_KILL, string.char(proxy.COM_PROCESS_KILL), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "SETOPT" then
-		proxy.queries:append(proxy.COM_SET_OPTION, string.char(proxy.COM_SET_OPTION))
+		proxy.queries:append(proxy.COM_SET_OPTION, string.char(proxy.COM_SET_OPTION), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "BINLOGDUMP" then
-		proxy.queries:append(proxy.COM_BINLOG_DUMP, string.char(proxy.COM_BINLOG_DUMP))
+		proxy.queries:append(proxy.COM_BINLOG_DUMP, string.char(proxy.COM_BINLOG_DUMP), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "BINLOGDUMP1" then
 		proxy.queries:append(proxy.COM_BINLOG_DUMP, 
@@ -59,10 +59,10 @@ function read_query(packet)
 			"\002\000\000\000" ..
 			"\000" .. 
 			""
-			)
+			, { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "REGSLAVE" then
-		proxy.queries:append(proxy.COM_REGISTER_SLAVE, string.char(proxy.COM_REGISTER_SLAVE))
+		proxy.queries:append(proxy.COM_REGISTER_SLAVE, string.char(proxy.COM_REGISTER_SLAVE), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "REGSLAVE1" then
 		proxy.queries:append(proxy.COM_REGISTER_SLAVE, 
@@ -75,16 +75,16 @@ function read_query(packet)
 			"\000\000\000\000" .. -- recovery rank
 			"\001\000\000\000" .. -- master id ... what ever that is
 			""
-			) 
+			, { resultset_is_needed = true }) 
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "PREP" then
-		proxy.queries:append(proxy.COM_STMT_PREPARE, string.char(proxy.COM_STMT_PREPARE))
+		proxy.queries:append(proxy.COM_STMT_PREPARE, string.char(proxy.COM_STMT_PREPARE), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "PREP1" then
-		proxy.queries:append(proxy.COM_STMT_PREPARE, string.char(proxy.COM_STMT_PREPARE) .. "SELECT ?")
+		proxy.queries:append(proxy.COM_STMT_PREPARE, string.char(proxy.COM_STMT_PREPARE) .. "SELECT ?", { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "EXEC" then
-		proxy.queries:append(proxy.COM_STMT_EXECUTE, string.char(proxy.COM_STMT_EXECUTE))
+		proxy.queries:append(proxy.COM_STMT_EXECUTE, string.char(proxy.COM_STMT_EXECUTE), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "EXEC1" then
 		proxy.queries:append(proxy.COM_STMT_EXECUTE, 
@@ -96,40 +96,40 @@ function read_query(packet)
 			"\001"             .. -- new-parameters
 			"\000\254" ..
 			"\004" .. "1234" ..
-			"")
+			"", { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "DEAL" then
-		proxy.queries:append(proxy.COM_STMT_CLOSE, string.char(proxy.COM_STMT_CLOSE))
+		proxy.queries:append(proxy.COM_STMT_CLOSE, string.char(proxy.COM_STMT_CLOSE), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "DEAL1" then
-		proxy.queries:append(proxy.COM_STMT_CLOSE, string.char(proxy.COM_STMT_CLOSE) .. "\001\000\000\000")
+		proxy.queries:append(proxy.COM_STMT_CLOSE, string.char(proxy.COM_STMT_CLOSE) .. "\001\000\000\000", { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "RESET" then
-		proxy.queries:append(proxy.COM_STMT_RESET, string.char(proxy.COM_STMT_RESET))
+		proxy.queries:append(proxy.COM_STMT_RESET, string.char(proxy.COM_STMT_RESET), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "RESET1" then
-		proxy.queries:append(proxy.COM_STMT_RESET, string.char(proxy.COM_STMT_RESET) .. "\001\000\000\000")
+		proxy.queries:append(proxy.COM_STMT_RESET, string.char(proxy.COM_STMT_RESET) .. "\001\000\000\000", { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "FETCH" then
-		proxy.queries:append(proxy.COM_STMT_FETCH, string.char(proxy.COM_STMT_FETCH))
+		proxy.queries:append(proxy.COM_STMT_FETCH, string.char(proxy.COM_STMT_FETCH), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "FETCH1" then
-		proxy.queries:append(proxy.COM_STMT_FETCH, string.char(proxy.COM_STMT_FETCH) .. "\001\000\000\000" .. "\128\000\000\000")
+		proxy.queries:append(proxy.COM_STMT_FETCH, string.char(proxy.COM_STMT_FETCH) .. "\001\000\000\000" .. "\128\000\000\000", { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "FLIST" then
-		proxy.queries:append(proxy.COM_FIELD_LIST, string.char(proxy.COM_FIELD_LIST))
+		proxy.queries:append(proxy.COM_FIELD_LIST, string.char(proxy.COM_FIELD_LIST), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "FLIST1" then
-		proxy.queries:append(proxy.COM_FIELD_LIST, string.char(proxy.COM_FIELD_LIST) .. "t1\000id\000\000\000")
+		proxy.queries:append(proxy.COM_FIELD_LIST, string.char(proxy.COM_FIELD_LIST) .. "t1\000id\000\000\000", { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "TDUMP" then
-		proxy.queries:append(proxy.COM_TABLE_DUMP, string.char(proxy.COM_TABLE_DUMP))
+		proxy.queries:append(proxy.COM_TABLE_DUMP, string.char(proxy.COM_TABLE_DUMP), { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "TDUMP1" then
-		proxy.queries:append(proxy.COM_TABLE_DUMP, string.char(proxy.COM_TABLE_DUMP) .. "\004test\002t1")
+		proxy.queries:append(proxy.COM_TABLE_DUMP, string.char(proxy.COM_TABLE_DUMP) .. "\004test\002t1", { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	elseif packet:sub(2) == "TDUMP2" then
-		proxy.queries:append(proxy.COM_TABLE_DUMP, string.char(proxy.COM_TABLE_DUMP) .. "\004test\002t2")
+		proxy.queries:append(proxy.COM_TABLE_DUMP, string.char(proxy.COM_TABLE_DUMP) .. "\004test\002t2", { resultset_is_needed = true })
 		return proxy.PROXY_SEND_QUERY
 	end
 end

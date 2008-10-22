@@ -61,6 +61,9 @@ function parse(packet)
 		-- nothing to decode
 	elseif cmd.type == proxy.COM_STMT_PREPARE then
 		cmd.query = packet:sub(2)
+	-- the stmt_handler_id is at the same position for both STMT_EXECUTE and STMT_CLOSE
+	elseif cmd.type == proxy.COM_STMT_EXECUTE or cmd.type == proxy.COM_STMT_CLOSE then
+		cmd.stmt_handler_id = string.byte(packet, 2) + (string.byte(packet, 3) * 256) + (string.byte(packet, 4) * 256 * 256) + (string.byte(packet, 5) * 256 * 256 * 256)
 	elseif cmd.type == proxy.COM_FIELD_LIST then
 		cmd.table = packet:sub(2)
 	elseif cmd.type == proxy.COM_INIT_DB or
@@ -70,7 +73,7 @@ function parse(packet)
 	elseif cmd.type == proxy.COM_SET_OPTION then
 		cmd.option = packet:sub(2)
 	else
-		print("[debug] (command) unhandled type " .. cmd.type_name)
+		print("[debug] (command) unhandled type name:" .. tostring(cmd.type_name) .. " byte:" .. tostring(cmd.type))
 	end
 
 	return cmd
@@ -89,6 +92,10 @@ function pretty_print(cmd)
 	elseif cmd.type == proxy.COM_FIELD_LIST then
 		-- should have a table-name
 		return ("[%s]"):format(cmd.type_name)
+	elseif cmd.type == proxy.COM_STMT_EXECUTE then
+    	return ("[%s] %s"):format(cmd.type_name, cmd.stmt_handler_id)
+	elseif cmd.type == proxy.COM_STMT_EXECUTE then
+		return ("[%s] %s"):format(cmd.type_name, cmd.stmt_handler_id)
 	end
 
 	return ("[%s] ... no idea"):format(cmd.type_name)

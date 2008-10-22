@@ -504,7 +504,8 @@ network_socket_retval_t network_mysqld_read(chassis *srv, network_socket *con) {
 		con->packet_len = network_mysqld_proto_get_header((unsigned char *)(header_str));
 		con->packet_id  = (unsigned char)(header_str[3]); /* packet-id if the next packet */
 	}
-
+/* TODO: convert to DTrace probe
+	g_debug("[%s] read packet id %d of length %d", G_STRLOC, con->packet_id, con->packet_len + NET_HEADER_SIZE); */
 	/* move the packet from the raw queue to the recv-queue */
 	if ((packet = network_queue_pop_string(con->recv_queue_raw, con->packet_len + NET_HEADER_SIZE, NULL))) {
 		network_queue_append(con->recv_queue, packet);
@@ -750,6 +751,11 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		switch (con->state) {
 		case CON_STATE_ERROR:
 			/* we can't go on, close the connection */
+			{
+				gboolean is_server_fd = event_fd == con->server->fd;
+				g_debug("[%s]: error on %s connection (fd: %d event: %d). closing client connection.",
+						  G_STRLOC, (is_server_fd ? "server" : "client"), event_fd, events);
+			}
 			plugin_call_cleanup(srv, con);
 			network_mysqld_con_free(con);
 
@@ -1234,8 +1240,18 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
-			if (con->is_overlong_packet) {
-				con->state = CON_STATE_READ_QUERY;
+			/* in case we are waiting for LOAD DATA LOCAL INFILE data on this connection,
+			 we need to read the sentinel zero-length packet, too. Otherwise we will block
+			 this connection. Bug#37404
+			 */
+			if (con->is_overlong_packet || con->in_load_data_local_state) {
+				/* the last packet of LOAD DATA LOCAL INFILE is zero-length, signalling "no more data following" */
+				if (con->parse.len == 0) {
+					con->state = CON_STATE_READ_QUERY_RESULT;
+					con->in_load_data_local_state = FALSE;
+				} else {
+					con->state = CON_STATE_READ_QUERY;
+				}
 				break;
 			}
 
@@ -1259,6 +1275,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				
 			break; 
 		case CON_STATE_READ_QUERY_RESULT: 
+			/* read all packets of the resultset 
+			 *
+			 * depending on the backend we may forward the data to the client right away
+			 */
 			do {
 				network_socket *recv_sock;
 
@@ -1282,6 +1302,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 				switch (plugin_call(srv, con, con->state)) {
 				case NETWORK_SOCKET_SUCCESS:
+					/* if we don't need the resultset, forward it to the client */
+					if (!con->resultset_is_finished && !con->resultset_is_needed) {
+						/* check how much data we have in the queue waiting, no need to try to send 5 bytes */
+						if (con->client->send_queue->len > 64 * 1024) {
+							con->state = CON_STATE_SEND_QUERY_RESULT;
+						}
+					}
 					break;
 				case NETWORK_SOCKET_ERROR:
 					/* something nasty happend, let's close the connection */
@@ -1292,6 +1319,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					con->state = CON_STATE_ERROR;
 					break;
 				}
+
 
 			} while (con->state == CON_STATE_READ_QUERY_RESULT);
 	
@@ -1319,11 +1347,17 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			/* if the write failed, don't call the plugin handlers */
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
+			/* in case we havn't read the full resultset from the server yet, go back and read more
+			 */
+			if (!con->resultset_is_finished) {
+				con->state = CON_STATE_READ_QUERY_RESULT;
+				break;
+			}
+
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_critical("%s.%d: ...", __FILE__, __LINE__);
 				con->state = CON_STATE_ERROR;
 				break;
 			}

@@ -155,7 +155,7 @@ void g_debug_hexdump(const char *msg, const void *_s, size_t len) {
 		}
 	}
 
-	g_message("(%s) %"G_GSIZE_FORMAT" bytes:\n  %s", 
+	g_debug("(%s) %"G_GSIZE_FORMAT" bytes:\n  %s", 
 			msg, 
 			len,
 			hex->str);

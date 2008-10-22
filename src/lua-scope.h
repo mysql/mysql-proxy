@@ -40,6 +40,7 @@ CHASSIS_API void lua_scope_release(lua_scope *sc, const char* pos);
 
 #ifdef HAVE_LUA_H
 CHASSIS_API lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name);
+CHASSIS_API void proxy_lua_dumpstack_verbose(lua_State *L);
 #endif
 
 #endif

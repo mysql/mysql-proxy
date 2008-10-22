@@ -17,6 +17,7 @@ network_mysqld_com_query_result_t *network_mysqld_com_query_result_new() {
 
 	com_query = g_new0(network_mysqld_com_query_result_t, 1);
 	com_query->state = PARSE_COM_QUERY_INIT;
+	com_query->query_status = MYSQLD_PACKET_NULL; /* can have 3 values: NULL for unknown, OK for a OK packet, ERR for a error-packet */
 
 	return com_query;
 }
@@ -27,12 +28,12 @@ void network_mysqld_com_query_result_free(network_mysqld_com_query_result_t *uda
 	g_free(udata);
 }
 
+/* TODO: is this one dead? */
 int network_mysqld_com_query_result_track_state(network_packet *packet, network_mysqld_com_query_result_t *udata) {
 	int err = 0;
 
 	if (udata->state == PARSE_COM_QUERY_LOAD_DATA) {
 		/* if the packet length is 0, the client is done */
-
 		guint32 len;
 
 	       	err = err || network_mysqld_proto_get_int24(packet, &len);
@@ -50,7 +51,7 @@ int network_mysqld_com_query_result_track_state(network_packet *packet, network_
  *         0  on success and done
  *         1  on success and need more
  */
-int network_mysqld_proto_get_com_query_result(network_packet *packet, network_mysqld_com_query_result_t *query) {
+int network_mysqld_proto_get_com_query_result(network_packet *packet, network_mysqld_com_query_result_t *query, gboolean use_binary_row_data) {
 	int is_finished = 0;
 	guint8 status;
 	int err = 0;
@@ -67,9 +68,12 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 
 		switch (status) {
 		case MYSQLD_PACKET_ERR: /* e.g. SELECT * FROM dual -> ERROR 1096 (HY000): No tables used */
+			query->query_status = MYSQLD_PACKET_ERR;
 			is_finished = 1;
 			break;
 		case MYSQLD_PACKET_OK:  /* e.g. DELETE FROM tbl */
+			query->query_status = MYSQLD_PACKET_OK;
+
 			ok_packet = network_mysqld_ok_packet_new();
 
 			err = err || network_mysqld_proto_get_ok_packet(packet, ok_packet);
@@ -86,6 +90,7 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 				query->affected_rows = ok_packet->affected_rows;
 				query->insert_id     = ok_packet->insert_id;
 				query->was_resultset = 0;
+				query->binary_encoded= use_binary_row_data; 
 			}
 
 			network_mysqld_ok_packet_free(ok_packet);
@@ -94,7 +99,6 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 		case MYSQLD_PACKET_NULL:
 			/* OH NO, LOAD DATA INFILE :) */
 			query->state = PARSE_COM_QUERY_LOAD_DATA;
-
 			is_finished = 1;
 
 			break;
@@ -107,6 +111,7 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 
 			break;
 		default:
+			query->query_status = MYSQLD_PACKET_OK;
 			/* looks like a result */
 			query->state = PARSE_COM_QUERY_FIELD;
 			break;
@@ -190,8 +195,15 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 			is_finished = 1;
 			break;
 		case MYSQLD_PACKET_OK:
-		case MYSQLD_PACKET_NULL: /* the first field might be a NULL */
-			break;
+		case MYSQLD_PACKET_NULL:
+			if (use_binary_row_data) {
+				/* fallthrough to default:
+				   0x00 is part of the protocol for binary row packets
+				 */
+			} else {
+				/* the first field might be a NULL for a text row packet */
+				break;
+			}
 		default:
 			query->rows++;
 			query->bytes += packet->data->len;
@@ -315,8 +327,6 @@ int network_mysqld_proto_get_com_stmt_prepare_result(
 	return is_finished;
 }
 
-
-
 network_mysqld_com_init_db_result_t *network_mysqld_com_init_db_result_new() {
 	network_mysqld_com_init_db_result_t *udata;
 
@@ -409,7 +419,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 	
 	err = err || network_mysqld_proto_skip_network_header(packet);
 	if (err) return -1;
-						
+
 	/* forward the response to the client */
 	switch (con->parse.command) {
 	case COM_CHANGE_USER: 
@@ -537,15 +547,38 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		is_finished = network_mysqld_proto_get_com_stmt_prepare_result(packet, con->parse.data);
 		break;
 	case COM_STMT_EXECUTE:
+		/* COM_STMT_EXECUTE result packets are basically the same as COM_QUERY ones,
+		 * the only difference is the encoding of the actual data - fields are in there, too.
+		 */
+		is_finished = network_mysqld_proto_get_com_query_result(packet, con->parse.data, TRUE);
+		break;
 	case COM_PROCESS_INFO:
 	case COM_QUERY:
-		is_finished = network_mysqld_proto_get_com_query_result(packet, con->parse.data);
+		is_finished = network_mysqld_proto_get_com_query_result(packet, con->parse.data, FALSE);
+		{
+			network_mysqld_com_query_result_t *query = (network_mysqld_com_query_result_t*)con->parse.data;
+
+			if (query->state == PARSE_COM_QUERY_LOAD_DATA) {
+				con->in_load_data_local_state = TRUE;
+			}
+		}
 		break;
 	case COM_BINLOG_DUMP:
 		/**
 		 * the binlog-dump event stops, forward all packets as we see them
 		 * and keep the command active
 		 */
+		is_finished = 1;
+		break;
+	case COM_SLEEP:
+		/** 
+		 * this is not COM_SLEEP, even though it shares the same numeric value.
+		 * when executing a LOAD DATA LOCAL INFILE the server simply responds with
+		 * an OK packet (5th byte is 0x00), seen here as COM_SLEEP.
+		 * That's ok, because COM_SLEEP is an internal state and does not go over the wire.
+		 */
+		err = err || network_mysqld_proto_peek_int8(packet, &status);
+		if (err) return -1;
 		is_finished = 1;
 		break;
 	default:

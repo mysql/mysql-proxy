@@ -167,7 +167,7 @@ function read_query( packet )
 
 	if true or proxy.connection.client.default_db and proxy.connection.client.default_db ~= proxy.connection.server.default_db then
 		-- sync the client-side default_db with the server-side default_db
-		proxy.queries:append(2, string.char(proxy.COM_INIT_DB) .. proxy.connection.client.default_db)
+		proxy.queries:append(2, string.char(proxy.COM_INIT_DB) .. proxy.connection.client.default_db, { resultset_is_needed = true })
 	end
 	proxy.queries:append(1, packet)
 

@@ -82,24 +82,24 @@ struct network_mysqld_con {
 	 *   to get the binlog-file and the pos 
 	 */
 	enum { 
-        CON_STATE_INIT, 
-        CON_STATE_CONNECT_SERVER, 
-        CON_STATE_READ_HANDSHAKE, 
-        CON_STATE_SEND_HANDSHAKE, 
-        CON_STATE_READ_AUTH, 
-        CON_STATE_SEND_AUTH, 
-        CON_STATE_READ_AUTH_RESULT,
-        CON_STATE_SEND_AUTH_RESULT,
-        CON_STATE_READ_AUTH_OLD_PASSWORD,
-        CON_STATE_SEND_AUTH_OLD_PASSWORD,
-        CON_STATE_READ_QUERY,
-        CON_STATE_SEND_QUERY,
-        CON_STATE_READ_QUERY_RESULT,
-        CON_STATE_SEND_QUERY_RESULT,
+        CON_STATE_INIT = 0, 
+        CON_STATE_CONNECT_SERVER = 1, 
+        CON_STATE_READ_HANDSHAKE = 2, 
+        CON_STATE_SEND_HANDSHAKE = 3, 
+        CON_STATE_READ_AUTH = 4, 
+        CON_STATE_SEND_AUTH = 5, 
+        CON_STATE_READ_AUTH_RESULT = 6,
+        CON_STATE_SEND_AUTH_RESULT = 7,
+        CON_STATE_READ_AUTH_OLD_PASSWORD = 8,
+        CON_STATE_SEND_AUTH_OLD_PASSWORD = 9,
+        CON_STATE_READ_QUERY = 10,
+        CON_STATE_SEND_QUERY = 11,
+        CON_STATE_READ_QUERY_RESULT = 12,
+        CON_STATE_SEND_QUERY_RESULT = 13,
         
-        CON_STATE_CLOSE_CLIENT,
-        CON_STATE_SEND_ERROR,
-        CON_STATE_ERROR
+        CON_STATE_CLOSE_CLIENT = 14,
+        CON_STATE_SEND_ERROR = 15,
+        CON_STATE_ERROR = 16
     } state;                      /**< the current/next state of this connection */
 
 	/**
@@ -120,6 +120,19 @@ struct network_mysqld_con {
 	int is_listen_socket;
 
 	guint8 auth_result_state;
+
+	/* if we don't need the resultset itself, we can forward it redirectly
+	 *
+	 * - set to TRUE _is_needed and we will buffer it
+	 * - set to FALSE and we'll try to forward the packets to the client 
+	 *   even before the full result-set is parsed
+	 *
+	 * _is_finished is used to track if we have read the full resultset (internal)
+	 * */
+	gboolean resultset_is_needed;
+	gboolean resultset_is_finished;
+
+	gboolean in_load_data_local_state;
 
 	struct {
 		guint32 len;

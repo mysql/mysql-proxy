@@ -8,14 +8,6 @@
 #endif
 
 #include <glib.h>
-#ifdef HAVE_LUA_H
-/**
- * embedded lua support
- */
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
-#endif /* HAVE_LUA_H */
 
 #include "network-exports.h"
 
@@ -29,6 +21,8 @@ typedef struct {
 	guint64 insert_id;
     
 	gboolean was_resultset;                      /**< if set, affected_rows and insert_id are ignored */
+	
+	gboolean binary_encoded;                     /**< if set, the row data is binary encoded. we need the metadata to decode */
     
 	/**
 	 * MYSQLD_PACKET_OK or MYSQLD_PACKET_ERR
@@ -51,7 +45,22 @@ typedef struct {
 
 	guint64      rows;
 	guint64      bytes;
+
+	gboolean     resultset_is_needed;       /**< flag to announce if we have to buffer the result for later processing */
 } injection;
+
+/**
+ * a injection_queue is GQueue for now
+ *
+ */
+typedef GQueue network_injection_queue;
+
+NETWORK_API network_injection_queue *network_injection_queue_new(void);
+NETWORK_API void network_injection_queue_free(network_injection_queue *q);
+NETWORK_API void network_injection_queue_reset(network_injection_queue *q);
+NETWORK_API void network_injection_queue_prepend(network_injection_queue *q, injection *inj);
+NETWORK_API void network_injection_queue_append(network_injection_queue *q, injection *inj);
+NETWORK_API guint network_injection_queue_len(network_injection_queue *q);
 
 /**
  * parsed result set
@@ -70,10 +79,10 @@ typedef struct {
 	guint64      bytes;
 } proxy_resultset_t;
 
-NETWORK_API injection *injection_init(int id, GString *query);
+NETWORK_API injection *injection_new(int id, GString *query);
 NETWORK_API void injection_free(injection *i);
 
-NETWORK_API void proxy_getqueuemetatable(lua_State *L);
-NETWORK_API void proxy_getinjectionmetatable(lua_State *L);
+NETWORK_API proxy_resultset_t *proxy_resultset_init();
+NETWORK_API void proxy_resultset_free(proxy_resultset_t *res);
 
 #endif /* _QUERY_HANDLING_H_ */

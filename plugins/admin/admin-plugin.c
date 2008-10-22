@@ -234,7 +234,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 static network_mysqld_lua_stmt_ret admin_lua_read_query(network_mysqld_con *con) {
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	char command = -1;
-	injection *inj;
 	network_socket *recv_sock = con->client;
 	GList   *chunk  = recv_sock->recv_queue->chunks->head;
 	GString *packet = chunk->data;
@@ -255,7 +254,7 @@ static network_mysqld_lua_stmt_ret admin_lua_read_query(network_mysqld_con *con)
 	/* reset the query status */
 	memset(&(st->injected.qstat), 0, sizeof(st->injected.qstat));
 	
-	while ((inj = g_queue_pop_head(st->injected.queries))) injection_free(inj);
+	network_injection_queue_reset(st->injected.queries);
 
 	/* ok, here we go */
 

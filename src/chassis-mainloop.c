@@ -142,6 +142,22 @@ gboolean chassis_resolve_path(chassis *chas, gchar **filename) {
 }
 
 /**
+ * forward libevent messages to the glib error log 
+ */
+static void event_log_use_glib(int libevent_log_level, const char *msg) {
+	/* map libevent to glib log-levels */
+
+	GLogLevelFlags glib_log_level = G_LOG_LEVEL_DEBUG;
+
+	if (libevent_log_level == _EVENT_LOG_DEBUG) glib_log_level = G_LOG_LEVEL_DEBUG;
+	else if (libevent_log_level == _EVENT_LOG_MSG) glib_log_level = G_LOG_LEVEL_MESSAGE;
+	else if (libevent_log_level == _EVENT_LOG_WARN) glib_log_level = G_LOG_LEVEL_WARNING;
+	else if (libevent_log_level == _EVENT_LOG_ERR) glib_log_level = G_LOG_LEVEL_CRITICAL;
+
+	g_log(G_LOG_DOMAIN, glib_log_level, "(libevent) %s", msg);
+}
+
+/**
  * init libevent
  *
  * kqueue has to be called after the fork() of daemonize
@@ -150,6 +166,8 @@ gboolean chassis_resolve_path(chassis *chas, gchar **filename) {
  */
 static void chassis_init_libevent(chassis *chas) {
 	chas->event_base  = event_init();
+
+	event_set_log_callback(event_log_use_glib);
 }
 
 int chassis_mainloop(void *_chas) {
@@ -218,6 +236,8 @@ int chassis_mainloop(void *_chas) {
 		if (r == -1) {
 			if (errno == EINTR) continue;
 
+			g_critical("%s: event_base_dispatch() failed: %s (%d)", 
+					G_STRLOC, g_strerror(errno), errno);
 			break;
 		}
 	}

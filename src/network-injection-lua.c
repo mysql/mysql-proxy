@@ -2,12 +2,13 @@
 
 #include <string.h>
 
-#include "query-handling.h"
+#include "network-injection-lua.h"
 
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"
 #include "glib-ext.h"
 #include "lua-env.h"
+#include "lua-scope.h"
 
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
@@ -17,46 +18,51 @@
 
 
 /**
- * Initialize an injection struct.
+ * proxy.queries:append(id, packet[, { options }])
+ *
+ *   id:      opaque numeric id (numeric)
+ *   packet:  mysql packet to append (string)  FIXME: support table for multiple packets
+ *   options: table of options (table)
+ *     backend_ndx:  backend_ndx to send it to (numeric)
+ *     resultset_is_needed: expose the result-set into lua (bool)
  */
-injection *injection_init(int id, GString *query) {
-	injection *i;
-    
-	i = g_new0(injection, 1);
-	i->id = id;
-	i->query = query;
-    
-	/**
-	 * we have to assume that injection_init() is only used by the read_query call
-	 * which should be fine
-	 */
-	g_get_current_time(&(i->ts_read_query));
-    
-	return i;
-}
-
-/**
- * Free an injection struct
- */
-void injection_free(injection *i) {
-	if (!i) return;
-    
-	if (i->query) g_string_free(i->query, TRUE);
-    
-	g_free(i);
-}
-
 static int proxy_queue_append(lua_State *L) {
-	/* we expect 2 parameters */
 	GQueue *q = *(GQueue **)luaL_checkself(L);
 	int resp_type = luaL_checkinteger(L, 2);
 	size_t str_len;
 	const char *str = luaL_checklstring(L, 3, &str_len);
-    
+	injection *inj;
+
 	GString *query = g_string_sized_new(str_len);
 	g_string_append_len(query, str, str_len);
+
+	inj = injection_new(resp_type, query);
+	inj->resultset_is_needed = FALSE;
+
+	/* check the 4th (last) param */
+	switch (luaL_opt(L, lua_istable, 4, -1)) {
+	case -1:
+		/* none or nil */
+		break;
+	case 1:
+		lua_getfield(L, 4, "resultset_is_needed");
+		if (lua_isnil(L, -1)) {
+			/* no defined */
+		} else if (lua_isboolean(L, -1)) {
+			inj->resultset_is_needed = lua_toboolean(L, -1);
+		} else {
+			luaL_argerror(L, 4, ":append(..., { resultset_is_needed = boolean } ), is %s");
+		}
+
+		lua_pop(L, 1);
+		break;
+	default:
+		proxy_lua_dumpstack_verbose(L);
+		luaL_typerror(L, 4, "table");
+		break;
+	}
     
-	g_queue_push_tail(q, injection_init(resp_type, query));
+	network_injection_queue_append(q, inj);
     
 	return 0;
 }
@@ -71,7 +77,7 @@ static int proxy_queue_prepend(lua_State *L) {
 	GString *query = g_string_sized_new(str_len);
 	g_string_append_len(query, str, str_len);
     
-	g_queue_push_head(q, injection_init(resp_type, query));
+	network_injection_queue_prepend(q, injection_new(resp_type, query));
     
 	return 0;
 }
@@ -79,9 +85,8 @@ static int proxy_queue_prepend(lua_State *L) {
 static int proxy_queue_reset(lua_State *L) {
 	/* we expect 2 parameters */
 	GQueue *q = *(GQueue **)luaL_checkself(L);
-	injection *inj;
-    
-	while ((inj = g_queue_pop_head(q))) injection_free(inj);
+
+	network_injection_queue_reset(q);
     
 	return 0;
 }
@@ -109,30 +114,6 @@ static const struct luaL_reg methods_proxy_queue[] = {
  */
 void proxy_getqueuemetatable(lua_State *L) {
     proxy_getmetatable(L, methods_proxy_queue);
-}
-
-/**
- * Initialize a resultset struct
- */
-proxy_resultset_t *proxy_resultset_init() {
-	proxy_resultset_t *res;
-    
-	res = g_new0(proxy_resultset_t, 1);
-    
-	return res;
-}
-
-/**
- * Free a resultset struct
- */
-void proxy_resultset_free(proxy_resultset_t *res) {
-	if (!res) return;
-    
-	if (res->fields) {
-		network_mysqld_proto_fielddefs_free(res->fields);
-	}
-    
-	g_free(res);
 }
 
 /**
@@ -304,24 +285,16 @@ static int proxy_resultset_rows_iter(lua_State *L) {
  * @return if this is not a result-set we return -1
  */
 static int parse_resultset_fields(proxy_resultset_t *res) {
-	GString *packet = res->result_queue->head->data;
+	GString *packet;
 	GList *chunk;
+
+	g_return_val_if_fail(res->result_queue != NULL, -1);
     
+	packet = res->result_queue->head->data;
+
 	if (res->fields) return 0;
-    
-	switch ((guint8)packet->str[NET_HEADER_SIZE]) {
-        case MYSQLD_PACKET_OK:
-        case MYSQLD_PACKET_ERR:
-            res->qstat.query_status = packet->str[NET_HEADER_SIZE];
-            
-            return 0;
-        default:
-            /* OK with a resultset */
-            res->qstat.query_status = MYSQLD_PACKET_OK;
-            break;
-	}
-    
-	/* parse the fields */
+
+   	/* parse the fields */
 	res->fields = network_mysqld_proto_fielddefs_new();
     
 	if (!res->fields) return -1;
@@ -354,51 +327,68 @@ static int proxy_resultset_get(lua_State *L) {
 	const char *key = luaL_checklstring(L, 2, &keysize);
     
 	if (strleq(key, keysize, C("fields"))) {
-		GPtrArray **fields_p;
-        
-		parse_resultset_fields(res);
-        
-		if (res->fields) {
-			fields_p = lua_newuserdata(L, sizeof(res->fields));
-			*fields_p = res->fields;
-            
-			proxy_getmetatable(L, methods_proxy_resultset_fields);
-			lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
+		if (!res->result_queue) {
+			luaL_error(L, ".resultset.fields isn't available if 'resultset_is_needed ~= true'");
 		} else {
-			lua_pushnil(L);
+			GPtrArray **fields_p;
+		
+			if (0 != parse_resultset_fields(res)) {
+				/* failed */
+			}
+		
+			if (res->fields) {
+				fields_p = lua_newuserdata(L, sizeof(res->fields));
+				*fields_p = res->fields;
+		    
+				proxy_getmetatable(L, methods_proxy_resultset_fields);
+				lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
+			} else {
+				lua_pushnil(L);
+			}
 		}
 	} else if (strleq(key, keysize, C("rows"))) {
-		proxy_resultset_t *rows;
-		proxy_resultset_t **rows_p;
-        
-		parse_resultset_fields(res);
-        
-		if (res->rows_chunk_head) {
-            
-			rows = proxy_resultset_init();
-			rows->rows_chunk_head = res->rows_chunk_head;
-			rows->row    = rows->rows_chunk_head;
-			rows->fields = res->fields;
-            
-			/* push the parameters on the stack */
-			rows_p = lua_newuserdata(L, sizeof(rows));
-			*rows_p = rows;
-            
-			proxy_getmetatable(L, methods_proxy_resultset_light);
-			lua_setmetatable(L, -2);
-            
-			/* return a interator */
-			lua_pushcclosure(L, proxy_resultset_rows_iter, 1);
+		if (!res->result_queue) {
+			luaL_error(L, ".resultset.rows isn't available if 'resultset_is_needed ~= true'");
+		} else if (res->qstat.binary_encoded) {
+			luaL_error(L, ".resultset.rows isn't available for prepared statements");
 		} else {
-			lua_pushnil(L);
+			proxy_resultset_t *rows;
+			proxy_resultset_t **rows_p;
+		
+			parse_resultset_fields(res);
+		
+			if (res->rows_chunk_head) {
+		    
+				rows = proxy_resultset_init();
+				rows->rows_chunk_head = res->rows_chunk_head;
+				rows->row    = rows->rows_chunk_head;
+				rows->fields = res->fields;
+		    
+				/* push the parameters on the stack */
+				rows_p = lua_newuserdata(L, sizeof(rows));
+				*rows_p = rows;
+		    
+				proxy_getmetatable(L, methods_proxy_resultset_light);
+				lua_setmetatable(L, -2);
+		    
+				/* return a interator */
+				lua_pushcclosure(L, proxy_resultset_rows_iter, 1);
+			} else {
+				lua_pushnil(L);
+			}
 		}
 	} else if (strleq(key, keysize, C("row_count"))) {
 		lua_pushinteger(L, res->rows);
 	} else if (strleq(key, keysize, C("bytes"))) {
 		lua_pushinteger(L, res->bytes);
 	} else if (strleq(key, keysize, C("raw"))) {
-		GString *s = res->result_queue->head->data;
-		lua_pushlstring(L, s->str + 4, s->len - 4);
+		if (!res->result_queue) {
+			luaL_error(L, ".resultset.raw isn't available if 'resultset_is_needed ~= true'");
+		} else {
+			GString *s;
+			s = res->result_queue->head->data;
+			lua_pushlstring(L, s->str + 4, s->len - 4); /* skip the network-header */
+		}
 	} else if (strleq(key, keysize, C("flags"))) {
 		lua_newtable(L);
 		lua_pushboolean(L, (res->qstat.server_status & SERVER_STATUS_IN_TRANS) != 0);
@@ -431,8 +421,10 @@ static int proxy_resultset_get(lua_State *L) {
 			lua_pushnumber(L, res->qstat.insert_id);
 		}
 	} else if (strleq(key, keysize, C("query_status"))) {
-		if (0 != parse_resultset_fields(res)) {
-			/* not a result-set */
+		/* hmm, is there another way to figure out if this is a 'resultset' ?
+		 * one that doesn't require the parse the meta-data  */
+
+		if (res->qstat.query_status == MYSQLD_PACKET_NULL) {
 			lua_pushnil(L);
 		} else {
 			lua_pushinteger(L, res->qstat.query_status);
@@ -472,8 +464,13 @@ static int proxy_injection_get(lua_State *L) {
         
 		res_p = lua_newuserdata(L, sizeof(res));
 		*res_p = res = proxy_resultset_init();
-        
-		res->result_queue = inj->result_queue;
+
+		/* only expose the resultset if really needed 
+		   FIXME: if the resultset is encoded in binary form, we can't provide it either.
+		 */
+		if (inj->resultset_is_needed && !inj->qstat.binary_encoded) {	
+			res->result_queue = inj->result_queue;
+		}
 		res->qstat = inj->qstat;
 		res->rows  = inj->rows;
 		res->bytes = inj->bytes;
