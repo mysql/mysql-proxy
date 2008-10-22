@@ -46,10 +46,13 @@
 :ENDNSIS
 
 @rem MSVC 8 2005 doesn't seem to have devenv.com
-@SET VS_CMD="%VS80COMNTOOLS%\..\IDE\VCExpress.exe"
+@SET VS_CMD="%VS90COMNTOOLS%\..\IDE\VCExpress.exe"
 
 @echo Copying dependencies to deps folder
 @copy %DEPS_PATH%\packages\* deps\
+@echo Special cURL+SSL binary installation
+@mkdir deps\curlssl
+@copy %DEPS_PATH%\ssl-binary-libs\*.dll deps\curlssl
 
 @rem clear the cache if neccesary to let cmake recheck everything
 @rem del CMakeCache.txt
