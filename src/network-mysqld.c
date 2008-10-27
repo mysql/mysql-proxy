@@ -755,7 +755,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				gchar *which_connection = "a"; /* some connection, don't know yet */
 				if (con->server && event_fd == con->server->fd) {
 					which_connection = "server";
-				} else if (con->client && event_fd = con->client->fd) {
+				} else if (con->client && event_fd == con->client->fd) {
 					which_connection = "client";
 				}
 				g_debug("[%s]: error on %s connection (fd: %d event: %d). closing client connection.",
