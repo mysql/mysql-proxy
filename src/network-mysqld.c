@@ -752,9 +752,14 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_ERROR:
 			/* we can't go on, close the connection */
 			{
-				gboolean is_server_fd = event_fd == con->server->fd;
+				gchar *which_connection = "a"; /* some connection, don't know yet */
+				if (con->server && event_fd == con->server->fd) {
+					which_connection = "server";
+				} else if (con->client && event_fd = con->client->fd) {
+					which_connection = "client";
+				}
 				g_debug("[%s]: error on %s connection (fd: %d event: %d). closing client connection.",
-						  G_STRLOC, (is_server_fd ? "server" : "client"), event_fd, events);
+						G_STRLOC, which_connection,	event_fd, events);
 			}
 			plugin_call_cleanup(srv, con);
 			network_mysqld_con_free(con);
