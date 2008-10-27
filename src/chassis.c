@@ -95,6 +95,8 @@
 #include <io.h>      /* open() */
 #else
 #include <unistd.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
 #endif
 
 #include <glib.h>
@@ -179,6 +181,142 @@ static void daemonize(void) {
 	
 	umask(0);
 }
+
+
+/**
+ * forward the signal to the process group, but not us
+ */
+static void signal_forward(int sig) {
+	signal(sig, SIG_IGN); /* we don't want to create a loop here */
+
+	kill(0, sig);
+}
+
+/**
+ * keep the ourself alive 
+ *
+ * if we or the child gets a SIGTERM, we quit too
+ * on everything else we restart it
+ */
+static int proc_keepalive(int *child_exit_status) {
+	int nprocs = 0;
+	pid_t child_pid = -1;
+
+	/* we ignore SIGINT and SIGTERM and just let it be forwarded to the child instead
+	 * as we want to collect its PID before we shutdown too 
+	 *
+	 * the child will have to set its own signal handlers for this
+	 */
+
+	for (;;) {
+		/* try to start the children */
+		while (nprocs < 1) {
+			pid_t pid = fork();
+
+			if (pid == 0) {
+				/* child */
+				
+				g_debug("%s: we are the child: %d",
+						G_STRLOC,
+						getpid());
+				return 0;
+			} else if (pid < 0) {
+				/* fork() failed */
+
+				g_critical("%s: fork() failed: %s (%d)",
+					G_STRLOC,
+					g_strerror(errno),
+					errno);
+
+				return -1;
+			} else {
+				/* we are the angel, let's see what the child did */
+				g_message("%s: [angel] we try to keep PID=%d alive",
+						G_STRLOC,
+						pid);
+
+				signal(SIGINT, signal_forward);
+				signal(SIGTERM, signal_forward);
+				signal(SIGHUP, signal_forward);
+
+				child_pid = pid;
+				nprocs++;
+			}
+		}
+
+		if (child_pid != -1) {
+			struct rusage rusage;
+			int exit_status;
+			pid_t exit_pid;
+
+			g_debug("%s: waiting for %d",
+					G_STRLOC,
+					child_pid);
+			exit_pid = wait4(child_pid, &exit_status, 0, &rusage);
+			g_debug("%s: %d returned: %d",
+					G_STRLOC,
+					child_pid,
+					exit_pid);
+
+			if (exit_pid == child_pid) {
+				/* our child returned, let's see how it went */
+				if (WIFEXITED(exit_status)) {
+					g_message("%s: [angel] PID=%d exited normally with exit-code = %d (it used %ld kBytes max)",
+							G_STRLOC,
+							child_pid,
+							WEXITSTATUS(exit_status),
+							rusage.ru_maxrss / 1024);
+					if (child_exit_status) *child_exit_status = WEXITSTATUS(exit_status);
+					return 1;
+				} else if (WIFSIGNALED(exit_status)) {
+					int time_towait = 2;
+					/* our child died on a signal
+					 *
+					 * log it and restart */
+
+					g_message("%s: [angel] PID=%d died on signal=%d (it used %ld kBytes max) ... waiting 3min before restart",
+							G_STRLOC,
+							child_pid,
+							WTERMSIG(exit_status),
+							rusage.ru_maxrss / 1024);
+
+					/**
+					 * to make sure we don't loop as fast as we can, sleep a bit between 
+					 * restarts
+					 */
+	
+					signal(SIGINT, SIG_DFL);
+					signal(SIGTERM, SIG_DFL);
+					signal(SIGHUP, SIG_DFL);
+					while (time_towait > 0) time_towait = sleep(time_towait);
+
+					nprocs--;
+					child_pid = -1;
+				} else if (WIFSTOPPED(exit_status)) {
+				} else {
+					g_assert_not_reached();
+				}
+			} else if (-1 == exit_pid) {
+				if (EINTR == errno) {
+					/* EINTR is ok, all others bad */
+				} else {
+					/* how can this happen ? */
+					g_critical("%s: wait4(%d, ...) failed: %s (%d)",
+						G_STRLOC,
+						child_pid,
+						g_strerror(errno),
+						errno);
+
+					return -1;
+				}
+			} else {
+				g_assert_not_reached();
+			}
+		}
+	}
+
+	return 1;
+}
 #endif
 
 #define GETTEXT_PACKAGE "mysql-proxy"
@@ -251,6 +389,7 @@ int main_cmdline(int argc, char **argv) {
 	GOptionEntry *config_entries;
 	gchar **plugin_names = NULL;
 	guint invoke_dbg_on_crash = 0;
+	guint auto_restart = 0;
 
 	gchar *log_level = NULL;
 
@@ -280,6 +419,7 @@ int main_cmdline(int argc, char **argv) {
 		{ "log-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "log all messages in a file", "<file>" },
 		{ "log-use-syslog",           0, 0, G_OPTION_ARG_NONE, NULL, "log all messages to syslog", NULL },
 		{ "log-backtrace-on-crash",   0, 0, G_OPTION_ARG_NONE, NULL, "try to invoke debugger on crash", NULL },
+		{ "keepalive",                0, 0, G_OPTION_ARG_NONE, NULL, "try to restart the proxy if it crashed", NULL },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -377,6 +517,7 @@ int main_cmdline(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(log->log_filename);
 	main_entries[i++].arg_data  = &(log->use_syslog);
 	main_entries[i++].arg_data  = &(invoke_dbg_on_crash);
+	main_entries[i++].arg_data  = &(auto_restart);
 
 	option_ctx = g_option_context_new("- MySQL App Shell");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
@@ -723,6 +864,23 @@ int main_cmdline(int argc, char **argv) {
 
 	if (daemon_mode) {
 		daemonize();
+	}
+
+	if (auto_restart) {
+		int child_exit_status = EXIT_SUCCESS; /* forward the exit-status of the child */
+		int ret = proc_keepalive(&child_exit_status);
+
+		if (ret > 0) {
+			/* the agent stopped */
+		
+			exit_code = child_exit_status;
+			goto exit_nicely;
+		} else if (ret < 0) {
+			exit_code = EXIT_FAILURE;
+			goto exit_nicely;
+		} else {
+			/* we are the child, go on */
+		}
 	}
 #endif
 	if (pid_file) {
