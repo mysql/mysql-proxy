@@ -24,7 +24,7 @@ local function boom(msg, usermsg)
 		end
 	end
 
-	error(e)
+	error(("%s (%s): %s"):format(e.message or "assertion failed", e.testmessage or "", e.trace))
 end
 
 function assertEquals(is, expected, msg)
