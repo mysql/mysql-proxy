@@ -1,3 +1,20 @@
+@rem  $%BEGINLICENSE%$
+@rem  Copyright 2008 MySQL AB, 2008 Sun Microsystems, Inc. All rights reserved.
+@rem  U.S. Government Rights - Commercial software. Government users are subject
+@rem  to the Sun Microsystems, Inc. standard license agreement and applicable
+@rem  provisions of the FAR and its supplements. Use is subject to license terms.
+@rem  This distribution may include materials developed by third parties.Sun,
+@rem  Sun Microsystems, the Sun logo and MySQL Enterprise Monitor are
+@rem  trademarks or registered trademarks of Sun Microsystems, Inc. in the U.S.
+@rem  and other countries.
+@rem 
+@rem  Copyright 2008 MySQL AB, 2008 Sun Microsystems, Inc. Tous droits réservés.
+@rem  L'utilisation est soumise aux termes du contrat de licence.Cette
+@rem  distribution peut comprendre des composants développés par des tierces
+@rem  parties.Sun, Sun Microsystems, le logo Sun et MySQL Enterprise Monitor sont
+@rem  des marques de fabrique ou des marques déposées de Sun Microsystems, Inc.
+@rem  aux Etats-Unis et dans du'autres pays.
+@rem  $%ENDLICENSE%$
 @echo "Run this from a shell started with the Visual Studio Build environment set!"
 @echo "You can set DEPS_PATH (for the dependencies package) and MYSQL_DIR for a MySQL server installation"
 @IF DEFINED DEPS_PATH (GOTO MYSQL_CONF)

@@ -1,4 +1,21 @@
-/* Copyright (C) 2007, 2008 MySQL AB */ 
+/* $%BEGINLICENSE%$
+ Copyright (C) 2008 MySQL AB, 2008 Sun Microsystems, Inc
+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; version 2 of the License.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software
+ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+ $%ENDLICENSE%$ */
+ 
 
 /**
  * expose the chassis functions into the lua space
@@ -361,7 +378,7 @@ static int lua_proto_append_challenge_packet (lua_State *L) {
 */
 static void set_info (lua_State *L) {
 	lua_pushliteral (L, "_COPYRIGHT");
-	lua_pushliteral (L, "Copyright (C) 2008 MySQL AB");
+	lua_pushliteral (L, "Copyright (C) 2008 MySQL AB, 2008 Sun Microsystems, Inc");
 	lua_settable (L, -3);
 	lua_pushliteral (L, "_DESCRIPTION");
 	lua_pushliteral (L, "export mysql protocol encoders and decoders mysql.*");
