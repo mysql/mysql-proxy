@@ -1,6 +1,5 @@
 %{
-/*
- $%BEGINLICENSE%$
+/*$%BEGINLICENSE%$
  Copyright (C) 2007-2008 MySQL AB, 2008 Sun Microsystems, Inc
 
  This program is free software; you can redistribute it and/or modify
@@ -16,9 +15,7 @@
  along with this program; if not, write to the Free Software
  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
- $%ENDLICENSE%$
-
-*/
+ $%ENDLICENSE%$*/
 
 
 #include <string.h>
