@@ -1429,7 +1429,11 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	network_mysqld_con *listen_con = user_data;
 	network_mysqld_con *client_con;
+#if defined(__LP64__) && defined(__hpux)
+	int addr_len;	/* on HP/UX IA64 socklen_t and int are not of the same size, confusing accept() later on */
+#else
 	socklen_t addr_len;
+#endif
 	struct sockaddr_in ipv4;
 	int fd;
 
