@@ -396,6 +396,7 @@ int main_cmdline(int argc, char **argv) {
 	int exit_code = EXIT_SUCCESS;
 	int print_version = 0;
 	int daemon_mode = 0;
+	gchar *user = NULL;
 	gchar *base_dir = NULL;
 	int auto_base_dir = 0;	/**< distinguish between user supplied basedir and automatically discovered one */
 	const gchar *check_str = NULL;
@@ -428,6 +429,9 @@ int main_cmdline(int argc, char **argv) {
 	GOptionEntry main_entries[] = 
 	{
 		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
+#ifndef _WIN32
+		{ "user",                     0, 0, G_OPTION_ARG_STRING, NULL, "Run mysql-proxy as user", "<user>" },
+#endif
 		{ "basedir",                  0, 0, G_OPTION_ARG_STRING, NULL, "Base directory to prepend to relative paths in the config", "<absolute path>" },
 		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
 		{ "plugin-dir",               0, 0, G_OPTION_ARG_STRING, NULL, "path to the plugins", "<path>" },
@@ -525,6 +529,9 @@ int main_cmdline(int argc, char **argv) {
 
 	i = 0;
 	main_entries[i++].arg_data  = &(daemon_mode);
+#ifndef _WIN32
+	main_entries[i++].arg_data  = &(user);
+#endif
 	main_entries[i++].arg_data  = &(base_dir);
 	main_entries[i++].arg_data  = &(pid_file);
 	main_entries[i++].arg_data  = &(plugin_dir);
@@ -935,6 +942,12 @@ int main_cmdline(int argc, char **argv) {
 	if (win32_running_as_service) agent_service_set_state(SERVICE_RUNNING, 0);
 #endif
 
+	/*
+	 * we have to drop root privileges in chassis_mainloop() after
+	 * the plugins opened the ports, so we need the user there
+	 */
+	srv->user = g_strdup(user);
+
 	if (chassis_mainloop(srv)) {
 		/* looks like we failed */
 
@@ -964,6 +977,7 @@ exit_nicely:
 	if (srv) chassis_free(srv);
 
 	if (base_dir) g_free(base_dir);
+	if (user) g_free(user);
 	if (pid_file) g_free(pid_file);
 	if (log_level) g_free(log_level);
 	if (plugin_dir) g_free(plugin_dir);

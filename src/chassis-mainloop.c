@@ -23,12 +23,20 @@
 #include <errno.h>
 #include <stdio.h>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h> /* event.h need struct timeval */
+#endif
+
+#ifdef HAVE_PWD_H
+#include <pwd.h>	 /* getpwnam() */
 #endif
 
 #include <glib.h>
@@ -102,6 +110,7 @@ void chassis_free(chassis *chas) {
 #endif
 	
 	if (chas->base_dir) g_free(chas->base_dir);
+	if (chas->user) g_free(chas->user);
 	g_free(chas);
 }
 
@@ -219,6 +228,45 @@ int chassis_mainloop(void *_chas) {
 		}
 	}
 
+	/*
+	 * drop root privileges if requested
+	 */
+#ifndef _WIN32
+	if (chas->user) {
+		struct passwd *user_info;
+		uid_t user_id= geteuid();
+
+		/* Don't bother if we aren't superuser */
+		if (user_id) {
+			g_critical("can only use the --user switch if running as root");
+			return -1;
+		}
+
+		if (NULL == (user_info = getpwnam(chas->user))) {
+			g_critical("unknown user: %s", chas->user);
+			return -1;
+		}
+
+		if (chas->log->log_filename) {
+			/* chown logfile */
+			if (-1 == chown(chas->log->log_filename, user_info->pw_uid, user_info->pw_gid)) {
+				g_critical("%s.%d: chown(%s) failed: %s",
+							__FILE__, __LINE__,
+							chas->log->log_filename,
+							g_strerror(errno) );
+
+				return -1;
+			}
+		}
+
+		setgid(user_info->pw_gid);
+		setuid(user_info->pw_uid);
+		g_debug("now running as user: %s (%d/%d)",
+				chas->user,
+				user_info->pw_uid,
+				user_info->pw_gid );
+	}
+#endif
 
 	signal_set(&ev_sigterm, SIGTERM, sigterm_handler, NULL);
 	event_base_set(chas->event_base, &ev_sigterm);

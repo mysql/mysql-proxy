@@ -30,8 +30,8 @@ tests_to_skip = {
         ['bug_30867']   = 'needs backends',
         ['xtab2']   = 'works, but needs a real mysql-server',
         ['select_affected_rows']   = 'needs backends',
-		['client_address_socket'] = 'waiting for bug#38416',
-
+        ['client_address_socket'] = 'waiting for bug#38416',
+        ['change_user'] = 'works, but needs to run as root and configured with a valid user',
 }
 
 
