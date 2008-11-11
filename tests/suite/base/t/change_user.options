@@ -1,0 +1,6 @@
+local change_user_proxy_options = default_proxy_options
+change_user_proxy_options["user"] = "_mysql"
+-- this doesn't work becuase run-tests.lua doesn't call mysqltest with
+-- the correct port
+-- change_user_proxy_options["proxy-address"] = "127.0.0.1:800"
+start_proxy('change_user', change_user_proxy_options)
