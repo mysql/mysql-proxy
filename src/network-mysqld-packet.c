@@ -150,26 +150,30 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 
 			break;
 		case MYSQLD_PACKET_EOF:
-#if MYSQL_VERSION_ID >= 50000
 			/**
 			 * in 5.0 we have CURSORs which have no rows, just a field definition
 			 */
-			eof_packet = network_mysqld_eof_packet_new();
+			if (packet->data->len == 9) {
+				eof_packet = network_mysqld_eof_packet_new();
 
-			err = err || network_mysqld_proto_get_eof_packet(packet, eof_packet);
+				err = err || network_mysqld_proto_get_eof_packet(packet, eof_packet);
 
-			if (!err) {
-				if (eof_packet->server_status & SERVER_STATUS_CURSOR_EXISTS) {
-					is_finished = 1;
-				} else {
-					query->state = PARSE_COM_QUERY_RESULT;
-				}
-			}
-
-			network_mysqld_eof_packet_free(eof_packet);
+				if (!err) {
+#if MYSQL_VERSION_ID >= 50000
+					if (eof_packet->server_status & SERVER_STATUS_CURSOR_EXISTS) {
+						is_finished = 1;
+					} else {
+						query->state = PARSE_COM_QUERY_RESULT;
+					}
 #else
-			query->state = PARSE_COM_QUERY_RESULT;
+					query->state = PARSE_COM_QUERY_RESULT;
 #endif
+				}
+
+				network_mysqld_eof_packet_free(eof_packet);
+			} else {
+				query->state = PARSE_COM_QUERY_RESULT;
+			}
 			break;
 		default:
 			break;

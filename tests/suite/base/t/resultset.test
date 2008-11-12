@@ -24,3 +24,5 @@ test_res_blob;
 INSERT INTO test.t1 VALUES ( 1 );
 SELECT error_msg();
 SELECT row_count(1), bytes();
+SELECT 5.0;
+SELECT 4.1;

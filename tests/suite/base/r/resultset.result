@@ -15,3 +15,9 @@ errcode	errmsg	sqlstate
 SELECT row_count(1), bytes();
 row_count	bytes
 2	16
+SELECT 5.0;
+row_count	bytes
+1	6
+SELECT 4.1;
+row_count	bytes
+1	6

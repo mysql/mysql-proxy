@@ -6,6 +6,7 @@
 #cmakedefine HAVE_NETINET_IN_H
 #cmakedefine HAVE_NET_IF_H
 #cmakedefine HAVE_NET_IF_DL_H
+#cmakedefine HAVE_PWD_H
 #cmakedefine HAVE_SIGNAL_H
 #cmakedefine HAVE_STDDEF_H
 #cmakedefine HAVE_STDINT_H
