@@ -1371,7 +1371,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			/* in case we havn't read the full resultset from the server yet, go back and read more
 			 */
-			if (!con->resultset_is_finished) {
+			if (!con->resultset_is_finished && con->server) {
 				con->state = CON_STATE_READ_QUERY_RESULT;
 				break;
 			}
