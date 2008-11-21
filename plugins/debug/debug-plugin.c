@@ -158,7 +158,13 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 								}
 
 								if (!row) row = g_ptr_array_new();
-								g_ptr_array_add(row, g_strdup(lua_tostring(L, -1)));
+								if (lua_isboolean(L, -1)) {
+									g_ptr_array_add(row, g_strdup(lua_toboolean(L, -1) ? "TRUE" : "FALSE"));
+								} else if (lua_isnumber(L, -1)) {
+									g_ptr_array_add(row, g_strdup_printf("%.0f", lua_tonumber(L, -1)));
+								} else {
+									g_ptr_array_add(row, g_strdup(lua_tostring(L, -1)));
+								}
 
 								lua_pop(L, 1); /* pop the value, but keep the key on the stack */
 							}
@@ -172,7 +178,13 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 							lua_table_key_to_mysql_field(L, fields);
 
 							if (!row) row = g_ptr_array_new();
-							g_ptr_array_add(row, g_strdup(lua_tostring(L, -1)));
+							if (lua_isboolean(L, -1)) {
+								g_ptr_array_add(row, g_strdup(lua_toboolean(L, -1) ? "TRUE" : "FALSE"));
+							} else if (lua_isnumber(L, -1)) {
+								g_ptr_array_add(row, g_strdup_printf("%.0f", lua_tonumber(L, -1)));
+							} else {
+								g_ptr_array_add(row, g_strdup(lua_tostring(L, -1)));
+							}
 						}
 
 						lua_pop(L, 1); /* pop the value, but keep the key on the stack */
