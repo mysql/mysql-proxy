@@ -149,6 +149,12 @@ static SERVICE_STATUS agent_service_status;
 static SERVICE_STATUS_HANDLE agent_service_status_handle = 0;
 #endif
 
+#ifdef WIN32
+#define CHASSIS_NEWLINE "\r\n"
+#else
+#define CHASSIS_NEWLINE "\n"
+#endif
+
 /**
  * turn a GTimeVal into string
  *
@@ -579,10 +585,10 @@ int main_cmdline(int argc, char **argv) {
 	 * and print their version numbers, too. then we exit cleanly.
 	 */
 	if (print_version) {
-		printf("%s\r\n", PACKAGE_STRING); 
-		printf("  glib2: %d.%d.%d\r\n", GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+		printf("%s" CHASSIS_NEWLINE, PACKAGE_STRING); 
+		printf("  glib2: %d.%d.%d" CHASSIS_NEWLINE, GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
 #ifdef HAVE_EVENT_H
-		printf("  libevent: %s\r\n", event_get_version());
+		printf("  libevent: %s" CHASSIS_NEWLINE, event_get_version());
 #endif
 	}
 	
@@ -767,12 +773,12 @@ int main_cmdline(int argc, char **argv) {
 		
 		p = chassis_plugin_load(plugin_filename);
 		g_free(plugin_filename);
-        
+
 		if (print_version && p) {
 			if (0 == strcmp(plugin_names[i], p->name)) {
-                printf("  %s: %s\r\n", p->name, p->version);
+                printf("  %s: %s" CHASSIS_NEWLINE, p->name, p->version);
 			} else {
-                printf("  %s(%s): %s\r\n", p->name, plugin_names[i], p->version);
+                printf("  %s(%s): %s" CHASSIS_NEWLINE, p->name, plugin_names[i], p->version);
 			}
 		}
 		
