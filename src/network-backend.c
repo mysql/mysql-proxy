@@ -106,36 +106,50 @@ int network_backends_add(network_backends_t *bs, /* const */ gchar *address, bac
 	return is_known ? -1 : 0;
 }
 
+/**
+ * updated the _DOWN state to _UNKNOWN if the backends were
+ * down for at least 4 seconds
+ *
+ * we only check once a second to reduce the overhead on connection setup
+ *
+ * @returns   number of updated backends
+ */
 int network_backends_check(network_backends_t *bs) {
 	GTimeVal now;
 	guint i;
+	int backends_woken_up = 0;
 
 	g_get_current_time(&now);
 
 	/* check max(once a second) */
-	if (now.tv_sec - bs->backend_last_check.tv_sec < 1) return 0;
+	if (bs->backend_last_check.tv_sec > 0 &&
+	    now.tv_sec - bs->backend_last_check.tv_sec < 1) return 0;
+
 
 	/* check once a second if we have to wakeup a connection */
 	g_mutex_lock(bs->backends_mutex);
+
+	bs->backend_last_check = now;
+
 	for (i = 0; i < bs->backends->len; i++) {
 		backend_t *cur = bs->backends->pdata[i];
 
 		if (cur->state != BACKEND_STATE_DOWN) continue;
 
-		/* check if a backend is marked as down for more than 10 sec */
-
+		/* check if a backend is marked as down for more than 4 sec */
 		if (now.tv_sec - cur->state_since.tv_sec > 4) {
-			g_debug("%s.%d: backend %s was down for more than 10 sec, waking it up", 
+			g_debug("%s.%d: backend %s was down for more than 4 sec, waking it up", 
 					__FILE__, __LINE__,
 					cur->addr.str);
 
 			cur->state = BACKEND_STATE_UNKNOWN;
 			cur->state_since = now;
+			backends_woken_up++;
 		}
 	}
 	g_mutex_unlock(bs->backends_mutex);
 
-	return 0;
+	return backends_woken_up;
 }
 
 backend_t *network_backends_get(network_backends_t *bs, gint ndx) {
