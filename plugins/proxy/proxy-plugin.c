@@ -1429,6 +1429,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 			/* mark the backend as being DOWN and retry with a different one */
 			st->backend->state = BACKEND_STATE_DOWN;
+			g_get_current_time(&(st->backend->state_since));
 			network_socket_free(con->server);
 			con->server = NULL;	
 			return NETWORK_SOCKET_ERROR_RETRY;
