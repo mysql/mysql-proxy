@@ -53,7 +53,7 @@
 #include "sys-pedantic.h"
 #include "lua-scope.h"
 #include "network-backend.h"
-
+#include "lua-registry-keys.h"
 
 typedef struct network_mysqld_con network_mysqld_con; /* forward declaration */
 

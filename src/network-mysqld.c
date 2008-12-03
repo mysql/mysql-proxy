@@ -293,7 +293,7 @@ int network_mysqld_init(chassis *srv) {
 	/* store the pointer to the chassis in the Lua registry */
 	L = srv->priv->sc->L;
 	lua_pushlightuserdata(L, (void*)srv);
-	lua_setfield(L, LUA_REGISTRYINDEX, "chassis");
+	lua_setfield(L, LUA_REGISTRYINDEX, CHASSIS_LUA_REGISTRY_KEY);
 	
 	return 0;
 }

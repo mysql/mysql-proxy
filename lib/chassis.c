@@ -36,6 +36,7 @@
 
 #include "chassis-mainloop.h"
 #include "chassis-plugin.h"
+#include "lua-registry-keys.h"
 
 static int lua_chassis_set_shutdown (lua_State *L) {
 	chassis_set_shutdown();
@@ -47,16 +48,16 @@ static int lua_chassis_set_shutdown (lua_State *L) {
  * helper function to set GHashTable key, value pairs in a Lua table
  * assumes to have a table on top of the stack.
  */
-static void lua_chassis_stats_setluaval(gpointer key, gpointer val, gpointer userdata) {
+static void chassis_stats_setluaval(gpointer key, gpointer val, gpointer userdata) {
     const gchar *name = key;
-    const gchar *value = val;
+    const guint value = GPOINTER_TO_UINT(val);
     lua_State *L = userdata;
 
     g_assert(lua_istable(L, -1));
     lua_checkstack(L, 2);
 
     lua_pushstring(L, name);
-    lua_pushstring(L, value);
+    lua_pushinteger(L, value);
     lua_settable(L, -3);
 }
 
@@ -77,7 +78,7 @@ static int lua_chassis_stats(lua_State *L) {
     int i = 0;
 
     /* retrieve the chassis stored in the registry */
-    lua_getfield(L, LUA_REGISTRYINDEX, "chassis");
+    lua_getfield(L, LUA_REGISTRYINDEX, CHASSIS_LUA_REGISTRY_KEY);
     chas = (chassis*) lua_topointer(L, -1);
     lua_pop(L, 1);
 
@@ -99,7 +100,7 @@ static int lua_chassis_stats(lua_State *L) {
     
     /* TODO: this simply builds a new table, don't bother with an iterator for now */
     lua_newtable(L);
-    g_hash_table_foreach(stats_hash, lua_chassis_stats_setluaval, L);
+    g_hash_table_foreach(stats_hash, chassis_stats_setluaval, L);
     
     g_hash_table_destroy(stats_hash);
     return 1;
@@ -153,7 +154,7 @@ static int lua_chassis_log(lua_State *L) {
 			/* skip Lua's "this is from a file" indicator */
 			source++;
 		}
-        lua_getfield(L, LUA_REGISTRYINDEX, "chassis");
+        lua_getfield(L, LUA_REGISTRYINDEX, CHASSIS_LUA_REGISTRY_KEY);
         chas = (chassis*) lua_topointer(L, -1);
         lua_pop(L, 1);
         if (chas && chas->base_dir) {
