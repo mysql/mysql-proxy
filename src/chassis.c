@@ -451,7 +451,9 @@ int main_cmdline(int argc, char **argv) {
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
 
+#if 0
 	g_mem_set_vtable(glib_mem_profiler_table);
+#endif
 
 	if (!GLIB_CHECK_VERSION(2, 6, 0)) {
 		g_error("the glib header are too old, need at least 2.6.0, got: %d.%d.%d", 
