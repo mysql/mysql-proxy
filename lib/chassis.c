@@ -206,6 +206,10 @@ static int lua_chassis_log_message(lua_State *L) {
 	g_assert(n == lua_gettop(L));
 	return retval;
 }
+static int lua_g_mem_profile(lua_State *L) {
+	g_mem_profile();
+	return 0;
+}
 /*
 ** Assumes the table is on top of the stack.
 */
@@ -235,6 +239,7 @@ static const struct luaL_reg chassislib[] = {
     CHASSIS_LUA_LOG_FUNC(debug),
 /* to get the stats of a plugin, exposed as a table */
     {"get_stats", lua_chassis_stats},
+    {"mem_profile", lua_g_mem_profile},
 	{NULL, NULL},
 };
 
