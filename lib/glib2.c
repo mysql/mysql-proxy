@@ -52,7 +52,7 @@ static int lua_g_checksum_md5 (lua_State *L) {
 */
 static void set_info (lua_State *L) {
 	lua_pushliteral (L, "_COPYRIGHT");
-	lua_pushliteral (L, "");
+	lua_pushliteral (L, "Copyright (c) 2008 MySQL AB, 2008 Sun Microsystems, Inc.");
 	lua_settable (L, -3);
 	lua_pushliteral (L, "_DESCRIPTION");
 	lua_pushliteral (L, "export glib2-functions as glib.*");

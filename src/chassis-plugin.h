@@ -26,9 +26,15 @@
 #include "chassis-mainloop.h"
 #include "chassis-exports.h"
 
-/* current magic is 0.7.0-3 */
-#define CHASSIS_PLUGIN_MAGIC 0x00070003L
+/* current magic is 0.7.0-4 */
+#define CHASSIS_PLUGIN_MAGIC 0x00070004L
 
+/**
+ * The private stats structure of a plugin. This is opaque to the rest of the code,
+ * we can only get a copy of it in a hash.
+ * @see chassis_plugin_stats.get_stats()
+ */
+typedef struct chassis_plugin_stats chassis_plugin_stats_t;
 typedef struct chassis_plugin_config chassis_plugin_config;
 
 typedef struct chassis_plugin {
@@ -37,6 +43,13 @@ typedef struct chassis_plugin {
 	gchar    *name;     /**< the name of the plugin as defined */
 	gchar    *version;  /**< the plugin's version number */
 	GModule  *module;   /**< the plugin handle when loaded */
+	
+	chassis_plugin_stats_t *stats;	/**< contains the plugin-specific statistics */
+
+	chassis_plugin_stats_t *(*new_stats)(void);		/**< handler function to initialize the plugin-specific stats */
+	void (*free_stats)(chassis_plugin_stats_t *user_data);	/**< handler function to dealloc the plugin-specific stats */
+	GHashTable *(*get_stats)(chassis_plugin_stats_t *user_data);	/**< handler function to retrieve the plugin-specific stats */
+
 	chassis_plugin_config *config;  /**< contains the plugin-specific config data */
 
 	chassis_plugin_config *(*init)(void);   /**< handler function to allocate/initialize a chassis_plugin_config struct */

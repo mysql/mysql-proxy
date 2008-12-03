@@ -92,6 +92,10 @@ chassis_plugin *chassis_plugin_load(const gchar *name) {
 		chassis_plugin_free(p);
 		return NULL;
 	}
+	
+	if (p->new_stats) {
+		p->stats = p->new_stats();
+	}
 
 	return p;
 }

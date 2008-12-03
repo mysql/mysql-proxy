@@ -35,11 +35,74 @@
 #include <glib.h>
 
 #include "chassis-mainloop.h"
+#include "chassis-plugin.h"
 
 static int lua_chassis_set_shutdown (lua_State *L) {
 	chassis_set_shutdown();
 
 	return 0;
+}
+
+/**
+ * helper function to set GHashTable key, value pairs in a Lua table
+ * assumes to have a table on top of the stack.
+ */
+static void lua_chassis_stats_setluaval(gpointer key, gpointer val, gpointer userdata) {
+    const gchar *name = key;
+    const gchar *value = val;
+    lua_State *L = userdata;
+
+    g_assert(lua_istable(L, -1));
+    lua_checkstack(L, 2);
+
+    lua_pushstring(L, name);
+    lua_pushstring(L, value);
+    lua_settable(L, -3);
+}
+
+/**
+ * Expose the plugin stats hashes to Lua for post-processing.
+ *
+ * Lua parameters: plugin name to fetch stats for
+ *                 TODO: might be omitted, then this function gets stats for all plugins
+ * Lua return values: nil if the plugin is not loaded
+ *                    a table with the stats when given one plugin name
+ *                    TODO: a table with the plugin names as keys and their values as subtables
+ */
+static int lua_chassis_stats(lua_State *L) {
+    const char* plugin_name = luaL_checkstring(L, 1);
+    chassis *chas = NULL;
+    chassis_plugin *plugin = NULL;
+    GHashTable *stats_hash = NULL;
+    int i = 0;
+
+    /* retrieve the chassis stored in the registry */
+    lua_getfield(L, LUA_REGISTRYINDEX, "chassis");
+    chas = (chassis*) lua_topointer(L, -1);
+    lua_pop(L, 1);
+
+    if (chas && chas->modules) {
+        for (i = 0; i < chas->modules->len; i++) {
+            plugin = chas->modules->pdata[i];
+            if (plugin->stats != NULL && plugin->get_stats != NULL) {
+                if (g_ascii_strcasecmp(plugin_name, plugin->name) == 0) {
+                    stats_hash = plugin->get_stats(plugin->stats);
+                    break;
+                }
+            }
+        }
+    }
+    if (stats_hash == NULL) {
+        lua_pushnil(L);
+        return 1;
+    }
+    
+    /* TODO: this simply builds a new table, don't bother with an iterator for now */
+    lua_newtable(L);
+    g_hash_table_foreach(stats_hash, lua_chassis_stats_setluaval, L);
+    
+    g_hash_table_destroy(stats_hash);
+    return 1;
 }
 
 /**
@@ -147,13 +210,13 @@ static int lua_chassis_log_message(lua_State *L) {
 */
 static void set_info (lua_State *L) {
 	lua_pushliteral (L, "_COPYRIGHT");
-	lua_pushliteral (L, "");
+	lua_pushliteral (L, "Copyright (c) 2008 MySQL AB, 2008 Sun Microsystems, Inc.");
 	lua_settable (L, -3);
 	lua_pushliteral (L, "_DESCRIPTION");
 	lua_pushliteral (L, "export chassis-functions as chassis.*");
 	lua_settable (L, -3);
 	lua_pushliteral (L, "_VERSION");
-	lua_pushliteral (L, "LuaChassis 0.1");
+	lua_pushliteral (L, "LuaChassis 0.2");
 	lua_settable (L, -3);
 }
 
@@ -169,6 +232,8 @@ static const struct luaL_reg chassislib[] = {
     CHASSIS_LUA_LOG_FUNC(message),
     CHASSIS_LUA_LOG_FUNC(info),
     CHASSIS_LUA_LOG_FUNC(debug),
+/* to get the stats of a plugin, exposed as a table */
+    {"get_stats", lua_chassis_stats},
 	{NULL, NULL},
 };
 
