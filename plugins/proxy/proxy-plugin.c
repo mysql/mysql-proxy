@@ -303,7 +303,7 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_co
 					 * too late
 					 * */
 
-					g_critical("%s: we tried to send more than one resultset to the client, but didn't had them buffered. Now the client is out of sync may have closed the connection on us. Please use proxy.queries:append(..., { resultset_is_needed = true }); to fix this.");
+					g_critical("%s: we tried to send more than one resultset to the client, but didn't had them buffered. Now the client is out of sync may have closed the connection on us. Please use proxy.queries:append(..., { resultset_is_needed = true }); to fix this.", G_STRLOC);
 
 					break;
 				}
