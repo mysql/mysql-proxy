@@ -37,8 +37,11 @@
 
 #include "lua-load-factory.h"
 #include "lua-scope.h"
+#include "chassis-stats.h"
 
 static int proxy_lua_panic (lua_State *L);
+
+static void *chassis_lua_alloc(void *userdata, void *ptr, size_t osize, size_t nsize);
 
 lua_scope *lua_scope_init(void) {
 	lua_scope *sc;
@@ -46,7 +49,7 @@ lua_scope *lua_scope_init(void) {
 	sc = g_new0(lua_scope, 1);
 
 #ifdef HAVE_LUA_H
-	sc->L = luaL_newstate();
+	sc->L = lua_newstate(chassis_lua_alloc, NULL);
 	luaL_openlibs(sc->L);
 	lua_atpanic(sc->L, proxy_lua_panic);
 #endif
@@ -443,5 +446,60 @@ static int proxy_lua_panic (lua_State *L) {
 	*null_ptr = 0;
 	return 0;
 }
+
+/**
+ * Our own instrumented version of the lua allocator function.
+ * It is handling all malloc/realloc/free cases as described in detail in the Lua reference manual.
+ *
+ * @param userdata NULL and unused in our case (userdata passed to lua_newstate)
+ * @param ptr the pointer to the block to be malloced/realloced/freed
+ * @param osize the original size of the block
+ * @param nsize the requested size of the block
+ */
+static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t osize, size_t nsize) {
+	/* the free case */
+	if (nsize == 0) {
+		if (osize != 0) {
+			CHASSIS_STATS_FREE_INC_NAME(lua_mem);
+			CHASSIS_STATS_ADD_NAME(lua_mem_bytes, -osize);
+			g_free(ptr);
+			return NULL;
+		} else /* osize == 0 */ {
+			return NULL;
+		}
+	} else /* nsize != 0 */ {
+		if (osize == 0) { 		/* the plain malloc case */
+			size_t cur_size;
+			CHASSIS_STATS_ALLOC_INC_NAME(lua_mem);
+			CHASSIS_STATS_ADD_NAME(lua_mem_bytes, nsize);
+			
+			cur_size = CHASSIS_STATS_GET_NAME(lua_mem_bytes);
+			if (cur_size > CHASSIS_STATS_GET_NAME(lua_mem_bytes_max)) {
+				CHASSIS_STATS_SET_NAME(lua_mem_bytes_max, cur_size);
+			}
+			return g_malloc(nsize);
+		} else /* osize != 0 */ {	/* the realloc case */
+			gpointer p = g_realloc(ptr, nsize);
+			size_t cur_size;
+
+			if (!p) return p;
+			
+			CHASSIS_STATS_ADD_NAME(lua_mem_bytes, nsize - osize); /* might be negative if Lua tries to shrink something */
+
+			cur_size = CHASSIS_STATS_GET_NAME(lua_mem_bytes);
+			if (cur_size > CHASSIS_STATS_GET_NAME(lua_mem_bytes_max)) {
+				CHASSIS_STATS_SET_NAME(lua_mem_bytes_max, cur_size);
+			}
+			
+			return p;
+		}
+	}
+	/* the ifs should cover all cases demanded of the lua allocator function, if not, crash hard */
+	g_critical("%s: userdata = %p, ptr = %p, osize = %d, nsize = %d", G_STRLOC, userdata, ptr, osize, nsize);
+	g_assert_not_reached();
+	return NULL;
+}
+
+
 #endif
 

@@ -43,6 +43,7 @@
 #include "chassis-plugin.h"
 #include "chassis-mainloop.h"
 #include "chassis-log.h"
+#include "chassis-stats.h"
 
 #ifdef _WIN32
 static volatile int signal_shutdown;
@@ -62,6 +63,8 @@ chassis *chassis_init() {
 
 	chas->modules     = g_ptr_array_new();
 	
+	chas->stats = chassis_stats_new();
+
 	return chas;
 }
 
@@ -111,6 +114,9 @@ void chassis_free(chassis *chas) {
 	
 	if (chas->base_dir) g_free(chas->base_dir);
 	if (chas->user) g_free(chas->user);
+	
+	if (chas->stats) chassis_stats_free(chas->stats);
+
 	g_free(chas);
 }
 

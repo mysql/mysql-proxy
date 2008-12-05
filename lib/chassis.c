@@ -36,6 +36,7 @@
 
 #include "chassis-mainloop.h"
 #include "chassis-plugin.h"
+#include "chassis-stats.h"
 #include "lua-registry-keys.h"
 
 static int lua_chassis_set_shutdown (lua_State *L) {
@@ -64,45 +65,103 @@ static void chassis_stats_setluaval(gpointer key, gpointer val, gpointer userdat
 /**
  * Expose the plugin stats hashes to Lua for post-processing.
  *
- * Lua parameters: plugin name to fetch stats for
- *                 TODO: might be omitted, then this function gets stats for all plugins
+ * Lua parameters: plugin name to fetch stats for (or "chassis" for only getting the global ones)
+ *                 might be omitted, then this function gets stats for all plugins, including the chassis
  * Lua return values: nil if the plugin is not loaded
  *                    a table with the stats when given one plugin name
- *                    TODO: a table with the plugin names as keys and their values as subtables
+ *                    a table with the plugin names as keys and their values as subtables, the chassis global stats are keyed as "chassis"
  */
 static int lua_chassis_stats(lua_State *L) {
-    const char* plugin_name = luaL_checkstring(L, 1);
+    const char *plugin_name = NULL;
     chassis *chas = NULL;
     chassis_plugin *plugin = NULL;
-    GHashTable *stats_hash = NULL;
     int i = 0;
+    gboolean found_stats = FALSE;
+    int nargs = lua_gettop(L);
+
+    if (nargs == 0) {
+        plugin_name = NULL;
+    } else if (nargs == 1) {        /* grab only the stats we were asked to fetch */
+        plugin_name = luaL_checkstring(L, 1);
+    } else {
+        return luaL_argerror(L, 2, "currently only zero or one arguments are allowed");
+    }
+    lua_newtable(L);    /* the table for the stats, either containing sub tables or the stats for the single plugin requested */
 
     /* retrieve the chassis stored in the registry */
     lua_getfield(L, LUA_REGISTRYINDEX, CHASSIS_LUA_REGISTRY_KEY);
     chas = (chassis*) lua_topointer(L, -1);
     lua_pop(L, 1);
 
+    /* get the global chassis stats */
+    if (nargs == 0 && chas) {
+        GHashTable *stats_hash = chassis_stats_get(chas->stats);
+        if (stats_hash == NULL) {
+            found_stats = FALSE;
+        } else {
+            found_stats = TRUE;
+
+            lua_newtable(L);
+            g_hash_table_foreach(stats_hash, chassis_stats_setluaval, L);
+            lua_setfield(L, -2, "chassis");
+            g_hash_table_destroy(stats_hash);
+        }
+    }
+
     if (chas && chas->modules) {
         for (i = 0; i < chas->modules->len; i++) {
             plugin = chas->modules->pdata[i];
             if (plugin->stats != NULL && plugin->get_stats != NULL) {
-                if (g_ascii_strcasecmp(plugin_name, plugin->name) == 0) {
+                GHashTable *stats_hash = NULL;
+                
+                if (plugin_name == NULL) {
+                    /* grab all stats and key them by plugin name */
                     stats_hash = plugin->get_stats(plugin->stats);
+                    if (stats_hash != NULL) {
+                        found_stats = TRUE;
+                    }
+                    /* the per-plugin table */
+                    lua_newtable(L);
+                    g_hash_table_foreach(stats_hash, chassis_stats_setluaval, L);
+                    lua_setfield(L, -2, plugin->name);
+                    
+                    g_hash_table_destroy(stats_hash);
+                    
+                } else if (g_ascii_strcasecmp(plugin_name, "chassis") == 0) {
+                  /* get the global chassis stats */
+                    stats_hash = chassis_stats_get(chas->stats);
+                    if (stats_hash == NULL) {
+                        found_stats = FALSE;
+                        break;
+                    }
+                    found_stats = TRUE;
+
+                    g_hash_table_foreach(stats_hash, chassis_stats_setluaval, L);
+                    g_hash_table_destroy(stats_hash);
+                    break;
+                } else if (g_ascii_strcasecmp(plugin_name, plugin->name) == 0) {
+                    /* check for the correct name and get the stats */
+                    stats_hash = plugin->get_stats(plugin->stats);
+                    if (stats_hash == NULL) {
+                        found_stats = FALSE;
+                        break;
+                    }
+                    found_stats = TRUE;
+                    
+                    /* the table to use is already on the stack */
+                    g_hash_table_foreach(stats_hash, chassis_stats_setluaval, L);
+                    g_hash_table_destroy(stats_hash);
                     break;
                 }
             }
         }
     }
-    if (stats_hash == NULL) {
+    /* can also be FALSE if we couldn't find the chassis */
+    if (!found_stats) {
+        lua_pop(L, 1);  /* pop the unused stats table */
         lua_pushnil(L);
         return 1;
     }
-    
-    /* TODO: this simply builds a new table, don't bother with an iterator for now */
-    lua_newtable(L);
-    g_hash_table_foreach(stats_hash, chassis_stats_setluaval, L);
-    
-    g_hash_table_destroy(stats_hash);
     return 1;
 }
 

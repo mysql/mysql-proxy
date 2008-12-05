@@ -39,6 +39,7 @@
 
 #include "chassis-exports.h"
 #include "chassis-log.h"
+#include "chassis-stats.h"
 
 typedef struct chassis_private chassis_private;
 typedef struct chassis chassis;
@@ -56,6 +57,8 @@ struct chassis {
 	void (*priv_free)(chassis *chas, chassis_private *priv);
 
 	chassis_log *log;
+	
+	chassis_stats_t *stats;			/**< the overall chassis stats, includes lua and glib allocation stats */
 };
 
 CHASSIS_API chassis *chassis_init(void);
