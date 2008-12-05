@@ -21,6 +21,7 @@
 #define _CHASSIS_STATS_H_
 
 #include <glib.h>
+#include "chassis-exports.h"
 
 typedef struct chassis_stats {
 	volatile gint lua_mem_alloc;
@@ -31,10 +32,10 @@ typedef struct chassis_stats {
 
 extern chassis_stats_t *chassis_global_stats;
 
-chassis_stats_t * chassis_stats_new(void);
-void chassis_stats_free(chassis_stats_t *stats);
+CHASSIS_API chassis_stats_t * chassis_stats_new(void);
+CHASSIS_API void chassis_stats_free(chassis_stats_t *stats);
 
-GHashTable* chassis_stats_get(chassis_stats_t *user_data);
+CHASSIS_API GHashTable* chassis_stats_get(chassis_stats_t *user_data);
 
 #define CHASSIS_STATS_ALLOC_INC_NAME(name) ((chassis_global_stats != NULL) ? g_atomic_int_inc(&(chassis_global_stats->name ## _alloc)) : (void)0)
 #define CHASSIS_STATS_FREE_INC_NAME(name) ((chassis_global_stats != NULL) ? g_atomic_int_inc(&(chassis_global_stats->name ## _free)) : (void)0)
