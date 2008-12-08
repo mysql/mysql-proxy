@@ -30,7 +30,7 @@ typedef struct chassis_stats {
 	volatile gint lua_mem_bytes_max;
 } chassis_stats_t;
 
-extern chassis_stats_t *chassis_global_stats;
+CHASSIS_API chassis_stats_t *chassis_global_stats;
 
 CHASSIS_API chassis_stats_t * chassis_stats_new(void);
 CHASSIS_API void chassis_stats_free(chassis_stats_t *stats);
