@@ -415,8 +415,9 @@ int main_cmdline(int argc, char **argv) {
 	guint invoke_dbg_on_crash = 0;
 	guint auto_restart = 0;
 	guint max_files_number = 8192;
+#ifndef _WIN32
 	struct rlimit max_files_rlimit;
-
+#endif
 	gchar *log_level = NULL;
 
 	GKeyFile *keyfile = NULL;
