@@ -414,6 +414,8 @@ int main_cmdline(int argc, char **argv) {
 	gchar **plugin_names = NULL;
 	guint invoke_dbg_on_crash = 0;
 	guint auto_restart = 0;
+	guint max_files_number = 8192;
+	struct rlimit max_files_rlimit;
 
 	gchar *log_level = NULL;
 
@@ -447,6 +449,7 @@ int main_cmdline(int argc, char **argv) {
 		{ "log-use-syslog",           0, 0, G_OPTION_ARG_NONE, NULL, "log all messages to syslog", NULL },
 		{ "log-backtrace-on-crash",   0, 0, G_OPTION_ARG_NONE, NULL, "try to invoke debugger on crash", NULL },
 		{ "keepalive",                0, 0, G_OPTION_ARG_NONE, NULL, "try to restart the proxy if it crashed", NULL },
+		{ "max-open-files",           0, 0, G_OPTION_ARG_INT, NULL, "maximum number of open files (ulimit -n)", NULL},
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -552,6 +555,7 @@ int main_cmdline(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(log->use_syslog);
 	main_entries[i++].arg_data  = &(invoke_dbg_on_crash);
 	main_entries[i++].arg_data  = &(auto_restart);
+	main_entries[i++].arg_data  = &(max_files_number);
 
 	option_ctx = g_option_context_new("- MySQL App Shell");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
@@ -957,6 +961,41 @@ int main_cmdline(int argc, char **argv) {
 	 * the plugins opened the ports, so we need the user there
 	 */
 	srv->user = g_strdup(user);
+
+#ifdef _WIN32
+	g_debug("%s: current maximum number of open stdio file descriptors: %d", G_STRLOC, _getmaxstdio());
+	if (max_files_number > 2048) {
+		g_warning("%s: Windows only allows a maximum number of 2048 open files for stdio, using that value instead of %d", G_STRLOC, max_files_number);
+		max_files_number = 2048;
+	}
+	if (-1 == _setmaxstdio(max_files_number)) {
+		g_critical("%s: failed to increase the maximum number of open files for stdio: %s (%d)", G_STRLOC, g_strerror(errno), errno);
+	} else {
+		g_debug("%s: set new limit of open files for stdio to %d", G_STRLOC, _getmaxstdio());
+	}
+#else
+	if (-1 == getrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
+		g_warning("%s: cannot get limit of open files for this process. %s (%d)",
+				  G_STRLOC, g_strerror(errno), errno);
+	} else {
+		rlim_t soft_limit = max_files_rlimit.rlim_cur;
+		g_debug("%s: current RLIMIT_NOFILE = %llu (hard: %llu)", G_STRLOC, max_files_rlimit.rlim_cur, max_files_rlimit.rlim_max);
+
+		max_files_rlimit.rlim_cur = max_files_number;
+
+		g_debug("%s: trying to set new RLIMIT_NOFILE = %llu (hard: %llu)", G_STRLOC, max_files_rlimit.rlim_cur, max_files_rlimit.rlim_max);
+		if (-1 == setrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
+			g_critical("%s: could not raise RLIMIT_NOFILE to %u, %s (%d). Current limit still %llu.", G_STRLOC, max_files_number, g_strerror(errno), errno, soft_limit);
+		} else {
+			if (-1 == getrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
+				g_warning("%s: cannot get limit of open files for this process. %s (%d)",
+						  G_STRLOC, g_strerror(errno), errno);
+			} else {
+				g_debug("%s: set new RLIMIT_NOFILE = %llu (hard: %llu)", G_STRLOC, max_files_rlimit.rlim_cur, max_files_rlimit.rlim_max);
+			}
+		}
+	}
+#endif
 
 	if (chassis_mainloop(srv)) {
 		/* looks like we failed */
