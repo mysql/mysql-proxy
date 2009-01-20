@@ -344,10 +344,9 @@ dnl cli plugin requires readline, so we disable it for now
 dnl AC_CONFIG_FILES([plugins/cli/Makefile])
 AC_CONFIG_FILES([plugins/debug/Makefile])
 
-dnl Create the wrapper script for starting mysql-proxy and/or mysql-monitor-agent
-dnl FIXME: hasn't been added back yet
-dnl AC_CONFIG_FILES([scripts/Makefile])
-dnl AC_CONFIG_FILES([scripts/mysql-proxy:scripts/mysql-proxy-binwrapper.in], [chmod +x scripts/mysql-proxy])
+dnl Create the wrapper script for starting mysql-proxy
+AC_CONFIG_FILES([scripts/Makefile])
+AC_CONFIG_FILES([scripts/mysql-proxy:scripts/mysql-proxy-binwrapper.in], [chmod +x scripts/mysql-proxy])
 
 AC_OUTPUT
 

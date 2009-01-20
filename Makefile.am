@@ -1,4 +1,4 @@
-SUBDIRS =	cmake src lib plugins examples tests m4
+SUBDIRS =	cmake src lib plugins examples scripts tests m4
 
 EXTRA_DIST = \
 		CMakeLists.txt \
