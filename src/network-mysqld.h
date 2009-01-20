@@ -82,6 +82,28 @@ typedef struct {
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_cleanup);
 } network_mysqld_hooks;
 
+typedef enum { 
+	CON_STATE_INIT = 0, 
+	CON_STATE_CONNECT_SERVER = 1, 
+	CON_STATE_READ_HANDSHAKE = 2, 
+	CON_STATE_SEND_HANDSHAKE = 3, 
+	CON_STATE_READ_AUTH = 4, 
+	CON_STATE_SEND_AUTH = 5, 
+	CON_STATE_READ_AUTH_RESULT = 6,
+	CON_STATE_SEND_AUTH_RESULT = 7,
+	CON_STATE_READ_AUTH_OLD_PASSWORD = 8,
+	CON_STATE_SEND_AUTH_OLD_PASSWORD = 9,
+	CON_STATE_READ_QUERY = 10,
+	CON_STATE_SEND_QUERY = 11,
+	CON_STATE_READ_QUERY_RESULT = 12,
+	CON_STATE_SEND_QUERY_RESULT = 13,
+	
+	CON_STATE_CLOSE_CLIENT = 14,
+	CON_STATE_SEND_ERROR = 15,
+	CON_STATE_ERROR = 16
+} network_mysqld_con_state_t;
+
+
 struct network_mysqld_con {
 	/**
 	 * SERVER:
@@ -98,26 +120,7 @@ struct network_mysqld_con {
 	 * - SHOW MASTER STATUS 
 	 *   to get the binlog-file and the pos 
 	 */
-	enum { 
-        CON_STATE_INIT = 0, 
-        CON_STATE_CONNECT_SERVER = 1, 
-        CON_STATE_READ_HANDSHAKE = 2, 
-        CON_STATE_SEND_HANDSHAKE = 3, 
-        CON_STATE_READ_AUTH = 4, 
-        CON_STATE_SEND_AUTH = 5, 
-        CON_STATE_READ_AUTH_RESULT = 6,
-        CON_STATE_SEND_AUTH_RESULT = 7,
-        CON_STATE_READ_AUTH_OLD_PASSWORD = 8,
-        CON_STATE_SEND_AUTH_OLD_PASSWORD = 9,
-        CON_STATE_READ_QUERY = 10,
-        CON_STATE_SEND_QUERY = 11,
-        CON_STATE_READ_QUERY_RESULT = 12,
-        CON_STATE_SEND_QUERY_RESULT = 13,
-        
-        CON_STATE_CLOSE_CLIENT = 14,
-        CON_STATE_SEND_ERROR = 15,
-        CON_STATE_ERROR = 16
-    } state;                      /**< the current/next state of this connection */
+	network_mysqld_con_state_t state;                      /**< the current/next state of this connection */
 
 	/**
 	 * the client and server side of the connection

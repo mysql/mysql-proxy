@@ -720,7 +720,7 @@ void network_mysqld_con_reset_command_response_state(network_mysqld_con *con) {
  * @param user_data    the connection handle
  */
 void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
-	guint ostate;
+	network_mysqld_con_state_t ostate;
 	network_mysqld_con *con = user_data;
 	chassis *srv = con->srv;
 	int retval;
