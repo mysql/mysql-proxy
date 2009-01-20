@@ -747,6 +747,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			if (con->client && event_fd == con->client->fd) {
 				/* the client closed the connection, let's keep the server side open */
 				con->state = CON_STATE_CLOSE_CLIENT;
+			} else if (con->server && event_fd == con->server->fd && con->com_quit_seen) {
+				con->state = CON_STATE_CLOSE_SERVER;
 			} else {
 				/* server side closed on use, oops, close both sides */
 				con->state = CON_STATE_ERROR;
@@ -785,7 +787,9 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			return;
 		case CON_STATE_CLOSE_CLIENT:
-			/* the server connection is still fine, 
+		case CON_STATE_CLOSE_SERVER:
+			/* FIXME: this comment has nothing to do with reality...
+			 * the server connection is still fine, 
 			 * let's keep it open for reuse */
 			plugin_call_cleanup(srv, con);
 			network_mysqld_con_free(con);
@@ -1210,7 +1214,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					if (con->parse.len != PACKET_LEN_MAX) {
 						con->is_overlong_packet = 0;
 					}
-	
 				} else {
 					con->parse.command = packet.data->str[4];
 	
@@ -1237,6 +1240,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 						network_mysqld_com_init_db_result_track_state(&packet, con->parse.data);
 
 						break;
+					case COM_QUIT:
+						/* track COM_QUIT going to the server, to be able to tell if the server
+						 a) simply went away or
+						 b) closed the connection because the client asked it to
+						 If b) we should not print a message at the next EV_READ event from the server fd
+						 */
+						con->com_quit_seen = TRUE;
 					default:
 						break;
 					}

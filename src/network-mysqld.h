@@ -100,7 +100,9 @@ typedef enum {
 	
 	CON_STATE_CLOSE_CLIENT = 14,
 	CON_STATE_SEND_ERROR = 15,
-	CON_STATE_ERROR = 16
+	CON_STATE_ERROR = 16,
+
+	CON_STATE_CLOSE_SERVER = 17
 } network_mysqld_con_state_t;
 
 
@@ -153,6 +155,7 @@ struct network_mysqld_con {
 	gboolean resultset_is_finished;
 
 	gboolean in_load_data_local_state;
+	gboolean com_quit_seen;
 
 	struct {
 		guint32 len;
