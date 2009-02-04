@@ -28,6 +28,7 @@
 
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"
+#include "network-mysqld-masterinfo.h"
 #include "glib-ext.h"
 #include "lua-env.h"
 
@@ -150,6 +151,59 @@ static int lua_proto_get_ok_packet (lua_State *L) {
 	LUA_EXPORT_INT(ok_packet, affected_rows);
 
 	network_mysqld_ok_packet_free(ok_packet);
+
+	return 1;
+}
+
+/**
+ * Added by Wizard - Read master.info files
+ */
+static int lua_proto_get_masterinfo_get (lua_State *L) {
+	size_t packet_len;
+	const char *packet_str = luaL_checklstring(L, 1, &packet_len);
+	//network_mysqld_ok_packet_t *ok_packet;
+	network_mysqld_masterinfo_t *info;
+
+	network_packet packet;
+	GString s;
+	int err = 0;
+
+	s.str = (char *)packet_str;
+	s.len = packet_len;
+
+	packet.data = &s;
+	packet.offset = 0;
+
+	//ok_packet = network_mysqld_ok_packet_new();
+	info = network_mysqld_masterinfo_new();
+
+	//err = err || network_mysqld_proto_get_ok_packet(&packet, ok_packet);
+	err = err || network_mysqld_masterinfo_get(&packet, info);
+	
+	if (err) {
+		//network_mysqld_ok_packet_free(ok_packet);
+		network_mysqld_masterinfo_free(info);
+
+		//luaL_error(L, "%s: network_mysqld_proto_get_ok_packet() failed", G_STRLOC);
+		luaL_error(L, "%s: network_mysqld_masterinfo_get() failed", G_STRLOC);
+		return 0;
+	}
+
+	lua_newtable(L);
+/*
+	LUA_EXPORT_INT(ok_packet, server_status);
+	LUA_EXPORT_INT(ok_packet, insert_id);
+	LUA_EXPORT_INT(ok_packet, warnings);
+	LUA_EXPORT_INT(ok_packet, affected_rows);
+*/
+	LUA_EXPORT_INT(info, master_log_file);
+	LUA_EXPORT_INT(info, master_log_pos);
+	LUA_EXPORT_INT(info, master_host);
+	LUA_EXPORT_INT(info, master_user);
+
+
+	//network_mysqld_ok_packet_free(ok_packet);
+	network_mysqld_masterinfo_free(info);
 
 	return 1;
 }
@@ -400,6 +454,7 @@ static const struct luaL_reg mysql_protolib[] = {
 	{"to_challenge_packet", lua_proto_append_challenge_packet},
 	{"from_response_packet", lua_proto_get_response_packet},
 	{"to_response_packet", lua_proto_append_response_packet},
+	{"get_masterinfo", lua_proto_get_masterinfo_get},
 	{NULL, NULL},
 };
 
