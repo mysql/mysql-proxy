@@ -1231,7 +1231,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 						break;
 					case COM_STMT_PREPARE:
 						con->parse.data = network_mysqld_com_stmt_prepare_result_new();
-						con->parse.data_free = (GDestroyNotify)network_mysqld_com_init_db_result_free;
+						con->parse.data_free = (GDestroyNotify)network_mysqld_com_stmt_prepare_result_free;
 						break;
 					case COM_INIT_DB:
 						con->parse.data = network_mysqld_com_init_db_result_new();

@@ -280,6 +280,12 @@ network_mysqld_com_stmt_prepare_result_t *network_mysqld_com_stmt_prepare_result
 	return udata;
 }
 
+void network_mysqld_com_stmt_prepare_result_free(network_mysqld_com_stmt_prepare_result_t *udata) {
+	if (!udata) return;
+
+	g_free(udata);
+}
+
 int network_mysqld_proto_get_com_stmt_prepare_result(
 		network_packet *packet, 
 		network_mysqld_com_stmt_prepare_result_t *udata) {
