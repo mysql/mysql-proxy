@@ -155,13 +155,9 @@ static int lua_proto_get_ok_packet (lua_State *L) {
 	return 1;
 }
 
-/**
- * Added by Wizard - Read master.info files
- */
 static int lua_proto_get_masterinfo_get (lua_State *L) {
 	size_t packet_len;
 	const char *packet_str = luaL_checklstring(L, 1, &packet_len);
-	//network_mysqld_ok_packet_t *ok_packet;
 	network_mysqld_masterinfo_t *info;
 
 	network_packet packet;
@@ -174,35 +170,28 @@ static int lua_proto_get_masterinfo_get (lua_State *L) {
 	packet.data = &s;
 	packet.offset = 0;
 
-	//ok_packet = network_mysqld_ok_packet_new();
 	info = network_mysqld_masterinfo_new();
 
-	//err = err || network_mysqld_proto_get_ok_packet(&packet, ok_packet);
 	err = err || network_mysqld_masterinfo_get(&packet, info);
 	
 	if (err) {
-		//network_mysqld_ok_packet_free(ok_packet);
 		network_mysqld_masterinfo_free(info);
-
-		//luaL_error(L, "%s: network_mysqld_proto_get_ok_packet() failed", G_STRLOC);
 		luaL_error(L, "%s: network_mysqld_masterinfo_get() failed", G_STRLOC);
 		return 0;
 	}
 
 	lua_newtable(L);
-/*
-	LUA_EXPORT_INT(ok_packet, server_status);
-	LUA_EXPORT_INT(ok_packet, insert_id);
-	LUA_EXPORT_INT(ok_packet, warnings);
-	LUA_EXPORT_INT(ok_packet, affected_rows);
-*/
-	LUA_EXPORT_INT(info, master_log_file);
+
+	LUA_EXPORT_STR(info, master_log_file);
 	LUA_EXPORT_INT(info, master_log_pos);
-	LUA_EXPORT_INT(info, master_host);
-	LUA_EXPORT_INT(info, master_user);
+	LUA_EXPORT_STR(info, master_host);
+	LUA_EXPORT_STR(info, master_user);
+	LUA_EXPORT_STR(info, master_password);
+	LUA_EXPORT_INT(info, master_port);
+	LUA_EXPORT_INT(info, master_connect_retry);
+	LUA_EXPORT_INT(info, master_ssl);
+	LUA_EXPORT_INT(info, master_ssl_verify_server_cert);
 
-
-	//network_mysqld_ok_packet_free(ok_packet);
 	network_mysqld_masterinfo_free(info);
 
 	return 1;
