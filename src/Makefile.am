@@ -60,13 +60,14 @@ libmysql_chassis_la_SOURCES = \
 	chassis-plugin.c \
 	chassis-log.c \
 	chassis-mainloop.c \
+	chassis-event-thread.c \
 	chassis-keyfile.c \
 	chassis-stats.c
 
 
 libmysql_chassis_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
-libmysql_chassis_la_CPPFLAGS = $(MYSQL_CFLAGS) $(EVENT_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
-libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMODULE_LIBS)
+libmysql_chassis_la_CPPFLAGS = $(MYSQL_CFLAGS) $(EVENT_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS)
+libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS)
 
 
 noinst_HEADERS=\
@@ -85,6 +86,7 @@ noinst_HEADERS=\
 	chassis-log.h \
 	chassis-keyfile.h \
 	chassis-mainloop.h \
+	chassis-event-thread.h \
 	glib-ext.h \
 	lua-load-factory.h \
 	lua-scope.h \
