@@ -155,7 +155,7 @@ static int lua_proto_get_ok_packet (lua_State *L) {
 	return 1;
 }
 
-static int lua_proto_get_masterinfo_get (lua_State *L) {
+static int lua_proto_get_masterinfo (lua_State *L) {
 	size_t packet_len;
 	const char *packet_str = luaL_checklstring(L, 1, &packet_len);
 	network_mysqld_masterinfo_t *info;
@@ -443,7 +443,7 @@ static const struct luaL_reg mysql_protolib[] = {
 	{"to_challenge_packet", lua_proto_append_challenge_packet},
 	{"from_response_packet", lua_proto_get_response_packet},
 	{"to_response_packet", lua_proto_append_response_packet},
-	{"get_masterinfo", lua_proto_get_masterinfo_get},
+	{"from_masterinfo_string", lua_proto_get_masterinfo},
 	{NULL, NULL},
 };
 
