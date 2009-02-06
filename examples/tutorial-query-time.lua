@@ -38,7 +38,7 @@ function read_query( packet )
 	if packet:byte() == proxy.COM_QUERY then
 		print("we got a normal query: " .. packet:sub(2))
 
-		proxy.queries:append(1, packet )
+		proxy.queries:append(1, packet, { resultset_is_needed = false} )
 
 		return proxy.PROXY_SEND_QUERY
 	end

@@ -42,7 +42,7 @@ function read_query( packet )
 		-- generate a new COM_QUERY packet
 		--   [ \3SELECT NOW() ]
 		-- and inject it with the id = 2
-		proxy.queries:append(2, string.char(proxy.COM_QUERY) .. "SELECT NOW()" )
+		proxy.queries:append(2, string.char(proxy.COM_QUERY) .. "SELECT NOW()", { resultset_is_needed = true } )
 
 		return proxy.PROXY_SEND_QUERY
 	end

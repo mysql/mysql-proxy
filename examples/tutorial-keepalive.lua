@@ -36,7 +36,7 @@ local min_idle_connections = 4
 local max_idle_connections = 8
 
 -- debug
-local is_debug = false
+local is_debug = true
 
 --- end of config
 
@@ -184,9 +184,9 @@ function read_query( packet )
 
 	if true or proxy.connection.client.default_db and proxy.connection.client.default_db ~= proxy.connection.server.default_db then
 		-- sync the client-side default_db with the server-side default_db
-		proxy.queries:append(2, string.char(proxy.COM_INIT_DB) .. proxy.connection.client.default_db)
+		proxy.queries:append(2, string.char(proxy.COM_INIT_DB) .. proxy.connection.client.default_db,  { resultset_is_needed = true })
 	end
-	proxy.queries:append(1, packet)
+	proxy.queries:append(1, packet,  { resultset_is_needed = true })
 
 	return proxy.PROXY_SEND_QUERY
 end

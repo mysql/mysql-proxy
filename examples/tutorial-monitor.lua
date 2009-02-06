@@ -166,7 +166,7 @@ function read_query()
     end
 --]]
 
-	proxy.queries:append(1, string.char(proxy.COM_QUERY) .. "SELECT NOW()" )
+	proxy.queries:append(1, string.char(proxy.COM_QUERY) .. "SELECT NOW()", { resultset_is_needed = true } )
     if proxy.connection then
         print ("inject monitor query into backend # " .. proxy.connection.backend_ndx)
     else
