@@ -119,7 +119,6 @@ int network_mysqld_masterinfo_get(network_packet *packet, network_mysqld_masteri
 	g_return_val_if_fail(packet, -1);
 
 	err = err || network_mysqld_masterinfo_get_int32(packet, &lines);
-	err = err || (lines != 15); /* for now we assume 5.1 format */
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_log_file);
 	err = err || network_mysqld_masterinfo_get_int32(packet, &(info->master_log_pos));
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_host);
@@ -133,7 +132,9 @@ int network_mysqld_masterinfo_get(network_packet *packet, network_mysqld_masteri
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_ssl_cert);
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_ssl_cipher);
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_ssl_key);
-	err = err || network_mysqld_masterinfo_get_int32(packet, &(info->master_ssl_verify_server_cert));
+	if (lines >= 15) {
+		err = err || network_mysqld_masterinfo_get_int32(packet, &(info->master_ssl_verify_server_cert));
+	}
 
 	return err ? -1 : 0;
 }
