@@ -63,10 +63,11 @@ check_chassis_path_SOURCES = \
 	check_chassis_path.c \
 	$(top_srcdir)/src/chassis-log.c \
 	$(top_srcdir)/src/chassis-mainloop.c \
+	$(top_srcdir)/src/chassis-event-thread.c \
 	$(top_srcdir)/src/chassis-plugin.c \
 	$(top_srcdir)/src/chassis-stats.c
 check_chassis_path_CPPFLAGS = -I$(top_srcdir)/src $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS)
-check_chassis_path_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(EVENT_LIBS)
+check_chassis_path_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(EVENT_LIBS) $(GTHREAD_LIBS)
 
 t_network_backend_SOURCES  = \
 	t_network_backend.c \

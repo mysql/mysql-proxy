@@ -95,6 +95,8 @@ START_TEST(test_abspath_basedir) {
 /*@}*/
 
 int main(int argc, char **argv) {
+	g_thread_init(NULL);
+
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
 	
