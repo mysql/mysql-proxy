@@ -134,8 +134,9 @@ int network_mysqld_masterinfo_get(network_packet *packet, network_mysqld_masteri
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_ssl_key);
 	if (lines >= 15) {
 		err = err || network_mysqld_masterinfo_get_int32(packet, &(info->master_ssl_verify_server_cert));
+	} else {
+		info->master_ssl_verify_server_cert = -1;
 	}
-
 	return err ? -1 : 0;
 }
 
