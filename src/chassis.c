@@ -430,6 +430,7 @@ int main_cmdline(int argc, char **argv) {
 		{ "log-backtrace-on-crash",   0, 0, G_OPTION_ARG_NONE, NULL, "try to invoke debugger on crash", NULL },
 		{ "keepalive",                0, 0, G_OPTION_ARG_NONE, NULL, "try to restart the proxy if it crashed", NULL },
 		{ "max-open-files",           0, 0, G_OPTION_ARG_INT, NULL, "maximum number of open files (ulimit -n)", NULL},
+		{ "event-threads",            0, 0, G_OPTION_ARG_INT, NULL, "number of event-handling threads", NULL},
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -536,6 +537,7 @@ int main_cmdline(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(invoke_dbg_on_crash);
 	main_entries[i++].arg_data  = &(auto_restart);
 	main_entries[i++].arg_data  = &(max_files_number);
+	main_entries[i++].arg_data  = &(srv->event_thread_count);
 
 	option_ctx = g_option_context_new("- MySQL App Shell");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
