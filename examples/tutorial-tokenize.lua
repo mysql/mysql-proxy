@@ -23,32 +23,6 @@
 
 local tokenizer = require("proxy.tokenizer")
 
-
-function normalize_query(tokens)
-	local n_q = ""
-
-	for i = 1, #tokens do
-		local token = tokens[1]
-		-- normalize the query
-		if token["token_name"] == "TK_COMMENT" then
-		elseif token["token_name"] == "TK_LITERAL" then
-			n_q = n_q .. "`" .. token.text .. "` "
-		elseif token["token_name"] == "TK_STRING" then
-			n_q = n_q .. "? "
-		elseif token["token_name"] == "TK_INTEGER" then
-			n_q = n_q .. "? "
-		elseif token["token_name"] == "TK_FLOAT" then
-			n_q = n_q .. "? "
-		elseif token["token_name"] == "TK_FUNCTION" then
-			n_q = n_q .. token.text:upper()
-		else
-			n_q = n_q .. token.text:upper() .. " "
-		end
-	end
-
-	return n_q
-end
-
 function read_query(packet) 
 	if packet:byte() == proxy.COM_QUERY then
 		local tokens = tokenizer.tokenize(packet:sub(2))
@@ -56,7 +30,7 @@ function read_query(packet)
 		-- just for debug
 		for i = 1, #tokens do
 			-- print the token and what we know about it
-            		local token = tokens[1]
+            		local token = tokens[i]
 			local txt = token["text"]
             		if token["token_name"] == 'TK_STRING' then
                 		txt = string.format("%q", txt)
@@ -67,7 +41,7 @@ function read_query(packet)
 
 		end
 
-		print("normalized query: " .. normalize_query(tokens))
+		print("normalized query: " .. tokenizer.normalize(tokens))
         print("")
 	end
 end

@@ -26,8 +26,8 @@ function read_query(packet)
 	res = { }
 
 	if q:sub(1, 6):upper() == "SELECT" then
-		proxy.queries:append(1, packet)
-		proxy.queries:append(2, packet)
+		proxy.queries:append(1, packet, { resultset_is_needed = true })
+		proxy.queries:append(2, packet, { resultset_is_needed = true })
 
 		return proxy.PROXY_SEND_QUERY
 	end
