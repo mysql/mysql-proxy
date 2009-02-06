@@ -43,6 +43,7 @@
 
 #include "network-mysqld.h"
 #include "network-mysqld-packet.h"
+#include "chassis-event-thread.h"
 #include "network-mysqld-lua.h"
 
 #include "network-conn-pool.h"
@@ -201,7 +202,6 @@ static void network_mysqld_con_idle_handle(int event_fd, short events, void *use
  * proxy from its backend 
  */
 int network_connection_pool_lua_add_connection(network_mysqld_con *con) {
-	chassis *srv = con->srv;
 	network_connection_pool_entry *pool_entry = NULL;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 
@@ -215,8 +215,7 @@ int network_connection_pool_lua_add_connection(network_mysqld_con *con) {
 	pool_entry = network_connection_pool_add(st->backend->pool, con->server);
 
 	event_set(&(con->server->event), con->server->fd, EV_READ, network_mysqld_con_idle_handle, pool_entry);
-	event_base_set(srv->event_base, &(con->server->event));
-	event_add(&(con->server->event), NULL);
+	chassis_event_add_local(con->srv, &(con->server->event)); /* add a event, but stay in the same thread */
 	
 	st->backend->connected_clients--;
 	st->backend = NULL;
