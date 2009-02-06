@@ -43,6 +43,7 @@
 
 typedef struct chassis_private chassis_private;
 typedef struct chassis chassis;
+typedef struct chassis_event_threads_t chassis_event_threads_t;
 
 struct chassis {
 	struct event_base *event_base;
@@ -59,6 +60,11 @@ struct chassis {
 	chassis_log *log;
 	
 	chassis_stats_t *stats;			/**< the overall chassis stats, includes lua and glib allocation stats */
+
+	/* network-io threads */
+	gint event_thread_count;
+
+	chassis_event_threads_t *threads;
 };
 
 CHASSIS_API chassis *chassis_init(void);
