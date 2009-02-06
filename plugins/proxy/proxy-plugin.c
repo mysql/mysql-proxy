@@ -469,7 +469,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	switch (proxy_lua_read_handshake(con)) {
 	case PROXY_NO_DECISION:
 		break;
-	case PROXY_SEND_QUERY:
+	case PROXY_SEND_RESULT:
 		/* the client overwrote and wants to send its own packet
 		 * it is already in the queue */
 
