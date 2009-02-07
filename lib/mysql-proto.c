@@ -190,8 +190,10 @@ static int lua_proto_get_masterinfo_string (lua_State *L) {
 	LUA_EXPORT_INT(info, master_port);
 	LUA_EXPORT_INT(info, master_connect_retry);
 	LUA_EXPORT_INT(info, master_ssl);
-	LUA_EXPORT_INT(info, master_ssl_verify_server_cert);
-
+	if (info->lines >= 15) {
+		LUA_EXPORT_INT(info, master_ssl_verify_server_cert);
+	}
+	
 	network_mysqld_masterinfo_free(info);
 
 	return 1;

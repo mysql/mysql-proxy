@@ -24,6 +24,7 @@
 #include "network-mysqld-proto.h"
 
 typedef struct {
+	guint32   lines;
 	GString  *master_log_file;
 	guint32   master_log_pos;
 	GString  *master_host;
