@@ -1439,42 +1439,21 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
 	network_mysqld_con *listen_con = user_data;
 	network_mysqld_con *client_con;
-#if defined(__LP64__) && defined(__hpux)
-	int addr_len;	/* on HP/UX IA64 socklen_t and int are not of the same size, confusing accept() later on */
-#else
-	socklen_t addr_len;
-#endif
-	struct sockaddr_in ipv4;
-	int fd;
+	network_socket *client;
 
 	g_assert(events == EV_READ);
 	g_assert(listen_con->server);
 
-	addr_len = sizeof(struct sockaddr_in);
-
-	if (-1 == (fd = accept(event_fd, (struct sockaddr *)&ipv4, &addr_len))) {
-		return ;
-	}
-
+	client = network_socket_accept(listen_con->server);
+	if (!client) return;
 
 	/* looks like we open a client connection */
 	client_con = network_mysqld_con_init();
+	client_con->client = client;
+
 	network_mysqld_add_connection(listen_con->srv, client_con);
 
-	client_con->client = network_socket_init();
-	client_con->client->addr.addr.ipv4 = ipv4;
-	client_con->client->addr.len = addr_len;
-	client_con->client->fd   = fd;
-
-	network_socket_set_non_blocking(client_con->client);
-
 	
-	if (network_address_resolve_address(&(client_con->client->addr)) != NETWORK_SOCKET_SUCCESS) {
-        g_message("%s.%d: resolving address failed, closing connection", __FILE__, __LINE__);
-		network_mysqld_con_free(client_con);
-        return;
-	}
-
 	/**
 	 * inherit the config to the new connection 
 	 */
