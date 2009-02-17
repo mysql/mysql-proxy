@@ -16,6 +16,7 @@ dist_doc_DATA=\
 	tutorial-tokenize.lua \
 	tutorial-resultset.lua \
 	tutorial-states.lua \
+	tutorial-routing.lua \
 	tutorial-monitor.lua
 
 EXTRA_DIST=CMakeLists.txt
