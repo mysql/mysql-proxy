@@ -41,16 +41,16 @@ static int proxy_socket_get(lua_State *L) {
 		lua_pushlstring(L, sock->default_db->str, sock->default_db->len);
 		return 1;
 	} else if (strleq(key, keysize, C("address"))) {
-		lua_pushstring(L, sock->addr.str);
-		return 1;
+		return luaL_error(L, ".address is deprecated. Use .src.name or .dst.name instead");
+	} else if (strleq(key, keysize, C("src"))) {
+		return network_address_lua_push(L, sock->src);
+	} else if (strleq(key, keysize, C("dst"))) {
+		return network_address_lua_push(L, sock->dst);
 	}
-       
+      
 	if (sock->response) {
 		if (strleq(key, keysize, C("username"))) {
 			lua_pushlstring(L, S(sock->response->username));
-			return 1;
-		} else if (strleq(key, keysize, C("address"))) {
-			lua_pushstring(L, sock->addr.str);
 			return 1;
 		} else if (strleq(key, keysize, C("scrambled_password"))) {
 			lua_pushlstring(L, S(sock->response->response));

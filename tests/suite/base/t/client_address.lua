@@ -61,7 +61,7 @@ function read_query( packet )
     -- counter = counter + 1
     -- if counter < 3 then return end
 	local client_addr_check
-	if proxy.connection.client.address ~= nil then
+	if proxy.connection.client.src.address ~= nil then
 		client_addr_check = "not-nil"
 	else
 		client_addr_check = "nil"
