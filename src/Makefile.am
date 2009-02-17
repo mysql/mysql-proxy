@@ -43,6 +43,8 @@ libmysql_proxy_la_SOURCES = \
 	network-conn-pool-lua.c  \
 	network-socket.c \
 	network-socket-lua.c \
+	network-address.c \
+	network-address-lua.c \
 	network-injection.c \
 	network-injection-lua.c \
 	network-backend.c \
@@ -80,6 +82,8 @@ noinst_HEADERS=\
 	network-conn-pool-lua.h \
 	network-socket.h \
 	network-socket-lua.h \
+	network-address.h \
+	network-address-lua.h \
 	sys-pedantic.h \
 	chassis-plugin.h \
 	chassis-log.h \
