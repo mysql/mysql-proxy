@@ -57,6 +57,8 @@
 #include <glib.h>
 #include <event.h>
 
+#include "network-address.h"
+
 typedef enum {
 	NETWORK_SOCKET_SUCCESS,
 	NETWORK_SOCKET_WAIT_FOR_EVENT,
@@ -72,20 +74,6 @@ typedef struct {
 	size_t offset; /* offset in the first chunk */
 } network_queue;
 
-typedef struct {
-	union {
-		struct sockaddr_in ipv4;
-#ifdef HAVE_SYS_UN_H
-		struct sockaddr_un un;
-#endif
-		struct sockaddr common;
-	} addr;
-
-	gchar *str;
-
-	socklen_t len;
-} network_address;
-
 typedef struct network_mysqld_auth_challenge network_mysqld_auth_challenge;
 typedef struct network_mysqld_auth_response network_mysqld_auth_response;
 
@@ -93,7 +81,8 @@ typedef struct {
 	int fd;             /**< socket-fd */
 	struct event event; /**< events for this fd */
 
-	network_address addr;
+	network_address *src; /**< getsockname() */
+	network_address *dst; /**< getpeername() */
 
 	guint32 packet_len; /**< the packet_len is a 24bit unsigned int */
 	guint8  packet_id;  /**< id which increments for each packet in the stream */
@@ -137,13 +126,9 @@ NETWORK_API network_socket_retval_t network_socket_write(network_socket *con, in
 NETWORK_API network_socket_retval_t network_socket_read(network_socket *con);
 NETWORK_API network_socket_retval_t network_socket_set_non_blocking(network_socket *sock);
 NETWORK_API network_socket_retval_t network_socket_connect(network_socket *con);
+NETWORK_API network_socket_retval_t network_socket_connect_finish(network_socket *sock);
 NETWORK_API network_socket_retval_t network_socket_bind(network_socket *con);
-
-NETWORK_API network_address *network_address_new(void);
-NETWORK_API void network_address_free(network_address *);
-NETWORK_API network_socket_retval_t network_address_set_address(network_address *addr, gchar *address);
-NETWORK_API network_socket_retval_t network_address_resolve_address(network_address *addr);
-NETWORK_API gboolean network_address_is_local(network_address *dst_addr, network_address *src_addr);
+NETWORK_API network_socket *network_socket_accept(network_socket *srv);
 
 #endif
 

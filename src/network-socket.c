@@ -209,6 +209,9 @@ network_socket *network_socket_init() {
 	s->default_db = g_string_new(NULL);
 	s->fd           = -1;
 
+	s->src = network_address_new();
+	s->dst = network_address_new();
+
 	return s;
 }
 
@@ -222,9 +225,8 @@ void network_socket_free(network_socket *s) {
 	if (s->response) network_mysqld_auth_response_free(s->response);
 	if (s->challenge) network_mysqld_auth_challenge_free(s->challenge);
 
-	if (s->addr.str) {
-		g_free(s->addr.str);
-	}
+	network_address_free(s->dst);
+	network_address_free(s->src);
 
 	event_del(&(s->event));
 
@@ -266,30 +268,127 @@ network_socket_retval_t network_socket_set_non_blocking(network_socket *sock) {
 }
 
 /**
+ * accept a connection
+ *
+ * event handler for listening connections
+ *
+ * @param event_fd     fd on which the event was fired
+ * @param events       the event that was fired
+ * @param user_data    the listening connection handle
+ * 
+ */
+network_socket *network_socket_accept(network_socket *srv) {
+	network_socket *client;
+
+	g_return_val_if_fail(srv, NULL);
+
+	client = network_socket_init();
+
+	if (-1 == (client->fd = accept(srv->fd, &client->src->addr.common, &(client->src->len)))) {
+		network_socket_free(client);
+
+		return NULL;
+	}
+
+	network_socket_set_non_blocking(client);
+
+	if (network_address_refresh_name(client->src)) {
+		network_socket_free(client);
+		return NULL;
+	}
+
+	/* the listening side may be INADDR_ANY, let's get which address the client really connected to */
+	if (-1 == getsockname(client->fd, &client->dst->addr.common, &(client->dst->len))) {
+		network_address_free(client->dst);
+
+		client->dst = NULL;
+	} else if (network_address_refresh_name(client->dst)) {
+		network_address_free(client->dst);
+
+		client->dst = NULL;
+	}
+
+	return client;
+}
+
+static network_socket_retval_t network_socket_connect_setopts(network_socket *sock) {
+	int val = 1;
+
+	/**
+	 * set the same options as the mysql client 
+	 */
+#ifdef IP_TOS
+	val = 8;
+	setsockopt(sock->fd, IPPROTO_IP,     IP_TOS, &val, sizeof(val));
+#endif
+	val = 1;
+	setsockopt(sock->fd, IPPROTO_TCP,    TCP_NODELAY, &val, sizeof(val) );
+	val = 1;
+	setsockopt(sock->fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val) );
+
+	return NETWORK_SOCKET_SUCCESS;
+}
+
+/**
+ * finish the non-blocking connect()
+ *
+ * sets 'errno' as if connect() would have failed
+ *
+ */
+network_socket_retval_t network_socket_connect_finish(network_socket *sock) {
+	int so_error = 0;
+	socklen_t so_error_len = sizeof(so_error);
+
+	/**
+	 * we might get called a 2nd time after a connect() == EINPROGRESS
+	 */
+	if (getsockopt(sock->fd, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len)) {
+#ifdef _WIN32
+		errno = WSAGetLastError();
+#endif
+		/* getsockopt failed */
+		g_critical("%s: getsockopt(%s) failed: %s", 
+				G_STRLOC,
+				sock->dst->name->str, g_strerror(errno));
+		return NETWORK_SOCKET_ERROR;
+	}
+
+	switch (so_error) {
+	case 0:
+		network_socket_connect_setopts(sock);
+
+		return NETWORK_SOCKET_SUCCESS;
+	default:
+		errno = so_error;
+
+		return NETWORK_SOCKET_ERROR_RETRY;
+	}
+}
+
+/**
  * connect a socket
  *
- * the con->addr has to be set before 
+ * the sock->addr has to be set before 
  * 
  * @param con    a socket 
  * @return       0 on connected, -1 on error, -2 for try again
  * @see network_mysqld_set_address()
  */
-network_socket_retval_t network_socket_connect(network_socket * con) {
-	int val = 1;
-
-	g_assert(con->addr.len);
+network_socket_retval_t network_socket_connect(network_socket *sock) {
+	g_assert(sock->dst);
+	g_assert(sock->dst->len);
 
 	/**
-	 * con->addr.addr.ipv4.sin_family is always mapped to the same field 
+	 * sock->dst->addr.ipv4.sin_family is always mapped to the same field 
 	 * even if it is not a IPv4 address as we use a union
 	 */
-	if (-1 == (con->fd = socket(con->addr.addr.ipv4.sin_family, SOCK_STREAM, 0))) {
+	if (-1 == (sock->fd = socket(sock->dst->addr.ipv4.sin_family, SOCK_STREAM, 0))) {
 #ifdef _WIN32
 		errno = WSAGetLastError();
 #endif
 		g_critical("%s.%d: socket(%s) failed: %s (%d)", 
 				__FILE__, __LINE__,
-				con->addr.str, g_strerror(errno), errno);
+				sock->dst->name->str, g_strerror(errno), errno);
 		return -1;
 	}
 
@@ -297,9 +396,9 @@ network_socket_retval_t network_socket_connect(network_socket * con) {
 	 * make the connect() call non-blocking
 	 *
 	 */
-	network_socket_set_non_blocking(con);
+	network_socket_set_non_blocking(sock);
 
-	if (-1 == connect(con->fd, (struct sockaddr *) &(con->addr.addr), con->addr.len)) {
+	if (-1 == connect(sock->fd, &sock->dst->addr.common, sock->dst->len)) {
 #ifdef _WIN32
 		errno = WSAGetLastError();
 #endif
@@ -314,23 +413,13 @@ network_socket_retval_t network_socket_connect(network_socket * con) {
 		default:
 			g_critical("%s.%d: connect(%s) failed: %s (%d)", 
 					__FILE__, __LINE__,
-					con->addr.str,
+					sock->dst->name->str,
 					g_strerror(errno), errno);
 			return -1;
 		}
 	}
 
-	/**
-	 * set the same options as the mysql client 
-	 */
-#ifdef IP_TOS
-	val = 8;
-	setsockopt(con->fd, IPPROTO_IP,     IP_TOS, &val, sizeof(val));
-#endif
-	val = 1;
-	setsockopt(con->fd, IPPROTO_TCP,    TCP_NODELAY, &val, sizeof(val) );
-	val = 1;
-	setsockopt(con->fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val) );
+	network_socket_connect_setopts(sock);
 
 	return 0;
 }
@@ -347,22 +436,22 @@ network_socket_retval_t network_socket_connect(network_socket * con) {
 network_socket_retval_t network_socket_bind(network_socket * con) {
 	int val = 1;
 
-	g_assert(con->addr.len);
+	g_return_val_if_fail(con->dst, NETWORK_SOCKET_ERROR);
 
-	if (-1 == (con->fd = socket(con->addr.addr.ipv4.sin_family, SOCK_STREAM, 0))) {
+	if (-1 == (con->fd = socket(con->dst->addr.ipv4.sin_family, SOCK_STREAM, 0))) {
 		g_critical("%s.%d: socket(%s) failed: %s", 
 				__FILE__, __LINE__,
-				con->addr.str, g_strerror(errno));
+				con->dst->name->str, g_strerror(errno));
 		return NETWORK_SOCKET_ERROR;
 	}
 
 	setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
 	setsockopt(con->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
 
-	if (-1 == bind(con->fd, (struct sockaddr *) &(con->addr.addr), con->addr.len)) {
+	if (-1 == bind(con->fd, &con->dst->addr.common, con->dst->len)) {
 		g_critical("%s.%d: bind(%s) failed: %s", 
 				__FILE__, __LINE__,
-				con->addr.str,
+				con->dst->name->str,
 				g_strerror(errno));
 		return NETWORK_SOCKET_ERROR;
 	}
@@ -497,7 +586,7 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
 		default:
 			g_message("%s.%d: writev(%s, ...) failed: %s", 
 					__FILE__, __LINE__, 
-					con->addr.str, 
+					con->dst->name->str, 
 					g_strerror(errno));
 			return NETWORK_SOCKET_ERROR;
 		}
@@ -562,7 +651,7 @@ static network_socket_retval_t network_socket_write_send(network_socket *con, in
 			default:
 				g_message("%s: send(%s, %"G_GSIZE_FORMAT") failed: %s", 
 						G_STRLOC, 
-						con->addr.str, 
+						con->dst->name->str, 
 						s->len - con->send_queue->offset, 
 						g_strerror(errno));
 				return NETWORK_SOCKET_ERROR;
@@ -599,184 +688,3 @@ network_socket_retval_t network_socket_write(network_socket *con, int send_chunk
 }
 
 
-network_address *network_address_new() {
-	network_address *addr;
-
-	addr = g_new0(network_address, 1);
-	addr->len = sizeof(addr->addr.common);
-
-	return addr;
-}
-
-void network_address_free(network_address *addr) {
-	if (!addr) return;
-
-	g_free(addr);
-}
-
-static network_socket_retval_t network_address_set_address_ip(network_address *addr, const gchar *address, guint port) {
-	if (port == 0) {
-		return NETWORK_SOCKET_ERROR;
-	}
-
-	if (port > 65535) {
-		return NETWORK_SOCKET_ERROR;
-	}
-
-	memset(&addr->addr.ipv4, 0, sizeof(struct sockaddr_in));
-
-	if (strlen(address) == 0 || 
-	    0 == strcmp("0.0.0.0", address)) {
-		/* no ip */
-		addr->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
-	} else {
-		struct hostent *he;
-
-		he = gethostbyname(address);
-
-		if (NULL == he)  {
-			return NETWORK_SOCKET_ERROR;
-		}
-
-		g_assert(he->h_addrtype == AF_INET);
-		g_assert(he->h_length == sizeof(struct in_addr));
-
-		memcpy(&(addr->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
-	}
-
-	addr->addr.ipv4.sin_family = AF_INET;
-	addr->addr.ipv4.sin_port = htons(port);
-	addr->len = sizeof(struct sockaddr_in);
-
-	if (addr->str) g_free(addr->str);
-	addr->str = g_strdup_printf("%s:%d", address, port);
-
-	return NETWORK_SOCKET_SUCCESS;
-}
-
-network_socket_retval_t network_address_set_address_un(network_address *addr, gchar *address) {
-#ifdef HAVE_SYS_UN_H
-	if (strlen(address) >= sizeof(addr->addr.un.sun_path) - 1) {
-		g_critical("unix-path is too long: %s", address);
-		return NETWORK_SOCKET_ERROR;
-	}
-
-	addr->addr.un.sun_family = AF_UNIX;
-	strcpy(addr->addr.un.sun_path, address);
-	addr->len = sizeof(struct sockaddr_un);
-	
-	if (addr->str) g_free(addr->str);
-	addr->str = g_strdup(address);
-
-	return NETWORK_SOCKET_SUCCESS;
-#else
-	return NETWORK_SOCKET_ERROR;
-#endif
-}
-
-/**
- * translate a address-string into a network_address structure
- *
- * - if the address contains a colon we assume IPv4, 
- *   - ":3306" -> (tcp) "0.0.0.0:3306"
- * - if it starts with a / it is a unix-domain socket 
- *   - "/tmp/socket" -> (unix) "/tmp/socket"
- *
- * @param addr     the address-struct
- * @param address  the address string
- * @return 0 on success, -1 otherwise
- */
-network_socket_retval_t network_address_set_address(network_address *addr, gchar *address) {
-	gchar *s;
-
-	/* split the address:port */
-	if (address[0] == '/') {
-		return network_address_set_address_un(addr, address);
-	} else if (NULL != (s = strchr(address, ':'))) {
-		network_socket_retval_t ret;
-		char *ip_address = g_strndup(address, s - address);
-
-		guint port = strtoul(s + 1, NULL, 10);
-
-		ret = network_address_set_address_ip(addr, ip_address, port);
-
-		g_free(ip_address);
-
-		return ret;
-	} else { /* perhaps it is a plain IP address, lets add the default-port */
-		return network_address_set_address_ip(addr, address, 3306);
-	}
-
-	g_assert_not_reached();
-}
-
-
-network_socket_retval_t network_address_resolve_address(network_address *addr) {
-	/* resolve the peer-addr if we haven't done so yet */
-	if (addr->str) return NETWORK_SOCKET_SUCCESS;
-
-	switch (addr->addr.common.sa_family) {
-	case AF_INET:
-		addr->str = g_strdup_printf("%s:%d", 
-				inet_ntoa(addr->addr.ipv4.sin_addr),
-				addr->addr.ipv4.sin_port);
-		break;
-#ifdef HAVE_SYS_UN_H
-	case AF_UNIX:
-		addr->str = g_strdup(addr->addr.un.sun_path);
-		break;
-#endif
-	default:
-        if (addr->addr.common.sa_family > AF_MAX)
-            g_debug("%s.%d: ignoring invalid sa_family %d", __FILE__, __LINE__, addr->addr.common.sa_family);
-        else
-            g_warning("%s.%d: can't convert addr-type %d into a string",
-				      __FILE__, __LINE__, 
-				      addr->addr.common.sa_family);
-		return NETWORK_SOCKET_ERROR;
-	}
-
-	return NETWORK_SOCKET_SUCCESS;
-
-}
-
-/**
- * check if the host-part of the address is equal
- */
-gboolean network_address_is_local(network_address *dst_addr, network_address *src_addr) {
-	if (src_addr->addr.common.sa_family != dst_addr->addr.common.sa_family) {
-		g_message("%s: is-local family %d != %d",
-				G_STRLOC,
-				src_addr->addr.common.sa_family,
-				dst_addr->addr.common.sa_family
-				);
-		return FALSE;
-	}
-
-	switch (src_addr->addr.common.sa_family) {
-	case AF_INET:
-		/* inet_ntoa() returns a pointer to a static buffer
-		 * we can't call it twice in the same function-call */
-
-		g_debug("%s: is-local src: %s(:%d) =? ...",
-				G_STRLOC,
-				inet_ntoa(src_addr->addr.ipv4.sin_addr),
-				ntohs(src_addr->addr.ipv4.sin_port));
-
-		g_debug("%s: is-local dst: %s(:%d)",
-				G_STRLOC,
-				inet_ntoa(dst_addr->addr.ipv4.sin_addr),
-				ntohs(dst_addr->addr.ipv4.sin_port)
-				);
-
-		return (dst_addr->addr.ipv4.sin_addr.s_addr == src_addr->addr.ipv4.sin_addr.s_addr);
-#ifdef HAVE_SYS_UN_H
-	case AF_UNIX:
-		/* we are always local */
-		return TRUE;
-#endif
-	default:
-		g_critical("%s: sa_family = %d", G_STRLOC, src_addr->addr.common.sa_family);
-		return FALSE;
-	}
-}
