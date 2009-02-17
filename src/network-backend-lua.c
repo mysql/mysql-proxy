@@ -27,6 +27,7 @@
 #include "network-mysqld.h"
 #include "network-conn-pool-lua.h"
 #include "network-backend-lua.h"
+#include "network-address-lua.h"
 #include "network-mysqld-lua.h"
 
 /**
@@ -48,8 +49,8 @@ static int proxy_backend_get(lua_State *L) {
 
 	if (strleq(key, keysize, C("connected_clients"))) {
 		lua_pushinteger(L, backend->connected_clients);
-	} else if (strleq(key, keysize, C("address"))) {
-		lua_pushstring(L, backend->addr.str);
+	} else if (strleq(key, keysize, C("dst"))) {
+		network_address_lua_push(L, backend->addr);
 	} else if (strleq(key, keysize, C("state"))) {
 		lua_pushinteger(L, backend->state);
 	} else if (strleq(key, keysize, C("type"))) {

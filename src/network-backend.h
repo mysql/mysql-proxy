@@ -42,7 +42,7 @@ typedef enum {
 } backend_type_t;
 
 typedef struct {
-	network_address addr;
+	network_address *addr;
    
 	backend_state_t state;   /**< UP or DOWN */
 	backend_type_t type;     /**< ReadWrite or ReadOnly */

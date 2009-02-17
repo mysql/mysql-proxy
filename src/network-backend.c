@@ -16,11 +16,16 @@
 
  $%ENDLICENSE%$ */
  
+#include <string.h>
+
+#include <glib.h>
 
 #include "network-backend.h"
 #include "chassis-plugin.h"
-#include <glib.h>
-#include <string.h>
+#include "glib-ext.h"
+
+#define C(x) x, sizeof(x) - 1
+#define S(x) x->str, x->len
 
 backend_t *backend_init() {
 	backend_t *b;
@@ -29,6 +34,7 @@ backend_t *backend_init() {
 
 	b->pool = network_connection_pool_init();
 	b->uuid = g_string_new(NULL);
+	b->addr = network_address_new();
 
 	return b;
 }
@@ -38,7 +44,7 @@ void backend_free(backend_t *b) {
 
 	network_connection_pool_free(b->pool);
 
-	if (b->addr.str) g_free(b->addr.str);
+	if (b->addr)     network_address_free(b->addr);
 	if (b->uuid)     g_string_free(b->uuid, TRUE);
 
 	g_free(b);
@@ -82,7 +88,7 @@ int network_backends_add(network_backends_t *bs, /* const */ gchar *address, bac
 	new_backend = backend_init();
 	new_backend->type = type;
 
-	if (0 != network_address_set_address(&new_backend->addr, address)) {
+	if (0 != network_address_set_address(new_backend->addr, address)) {
 		return -1;
 	}
 
@@ -91,7 +97,7 @@ int network_backends_add(network_backends_t *bs, /* const */ gchar *address, bac
 	for (i = 0; i < bs->backends->len; i++) {
 		backend_t *old_backend = bs->backends->pdata[i];
 
-		if (0 == strcmp(old_backend->addr.str, new_backend->addr.str)) {
+		if (strleq(S(old_backend->addr->name), S(new_backend->addr->name))) {
 			backend_free(new_backend);
 
 			is_known = TRUE;
@@ -140,7 +146,7 @@ int network_backends_check(network_backends_t *bs) {
 		if (now.tv_sec - cur->state_since.tv_sec > 4) {
 			g_debug("%s.%d: backend %s was down for more than 4 sec, waking it up", 
 					__FILE__, __LINE__,
-					cur->addr.str);
+					cur->addr->name->str);
 
 			cur->state = BACKEND_STATE_UNKNOWN;
 			cur->state_since = now;
