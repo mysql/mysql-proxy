@@ -70,6 +70,10 @@ void network_address_free(network_address *addr) {
 	g_free(addr);
 }
 
+void network_address_reset(network_address *addr) {
+	addr->len = sizeof(addr->addr.common);
+}
+
 static gint network_address_set_address_ip(network_address *addr, const gchar *address, guint port) {
 	if (port == 0) {
 		return -1;

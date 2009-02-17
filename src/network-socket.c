@@ -299,13 +299,9 @@ network_socket *network_socket_accept(network_socket *srv) {
 
 	/* the listening side may be INADDR_ANY, let's get which address the client really connected to */
 	if (-1 == getsockname(client->fd, &client->dst->addr.common, &(client->dst->len))) {
-		network_address_free(client->dst);
-
-		client->dst = NULL;
+		network_address_reset(client->dst);
 	} else if (network_address_refresh_name(client->dst)) {
-		network_address_free(client->dst);
-
-		client->dst = NULL;
+		network_address_reset(client->dst);
 	}
 
 	return client;
@@ -325,6 +321,19 @@ static network_socket_retval_t network_socket_connect_setopts(network_socket *so
 	setsockopt(sock->fd, IPPROTO_TCP,    TCP_NODELAY, &val, sizeof(val) );
 	val = 1;
 	setsockopt(sock->fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val) );
+
+	/* the listening side may be INADDR_ANY, let's get which address the client really connected to */
+	if (-1 == getsockname(sock->fd, &sock->src->addr.common, &(sock->src->len))) {
+		g_debug("%s: getsockname() failed: %s (%d)",
+				G_STRLOC,
+				g_strerror(errno),
+				errno);
+		network_address_reset(sock->src);
+	} else if (network_address_refresh_name(sock->src)) {
+		g_debug("%s: network_address_refresh_name() failed",
+				G_STRLOC);
+		network_address_reset(sock->src);
+	}
 
 	return NETWORK_SOCKET_SUCCESS;
 }
