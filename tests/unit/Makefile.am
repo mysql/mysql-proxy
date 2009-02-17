@@ -54,6 +54,7 @@ t_network_socket_SOURCES  = \
 	$(top_srcdir)/src/glib-ext.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
+	$(top_srcdir)/src/network-address.c \
 	$(top_srcdir)/src/network-socket.c
 
 t_network_socket_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
@@ -75,6 +76,7 @@ t_network_backend_SOURCES  = \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network-conn-pool.c \
+	$(top_srcdir)/src/network-address.c \
 	$(top_srcdir)/src/network-socket.c
 
 t_network_backend_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)

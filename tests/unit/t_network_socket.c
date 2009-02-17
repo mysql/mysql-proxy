@@ -143,14 +143,14 @@ void t_network_address_set() {
 
 	addr = network_address_new();
 
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:3306"), ==, NETWORK_SOCKET_SUCCESS);
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1"), ==, NETWORK_SOCKET_SUCCESS);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:3306"), ==, 0);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1"), ==, 0);
 
 	/* should fail */	
-	g_assert_cmpint(network_address_set_address(addr, "500.0.0.1"), ==, NETWORK_SOCKET_ERROR);
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:0"), ==, NETWORK_SOCKET_ERROR);
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:65536"), ==, NETWORK_SOCKET_ERROR);
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:-1"), ==, NETWORK_SOCKET_ERROR);
+	g_assert_cmpint(network_address_set_address(addr, "500.0.0.1"), ==, -1);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:0"), ==, -1);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:65536"), ==, -1);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:-1"), ==, -1);
 
 	network_address_free(addr);
 }
