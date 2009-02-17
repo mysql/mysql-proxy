@@ -10,6 +10,7 @@ TESTS=proxy-test.lua \
 TESTS_ENVIRONMENT = \
 	LUA_PATH="${top_srcdir}/lib/?.lua" \
 	LUA_CPATH="${top_builddir}/lib/.libs/?.so" \
+	DYLD_LIBRARY_PATH="${top_builddir}/src/.libs/" \
 	lua 
 
 EXTRA_DIST=$(TESTS)
