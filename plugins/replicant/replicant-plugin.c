@@ -471,7 +471,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_connect_server) {
 
 	con->server = network_socket_init();
 
-	if (0 != network_address_set_address(&(con->server->addr), address)) {
+	if (0 != network_address_set_address(con->server->dst, address)) {
 		return -1;
 	}
     

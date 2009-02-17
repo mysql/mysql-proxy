@@ -545,7 +545,7 @@ static int network_mysqld_admin_plugin_apply_config(chassis *chas, chassis_plugi
 	network_mysqld_server_connection_init(con);
 
 	/* FIXME: network_socket_set_address() */
-	if (0 != network_address_set_address(&listen_sock->addr, config->address)) {
+	if (0 != network_address_set_address(listen_sock->dst, config->address)) {
 		return -1;
 	}
 

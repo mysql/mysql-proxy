@@ -1405,34 +1405,25 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	backend_t *cur;
 
 	if (con->server) {
-		int so_error = 0;
-		socklen_t so_error_len = sizeof(so_error);
-
-		/**
-		 * we might get called a 2nd time after a connect() == EINPROGRESS
-		 */
-		if (getsockopt(con->server->fd, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len)) {
-			/* getsockopt failed */
-			g_critical("%s.%d: getsockopt(%s) failed: %s", 
-					__FILE__, __LINE__,
-					con->server->addr.str, g_strerror(errno));
-			return NETWORK_SOCKET_ERROR;
-		}
-
-		switch (so_error) {
-		case 0:
+		switch (network_socket_connect_finish(con->server)) {
+		case NETWORK_SOCKET_SUCCESS:
 			break;
-		default:
+		case NETWORK_SOCKET_ERROR:
+		case NETWORK_SOCKET_ERROR_RETRY:
 			g_message("%s.%d: connect(%s) failed: %s. Retrying with different backend.", 
 					__FILE__, __LINE__,
-					con->server->addr.str, g_strerror(so_error));
+					con->server->dst->name->str, g_strerror(errno));
 
 			/* mark the backend as being DOWN and retry with a different one */
 			st->backend->state = BACKEND_STATE_DOWN;
 			g_get_current_time(&(st->backend->state_since));
 			network_socket_free(con->server);
-			con->server = NULL;	
+			con->server = NULL;
+
 			return NETWORK_SOCKET_ERROR_RETRY;
+		default:
+			g_assert_not_reached();
+			break;
 		}
 
 		if (st->backend->state != BACKEND_STATE_UP) {
@@ -1539,8 +1530,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	 */
 	if (NULL == con->server) {
 		con->server = network_socket_init();
-		con->server->addr = st->backend->addr;
-		con->server->addr.str = g_strdup(st->backend->addr.str);
+		con->server->dst = network_address_copy(NULL, st->backend->addr);
 	
 		st->backend->connected_clients++;
 
@@ -1553,7 +1543,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 			break;
 		default:
 			g_message("%s.%d: connecting to backend (%s) failed, marking it as down for ...", 
-					__FILE__, __LINE__, con->server->addr.str);
+					__FILE__, __LINE__, con->server->dst->name->str);
 
 			st->backend->state = BACKEND_STATE_DOWN;
 			g_get_current_time(&(st->backend->state_since));
@@ -1881,7 +1871,7 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 	network_mysqld_proxy_connection_init(con);
 
 	/* FIXME: network_socket_set_address() */
-	if (0 != network_address_set_address(&listen_sock->addr, config->address)) {
+	if (0 != network_address_set_address(listen_sock->dst, config->address)) {
 		return -1;
 	}
 
