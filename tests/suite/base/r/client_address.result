@@ -1,3 +1,48 @@
-SELECT 1;
-client
+SELECT proxy.connection.client.dst.name;
+value
+127.0.0.1:14040
+SELECT proxy.connection.client.dst.type;
+value
+2
+SELECT proxy.connection.client.dst.address;
+value
+127.0.0.1
+SELECT proxy.connection.client.dst.port;
+value
+14040
+SELECT proxy.connection.client.src.name;
+value
+not-nil
+SELECT proxy.connection.client.src.type;
+value
+2
+SELECT proxy.connection.client.src.address;
+value
+127.0.0.1
+SELECT proxy.connection.client.src.port;
+value
+not-nil
+SELECT proxy.connection.server.dst.name;
+value
+127.0.0.1:14070
+SELECT proxy.connection.server.dst.type;
+value
+2
+SELECT proxy.connection.server.dst.address;
+value
+127.0.0.1
+SELECT proxy.connection.server.dst.port;
+value
+14070
+SELECT proxy.connection.server.src.name;
+value
+not-nil
+SELECT proxy.connection.server.src.type;
+value
+2
+SELECT proxy.connection.server.src.address;
+value
+127.0.0.1
+SELECT proxy.connection.server.src.port;
+value
 not-nil

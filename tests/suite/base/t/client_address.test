@@ -15,4 +15,19 @@
 #  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 # 
 #  $%ENDLICENSE%$
-SELECT 1;
+SELECT proxy.connection.client.dst.name;
+SELECT proxy.connection.client.dst.type;
+SELECT proxy.connection.client.dst.address;
+SELECT proxy.connection.client.dst.port;
+SELECT proxy.connection.client.src.name;
+SELECT proxy.connection.client.src.type;
+SELECT proxy.connection.client.src.address;
+SELECT proxy.connection.client.src.port;
+SELECT proxy.connection.server.dst.name;
+SELECT proxy.connection.server.dst.type;
+SELECT proxy.connection.server.dst.address;
+SELECT proxy.connection.server.dst.port;
+SELECT proxy.connection.server.src.name;
+SELECT proxy.connection.server.src.type;
+SELECT proxy.connection.server.src.address;
+SELECT proxy.connection.server.src.port;

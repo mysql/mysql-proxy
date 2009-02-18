@@ -11,8 +11,10 @@ EXTRA_DIST = \
 		chain1b.lua \
 		change_user.lua \
 		change_user.test \
-		client_address.lua \
+		client_address-test.lua \
+		client_address-mock.lua \
 		client_address.test \
+		client_address.options \
 		default.options \
 		error_struct.lua \
 		error_struct.test \
