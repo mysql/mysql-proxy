@@ -385,20 +385,20 @@ network_socket_retval_t network_socket_connect_finish(network_socket *sock) {
  */
 network_socket_retval_t network_socket_connect(network_socket *sock) {
 	g_assert(sock->dst);
-	g_assert(sock->dst->len);
+	g_assert(sock->dst->name->len);
 
 	/**
 	 * sock->dst->addr.ipv4.sin_family is always mapped to the same field 
 	 * even if it is not a IPv4 address as we use a union
 	 */
-	if (-1 == (sock->fd = socket(sock->dst->addr.ipv4.sin_family, SOCK_STREAM, 0))) {
+	if (-1 == (sock->fd = socket(sock->dst->addr.common.sa_family, SOCK_STREAM, 0))) {
 #ifdef _WIN32
 		errno = WSAGetLastError();
 #endif
 		g_critical("%s.%d: socket(%s) failed: %s (%d)", 
 				__FILE__, __LINE__,
 				sock->dst->name->str, g_strerror(errno), errno);
-		return -1;
+		return NETWORK_SOCKET_ERROR;
 	}
 
 	/**
@@ -418,57 +418,77 @@ network_socket_retval_t network_socket_connect(network_socket *sock) {
 		switch (errno) {
 		case E_NET_INPROGRESS:
 		case E_NET_WOULDBLOCK: /* win32 uses WSAEWOULDBLOCK */
-			return -2;
+			return NETWORK_SOCKET_ERROR_RETRY;
 		default:
 			g_critical("%s.%d: connect(%s) failed: %s (%d)", 
 					__FILE__, __LINE__,
 					sock->dst->name->str,
 					g_strerror(errno), errno);
-			return -1;
+			return NETWORK_SOCKET_ERROR;
 		}
 	}
 
 	network_socket_connect_setopts(sock);
 
-	return 0;
+	return NETWORK_SOCKET_SUCCESS;
 }
 
 /**
  * connect a socket
  *
- * the con->addr has to be set before 
+ * the con->dst->addr has to be set before 
  * 
  * @param con    a socket 
- * @return       0 on connected, -1 on error, -2 for try again
- * @see network_mysqld_set_address()
+ * @return       NETWORK_SOCKET_SUCCESS on connected, NETWORK_SOCKET_ERROR on error
+ *
+ * @see network_address_set_address()
  */
 network_socket_retval_t network_socket_bind(network_socket * con) {
 	int val = 1;
 
 	g_return_val_if_fail(con->dst, NETWORK_SOCKET_ERROR);
+	g_return_val_if_fail(con->dst->name->len > 0, NETWORK_SOCKET_ERROR);
+	g_return_val_if_fail(con->fd < 0, NETWORK_SOCKET_ERROR); /* socket is already bound */
 
-	if (-1 == (con->fd = socket(con->dst->addr.ipv4.sin_family, SOCK_STREAM, 0))) {
-		g_critical("%s.%d: socket(%s) failed: %s", 
-				__FILE__, __LINE__,
-				con->dst->name->str, g_strerror(errno));
+	if (-1 == (con->fd = socket(con->dst->addr.common.sa_family, SOCK_STREAM, 0))) {
+		g_critical("%s: socket(%s) failed: %s (%d)", 
+				G_STRLOC,
+				con->dst->name->str,
+				g_strerror(errno), errno);
 		return NETWORK_SOCKET_ERROR;
 	}
 
-	setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val));
-	setsockopt(con->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
+	if (con->dst->addr.common.sa_family == AF_INET || 
+	    con->dst->addr.common.sa_family == AF_INET6) {
+		if (0 != setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val))) {
+			g_critical("%s: setsockopt(%s, IPPROTO_TCP, TCP_NODELAY) failed: %s (%d)", 
+					G_STRLOC,
+					con->dst->name->str,
+					g_strerror(errno), errno);
+			return NETWORK_SOCKET_ERROR;
+		}
+		if (0 != setsockopt(con->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val))) {
+			g_critical("%s: setsockopt(%s, SOL_SOCKET, SO_REUSEADDR) failed: %s (%d)", 
+					G_STRLOC,
+					con->dst->name->str,
+					g_strerror(errno), errno);
+			return NETWORK_SOCKET_ERROR;
+		}
+	}
 
 	if (-1 == bind(con->fd, &con->dst->addr.common, con->dst->len)) {
-		g_critical("%s.%d: bind(%s) failed: %s", 
-				__FILE__, __LINE__,
+		g_critical("%s: bind(%s) failed: %s (%d)", 
+				G_STRLOC,
 				con->dst->name->str,
-				g_strerror(errno));
+				g_strerror(errno), errno);
 		return NETWORK_SOCKET_ERROR;
 	}
 
 	if (-1 == listen(con->fd, 8)) {
-		g_critical("%s.%d: listen() failed: %s",
-				__FILE__, __LINE__,
-				g_strerror(errno));
+		g_critical("%s: listen(%s, 8) failed: %s (%d)",
+				G_STRLOC,
+				con->dst->name->str,
+				g_strerror(errno), errno);
 		return NETWORK_SOCKET_ERROR;
 	}
 
@@ -688,6 +708,13 @@ static network_socket_retval_t network_socket_write_send(network_socket *con, in
 	return NETWORK_SOCKET_SUCCESS;
 }
 
+/**
+ * write a content of con->send_queue to the socket
+ *
+ * @param send_chunks number of chunks to send, if < 0 send all
+ *
+ * @returns NETWORK_SOCKET_SUCCESS on success, NETWORK_SOCKET_ERROR on error and NETWORK_SOCKET_WAIT_FOR_EVENT if the call would have blocked 
+ */
 network_socket_retval_t network_socket_write(network_socket *con, int send_chunks) {
 #ifdef HAVE_WRITEV
 	return network_socket_write_writev(con, send_chunks);
@@ -696,4 +723,25 @@ network_socket_retval_t network_socket_write(network_socket *con, int send_chunk
 #endif
 }
 
+network_socket_retval_t network_socket_to_read(network_socket *sock) {
+	int b = -1;
 
+	if (0 != ioctl(sock->fd, FIONREAD, &b)) {
+		g_critical("%s: ioctl(%d, FIONREAD, ...) failed: %s (%d)",
+				G_STRLOC,
+				sock->fd,
+				g_strerror(errno), errno);
+		return NETWORK_SOCKET_ERROR;
+	} else if (b < 0) {
+		g_critical("%s: ioctl(%d, FIONREAD, ...) succeeded, but is negative: %d",
+				G_STRLOC,
+				sock->fd,
+				b);
+
+		return NETWORK_SOCKET_ERROR;
+	} else {
+		sock->to_read = b;
+		return NETWORK_SOCKET_SUCCESS;
+	}
+
+}

@@ -91,12 +91,9 @@
 #endif
 
 #ifndef _WIN32
-#include <sys/ioctl.h>
-
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#define ioctlsocket ioctl
 #endif
 
 #include <sys/stat.h>
@@ -1535,11 +1532,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		st->backend->connected_clients++;
 
 		switch(network_socket_connect(con->server)) {
-		case -2:
+		case NETWORK_SOCKET_ERROR_RETRY:
 			/* the socket is non-blocking already, 
 			 * call getsockopt() to see if we are done */
 			return NETWORK_SOCKET_ERROR_RETRY;
-		case 0:
+		case NETWORK_SOCKET_SUCCESS:
 			break;
 		default:
 			g_message("%s.%d: connecting to backend (%s) failed, marking it as down for ...", 

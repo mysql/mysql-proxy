@@ -124,6 +124,7 @@ NETWORK_API network_socket *network_socket_init(void);
 NETWORK_API void network_socket_free(network_socket *s);
 NETWORK_API network_socket_retval_t network_socket_write(network_socket *con, int send_chunks);
 NETWORK_API network_socket_retval_t network_socket_read(network_socket *con);
+NETWORK_API network_socket_retval_t network_socket_to_read(network_socket *sock);
 NETWORK_API network_socket_retval_t network_socket_set_non_blocking(network_socket *sock);
 NETWORK_API network_socket_retval_t network_socket_connect(network_socket *con);
 NETWORK_API network_socket_retval_t network_socket_connect_finish(network_socket *sock);
