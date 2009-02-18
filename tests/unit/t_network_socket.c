@@ -163,6 +163,8 @@ void t_network_socket_connect(void) {
 	network_socket *sock;
 	network_socket *client;
 	network_socket *client_connected;
+	fd_set read_fds;
+	struct timeval timeout;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
@@ -185,6 +187,12 @@ void t_network_socket_connect(void) {
 
 	network_queue_append(client->send_queue, g_string_new_len(C("foo")));
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_write(client, -1)); /* send all */
+
+	FD_ZERO(&read_fds);
+	FD_SET(client_connected->fd, &read_fds);
+	timeout.tv_sec = 1;
+	timeout.tv_usec = 500 * 000; /* wait 500ms */
+	g_assert_cmpint(1, ==, select(client_connected->fd + 1, &read_fds, NULL, NULL, &timeout));
 	
 	/* socket_read() needs ->to_read set */
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_to_read(client_connected));
