@@ -129,43 +129,90 @@ void test_network_queue_pop_string() {
 	network_queue_free(q);
 }
 
+#define TEST_ADDR_IP "127.0.0.1:57684"
 
-void t_network_address_new() {
-	network_address *addr;
+void t_network_socket_bind(void) {
+	network_socket *sock;
+	
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
-	addr = network_address_new();
+	sock = network_socket_init();
 
-	network_address_free(addr);
+	/* w/o a address set it should fail */
+	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_bind(sock)); /* should fail, no address */
+
+	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, TEST_ADDR_IP));
+	
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
+
+	network_socket_free(sock);
+
+	/* bind again, to test if REUSEADDR works */
+	sock = network_socket_init();
+	
+	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, TEST_ADDR_IP));
+	
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
+
+	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_bind(sock)); /* bind a socket that is already bound, should fail */
+
+	network_socket_free(sock);
 }
 
-void t_network_address_set() {
-	network_address *addr;
+void t_network_socket_connect(void) {
+	network_socket *sock;
+	network_socket *client;
+	network_socket *client_connected;
+	
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
-	addr = network_address_new();
+	sock = network_socket_init();
 
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:3306"), ==, 0);
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1"), ==, 0);
+	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, TEST_ADDR_IP));
+	
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
+	
+	client = network_socket_init();
+	g_assert_cmpint(0, ==, network_address_set_address(client->dst, TEST_ADDR_IP));
+	g_assert_cmpint(NETWORK_SOCKET_ERROR_RETRY, ==, network_socket_connect(client)); /* it can't succeed as we don't accept() connections yet */
 
-	/* should fail */	
-	g_assert_cmpint(network_address_set_address(addr, "500.0.0.1"), ==, -1);
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:0"), ==, -1);
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:65536"), ==, -1);
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:-1"), ==, -1);
+	client_connected = network_socket_accept(sock);
+	g_assert(client_connected);
+	
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect_finish(client));
+	
+	/* we are connected */
 
-	network_address_free(addr);
+	network_queue_append(client->send_queue, g_string_new_len(C("foo")));
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_write(client, -1)); /* send all */
+	
+	/* socket_read() needs ->to_read set */
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_to_read(client_connected));
+	g_assert_cmpint(3, ==, client_connected->to_read);
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_read(client_connected)); /* read all */
+	g_assert_cmpint(0, ==, client_connected->to_read);
+	
+	network_socket_free(client);
+	client = NULL;
+
+	/* try to read from closed socket */
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_to_read(client_connected));
+	g_assert_cmpint(0, ==, client_connected->to_read);
+
+	network_socket_free(client_connected);
+	network_socket_free(sock);
 }
-
 
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
 
 	g_test_add_func("/core/network_socket_new", test_network_socket_new);
+	g_test_add_func("/core/network_socket_bind", t_network_socket_bind);
+	g_test_add_func("/core/network_socket_connect", t_network_socket_connect);
 	g_test_add_func("/core/network_queue_append", test_network_queue_append);
 	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
 	g_test_add_func("/core/network_queue_pop_string", test_network_queue_pop_string);
-	g_test_add_func("/core/network_address_new", t_network_address_new);
-	g_test_add_func("/core/network_address_set", t_network_address_set);
 
 	return g_test_run();
 }

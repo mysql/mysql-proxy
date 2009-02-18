@@ -7,6 +7,7 @@ TESTS=\
 	check_loadscript \
 	check_chassis_log \
 	t_network_socket \
+	t_network_address \
 	t_network_backend \
 	t_network_injection \
 	t_network_mysqld_packet \
@@ -59,6 +60,15 @@ t_network_socket_SOURCES  = \
 
 t_network_socket_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
 t_network_socket_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)
+
+t_network_address_SOURCES  = \
+	t_network_address.c \
+	$(top_srcdir)/src/glib-ext.c \
+	$(top_srcdir)/src/network-address.c 
+
+t_network_address_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
+t_network_address_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)
+
 
 check_chassis_path_SOURCES = \
 	check_chassis_path.c \
