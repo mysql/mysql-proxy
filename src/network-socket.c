@@ -384,8 +384,8 @@ network_socket_retval_t network_socket_connect_finish(network_socket *sock) {
  * @see network_mysqld_set_address()
  */
 network_socket_retval_t network_socket_connect(network_socket *sock) {
-	g_assert(sock->dst);
-	g_assert(sock->dst->name->len);
+	g_return_val_if_fail(sock->dst, NETWORK_SOCKET_ERROR);
+	g_return_val_if_fail(sock->dst->name->len, NETWORK_SOCKET_ERROR);
 
 	/**
 	 * sock->dst->addr.ipv4.sin_family is always mapped to the same field 
