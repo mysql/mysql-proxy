@@ -6,7 +6,7 @@ SUBDIRS=\
 # the cli plugin needs readline and we don't have it on all platforms
 # cli
 
-EXTRA_DIST=CMakeLists.txt
+# EXTRA_DIST=CMakeLists.txt
 
 check-local:
 	mkdir -p $(top_builddir)/plugins/; 

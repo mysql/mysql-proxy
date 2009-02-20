@@ -19,4 +19,4 @@ dist_doc_DATA=\
 	tutorial-routing.lua \
 	tutorial-monitor.lua
 
-EXTRA_DIST=CMakeLists.txt
+# EXTRA_DIST=CMakeLists.txt

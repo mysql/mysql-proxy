@@ -133,4 +133,4 @@ endif
 # test_latency_CPPFLAGS= $(MYSQL_INCLUDE) $(GLIB_CFLAGS)
 # test_latency_LDADD= $(MYSQL_LIBS) $(GLIB_LIBS)
 
-EXTRA_DIST=CMakeLists.txt test-latency.c proxy-dtrace-provider.d
+EXTRA_DIST=test-latency.c proxy-dtrace-provider.d

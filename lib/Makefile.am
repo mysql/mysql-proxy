@@ -57,10 +57,10 @@ noinst_HEADERS = \
 	sql-tokenizer.h 
 
 EXTRA_DIST = \
-	CMakeLists.txt \
 	glib2.def \
 	lfs.def \
 	chassis.def \
 	lpeg.def \
 	mysql.def \
 	posix.def 
+

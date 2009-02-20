@@ -1,7 +1,6 @@
 SUBDIRS =	cmake src lib plugins examples scripts tests m4
 
 EXTRA_DIST = \
-		CMakeLists.txt \
 		config.h.cmake \
 		COPYING.lfs \
 		Doxyfile \
