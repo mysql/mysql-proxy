@@ -381,15 +381,17 @@ network_socket_retval_t network_socket_connect_finish(network_socket *sock) {
  * 
  * @param con    a socket 
  * @return       0 on connected, -1 on error, -2 for try again
- * @see network_mysqld_set_address()
+ * @see network_address_set_address()
  */
 network_socket_retval_t network_socket_connect(network_socket *sock) {
-	g_return_val_if_fail(sock->dst, NETWORK_SOCKET_ERROR);
-	g_return_val_if_fail(sock->dst->name->len, NETWORK_SOCKET_ERROR);
+	g_return_val_if_fail(sock->dst, NETWORK_SOCKET_ERROR); /* our _new() allocated it already */
+	g_return_val_if_fail(sock->dst->name->len, NETWORK_SOCKET_ERROR); /* we want to use the ->name in the error-msgs */
+	g_return_val_if_fail(sock->fd < 0, NETWORK_SOCKET_ERROR); /* we already have a valid fd, we don't want to leak it */
 
 	/**
-	 * sock->dst->addr.ipv4.sin_family is always mapped to the same field 
-	 * even if it is not a IPv4 address as we use a union
+	 * create a socket for the requested address
+	 *
+	 * if the dst->addr isn't set yet, socket() will fail with unsupported type
 	 */
 	if (-1 == (sock->fd = socket(sock->dst->addr.common.sa_family, SOCK_STREAM, 0))) {
 #ifdef _WIN32

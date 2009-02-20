@@ -183,6 +183,8 @@ void t_network_socket_connect(void) {
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect_finish(client));
 	
+	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_connect(client)); /* we are already connected, sure fail */
+
 	/* we are connected */
 
 	network_queue_append(client->send_queue, g_string_new_len(C("foo")));
