@@ -1476,7 +1476,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	GString *s;
 	gsize i, j;
 
-	g_assert(fields->len > 0 && fields->len < 251);
+	g_assert(fields->len > 0);
 
 	s = g_string_new(NULL);
 
@@ -1505,7 +1505,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	 *    \376\0\0\2\0
 	 */
 
-	g_string_append_c(s, fields->len); /* the field-count */
+	network_mysqld_proto_append_lenenc_int(s, fields->len); /* the field-count */
 	network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
 
 	for (i = 0; i < fields->len; i++) {

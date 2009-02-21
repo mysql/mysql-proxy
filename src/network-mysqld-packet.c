@@ -632,7 +632,8 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
  */ 
 GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 	network_packet packet;
-	guint8 field_count;
+	guint64 field_count;
+	guint8 type;
 	guint i;
 	int err = 0;
 	guint32 capabilities = CLIENT_PROTOCOL_41;
@@ -656,7 +657,7 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 	
-	err = err || network_mysqld_proto_get_int8(&packet, &field_count); /* the byte after the net-header is the field-count */
+	err = err || network_mysqld_proto_get_lenenc_int(&packet, &field_count);
     
 	/* the next chunk, the field-def */
 	for (i = 0; i < field_count; i++) {
@@ -733,8 +734,8 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 	
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 
-	err = err || network_mysqld_proto_get_int8(&packet, &field_count); /* the byte after the net-header is a EOF */
-	err = err || (field_count != MYSQLD_PACKET_EOF);
+	err = err || network_mysqld_proto_get_int8(&packet, &type); /* the byte after the net-header is a EOF */
+	err = err || (type != MYSQLD_PACKET_EOF);
 
 	if (err) return NULL;
     
