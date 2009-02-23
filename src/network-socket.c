@@ -665,7 +665,7 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
  *
  * use a loop over send() to be compatible with win32
  */
-static network_socket_retval_t network_socket_write_send(network_socket *con, int send_chunks) {
+static network_socket_retval_t G_GNUC_UNUSED network_socket_write_send(network_socket *con, int send_chunks) {
 	/* send the whole queue */
 	GList *chunk;
 
