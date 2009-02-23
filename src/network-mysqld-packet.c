@@ -927,7 +927,6 @@ void network_mysqld_eof_packet_free(network_mysqld_eof_packet_t *eof_packet) {
  */
 int network_mysqld_proto_get_eof_packet(network_packet *packet, network_mysqld_eof_packet_t *eof_packet) {
 	guint8 field_count;
-	guint64 affected, insert_id;
 	guint16 server_status, warning_count;
 	guint32 capabilities = CLIENT_PROTOCOL_41;
 
