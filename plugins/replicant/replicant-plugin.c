@@ -115,7 +115,7 @@ static void plugin_con_state_free(plugin_con_state *st) {
  */
 static int network_mysqld_resultset_master_status(chassis *UNUSED_PARAM(chas), network_mysqld_con *con) {
 	GList *chunk;
-	int i;
+	guint i;
 	network_socket *sock = con->client;
 	plugin_con_state *st = con->plugin_con_state;
 	GPtrArray *fields;
