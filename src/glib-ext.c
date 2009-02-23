@@ -142,12 +142,12 @@ void g_debug_hexdump(const char *msg, const void *_s, size_t len) {
 
 	for (i = 0; i < len; i++) {
 		if (i % 16 == 0) {
-			g_string_append_printf(hex, "[%04x]  ", i);
+			g_string_append_printf(hex, "[%04"G_GSIZE_MODIFIER"x]  ", i);
 		}
 		g_string_append_printf(hex, "%02x", s[i]);
 
 		if ((i + 1) % 16 == 0) {
-			int j;
+			size_t j;
 			g_string_append_len(hex, C("  "));
 			for (j = i - 15; j <= i; j++) {
 				g_string_append_c(hex, g_ascii_isprint(s[j]) ? s[j] : '.');
@@ -160,7 +160,7 @@ void g_debug_hexdump(const char *msg, const void *_s, size_t len) {
 
 	if (i % 16 != 0) {
 		/* fill up the line */
-		int j;
+		size_t j;
 
 		for (j = 0; j < 16 - (i % 16); j++) {
 			g_string_append_len(hex, C("   "));
