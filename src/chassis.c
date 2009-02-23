@@ -155,27 +155,6 @@ static SERVICE_STATUS_HANDLE agent_service_status_handle = 0;
 #define CHASSIS_NEWLINE "\n"
 #endif
 
-/**
- * turn a GTimeVal into string
- *
- * @return string in ISO notation with micro-seconds
- */
-static gchar * g_timeval_string(GTimeVal *t1, GString *str) {
-	size_t used_len;
-	
-	g_string_set_size(str, 63);
-
-	used_len = strftime(str->str, str->allocated_len, "%Y-%m-%dT%H:%M:%S", gmtime(&t1->tv_sec));
-
-	g_assert(used_len < str->allocated_len);
-	str->len = used_len;
-
-	g_string_append_printf(str, ".%06ld", t1->tv_usec);
-
-	return str->str;
-}
-
-
 #ifndef _WIN32
 /**
  * start the app in the background 
