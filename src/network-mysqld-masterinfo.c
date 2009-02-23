@@ -64,7 +64,7 @@ void network_mysqld_masterinfo_free(network_mysqld_masterinfo_t *info) {
  */
 
 static int network_mysqld_masterinfo_get_string(network_packet *packet, GString *str) {
-	gint i;
+	guint i;
 
 	g_return_val_if_fail(packet, -1);
 	g_return_val_if_fail(str, -1);
