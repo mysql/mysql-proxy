@@ -158,8 +158,7 @@ int network_backends_check(network_backends_t *bs) {
 	return backends_woken_up;
 }
 
-backend_t *network_backends_get(network_backends_t *bs, gint ndx) {
-	if (ndx < 0) return NULL;
+backend_t *network_backends_get(network_backends_t *bs, guint ndx) {
 	if (ndx >= network_backends_count(bs)) return NULL;
 
 	/* FIXME: shouldn't we copy the backend or add ref-counting ? */	

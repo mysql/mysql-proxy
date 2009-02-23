@@ -71,7 +71,7 @@ NETWORK_API network_backends_t *network_backends_new();
 NETWORK_API void network_backends_free(network_backends_t *);
 NETWORK_API int network_backends_add(network_backends_t *backends, /* const */ gchar *address, backend_type_t type);
 NETWORK_API int network_backends_check(network_backends_t *backends);
-NETWORK_API backend_t * network_backends_get(network_backends_t *backends, gint ndx);
+NETWORK_API backend_t * network_backends_get(network_backends_t *backends, guint ndx);
 NETWORK_API guint network_backends_count(network_backends_t *backends);
 
 #endif /* _BACKEND_H_ */
