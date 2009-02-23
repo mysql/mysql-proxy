@@ -60,7 +60,7 @@ static int lua_table_key_to_mysql_field(lua_State *L, GPtrArray *fields) {
 		 */
 		field->name = g_strdup(lua_tostring(L, -2));
 	} else if (lua_isnumber(L, -2)) {
-		field->name = g_strdup_printf("%ld", lua_tointeger(L, -2));
+		field->name = g_strdup_printf("%d", lua_tointeger(L, -2));
 	} else {
 		/* we don't know how to convert the key */
 		field->name = g_strdup("(hmm)");
@@ -222,12 +222,12 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 			/* if we don't have fields for the resultset, we should have a
 			 * error-msg on the stack */
 			if (!fields) {
-				size_t s_len = 0;
-				const char *s;
+				size_t err_len = 0;
+				const char *err;
 
-				s = lua_tolstring(L, -1, &s_len);
+				err = lua_tolstring(L, -1, &err_len);
 
-				network_mysqld_con_send_error(con->client, s, s_len);
+				network_mysqld_con_send_error(con->client, err, err_len);
 				
 				lua_pop(L, 1);
 			}
