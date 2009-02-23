@@ -52,11 +52,14 @@ static volatile sig_atomic_t signal_shutdown;
 #endif
 
 
+chassis *chassis_init() {
+	return chassis_new();
+}
 
 /**
  * create a global context
  */
-chassis *chassis_init() {
+chassis *chassis_new() {
 	chassis *chas;
 
 	chas = g_new0(chassis, 1);

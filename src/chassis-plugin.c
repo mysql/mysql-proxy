@@ -32,6 +32,10 @@
 #include "chassis-plugin.h"
 
 chassis_plugin *chassis_plugin_init(void) {
+	return chassis_plugin_new();
+}
+
+chassis_plugin *chassis_plugin_new(void) {
 	chassis_plugin *p;
 
 	p = g_new0(chassis_plugin, 1);
@@ -49,7 +53,7 @@ void chassis_plugin_free(chassis_plugin *p) {
 
 chassis_plugin *chassis_plugin_load(const gchar *name) {
 	int (*plugin_init)(chassis_plugin *p);
-	chassis_plugin *p = chassis_plugin_init();
+	chassis_plugin *p = chassis_plugin_new();
 
 	p->module = g_module_open(name, G_MODULE_BIND_LOCAL);
 

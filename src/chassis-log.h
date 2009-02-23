@@ -49,7 +49,8 @@ typedef struct {
 } chassis_log;
 
 
-CHASSIS_API chassis_log *chassis_log_init(void);
+CHASSIS_API chassis_log *chassis_log_init(void) G_GNUC_DEPRECATED;
+CHASSIS_API chassis_log *chassis_log_new(void);
 CHASSIS_API int chassis_log_set_level(chassis_log *log, const gchar *level);
 CHASSIS_API void chassis_log_free(chassis_log *log);
 CHASSIS_API int chassis_log_open(chassis_log *log);

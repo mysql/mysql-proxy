@@ -77,6 +77,10 @@ const struct {
 };
 
 chassis_log *chassis_log_init(void) {
+	return chassis_log_new();
+}
+
+chassis_log *chassis_log_new(void) {
 	chassis_log *log;
 
 	log = g_new0(chassis_log, 1);

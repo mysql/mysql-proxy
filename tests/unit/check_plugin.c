@@ -42,7 +42,7 @@ struct chassis_plugin_config {
 	gchar *foo;
 };
 
-chassis_plugin_config *mock_plugin_init(void) {
+chassis_plugin_config *mock_plugin_new(void) {
 	chassis_plugin_config *config;
 
 	config = g_new0(chassis_plugin_config, 1);
@@ -86,7 +86,7 @@ START_TEST(test_plugin_load) {
 	chassis_plugin *p;
 	GLogFunc old_log_func;
 
-	p = chassis_plugin_init();
+	p = chassis_plugin_new();
 	g_assert(p != NULL);
 	chassis_plugin_free(p);
 
@@ -109,8 +109,8 @@ START_TEST(test_plugin_config) {
 	int _argc = 2;
 	GError *gerr = NULL;
 	
-	p = chassis_plugin_init();
-	p->init = mock_plugin_init;
+	p = chassis_plugin_new();
+	p->init = mock_plugin_new;
 	p->destroy = mock_plugin_destroy;
 	p->get_options = mock_plugin_get_options;
 

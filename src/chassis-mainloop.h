@@ -61,7 +61,8 @@ struct chassis {
 	chassis_stats_t *stats;			/**< the overall chassis stats, includes lua and glib allocation stats */
 };
 
-CHASSIS_API chassis *chassis_init(void);
+CHASSIS_API chassis *chassis_init(void) G_GNUC_DEPRECATED;
+CHASSIS_API chassis *chassis_new(void);
 CHASSIS_API void chassis_free(chassis *chas);
 
 /**

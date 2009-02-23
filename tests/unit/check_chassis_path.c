@@ -43,7 +43,7 @@ START_TEST(test_path_basedir) {
 	gchar *filename;
 	chassis *chas;
 
-	chas = chassis_init();
+	chas = chassis_new();
 	chas->base_dir = g_strdup("/tmp");
 	
 	filename = g_strdup("some/relative/path/file");
@@ -61,7 +61,7 @@ START_TEST(test_no_basedir) {
 	gchar *filename;
 	chassis *chas;
 	
-	chas = chassis_init();
+	chas = chassis_new();
 	chas->base_dir = NULL;
 	
 	filename = g_strdup("some/relative/path/file");
@@ -79,7 +79,7 @@ START_TEST(test_abspath_basedir) {
 	gchar *filename;
 	chassis *chas;
 	
-	chas = chassis_init();
+	chas = chassis_new();
 	chas->base_dir = g_strdup("/tmp");
 	
 	filename = g_strdup("/some/relative/path/file");

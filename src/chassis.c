@@ -514,7 +514,7 @@ int main_cmdline(int argc, char **argv) {
 	g_thread_init(NULL);
 #endif
 
-	log = chassis_log_init();
+	log = chassis_log_new();
 	log->min_lvl = G_LOG_LEVEL_MESSAGE; /* display messages while parsing or loading plugins */
 
 #ifdef _WIN32
@@ -531,7 +531,7 @@ int main_cmdline(int argc, char **argv) {
 #endif
 	g_log_set_default_handler(chassis_log_func, log);
 
-	srv = chassis_init();
+	srv = chassis_new();
 	srv->log = log; /* we need the log structure for the log-rotation */
 
 	/* assign the mysqld part to the */

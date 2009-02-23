@@ -43,7 +43,7 @@ START_TEST(test_log_compress) {
 	chassis_log *l;
 	GLogFunc old_log_func;
 
-	l = chassis_log_init();
+	l = chassis_log_new();
 
 	g_log_set_always_fatal(G_LOG_FATAL_MASK);
 

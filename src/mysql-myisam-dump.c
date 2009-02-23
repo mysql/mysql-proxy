@@ -1184,12 +1184,12 @@ int main(int argc, char **argv) {
 	g_thread_init(NULL);
 #endif
 
-	log = chassis_log_init();
+	log = chassis_log_new();
 	log->min_lvl = G_LOG_LEVEL_MESSAGE; /* display messages while parsing or loading plugins */
 	
 	g_log_set_default_handler(chassis_log_func, log);
 
-	chas = chassis_init();
+	chas = chassis_new();
 
 	i = 0;
 	base_main_entries[i++].arg_data  = &(print_version);
