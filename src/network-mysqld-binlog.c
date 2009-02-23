@@ -115,7 +115,7 @@ int network_mysqld_proto_get_binlog_event_header(network_packet *packet, network
 	int err = 0;
 
 	err = err || network_mysqld_proto_get_int32(packet, &event->timestamp);
-	err = err || network_mysqld_proto_get_int8(packet,  &event->event_type);
+	err = err || network_mysqld_proto_get_int8(packet,  (guint8 *)&event->event_type); /* map a enum to a guint8 */
 	err = err || network_mysqld_proto_get_int32(packet, &event->server_id);
 	err = err || network_mysqld_proto_get_int32(packet, &event->event_size);
 	err = err || network_mysqld_proto_get_int32(packet, &event->log_pos);
@@ -125,10 +125,9 @@ int network_mysqld_proto_get_binlog_event_header(network_packet *packet, network
 }
 
 int network_mysqld_proto_get_binlog_event(network_packet *packet, 
-		network_mysqld_binlog *binlog,
+		network_mysqld_binlog G_GNUC_UNUSED *binlog,
 		network_mysqld_binlog_event *event) {
 
-	network_mysqld_table *tbl;
 	int err = 0;
 
 	switch ((guchar)event->event_type) {
