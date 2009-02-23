@@ -272,7 +272,7 @@ void network_mysqld_priv_shutdown(chassis *chas, chassis_private *priv) {
 	}
 }
 
-void network_mysqld_priv_free(chassis *chas, chassis_private *priv) {
+void network_mysqld_priv_free(chassis G_GNUC_UNUSED *chas, chassis_private *priv) {
 	if (!priv) return;
 
 	g_ptr_array_free(priv->cons, TRUE);
@@ -485,7 +485,7 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
  * the packet is added to the con->recv_queue and contains a full mysql packet
  * with packet-header and everything 
  */
-network_socket_retval_t network_mysqld_read(chassis *srv, network_socket *con) {
+network_socket_retval_t network_mysqld_read(chassis G_GNUC_UNUSED*chas, network_socket *con) {
 	GString *packet = NULL;
 
 	/* check if the recv_queue is clean up to now */
@@ -533,7 +533,7 @@ network_socket_retval_t network_mysqld_read(chassis *srv, network_socket *con) {
 	return NETWORK_SOCKET_SUCCESS;
 }
 
-network_socket_retval_t network_mysqld_write(chassis *srv, network_socket *con) {
+network_socket_retval_t network_mysqld_write(chassis G_GNUC_UNUSED*chas, network_socket *con) {
 	network_socket_retval_t ret;
 
 	ret = network_socket_write(con, -1);
@@ -1436,7 +1436,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
  * @param user_data    the listening connection handle
  * 
  */
-void network_mysqld_con_accept(int event_fd, short events, void *user_data) {
+void network_mysqld_con_accept(int G_GNUC_UNUSED event_fd, short events, void *user_data) {
 	network_mysqld_con *listen_con = user_data;
 	network_mysqld_con *client_con;
 	network_socket *client;
