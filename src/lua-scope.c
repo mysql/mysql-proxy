@@ -87,7 +87,7 @@ void lua_scope_free(lua_scope *sc) {
 	g_free(sc);
 }
 
-void lua_scope_get(lua_scope *sc, const char* pos) {
+void lua_scope_get(lua_scope *sc, const char G_GNUC_UNUSED* pos) {
 #ifdef HAVE_GTHREAD
 /*	g_warning("%s: === waiting for lua-scope", pos); */
 	g_mutex_lock(sc->mutex);
@@ -469,7 +469,7 @@ static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t o
 		}
 	} else /* nsize != 0 */ {
 		if (osize == 0) { 		/* the plain malloc case */
-			size_t cur_size;
+			gint cur_size; /* g_atomic_inc_int() works against gints */
 			CHASSIS_STATS_ALLOC_INC_NAME(lua_mem);
 			CHASSIS_STATS_ADD_NAME(lua_mem_bytes, nsize);
 			
@@ -480,7 +480,7 @@ static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t o
 			return g_malloc(nsize);
 		} else /* osize != 0 */ {	/* the realloc case */
 			gpointer p = g_realloc(ptr, nsize);
-			size_t cur_size;
+			gint cur_size; /* g_atomic_inc_int() works against gints */
 
 			if (!p) return p;
 			
@@ -495,7 +495,7 @@ static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t o
 		}
 	}
 	/* the ifs should cover all cases demanded of the lua allocator function, if not, crash hard */
-	g_critical("%s: userdata = %p, ptr = %p, osize = %d, nsize = %d", G_STRLOC, userdata, ptr, osize, nsize);
+	g_critical("%s: userdata = %p, ptr = %p, osize = %"G_GSIZE_FORMAT", nsize = %"G_GSIZE_FORMAT, G_STRLOC, userdata, ptr, osize, nsize);
 	g_assert_not_reached();
 	return NULL;
 }
