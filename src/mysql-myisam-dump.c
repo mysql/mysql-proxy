@@ -228,7 +228,7 @@ int network_mysqld_proto_field_get(network_packet *packet,
 GPtrArray *network_mysqld_proto_fields_new_full(
 		GPtrArray *fielddefs,
 		gchar *null_bits,
-		guint null_bits_len) {
+		guint G_GNUC_UNUSED null_bits_len) {
 	GPtrArray *fields;
 	guint i;
 
@@ -588,7 +588,6 @@ int network_mysqld_proto_get_frm(network_packet *packet, network_mysqld_frm *frm
 	guint8 key_num_len;
 	guint16 u16_key_length;
 	guint32 u32_key_length; /* used if u16_key_info_length == 0xffff */
-	guint32 record_offset;
 	guint8 __dummy;
 
 	if (packet->data->str[0] != '\xfe' ||
@@ -1027,7 +1026,7 @@ void network_mysqld_frm_print(network_mysqld_frm *frm) {
 	V0_S(frm, comment, "s");
 }
 
-void network_mysqld_myd_print(network_mysqld_frm *frm, const char *filename) {
+void network_mysqld_myd_print(network_mysqld_frm G_GNUC_UNUSED *frm, const char *filename) {
 	GMappedFile *f;
 	GError *gerr = NULL;
 	network_packet *packet;

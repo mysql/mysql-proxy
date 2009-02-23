@@ -229,7 +229,7 @@ int network_mysqld_proto_field_get(network_packet *packet,
 GPtrArray *network_mysqld_proto_fields_new_full(
 		GPtrArray *fielddefs,
 		gchar *null_bits,
-		guint null_bits_len) {
+		guint G_GNUC_UNUSED null_bits_len) {
 	GPtrArray *fields;
 	guint i;
 
@@ -821,7 +821,6 @@ int replicate_binlog_dump_file(
 		 * if not, just skip a byte a retry until we found a valid header
 		 * */
 		while (19 == (packet->data->len = read(fd, packet->data->str, 19))) {
-			gssize len;
 			packet->data->str[packet->data->len] = '\0'; /* term the string */
 			packet->offset = 0;
 
