@@ -39,7 +39,7 @@
 #include "chassis-stats.h"
 #include "lua-registry-keys.h"
 
-static int lua_chassis_set_shutdown (lua_State *L) {
+static int lua_chassis_set_shutdown (lua_State G_GNUC_UNUSED *L) {
 	chassis_set_shutdown();
 
 	return 0;
@@ -75,7 +75,7 @@ static int lua_chassis_stats(lua_State *L) {
     const char *plugin_name = NULL;
     chassis *chas = NULL;
     chassis_plugin *plugin = NULL;
-    int i = 0;
+    guint i = 0;
     gboolean found_stats = FALSE;
     int nargs = lua_gettop(L);
 
@@ -265,7 +265,7 @@ static int lua_chassis_log_message(lua_State *L) {
 	g_assert(n == lua_gettop(L));
 	return retval;
 }
-static int lua_g_mem_profile(lua_State *L) {
+static int lua_g_mem_profile(lua_State G_GNUC_UNUSED *L) {
 	g_mem_profile();
 	return 0;
 }
