@@ -135,6 +135,7 @@ typedef int socklen_t;
 
 #include "sys-pedantic.h"
 #include "network-injection.h"
+#include "network-injection-lua.h"
 #include "network-backend.h"
 #include "glib-ext.h"
 #include "lua-env.h"
@@ -345,8 +346,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_handshake(network_mysqld_con *
 	network_mysqld_lua_stmt_ret ret = PROXY_NO_DECISION; /* send what the server gave us */
 #ifdef HAVE_LUA_H
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
-	network_socket   *recv_sock = con->server;
-	network_socket   *send_sock = con->client;
 
 	lua_State *L;
 
@@ -899,7 +898,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	char command = -1;
-	injection *inj;
 	network_socket *recv_sock = con->client;
 	GList   *chunk  = recv_sock->recv_queue->chunks->head;
 	GString *packet = chunk->data;
@@ -1224,8 +1222,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	network_socket *recv_sock, *send_sock;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	injection *inj = NULL;
-	chassis_plugin_config *config = con->config;
-	gint8 status;
 
 	recv_sock = con->server;
 	send_sock = con->client;
