@@ -23,6 +23,7 @@
 
 #include "network-socket.h"
 #include "network-mysqld-packet.h"
+#include "network-address-lua.h"
 #include "network-socket-lua.h"
 
 #define C(x) x, sizeof(x) - 1
@@ -72,8 +73,8 @@ static int proxy_socket_get(lua_State *L) {
 	}
 	g_critical("%s: sock->challenge: %p, sock->response: %p (looking for %s)", 
 			G_STRLOC,
-			sock->challenge,
-			sock->response,
+			(void *)sock->challenge,
+			(void *)sock->response,
 			key
 			);
 
