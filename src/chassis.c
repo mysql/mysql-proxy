@@ -843,8 +843,8 @@ int main_cmdline(int argc, char **argv) {
 						gchar ***data = entry.arg_data;
 						gchar **files = *data;
 						if (NULL != files) {
-							gint i;
-							for (i = 0; files[i]; i++) chassis_resolve_path(srv, &files[i]);
+							gint j;
+							for (j = 0; files[j]; j++) chassis_resolve_path(srv, &files[j]);
 						}
 						break;
 					}
