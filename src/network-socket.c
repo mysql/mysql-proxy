@@ -80,7 +80,13 @@
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"
 
+#ifndef DISABLE_DEPRECATED_DECL
 network_queue *network_queue_init() {
+	return network_queue_new();
+}
+#endif
+
+network_queue *network_queue_new() {
 	network_queue *queue;
 
 	queue = g_new0(network_queue, 1);
@@ -194,15 +200,20 @@ GString *network_queue_pop_string(network_queue *queue, gsize steal_len, GString
 	return dest;
 }
 
-
+#ifndef DISABLE_DEPRECATED_DECL
 network_socket *network_socket_init() {
+	return network_socket_new();
+}
+#endif
+
+network_socket *network_socket_new() {
 	network_socket *s;
 	
 	s = g_new0(network_socket, 1);
 
-	s->send_queue = network_queue_init();
-	s->recv_queue = network_queue_init();
-	s->recv_queue_raw = network_queue_init();
+	s->send_queue = network_queue_new();
+	s->recv_queue = network_queue_new();
+	s->recv_queue_raw = network_queue_new();
 
 	s->packet_len = PACKET_LEN_UNSET;
 
@@ -282,7 +293,7 @@ network_socket *network_socket_accept(network_socket *srv) {
 
 	g_return_val_if_fail(srv, NULL);
 
-	client = network_socket_init();
+	client = network_socket_new();
 
 	if (-1 == (client->fd = accept(srv->fd, &client->src->addr.common, &(client->src->len)))) {
 		network_socket_free(client);

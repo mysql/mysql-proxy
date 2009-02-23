@@ -538,7 +538,7 @@ static int network_mysqld_admin_plugin_apply_config(chassis *chas, chassis_plugi
 
 	config->listen_con = con;
 	
-	listen_sock = network_socket_init();
+	listen_sock = network_socket_new();
 	con->server = listen_sock;
 
 	/* set the plugin hooks as we want to apply them to the new connections too later */

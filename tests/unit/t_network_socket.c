@@ -30,7 +30,7 @@
 void test_network_socket_new() {
 	network_socket *sock;
 
-	sock = network_socket_init();
+	sock = network_socket_new();
 	g_assert(sock);
 
 	network_socket_free(sock);
@@ -39,7 +39,7 @@ void test_network_socket_new() {
 void test_network_queue_append() {
 	network_queue *q;
 
-	q = network_queue_init();
+	q = network_queue_new();
 	g_assert(q);
 
 	network_queue_append(q, g_string_new("123"));
@@ -52,7 +52,7 @@ void test_network_queue_peek_string() {
 	network_queue *q;
 	GString *s;
 
-	q = network_queue_init();
+	q = network_queue_new();
 	g_assert(q);
 
 	network_queue_append(q, g_string_new("123"));
@@ -84,7 +84,7 @@ void test_network_queue_pop_string() {
 	network_queue *q;
 	GString *s;
 
-	q = network_queue_init();
+	q = network_queue_new();
 	g_assert(q);
 
 	network_queue_append(q, g_string_new("123"));
@@ -136,7 +136,7 @@ void t_network_socket_bind(void) {
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
-	sock = network_socket_init();
+	sock = network_socket_new();
 
 	/* w/o a address set it should fail */
 	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_bind(sock)); /* should fail, no address */
@@ -148,7 +148,7 @@ void t_network_socket_bind(void) {
 	network_socket_free(sock);
 
 	/* bind again, to test if REUSEADDR works */
-	sock = network_socket_init();
+	sock = network_socket_new();
 	
 	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, TEST_ADDR_IP));
 	
@@ -168,13 +168,13 @@ void t_network_socket_connect(void) {
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
-	sock = network_socket_init();
+	sock = network_socket_new();
 
 	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, TEST_ADDR_IP));
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
 	
-	client = network_socket_init();
+	client = network_socket_new();
 	g_assert_cmpint(0, ==, network_address_set_address(client->dst, TEST_ADDR_IP));
 	g_assert_cmpint(NETWORK_SOCKET_ERROR_RETRY, ==, network_socket_connect(client)); /* it can't succeed as we don't accept() connections yet */
 

@@ -1526,7 +1526,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	 * check if we have a connection in the pool for this backend
 	 */
 	if (NULL == con->server) {
-		con->server = network_socket_init();
+		con->server = network_socket_new();
 		con->server->dst = network_address_copy(NULL, st->backend->addr);
 	
 		st->backend->connected_clients++;
@@ -1861,7 +1861,7 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 
 	config->listen_con = con;
 	
-	listen_sock = network_socket_init();
+	listen_sock = network_socket_new();
 	con->server = listen_sock;
 
 	/* set the plugin hooks as we want to apply them to the new connections too later */

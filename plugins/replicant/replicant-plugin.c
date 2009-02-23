@@ -469,7 +469,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_connect_server) {
 	chassis_plugin_config *config = con->config;
 	gchar *address = config->master_address;
 
-	con->server = network_socket_init();
+	con->server = network_socket_new();
 
 	if (0 != network_address_set_address(con->server->dst, address)) {
 		return -1;
