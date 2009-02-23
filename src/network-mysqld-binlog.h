@@ -232,5 +232,8 @@ NETWORK_API void network_mysqld_binlog_dump_free(network_mysqld_binlog_dump *dum
 NETWORK_API int network_mysqld_proto_append_binlog_dump(GString *packet, network_mysqld_binlog_dump *dump);
 
 
+NETWORK_API int network_mysqld_binlog_event_tablemap_get(
+		network_mysqld_binlog_event *event,
+		network_mysqld_table *tbl);
 
 #endif
