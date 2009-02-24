@@ -299,13 +299,16 @@ int network_mysqld_init(chassis *srv) {
 }
 
 
+network_mysqld_con *network_mysqld_con_init() {
+	return network_mysqld_con_new();
+}
 /**
  * create a connection 
  *
  * @param srv    global context
  * @return       a connection context
  */
-network_mysqld_con *network_mysqld_con_init() {
+network_mysqld_con *network_mysqld_con_new() {
 	network_mysqld_con *con;
 
 	con = g_new0(network_mysqld_con, 1);
@@ -1448,7 +1451,7 @@ void network_mysqld_con_accept(int G_GNUC_UNUSED event_fd, short events, void *u
 	if (!client) return;
 
 	/* looks like we open a client connection */
-	client_con = network_mysqld_con_init();
+	client_con = network_mysqld_con_new();
 	client_con->client = client;
 
 	network_mysqld_add_connection(listen_con->srv, client_con);

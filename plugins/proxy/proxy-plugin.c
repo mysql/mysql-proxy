@@ -1008,7 +1008,7 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 			case PROXY_SEND_QUERY:
 				/* send the injected queries
 				 *
-				 * injection_init(..., query);
+				 * injection_new(..., query);
 				 * 
 				 *  */
 
@@ -1743,7 +1743,7 @@ int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
 void network_mysqld_proxy_free(network_mysqld_con G_GNUC_UNUSED *con) {
 }
 
-chassis_plugin_config * network_mysqld_proxy_plugin_init(void) {
+chassis_plugin_config * network_mysqld_proxy_plugin_new(void) {
 	chassis_plugin_config *config;
 
 	config = g_new0(chassis_plugin_config, 1);
@@ -1851,7 +1851,7 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 	/** 
 	 * create a connection handle for the listen socket 
 	 */
-	con = network_mysqld_con_init();
+	con = network_mysqld_con_new();
 	network_mysqld_add_connection(chas, con);
 	con->config = config;
 
@@ -1900,7 +1900,7 @@ G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	p->name         = g_strdup("proxy");
 	p->version		= g_strdup("0.7.0");
 
-	p->init         = network_mysqld_proxy_plugin_init;
+	p->init         = network_mysqld_proxy_plugin_new;
 	p->get_options  = network_mysqld_proxy_plugin_get_options;
 	p->apply_config = network_mysqld_proxy_plugin_apply_config;
 	p->destroy      = network_mysqld_proxy_plugin_free;

@@ -173,7 +173,8 @@ struct network_mysqld_con {
 NETWORK_API void g_list_string_free(gpointer data, gpointer UNUSED_PARAM(user_data));
 NETWORK_API gboolean g_hash_table_true(gpointer UNUSED_PARAM(key), gpointer UNUSED_PARAM(value), gpointer UNUSED_PARAM(u));
 
-NETWORK_API network_mysqld_con *network_mysqld_con_init(void);
+NETWORK_API network_mysqld_con *network_mysqld_con_init(void) G_GNUC_DEPRECATED;
+NETWORK_API network_mysqld_con *network_mysqld_con_new(void);
 NETWORK_API void network_mysqld_con_free(network_mysqld_con *con);
 
 /** 
