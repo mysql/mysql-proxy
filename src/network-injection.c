@@ -98,6 +98,10 @@ guint network_injection_queue_len(network_injection_queue *q) {
  * Initialize a resultset struct
  */
 proxy_resultset_t *proxy_resultset_init() {
+	return proxy_resultset_new();
+}
+
+proxy_resultset_t *proxy_resultset_new() {
 	proxy_resultset_t *res;
     
 	res = g_new0(proxy_resultset_t, 1);

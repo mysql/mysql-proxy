@@ -376,7 +376,7 @@ static int proxy_resultset_get(lua_State *L) {
 		
 			if (res->rows_chunk_head) {
 		    
-				rows = proxy_resultset_init();
+				rows = proxy_resultset_new();
 				rows->rows_chunk_head = res->rows_chunk_head;
 				rows->row    = rows->rows_chunk_head;
 				rows->fields = res->fields;
@@ -480,7 +480,7 @@ static int proxy_injection_get(lua_State *L) {
 		proxy_resultset_t **res_p;
         
 		res_p = lua_newuserdata(L, sizeof(res));
-		*res_p = res = proxy_resultset_init();
+		*res_p = res = proxy_resultset_new();
 
 		/* only expose the resultset if really needed 
 		   FIXME: if the resultset is encoded in binary form, we can't provide it either.

@@ -99,7 +99,8 @@ typedef struct {
 NETWORK_API injection *injection_new(int id, GString *query);
 NETWORK_API void injection_free(injection *i);
 
-NETWORK_API proxy_resultset_t *proxy_resultset_init();
+NETWORK_API proxy_resultset_t *proxy_resultset_init() G_GNUC_DEPRECATED;
+NETWORK_API proxy_resultset_t *proxy_resultset_new();
 NETWORK_API void proxy_resultset_free(proxy_resultset_t *res);
 
 #endif /* _QUERY_HANDLING_H_ */
