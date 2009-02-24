@@ -72,7 +72,7 @@ GOptionEntry * mock_plugin_get_options(chassis_plugin_config *config) {
 	return config_entries;
 }
 
-static void devnull_log_func(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
+static void devnull_log_func(const gchar G_GNUC_UNUSED *log_domain, GLogLevelFlags G_GNUC_UNUSED log_level, const gchar G_GNUC_UNUSED *message, gpointer G_GNUC_UNUSED user_data) {
 	/* discard the output */
 }
 
