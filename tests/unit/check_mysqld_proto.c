@@ -111,7 +111,7 @@ void test_mysqld_proto_lenenc_int(void) {
  *
  */
 void test_mysqld_proto_int(void) {
-	guint64 length, value;
+	guint64 length;
 	guint8 value8;
 	guint16 value16;
 	guint32 value32;
@@ -164,7 +164,10 @@ void test_mysqld_proto_int(void) {
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_int48(&packet, &value64));
 	g_assert_cmpint(length, ==, value64);
 
-	length = 0x00fffffffffaUL; packet.offset = 0;
+	/* we need a ULL declaration here which might not be available, just shift it ourself */
+	length = 0x00ff; 
+	length <<= 32;
+	length |= 0xfffffffaUL; packet.offset = 0;
 	g_string_truncate(packet.data, 0);
 	g_assert(0 == network_mysqld_proto_append_int64(packet.data, length));
 	g_assert(packet.data->len == 8);
