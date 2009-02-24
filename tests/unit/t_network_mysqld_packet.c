@@ -276,7 +276,6 @@ void test_mysqld_auth_empty_pw(void) {
 		;
 	GString *packet;
 	network_mysqld_auth_response *auth;
-	int i;
 
 	auth = network_mysqld_auth_response_new();
 	g_string_assign(auth->username, "root");
@@ -337,7 +336,6 @@ void test_mysqld_auth_with_pw(void) {
 
 	GString *packet, *challenge;
 	network_mysqld_auth_response *auth;
-	int i;
 
 	auth = network_mysqld_auth_response_new();
 	g_string_assign(auth->username, "root");
