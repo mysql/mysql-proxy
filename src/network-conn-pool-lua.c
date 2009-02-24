@@ -237,7 +237,7 @@ int network_connection_pool_lua_add_connection(network_mysqld_con *con) {
  *         the new backend on success
  */
 network_socket *network_connection_pool_lua_swap(network_mysqld_con *con, int backend_ndx) {
-	backend_t *backend = NULL;
+	network_backend_t *backend = NULL;
 	network_socket *send_sock;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	chassis_private *g = con->srv->priv;

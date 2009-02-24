@@ -38,12 +38,12 @@ void t_network_backends_new() {
 }
 
 void t_network_backend_new() {
-	backend_t *b;
+	network_backend_t *b;
 
-	b = backend_init();
+	b = network_backend_new();
 	g_assert(b);
 
-	backend_free(b);
+	network_backend_free(b);
 }
 
 void t_network_backends_add() {
@@ -79,7 +79,7 @@ void t_network_backends_add() {
  */
 void t_network_backends_check() {
 	network_backends_t *backends;
-	backend_t *backend;
+	network_backend_t *backend;
 
 	backends = network_backends_new();
 	g_assert(backends);

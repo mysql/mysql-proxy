@@ -53,7 +53,7 @@
  */
 START_TEST(test_luaL_loadfile_factory) {
 #ifdef HAVE_LUA_H
-	lua_scope *sc = lua_scope_init();
+	lua_scope *sc = lua_scope_new();
 	g_assert(sc->L != NULL);
 	
 	/* lua_scope_load_script used to give a bus error, when supplying a non-existant script */

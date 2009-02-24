@@ -44,6 +44,10 @@ static int proxy_lua_panic (lua_State *L);
 static void *chassis_lua_alloc(void *userdata, void *ptr, size_t osize, size_t nsize);
 
 lua_scope *lua_scope_init(void) {
+	return lua_scope_new();
+}
+
+lua_scope *lua_scope_new(void) {
 	lua_scope *sc;
 
 	sc = g_new0(lua_scope, 1);

@@ -54,11 +54,15 @@ typedef struct {
 	guint connected_clients; /**< number of open connections to this backend for SQF */
 
 	GString *uuid;           /**< the UUID of the backend */
-} backend_t;
+} network_backend_t;
 
+typedef network_backend_t backend_t G_GNUC_DEPRECATED;
 
-NETWORK_API backend_t *backend_init();
-NETWORK_API void backend_free(backend_t *b);
+NETWORK_API network_backend_t *backend_init() G_GNUC_DEPRECATED;
+NETWORK_API void backend_free(network_backend_t *b) G_GNUC_DEPRECATED;
+
+NETWORK_API network_backend_t *network_backend_new();
+NETWORK_API void network_backend_free(network_backend_t *b);
 
 typedef struct {
 	GPtrArray *backends;
@@ -71,7 +75,7 @@ NETWORK_API network_backends_t *network_backends_new();
 NETWORK_API void network_backends_free(network_backends_t *);
 NETWORK_API int network_backends_add(network_backends_t *backends, /* const */ gchar *address, backend_type_t type);
 NETWORK_API int network_backends_check(network_backends_t *backends);
-NETWORK_API backend_t * network_backends_get(network_backends_t *backends, guint ndx);
+NETWORK_API network_backend_t * network_backends_get(network_backends_t *backends, guint ndx);
 NETWORK_API guint network_backends_count(network_backends_t *backends);
 
 #endif /* _BACKEND_H_ */

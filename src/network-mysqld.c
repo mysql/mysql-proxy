@@ -251,7 +251,7 @@ chassis_private *network_mysqld_priv_init(void) {
 	priv = g_new0(chassis_private, 1);
 
 	priv->cons = g_ptr_array_new();
-	priv->sc = lua_scope_init();
+	priv->sc = lua_scope_new();
 	priv->backends  = network_backends_new();
 
 	return priv;

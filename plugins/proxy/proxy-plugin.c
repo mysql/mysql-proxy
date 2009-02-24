@@ -1395,7 +1395,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	guint min_connected_clients = G_MAXUINT;
 	guint i;
 	gboolean use_pooled_connection = FALSE;
-	backend_t *cur;
+	network_backend_t *cur;
 
 	if (con->server) {
 		switch (network_socket_connect_finish(con->server)) {

@@ -27,10 +27,14 @@
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
 
-backend_t *backend_init() {
-	backend_t *b;
+network_backend_t *backend_init() {
+	return network_backend_new();
+}
 
-	b = g_new0(backend_t, 1);
+network_backend_t *network_backend_new() {
+	network_backend_t *b;
+
+	b = g_new0(network_backend_t, 1);
 
 	b->pool = network_connection_pool_init();
 	b->uuid = g_string_new(NULL);
@@ -38,8 +42,11 @@ backend_t *backend_init() {
 
 	return b;
 }
+void backend_free(network_backend_t *b) {
+	network_backend_free(b);
+}
 
-void backend_free(backend_t *b) {
+void network_backend_free(network_backend_t *b) {
 	if (!b) return;
 
 	network_connection_pool_free(b->pool);
@@ -68,9 +75,9 @@ void network_backends_free(network_backends_t *bs) {
 
 	g_mutex_lock(bs->backends_mutex);
 	for (i = 0; i < bs->backends->len; i++) {
-		backend_t *backend = bs->backends->pdata[i];
+		network_backend_t *backend = bs->backends->pdata[i];
 		
-		backend_free(backend);
+		network_backend_free(backend);
 	}
 	g_mutex_unlock(bs->backends_mutex);
 
@@ -81,11 +88,11 @@ void network_backends_free(network_backends_t *bs) {
 }
 
 int network_backends_add(network_backends_t *bs, /* const */ gchar *address, backend_type_t type) {
-	backend_t *new_backend;
+	network_backend_t *new_backend;
 	guint i;
 	gboolean is_known = FALSE;
 
-	new_backend = backend_init();
+	new_backend = network_backend_new();
 	new_backend->type = type;
 
 	if (0 != network_address_set_address(new_backend->addr, address)) {
@@ -95,10 +102,10 @@ int network_backends_add(network_backends_t *bs, /* const */ gchar *address, bac
 	/* check if this backend is already known */
 	g_mutex_lock(bs->backends_mutex);
 	for (i = 0; i < bs->backends->len; i++) {
-		backend_t *old_backend = bs->backends->pdata[i];
+		network_backend_t *old_backend = bs->backends->pdata[i];
 
 		if (strleq(S(old_backend->addr->name), S(new_backend->addr->name))) {
-			backend_free(new_backend);
+			network_backend_free(new_backend);
 
 			is_known = TRUE;
 			break;
@@ -138,7 +145,7 @@ int network_backends_check(network_backends_t *bs) {
 	bs->backend_last_check = now;
 
 	for (i = 0; i < bs->backends->len; i++) {
-		backend_t *cur = bs->backends->pdata[i];
+		network_backend_t *cur = bs->backends->pdata[i];
 
 		if (cur->state != BACKEND_STATE_DOWN) continue;
 
@@ -158,7 +165,7 @@ int network_backends_check(network_backends_t *bs) {
 	return backends_woken_up;
 }
 
-backend_t *network_backends_get(network_backends_t *bs, guint ndx) {
+network_backend_t *network_backends_get(network_backends_t *bs, guint ndx) {
 	if (ndx >= network_backends_count(bs)) return NULL;
 
 	/* FIXME: shouldn't we copy the backend or add ref-counting ? */	

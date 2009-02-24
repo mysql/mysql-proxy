@@ -43,7 +43,7 @@
  * @see backend_state_t backend_type_t
  */
 static int proxy_backend_get(lua_State *L) {
-	backend_t *backend = *(backend_t **)luaL_checkself(L);
+	network_backend_t *backend = *(network_backend_t **)luaL_checkself(L);
 	gsize keysize = 0;
 	const char *key = luaL_checklstring(L, 2, &keysize);
 
@@ -78,7 +78,7 @@ static int proxy_backend_get(lua_State *L) {
 }
 
 static int proxy_backend_set(lua_State *L) {
-	backend_t *backend = *(backend_t **)luaL_checkself(L);
+	network_backend_t *backend = *(network_backend_t **)luaL_checkself(L);
 	gsize keysize = 0;
 	const char *key = luaL_checklstring(L, 2, &keysize);
 
@@ -120,8 +120,8 @@ int network_backend_lua_getmetatable(lua_State *L) {
  * @see proxy_backend_get
  */
 static int proxy_backends_get(lua_State *L) {
-	backend_t *backend; 
-	backend_t **backend_p;
+	network_backend_t *backend; 
+	network_backend_t **backend_p;
 
 	network_backends_t *bs = *(network_backends_t **)luaL_checkself(L);
 	int backend_ndx = luaL_checkinteger(L, 2) - 1; /** lua is indexes from 1, C from 0 */

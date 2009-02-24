@@ -48,7 +48,7 @@ typedef struct {
 	lua_State *L;                  /**< lua state of the current connection */
 	int L_ref;                     /**< reference into the lua_scope's registry */
 
-	backend_t *backend;
+	network_backend_t *backend;
 	int backend_ndx;               /**< [lua] index into the backend-array */
 
 	gboolean connection_close;     /**< [lua] set by the lua code to close a connection */
