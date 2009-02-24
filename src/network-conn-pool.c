@@ -39,7 +39,7 @@
  *
  * @return a connection pool entry
  */
-network_connection_pool_entry *network_connection_pool_entry_init(void) {
+network_connection_pool_entry *network_connection_pool_entry_new(void) {
 	network_connection_pool_entry *e;
 
 	e = g_new0(network_connection_pool_entry, 1);
@@ -73,7 +73,7 @@ void network_connection_pool_entry_free(network_connection_pool_entry *e, gboole
  *
  * @param q a GQueue to free
  *
- * @see network_connection_pool_init
+ * @see network_connection_pool_new
  * @see GDestroyFunc
  */
 static void g_queue_free_all(gpointer q) {
@@ -88,7 +88,7 @@ static void g_queue_free_all(gpointer q) {
 /**
  * init a connection pool
  */
-network_connection_pool *network_connection_pool_init(void) {
+network_connection_pool *network_connection_pool_new(void) {
 	network_connection_pool *pool;
 
 	pool = g_new0(network_connection_pool, 1);
@@ -214,7 +214,7 @@ network_connection_pool_entry *network_connection_pool_add(network_connection_po
 	network_connection_pool_entry *entry;
 	GQueue *conns = NULL;
 
-	entry = network_connection_pool_entry_init();
+	entry = network_connection_pool_entry_new();
 	entry->sock = sock;
 	entry->pool = pool;
 

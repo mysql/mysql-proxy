@@ -47,7 +47,8 @@ NETWORK_API network_connection_pool_entry *network_connection_pool_add(network_c
 NETWORK_API void network_connection_pool_remove(network_connection_pool *pool, network_connection_pool_entry *entry);
 NETWORK_API GQueue *network_connection_pool_get_conns(network_connection_pool *pool, GString *username, GString *);
 
-NETWORK_API network_connection_pool *network_connection_pool_init(void);
+NETWORK_API network_connection_pool *network_connection_pool_init(void) G_GNUC_DEPRECATED;
+NETWORK_API network_connection_pool *network_connection_pool_new(void);
 NETWORK_API void network_connection_pool_free(network_connection_pool *pool);
 
 #endif

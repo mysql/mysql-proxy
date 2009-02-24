@@ -36,7 +36,7 @@ network_backend_t *network_backend_new() {
 
 	b = g_new0(network_backend_t, 1);
 
-	b->pool = network_connection_pool_init();
+	b->pool = network_connection_pool_new();
 	b->uuid = g_string_new(NULL);
 	b->addr = network_address_new();
 
