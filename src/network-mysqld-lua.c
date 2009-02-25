@@ -227,7 +227,7 @@ int network_mysqld_lua_load_script(lua_scope *sc, const char *lua_script) {
 	lua_scope_load_script(sc, lua_script);
 
 	if (lua_isstring(sc->L, -1)) {
-		g_warning("%s: lua_load_file(%s) failed: %s", 
+		g_critical("%s: lua_load_file(%s) failed: %s", 
 				G_STRLOC, 
 				lua_script, lua_tostring(sc->L, -1));
 
