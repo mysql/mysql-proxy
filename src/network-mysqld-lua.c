@@ -259,6 +259,9 @@ int network_mysqld_lua_load_script(lua_scope *sc, const char *lua_script) {
  *
  * if the script is cached we have to point the global proxy object
  *
+ * @retval 0 success (even if we do not have a script)
+ * @retval -1 The script failed to load, most likely because of a syntax error.
+ * @retval -2 The script failed to execute.
  */
 int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char *lua_script) {
 	lua_State *L = NULL;
@@ -301,7 +304,7 @@ int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char
 	/* handles loading the file from disk/cache*/
 	if (0 != network_mysqld_lua_load_script(sc, lua_script)) {
 		/* loading script failed */
-		return 0;
+		return -1;
 	}
 
 	/* sets up global tables */
@@ -440,7 +443,7 @@ int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char
 
 		luaL_unref(sc->L, LUA_REGISTRYINDEX, st->L_ref);
 
-		return 0;
+		return -2;
 	}
 
 	st->L = L;

@@ -1,0 +1,2 @@
+SELECT 1 /* BUG #35669 */;
+ERROR 07000: MySQL Proxy Lua script failed to load. Check the error log.

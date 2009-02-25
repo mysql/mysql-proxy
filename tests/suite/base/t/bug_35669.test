@@ -16,4 +16,5 @@
 # 
 #  $%ENDLICENSE%$
 ## fails with a syntax error in lua script
+--error 1105 07000 "MySQL Proxy Lua script failed to load. Check the error log."
 SELECT 1 /* BUG #35669 */;

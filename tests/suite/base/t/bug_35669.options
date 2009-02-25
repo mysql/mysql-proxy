@@ -15,17 +15,9 @@
  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
  $%ENDLICENSE%$ --]]
-local options =    {
-    ["proxy-backend-addresses"] = PROXY_HOST .. ':' .. PROXY_MASTER_PORT ,
-    ["proxy-address"]           = PROXY_HOST .. ':' .. PROXY_PORT ,
-    ["admin-address"]           = PROXY_HOST .. ':' .. ADMIN_PORT ,
-    ["pid-file"]                = PROXY_PIDFILE,
-    ["proxy-lua-script"]        = 'bug_35669.lua',
-    ["plugin-dir"]              = PROXY_LIBPATH,
-    }
 
 --
 -- starts a Proxy with faulty script
 --
-start_proxy('bug_35669', options)
+start_proxy('bug_35669', default_proxy_options)
 
