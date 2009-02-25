@@ -472,8 +472,14 @@ static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t o
 			return NULL;
 		}
 	} else /* nsize != 0 */ {
+		/* track the maximum of the mem-usage inside lua
+		 *
+		 * g_atomic_... works against signed integers, but we actually would need something bigger to be safe
+		 *
+		 * stats may be wrong if the lua-mem-* counters actually go about MAX_INT 
+		 */
 		if (osize == 0) { 		/* the plain malloc case */
-			gint cur_size; /* g_atomic_inc_int() works against gints */
+			gint cur_size;
 			CHASSIS_STATS_ALLOC_INC_NAME(lua_mem);
 			CHASSIS_STATS_ADD_NAME(lua_mem_bytes, nsize);
 			
@@ -484,7 +490,7 @@ static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t o
 			return g_malloc(nsize);
 		} else /* osize != 0 */ {	/* the realloc case */
 			gpointer p = g_realloc(ptr, nsize);
-			gint cur_size; /* g_atomic_inc_int() works against gints */
+			gint cur_size;
 
 			if (!p) return p;
 			
