@@ -254,7 +254,6 @@ static network_mysqld_lua_stmt_ret admin_lua_read_query(network_mysqld_con *con)
 	network_socket *recv_sock = con->client;
 	GList   *chunk  = recv_sock->recv_queue->chunks->head;
 	GString *packet = chunk->data;
-	int register_callback_ret = 0;
 
 	if (packet->len < NET_HEADER_SIZE) return PROXY_SEND_QUERY; /* packet too short */
 
@@ -277,23 +276,22 @@ static network_mysqld_lua_stmt_ret admin_lua_read_query(network_mysqld_con *con)
 	/* ok, here we go */
 
 #ifdef HAVE_LUA_H
-	if ((register_callback_ret = network_mysqld_con_lua_register_callback(con, con->config->lua_script))) {
-		switch (register_callback_ret) {
-			case -1:
-				con->client->packet_id++;
-				network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to load. Check the error log."));
-				con->state = CON_STATE_SEND_ERROR;
-				return PROXY_SEND_RESULT;
-				break;
-			case -2:
-				con->client->packet_id++;
-				network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
-				con->state = CON_STATE_SEND_ERROR;
-				return PROXY_SEND_RESULT;
-				break;
-			default:
-				g_assert_not_reached();
-		}
+	switch(network_mysqld_con_lua_register_callback(con, con->config->lua_script)) {
+		case REGISTER_CALLBACK_SUCCESS:
+			break;
+		case REGISTER_CALLBACK_LOAD_FAILED:
+			con->client->packet_id++;
+			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to load. Check the error log."));
+			con->state = CON_STATE_SEND_ERROR;
+			return PROXY_SEND_RESULT;
+		case REGISTER_CALLBACK_EXECUTE_FAILED:
+			con->client->packet_id++;
+			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
+			con->state = CON_STATE_SEND_ERROR;
+			return PROXY_SEND_RESULT;
+		default:
+			g_assert_not_reached();
+			break;
 	}
 
 	if (st->L) {

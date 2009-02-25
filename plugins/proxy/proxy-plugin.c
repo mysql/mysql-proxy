@@ -189,7 +189,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_co
 	injection *inj = NULL;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	network_mysqld_lua_stmt_ret ret = PROXY_NO_DECISION;
-	int register_callback_ret = 0;
 
 	/**
 	 * check if we want to forward the statement to the client 
@@ -204,23 +203,22 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_co
 #ifdef HAVE_LUA_H
 	/* call the lua script to pick a backend
 	 * */
-	if ((register_callback_ret = network_mysqld_con_lua_register_callback(con, con->config->lua_script))) {
-		switch (register_callback_ret) {
-			case -1:
-				con->client->packet_id++;
-				network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to load. Check the error log."));
-				con->state = CON_STATE_SEND_ERROR;
-				return PROXY_SEND_RESULT;
-				break;
-			case -2:
-				con->client->packet_id++;
-				network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
-				con->state = CON_STATE_SEND_ERROR;
-				return PROXY_SEND_RESULT;
-				break;
-			default:
-				g_assert_not_reached();
-		}
+	switch(network_mysqld_con_lua_register_callback(con, con->config->lua_script)) {
+		case REGISTER_CALLBACK_SUCCESS:
+			break;
+		case REGISTER_CALLBACK_LOAD_FAILED:
+			con->client->packet_id++;
+			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to load. Check the error log."));
+			con->state = CON_STATE_SEND_ERROR;
+			return PROXY_SEND_RESULT;
+		case REGISTER_CALLBACK_EXECUTE_FAILED:
+			con->client->packet_id++;
+			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
+			con->state = CON_STATE_SEND_ERROR;
+			return PROXY_SEND_RESULT;
+		default:
+			g_assert_not_reached();
+			break;
 	}
 	
 
@@ -372,7 +370,7 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_handshake(network_mysqld_con *
 	   ignore the return code from network_mysqld_con_lua_register_callback, because we cannot do anything about it,
 	   it would always show up as ERROR 2013, which is not helpful.
 	 */
-	network_mysqld_con_lua_register_callback(con, con->config->lua_script);
+	(void)network_mysqld_con_lua_register_callback(con, con->config->lua_script);
 
 	if (!st->L) return ret;
 
@@ -525,7 +523,7 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) 
 	   ignore the return code from network_mysqld_con_lua_register_callback, because we cannot do anything about it,
 	   it would always show up as ERROR 2013, which is not helpful.	
 	*/
-	network_mysqld_con_lua_register_callback(con, con->config->lua_script);
+	(void)network_mysqld_con_lua_register_callback(con, con->config->lua_script);
 
 	if (!st->L) return 0;
 
@@ -773,7 +771,7 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_auth_result(network_mysqld_con
 	   ignore the return code from network_mysqld_con_lua_register_callback, because we cannot do anything about it,
 	   it would always show up as ERROR 2013, which is not helpful.	
 	*/
-	network_mysqld_con_lua_register_callback(con, con->config->lua_script);
+	(void)network_mysqld_con_lua_register_callback(con, con->config->lua_script);
 
 	if (!st->L) return 0;
 
@@ -927,7 +925,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 	GList   *chunk  = recv_sock->recv_queue->chunks->head;
 	GString *packet = chunk->data;
 	chassis_plugin_config *config = con->config;
-	int register_callback_ret = 0;
 
 	if (!config->profiling) return PROXY_SEND_QUERY;
 
@@ -961,23 +958,22 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 	/* ok, here we go */
 
 #ifdef HAVE_LUA_H
-	if ((register_callback_ret = network_mysqld_con_lua_register_callback(con, con->config->lua_script))) {
-		switch (register_callback_ret) {
-			case -1:
-				con->client->packet_id++;
-				network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to load. Check the error log."));
-				con->state = CON_STATE_SEND_ERROR;
-				return PROXY_SEND_RESULT;
-				break;
-			case -2:
-				con->client->packet_id++;
-				network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
-				con->state = CON_STATE_SEND_ERROR;
-				return PROXY_SEND_RESULT;
-				break;
-			default:
-				g_assert_not_reached();
-		}
+	switch(network_mysqld_con_lua_register_callback(con, con->config->lua_script)) {
+		case REGISTER_CALLBACK_SUCCESS:
+			break;
+		case REGISTER_CALLBACK_LOAD_FAILED:
+			con->client->packet_id++;
+			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to load. Check the error log."));
+			con->state = CON_STATE_SEND_ERROR;
+			return PROXY_SEND_RESULT;
+		case REGISTER_CALLBACK_EXECUTE_FAILED:
+			con->client->packet_id++;
+			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
+			con->state = CON_STATE_SEND_ERROR;
+			return PROXY_SEND_RESULT;
+		default:
+			g_assert_not_reached();
+			break;
 	}
 
 	if (st->L) {
@@ -1359,7 +1355,7 @@ static network_mysqld_lua_stmt_ret proxy_lua_connect_server(network_mysqld_con *
 	   ignore the return code from network_mysqld_con_lua_register_callback, because we cannot do anything about it,
 	   it would always show up as ERROR 2013, which is not helpful.
 	*/
-	network_mysqld_con_lua_register_callback(con, con->config->lua_script);
+	(void)network_mysqld_con_lua_register_callback(con, con->config->lua_script);
 
 	if (!st->L) return 0;
 
@@ -1640,7 +1636,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 
 static network_mysqld_lua_stmt_ret proxy_lua_disconnect_client(network_mysqld_con *con) {
 	network_mysqld_lua_stmt_ret ret = PROXY_NO_DECISION;
-	int register_callback_ret = 0;
 
 #ifdef HAVE_LUA_H
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
@@ -1649,15 +1644,15 @@ static network_mysqld_lua_stmt_ret proxy_lua_disconnect_client(network_mysqld_co
 	/* call the lua script to pick a backend
 	 * */
 	/* this error handling is different, as we no longer have a client. */
-	if ((register_callback_ret = network_mysqld_con_lua_register_callback(con, con->config->lua_script))) {
-		switch (register_callback_ret) {
-			case -1:
-			case -2:
-				return ret;
-				break;
-			default:
-				g_assert_not_reached();
-		}
+	switch(network_mysqld_con_lua_register_callback(con, con->config->lua_script)) {
+		case REGISTER_CALLBACK_SUCCESS:
+			break;
+		case REGISTER_CALLBACK_LOAD_FAILED:
+		case REGISTER_CALLBACK_EXECUTE_FAILED:
+			return ret;
+		default:
+			g_assert_not_reached();
+			break;
 	}
 
 	if (!st->L) return 0;

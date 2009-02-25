@@ -33,6 +33,12 @@ typedef enum {
 	PROXY_IGNORE_RESULT       /** for read_query_result */
 } network_mysqld_lua_stmt_ret;
 
+typedef enum {
+	REGISTER_CALLBACK_SUCCESS,
+	REGISTER_CALLBACK_LOAD_FAILED,
+	REGISTER_CALLBACK_EXECUTE_FAILED
+} network_mysqld_register_callback_ret;
+
 NETWORK_API int network_mysqld_con_getmetatable(lua_State *L);
 NETWORK_API void network_mysqld_lua_init_global_fenv(lua_State *L);
 
@@ -63,7 +69,7 @@ NETWORK_API network_mysqld_con_lua_t *network_mysqld_con_lua_new();
 NETWORK_API void network_mysqld_con_lua_free(network_mysqld_con_lua_t *st);
 
 /** be sure to include network-mysqld.h */
-NETWORK_API int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char *lua_script);
+NETWORK_API network_mysqld_register_callback_ret network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char *lua_script);
 NETWORK_API int network_mysqld_con_lua_handle_proxy_response(network_mysqld_con *con, const char *lua_script);
 
 #endif

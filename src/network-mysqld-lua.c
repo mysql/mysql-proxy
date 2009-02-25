@@ -263,7 +263,7 @@ int network_mysqld_lua_load_script(lua_scope *sc, const char *lua_script) {
  * @retval -1 The script failed to load, most likely because of a syntax error.
  * @retval -2 The script failed to execute.
  */
-int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char *lua_script) {
+network_mysqld_register_callback_ret network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char *lua_script) {
 	lua_State *L = NULL;
 	network_mysqld_con_lua_t *st   = con->plugin_con_state;
 	chassis_private *g = con->srv->priv; 
@@ -274,7 +274,7 @@ int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char
 	network_mysqld_con **con_p;
 	int stack_top;
 
-	if (!lua_script) return 0;
+	if (!lua_script) return REGISTER_CALLBACK_SUCCESS;
 
 	if (st->L) {
 		/* we have to rewrite _G.proxy to point to the local proxy */
@@ -298,13 +298,13 @@ int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char
 
 		g_assert(lua_isfunction(L, -1));
 
-		return 0; /* the script-env already setup, get out of here */
+		return REGISTER_CALLBACK_SUCCESS; /* the script-env already setup, get out of here */
 	}
 
 	/* handles loading the file from disk/cache*/
 	if (0 != network_mysqld_lua_load_script(sc, lua_script)) {
 		/* loading script failed */
-		return -1;
+		return REGISTER_CALLBACK_LOAD_FAILED;
 	}
 
 	/* sets up global tables */
@@ -443,7 +443,7 @@ int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char
 
 		luaL_unref(sc->L, LUA_REGISTRYINDEX, st->L_ref);
 
-		return -2;
+		return REGISTER_CALLBACK_EXECUTE_FAILED;
 	}
 
 	st->L = L;
@@ -451,7 +451,7 @@ int network_mysqld_con_lua_register_callback(network_mysqld_con *con, const char
 	g_assert(lua_isfunction(L, -1));
 	g_assert(lua_gettop(L) - stack_top == 1);
 
-	return 0;
+	return REGISTER_CALLBACK_SUCCESS;
 }
 
 /**
