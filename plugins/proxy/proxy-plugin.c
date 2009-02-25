@@ -216,9 +216,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_co
 			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
 			con->state = CON_STATE_SEND_ERROR;
 			return PROXY_SEND_RESULT;
-		default:
-			g_assert_not_reached();
-			break;
 	}
 	
 
@@ -971,9 +968,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
 			con->state = CON_STATE_SEND_ERROR;
 			return PROXY_SEND_RESULT;
-		default:
-			g_assert_not_reached();
-			break;
 	}
 
 	if (st->L) {
@@ -1650,9 +1644,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_disconnect_client(network_mysqld_co
 		case REGISTER_CALLBACK_LOAD_FAILED:
 		case REGISTER_CALLBACK_EXECUTE_FAILED:
 			return ret;
-		default:
-			g_assert_not_reached();
-			break;
 	}
 
 	if (!st->L) return 0;
