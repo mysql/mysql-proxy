@@ -85,6 +85,9 @@ static void g_queue_free_all(gpointer q) {
 	g_queue_free(queue);
 }
 
+network_connection_pool *network_connection_pool_init(void) {
+	return network_connection_pool_new();
+}
 /**
  * init a connection pool
  */
