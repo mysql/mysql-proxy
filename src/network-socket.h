@@ -113,18 +113,14 @@ typedef struct {
 	GString *default_db;     /** default-db of this side of the connection */
 } network_socket;
 
-#ifndef DISABLE_DEPRECATED_DECL
 NETWORK_API network_queue *network_queue_init(void) G_GNUC_DEPRECATED;
-#endif
 NETWORK_API network_queue *network_queue_new(void);
 NETWORK_API void network_queue_free(network_queue *queue);
 NETWORK_API int network_queue_append(network_queue *queue, GString *chunk);
 NETWORK_API GString *network_queue_pop_string(network_queue *queue, gsize steal_len, GString *dest);
 NETWORK_API GString *network_queue_peek_string(network_queue *queue, gsize peek_len, GString *dest);
 
-#ifndef DISABLE_DEPRECATED_DECL
 NETWORK_API network_socket *network_socket_init(void) G_GNUC_DEPRECATED;
-#endif
 NETWORK_API network_socket *network_socket_new(void);
 NETWORK_API void network_socket_free(network_socket *s);
 NETWORK_API network_socket_retval_t network_socket_write(network_socket *con, int send_chunks);
