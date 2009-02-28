@@ -395,6 +395,7 @@ int main_cmdline(int argc, char **argv) {
 	guint invoke_dbg_on_crash = 0;
 	guint auto_restart = 0;
 	guint max_files_number = 8192;
+	gint event_thread_count = 0;
 #ifndef _WIN32
 	struct rlimit max_files_rlimit;
 #endif
@@ -502,7 +503,7 @@ int main_cmdline(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(invoke_dbg_on_crash);
 	main_entries[i++].arg_data  = &(auto_restart);
 	main_entries[i++].arg_data  = &(max_files_number);
-	main_entries[i++].arg_data  = &(srv->event_thread_count);
+	main_entries[i++].arg_data  = &(event_thread_count);
 
 	option_ctx = g_option_context_new("- MySQL App Shell");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
@@ -890,6 +891,16 @@ int main_cmdline(int argc, char **argv) {
 		exit_code = EXIT_FAILURE;
 		goto exit_nicely;
 	}
+
+	/* make sure that he max-thread-count isn't negative */
+	if (event_thread_count < 0) {
+		g_critical("unknown option: %s", argv[1]);
+
+		exit_code = EXIT_FAILURE;
+		goto exit_nicely;
+	}
+
+	srv->event_thread_count = event_thread_count;
 	
 #ifndef _WIN32	
 	signal(SIGPIPE, SIG_IGN);
@@ -990,7 +1001,6 @@ int main_cmdline(int argc, char **argv) {
 		}
 	}
 #endif
-
 	if (chassis_mainloop(srv)) {
 		/* looks like we failed */
 

@@ -89,7 +89,7 @@ GPrivate *tls_event_base_key = NULL;
  *
  * @see network_connection_pool_lua_add_connection()
  */
-void chassis_event_add_local(chassis *chas, struct event *ev) {
+void chassis_event_add_local(chassis G_GNUC_UNUSED *chas, struct event *ev) {
 	struct event_base *event_base = ev->ev_base;
 	chassis_event_op_t *op;
 
@@ -115,7 +115,7 @@ void chassis_event_add_local(chassis *chas, struct event *ev) {
  *
  * @see chassis_event_add()
  */
-void chassis_event_handle(int event_fd, short events, void *user_data) {
+void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events, void *user_data) {
 	chassis_event_thread_t *event_thread = user_data;
 	struct event_base *event_base = event_thread->event_base;
 	chassis *chas = event_thread->chas;
@@ -163,7 +163,7 @@ void chassis_event_thread_free(chassis_event_thread_t *event_thread) {
  *
  * @see chassis_event_add_local()
  */
-void chassis_event_thread_set_event_base(chassis_event_thread_t *e, struct event_base *event_base) {
+void chassis_event_thread_set_event_base(chassis_event_thread_t G_GNUC_UNUSED *e, struct event_base *event_base) {
 	tls_event_base_key = g_private_new(NULL);
 
 	g_private_set(tls_event_base_key, event_base);
@@ -193,7 +193,7 @@ chassis_event_threads_t *chassis_event_threads_new() {
 }
 
 void chassis_event_threads_free(chassis_event_threads_t *threads) {
-	gint i;
+	guint i;
 
 	if (!threads) return;
 
@@ -269,7 +269,7 @@ void *chassis_event_thread_loop(chassis_event_thread_t *event_thread) {
 }
 
 void chassis_event_threads_start(chassis_event_threads_t *threads) {
-	gint i;
+	guint i;
 
 	for (i = 1; i < threads->event_threads->len; i++) { /* the 1st is the main-thread and already set up */
 		chassis_event_thread_t *event_thread = threads->event_threads->pdata[i];
