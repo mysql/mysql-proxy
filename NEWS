@@ -1,20 +1,17 @@
-
 0.7.0 - 
-  * split the code into a command-line interface and a library
-  * moved the proxy and the admin code into modules
-  * added unit-testing for the lua scripts
-  * added a error-msg if trailing options without dashes are specified
-  * added a script-cache with automatic reload on change
-  * added chassis with config-file support
-  * added buffered IO on unix
-  * added lua-scope that is shared between the plugins
-  * added a option to disable COM_CHANGE_USER on connection reuse
-  * removed explicit lua_gc() in favour of automatic lua_step()
-  * fixed tutorial-inject.lua to start indexing at 1 (#32088)
-  * proxy backends now live in proxy.global.backends, not proxy.backends
-    and are shared between plugins
+
+  We changed the code-structure in 0.7.0:
+
+  * split the code into a command-line interface (chassis) and 
+    a library (proxy-core)
+  * moved the proxy and the admin code into plugins
+  * added a library and cmdline interface to dump binlogs incl. MySQL 5.1 RBR
+  * added mysql-myisam-dump to dump the content of a .FRM files and .MYD files
+
+  Details on the different sections are in the ChangeLog
 
 0.6.1 - 
+
   * added new features to run-tests.lua (see README.TESTS)
   * fixed error handling for socket functions on win32
   * fixed sending fake server-greetings in connect_server()
