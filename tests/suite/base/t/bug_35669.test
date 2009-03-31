@@ -21,6 +21,10 @@
 --error 1105 07000 "(bug_35669-mock) >SELECT 1<"
 SELECT 1;
 
-## fails with a syntax error in lua script
+## fails with a syntax error in lua script if connected through another proxy
 --error 1105 07000 "MySQL Proxy Lua script failed to load. Check the error log."
 connect (faulty,127.0.0.1,root,,,14040);
+
+## fails with a syntax error in lua script if connected directly
+--error 1105 07000 "MySQL Proxy Lua script failed to load. Check the error log."
+connect (faultydirect,127.0.0.1,root,,,14070);
