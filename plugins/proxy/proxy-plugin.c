@@ -451,6 +451,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	network_socket *recv_sock, *send_sock;
 	network_mysqld_auth_challenge *challenge;
 	GString *challenge_packet;
+	guint8 status = 0;
 	int err = 0;
 
 	send_sock = con->client;
@@ -461,6 +462,19 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 	if (err) return NETWORK_SOCKET_ERROR;
+
+	err = err || network_mysqld_proto_peek_int8(&packet, &status);
+	if (err) return NETWORK_SOCKET_ERROR;
+
+	/* handle ERR packets directly */
+	if (status == 0xff) {
+		send_sock->packet_id = recv_sock->packet_id;
+
+		/* move the chunk from one queue to the next */
+		network_queue_append(send_sock->send_queue, g_queue_pop_tail(recv_sock->recv_queue->chunks));
+
+		return NETWORK_SOCKET_ERROR; /* it sends what is in the send-queue and hangs up */
+	}
 
 	challenge = network_mysqld_auth_challenge_new();
 	if (network_mysqld_proto_get_auth_challenge(&packet, challenge)) {
@@ -1345,13 +1359,21 @@ static network_mysqld_lua_stmt_ret proxy_lua_connect_server(network_mysqld_con *
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	lua_State *L;
 
-	/* call the lua script to pick a backend
-	   ignore the return code from network_mysqld_con_lua_register_callback, because we cannot do anything about it,
-	   it would always show up as ERROR 2013, which is not helpful.
-	*/
-	(void)network_mysqld_con_lua_register_callback(con, con->config->lua_script);
+	/**
+	 * if loading the script fails return a new error 
+	 */
+	switch (network_mysqld_con_lua_register_callback(con, con->config->lua_script)) {
+	case REGISTER_CALLBACK_SUCCESS:
+		break;
+	case REGISTER_CALLBACK_LOAD_FAILED:
+		network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to load. Check the error log."));
+		return PROXY_SEND_RESULT;
+	case REGISTER_CALLBACK_EXECUTE_FAILED:
+		network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
+		return PROXY_SEND_RESULT;
+	}
 
-	if (!st->L) return 0;
+	if (!st->L) return PROXY_NO_DECISION;
 
 	L = st->L;
 
