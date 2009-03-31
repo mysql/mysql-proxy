@@ -17,7 +17,7 @@
  $%ENDLICENSE%$ --]]
 
 --
--- starts a Proxy with faulty script
+-- starts a Proxy with faulty script and a mock-backend that ACKs our login
 --
-start_proxy('bug_35669', default_proxy_options)
+chain_proxy('bug_35669-mock.lua','bug_35669-test.lua')
 

@@ -15,6 +15,12 @@
 #  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 # 
 #  $%ENDLICENSE%$
+
+## execute something on the default connection to suppress a warning from
+## mysqltest that there was no successful query sent
+--error 1105 07000 "(bug_35669-mock) >SELECT 1<"
+SELECT 1;
+
 ## fails with a syntax error in lua script
 --error 1105 07000 "MySQL Proxy Lua script failed to load. Check the error log."
-SELECT 1 /* BUG #35669 */;
+connect (faulty,127.0.0.1,root,,,14040);

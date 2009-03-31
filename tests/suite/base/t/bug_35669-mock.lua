@@ -24,3 +24,5 @@ end
 function read_query (packet)
    faulty(1)
 end
+
+

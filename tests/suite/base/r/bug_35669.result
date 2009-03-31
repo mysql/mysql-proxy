@@ -1,2 +1,4 @@
-SELECT 1 /* BUG #35669 */;
-ERROR 07000: MySQL Proxy Lua script failed to load. Check the error log.
+SELECT 1;
+ERROR 07000: (bug_35669-mock) >SELECT 1<
+connect(127.0.0.1,root,,test,14040,);
+ERROR HY000: #07000MySQL Proxy Lua script failed to load. Check the error log.
