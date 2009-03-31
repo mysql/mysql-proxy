@@ -2,7 +2,8 @@ EXTRA_DIST = \
 		bug_30867.lua \
 		bug_30867.options \
 		bug_30867.test \
-		bug_35669.lua \
+		bug_35669-test.lua \
+		bug_35669-mock.lua \
 		bug_35669.options \
 		bug_35669.test \
 		bug_43078-test.lua \
