@@ -5,10 +5,12 @@ BUILD_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la $(GTHREAD_LIBS
 
 BUILT_SOURCES =
 if USE_WRAPPER_SCRIPT
+## we are self-contained
+## put all the binaries into a "hidden" location, the wrapper scripts are in ./scripts/
+pkglib_PROGRAMS = mysql-binlog-dump mysql-proxy mysql-myisam-dump
+else
 bin_PROGRAMS            = mysql-binlog-dump mysql-myisam-dump
 sbin_PROGRAMS			= mysql-proxy
-else
-sbin_PROGRAMS			= mysql-proxy mysql-binlog-dump mysql-myisam-dump
 endif
 
 mysql_proxy_SOURCES		= chassis.c 

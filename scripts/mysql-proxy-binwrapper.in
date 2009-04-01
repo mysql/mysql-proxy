@@ -18,7 +18,16 @@
 #
 # $%ENDLICENSE%$ 
 #
-# wrapper script for sbin/mysql-proxy
+# wrapper script for self-contained packaging
+#
+# we assume that this script is located in
+#
+#   {basedir}/bin/mysql-proxy
+#
+# and wants to call
+#
+#   {basedir}/lib/mysql-proxy/mysql-proxy
+#
 
 scriptdir=`dirname $0`
 scriptname=`basename $0`
@@ -28,4 +37,4 @@ scriptdir=`dirname "$scriptdir"`
 LUA_PATH="$scriptdir"/share/@PACKAGE_NAME@/?.lua
 LUA_CPATH="$scriptdir"/lib/@PACKAGE_NAME@/?.so
 export @DYNLIB_PATH_VAR@ LUA_PATH LUA_CPATH
-exec "$scriptdir/sbin/$scriptname" "$@"
+exec "$scriptdir/lib/@PACKAGE_NAME@/$scriptname" "$@"
