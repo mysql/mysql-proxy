@@ -35,6 +35,7 @@
 #ifdef HAVE_SYS_UN_H
 #include <sys/un.h>         /** struct sockaddr_un */
 #endif
+#include <sys/socket.h>     /** struct sockaddr (freebsd and hp/ux need it) */
 #else
 #include <winsock2.h>
 
