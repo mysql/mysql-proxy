@@ -1,4 +1,4 @@
-dist_doc_DATA=\
+EXTRA_DIST=\
 	tutorial-basic.lua \
 	tutorial-inject.lua \
 	tutorial-rewrite.lua \

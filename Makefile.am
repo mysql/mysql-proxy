@@ -1,8 +1,3 @@
-## for automake 1.9.6
-##
-## see http://www.mail-archive.com/automake@gnu.org/msg13232.html
-docdir = ${datadir}/doc/${PACKAGE}
-
 SUBDIRS =	cmake src lib plugins examples scripts tests m4
 
 EXTRA_DIST = \
