@@ -30,6 +30,14 @@
 #include <sys/types.h>
 #endif
 
+#ifdef HAVE_SYS_FILIO_H
+/**
+ * required for FIONREAD on solaris
+ */
+#include <sys/filio.h>
+#endif
+
+
 #include <arpa/inet.h> /** inet_ntoa */
 #include <netinet/in.h>
 #include <netinet/tcp.h>
