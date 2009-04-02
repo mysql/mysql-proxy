@@ -183,8 +183,8 @@ AC_MSG_CHECKING(if with lua)
 AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua]),
 [WITH_LUA=$withval],[WITH_LUA=yes])
 
-AC_MSG_RESULT($WITH_LUA)
 if test "$WITH_LUA" != "no"; then
+ AC_MSG_RESULT($WITH_LUA)
  # try pkgconfig
  if test "$WITH_LUA" = "yes"; then
     LUAPC=lua
@@ -204,6 +204,8 @@ if test "$WITH_LUA" != "no"; then
 
  AC_SUBST(LUA_CFLAGS)
  AC_SUBST(LUA_LIBS)
+else
+ AC_MSG_ERROR([MySQL Proxy can't be built using --without-lua, lua 5.1 is required])
 fi
 
 PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.16.0, [
