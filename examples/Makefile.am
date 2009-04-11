@@ -1,6 +1,6 @@
 EXTRA_DIST=
 
-example_scripts = 
+example_scripts = \
 	tutorial-basic.lua \
 	tutorial-inject.lua \
 	tutorial-rewrite.lua \
