@@ -1,6 +1,7 @@
 SUBDIRS = proxy 
 
-dist_pkgdata_DATA = \
+## those are in the end examples or proof-of-concepts
+example_scripts = \
 		active-queries.lua \
 		active-transactions.lua \
 		admin-sql.lua \
@@ -14,6 +15,15 @@ dist_pkgdata_DATA = \
 		ro-pooling.lua \
 		rw-splitting.lua \
 		xtab.lua
+EXTRA_DIST = 
+
+if USE_WRAPPER_SCRIPT
+## only install them if we are self-contained
+## otherwise let the packager decide where to put them
+dist_doc_DATA = ${example_scripts}
+else
+EXTRA_DIST += ${example_scripts}
+endif
 
 pkglib_LTLIBRARIES = lfs.la glib2.la chassis.la mysql.la lpeg.la posix.la
 
@@ -56,7 +66,7 @@ lpeg_la_LDFLAGS  = $(AM_LDFLAGS) -module -avoid-version
 noinst_HEADERS = \
 	sql-tokenizer.h 
 
-EXTRA_DIST = \
+EXTRA_DIST += \
 	glib2.def \
 	lfs.def \
 	chassis.def \

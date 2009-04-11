@@ -7,7 +7,7 @@ BUILT_SOURCES =
 if USE_WRAPPER_SCRIPT
 ## we are self-contained
 ## put all the binaries into a "hidden" location, the wrapper scripts are in ./scripts/
-pkglib_PROGRAMS = mysql-binlog-dump mysql-proxy mysql-myisam-dump
+libexec_PROGRAMS = mysql-binlog-dump mysql-proxy mysql-myisam-dump
 else
 bin_PROGRAMS            = mysql-binlog-dump mysql-myisam-dump
 sbin_PROGRAMS			= mysql-proxy
@@ -29,11 +29,11 @@ mysql_myisam_dump_CFLAGS	= $(BUILD_CFLAGS)
 mysql_myisam_dump_LDADD		= $(BUILD_LDADD)
 
 
-pkglib_LTLIBRARIES = 
+lib_LTLIBRARIES = 
 
 ## the core library
-pkglib_LTLIBRARIES += libmysql-chassis.la
-pkglib_LTLIBRARIES += libmysql-proxy.la
+lib_LTLIBRARIES += libmysql-chassis.la
+lib_LTLIBRARIES += libmysql-proxy.la
 libmysql_proxy_la_SOURCES = \
 	network-mysqld.c \
 	network-mysqld-lua.c \
