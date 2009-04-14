@@ -181,7 +181,8 @@ static int lua_proto_get_masterinfo_string (lua_State *L) {
 	}
 
 	lua_newtable(L);
-
+        
+        LUA_EXPORT_INT(info, master_lines);
 	LUA_EXPORT_STR(info, master_log_file);
 	LUA_EXPORT_INT(info, master_log_pos);
 	LUA_EXPORT_STR(info, master_host);
@@ -190,7 +191,12 @@ static int lua_proto_get_masterinfo_string (lua_State *L) {
 	LUA_EXPORT_INT(info, master_port);
 	LUA_EXPORT_INT(info, master_connect_retry);
 	LUA_EXPORT_INT(info, master_ssl);
-	if (info->lines >= 15) {
+        LUA_EXPORT_STR(info, master_ssl_ca);
+        LUA_EXPORT_STR(info, master_ssl_capath);
+        LUA_EXPORT_STR(info, master_ssl_cert);
+        LUA_EXPORT_STR(info, master_ssl_cipher);
+        LUA_EXPORT_STR(info, master_ssl_key);
+        if (info->master_lines >= 15) {
 		LUA_EXPORT_INT(info, master_ssl_verify_server_cert);
 	}
 	
@@ -198,6 +204,43 @@ static int lua_proto_get_masterinfo_string (lua_State *L) {
 
 	return 1;
 }
+
+static int lua_proto_append_masterinfo_string (lua_State *L) {
+        GString *packet;
+        network_mysqld_masterinfo_t *info;
+
+        luaL_checktype(L, 1, LUA_TTABLE);
+
+        info = network_mysqld_masterinfo_new();
+
+        LUA_IMPORT_INT(info, master_lines);
+        LUA_IMPORT_STR(info, master_log_file);
+        LUA_IMPORT_INT(info, master_log_pos);
+        LUA_IMPORT_STR(info, master_host);
+        LUA_IMPORT_STR(info, master_user);
+        LUA_IMPORT_STR(info, master_password);
+        LUA_IMPORT_INT(info, master_port);
+        LUA_IMPORT_INT(info, master_connect_retry);
+        LUA_IMPORT_INT(info, master_ssl);
+        LUA_IMPORT_STR(info, master_ssl_ca);
+        LUA_IMPORT_STR(info, master_ssl_capath);
+        LUA_IMPORT_STR(info, master_ssl_cert);
+        LUA_IMPORT_STR(info, master_ssl_cipher);
+        LUA_IMPORT_STR(info, master_ssl_key);
+        LUA_IMPORT_INT(info, master_ssl_verify_server_cert);
+
+        packet = g_string_new(NULL);
+        network_mysqld_masterinfo_append(packet, info);
+
+        lua_pushlstring(L, S(packet));
+
+        network_mysqld_masterinfo_free(info);
+
+        g_string_free(packet, TRUE);
+
+        return 1;
+}
+
 
 static int lua_proto_append_ok_packet (lua_State *L) {
 	GString *packet;
@@ -446,6 +489,7 @@ static const struct luaL_reg mysql_protolib[] = {
 	{"from_response_packet", lua_proto_get_response_packet},
 	{"to_response_packet", lua_proto_append_response_packet},
 	{"from_masterinfo_string", lua_proto_get_masterinfo_string},
+        {"to_masterinfo_string", lua_proto_append_masterinfo_string},
 	{NULL, NULL},
 };
 
