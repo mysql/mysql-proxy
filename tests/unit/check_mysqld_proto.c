@@ -267,13 +267,13 @@ void test_mysqld_binlog_events(void) {
 
 	g_string_assign_len(packet->data, C(rotate_packet));
 
-	network_mysqld_proto_skip_network_header(packet);
-	network_mysqld_proto_get_binlog_status(packet);
-	network_mysqld_proto_get_binlog_event_header(packet, event);
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_binlog_status(packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_binlog_event_header(packet, event));
 
 	g_assert_cmpint(event->event_type, ==, ROTATE_EVENT);
 
-	network_mysqld_proto_get_binlog_event(packet, binlog, event);
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_binlog_event(packet, binlog, event));
 
 	g_assert_cmpint(event->event.rotate_event.binlog_pos, ==, 102);
 	g_assert_cmpstr(event->event.rotate_event.binlog_file, ==, "hostname-bin.000009");
