@@ -1,4 +1,6 @@
-pkglib_LTLIBRARIES = libdebug.la
+plugindir = ${pkglibdir}/plugins/
+
+plugin_LTLIBRARIES = libdebug.la
 libdebug_la_LDFLAGS  = -export-dynamic -no-undefined -avoid-version -dynamic
 libdebug_la_SOURCES  = debug-plugin.c
 libdebug_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) $(top_builddir)/src/libmysql-proxy.la

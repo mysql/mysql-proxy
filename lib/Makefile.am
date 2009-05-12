@@ -1,3 +1,5 @@
+luaextdir = ${pkglibdir}/lua/
+
 SUBDIRS = proxy 
 
 ## those are in the end examples or proof-of-concepts
@@ -25,7 +27,7 @@ else
 EXTRA_DIST += ${example_scripts}
 endif
 
-pkglib_LTLIBRARIES = lfs.la glib2.la chassis.la mysql.la lpeg.la posix.la
+luaext_LTLIBRARIES = lfs.la glib2.la chassis.la mysql.la lpeg.la posix.la
 
 lfs_la_SOURCES  = lfs.c
 ## get libtool to build a shared-lib
