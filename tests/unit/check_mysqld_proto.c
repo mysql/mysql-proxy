@@ -271,6 +271,9 @@ void test_mysqld_binlog_events(void) {
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_binlog_status(packet));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_binlog_event_header(packet, event));
 
+	g_assert_cmpint(event->server_id, ==, 1);
+	g_assert_cmpint(event->timestamp, ==, 0);
+	g_assert_cmpint(event->flags, ==, 0);
 	g_assert_cmpint(event->event_type, ==, ROTATE_EVENT);
 
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_binlog_event(packet, binlog, event));

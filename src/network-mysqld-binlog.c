@@ -113,13 +113,20 @@ int network_mysqld_proto_get_binlog_status(network_packet *packet) {
 
 int network_mysqld_proto_get_binlog_event_header(network_packet *packet, network_mysqld_binlog_event *event) {
 	int err = 0;
+	guint8 event_type;
 
 	err = err || network_mysqld_proto_get_int32(packet, &event->timestamp);
-	err = err || network_mysqld_proto_get_int8(packet,  (guint8 *)&event->event_type); /* map a enum to a guint8 */
+	err = err || network_mysqld_proto_get_int8(packet,  &event_type);
 	err = err || network_mysqld_proto_get_int32(packet, &event->server_id);
 	err = err || network_mysqld_proto_get_int32(packet, &event->event_size);
 	err = err || network_mysqld_proto_get_int32(packet, &event->log_pos);
 	err = err || network_mysqld_proto_get_int16(packet, &event->flags);
+
+	if (!err) {
+	       	/* event->event_type is a enum, network_mysqld_proto_get_int8() wants a guint8 ... on x86 a passing the &(enum) down works, on sparc it doesn't */
+
+		event->event_type = event_type;
+	}
 
 	return err ? -1 : 0;
 }
