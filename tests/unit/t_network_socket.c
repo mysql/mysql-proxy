@@ -165,6 +165,7 @@ void t_network_socket_connect(void) {
 	network_socket *client_connected;
 	fd_set read_fds;
 	struct timeval timeout;
+	network_socket_retval_t ret;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
@@ -176,13 +177,25 @@ void t_network_socket_connect(void) {
 	
 	client = network_socket_new();
 	g_assert_cmpint(0, ==, network_address_set_address(client->dst, TEST_ADDR_IP));
-	g_assert_cmpint(NETWORK_SOCKET_ERROR_RETRY, ==, network_socket_connect(client)); /* it can't succeed as we don't accept() connections yet */
 
-	client_connected = network_socket_accept(sock);
+	switch ((ret = network_socket_connect(client))) {
+	case NETWORK_SOCKET_ERROR_RETRY:
+		client_connected = network_socket_accept(sock);
+	
+		g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect_finish(client));
+	
+		break;
+	case NETWORK_SOCKET_SUCCESS:
+		/* looks like solaris makes a successful connect() even if the listen-socket isn't in accept() yet */
+		client_connected = network_socket_accept(sock);
+		break;
+	default:
+		client_connected = NULL;
+		g_assert_cmpint(NETWORK_SOCKET_ERROR_RETRY,  ==, ret);
+		break;
+	}
+	
 	g_assert(client_connected);
-	
-	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect_finish(client));
-	
 	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_connect(client)); /* we are already connected, sure fail */
 
 	/* we are connected */
