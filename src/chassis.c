@@ -140,6 +140,7 @@
 #include "chassis-log.h"
 #include "chassis-keyfile.h"
 #include "chassis-mainloop.h"
+#include "chassis-path.h"
 
 #ifdef _WIN32
 static char **shell_argv;
@@ -457,7 +458,7 @@ int main_cmdline(int argc, char **argv) {
 	}
 
 #if defined(HAVE_LUA_H)
-# if defined(DATADIR)
+# if defined(LUAEXTDIR)
 	/**
 	 * if the LUA_PATH or LUA_CPATH are not set, set a good default 
 	 */
@@ -468,22 +469,22 @@ int main_cmdline(int argc, char **argv) {
 		 *  so we use _putenv. Since we only set ASCII chars, this
 		 *  is safe.
 		 */
-		_putenv(LUA_PATH "=!\\..\\" DATADIR "\\?.lua");
+		_putenv(LUA_PATH "=!\\..\\" LUAEXTDIR "\\?.lua");
 #else
 		g_setenv(LUA_PATH, 
-				DATADIR "/?.lua", 1);
+				LUAEXTDIR "/?.lua", 1);
 #endif
 	}
 
 # endif
 
-# if defined(LIBDIR)
+# if defined(LUAEXTDIR)
 	if (!g_getenv(LUA_CPATH)) {
 #  if _WIN32
 		_putenv(LUA_CPATH "=!/?.dll");
 #  else
 		g_setenv(LUA_CPATH, 
-				LIBDIR "/?.so", 1);
+				LUAEXTDIR "/?.so", 1);
 #  endif
 	}
 # endif
@@ -578,6 +579,11 @@ int main_cmdline(int argc, char **argv) {
 #ifdef HAVE_EVENT_H
 		printf("  libevent: %s" CHASSIS_NEWLINE, event_get_version());
 #endif
+#ifdef HAVE_LUA_H
+		printf("  lua: %s" CHASSIS_NEWLINE, LUA_RELEASE);
+		printf("    LUA_CPATH: (default) %s" CHASSIS_NEWLINE, LUAEXTDIR);
+		printf("    LUA_PATH: (default) %s" CHASSIS_NEWLINE, LUAEXTDIR);
+#endif
 	}
 	
 	/* add the other options which can also appear in the configfile */
@@ -606,23 +612,12 @@ int main_cmdline(int argc, char **argv) {
 	 * this is necessary for finding files when we daemonize
 	 */
 	if (!base_dir) {
-		gchar *absolute_path;
-		gchar *bin_dir;
-		
-		if (g_path_is_absolute(argv[0])) {
-			absolute_path = g_strdup(argv[0]); /* No need to dup, just to get free right */
-		} else {
-			absolute_path = g_find_program_in_path(argv[0]);
-			if (absolute_path == NULL)
-				g_critical("can't find myself (%s) in PATH", argv[0]);
+		base_dir = chassis_get_basedir(argv[0]);
+		if (!base_dir) {
+			goto exit_nicely;
 		}
-		bin_dir = g_path_get_dirname(absolute_path);
-		base_dir = g_path_get_dirname(bin_dir);
+
 		auto_base_dir = 1;
-		
-		/* don't free base_dir, because we need it later */
-		g_free(absolute_path);
-		g_free(bin_dir);
 	}
 	
 	/* --basedir must be an absolute path, doesn't make sense otherwise */
@@ -658,11 +653,11 @@ int main_cmdline(int argc, char **argv) {
 	
 	/* Lets find the plugin directory relative the executable path */
 	if (!plugin_dir) {
-		/* for Win32 the default plugin dir is bin/ and not lib/package_name */
+		/* for Win32 the default plugin dir is bin/ and not lib/package_name/plugins */
 #ifdef WIN32
-		plugin_dir = g_strconcat(srv->base_dir, G_DIR_SEPARATOR_S, "bin", NULL);
+		plugin_dir = g_build_filename(srv->base_dir, "bin", NULL);
 #else
-		plugin_dir = g_strconcat(srv->base_dir, G_DIR_SEPARATOR_S, "lib", G_DIR_SEPARATOR_S, PACKAGE, NULL);
+		plugin_dir = g_build_filename(srv->base_dir, "lib", PACKAGE, "plugins", NULL);
 #endif
 	}
 	/* 
@@ -763,6 +758,7 @@ int main_cmdline(int argc, char **argv) {
 		g_free(plugin_filename);
 
 		if (print_version && p) {
+			if (0 == i) printf("  == plugins ==" CHASSIS_NEWLINE); /* print the == plugins line only once */
 			if (0 == strcmp(plugin_names[i], p->name)) {
                 printf("  %s: %s" CHASSIS_NEWLINE, p->name, p->version);
 			} else {

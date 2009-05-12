@@ -1,6 +1,9 @@
+luaextdir = ${pkglibdir}/lua
+plugindir = ${pkglibdir}/plugins
+
 
 BUILD_CPPFLAGS = $(LUA_CFLAGS) $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS)
-BUILD_CFLAGS   = -DDATADIR="\"$(pkgdatadir)\""  -DLIBDIR="\"$(pkglibdir)\""
+BUILD_CFLAGS   = -DLUAEXTDIR="\"$(luaextdir)\""  -DPLUGINDIR="\"$(plugindir)\""
 BUILD_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la $(GTHREAD_LIBS) libmysql-proxy.la
 
 BUILT_SOURCES =
@@ -65,6 +68,7 @@ libmysql_chassis_la_SOURCES = \
 	chassis-log.c \
 	chassis-mainloop.c \
 	chassis-keyfile.c \
+	chassis-path.c \
 	chassis-stats.c
 
 
@@ -91,6 +95,7 @@ noinst_HEADERS=\
 	chassis-log.h \
 	chassis-keyfile.h \
 	chassis-mainloop.h \
+	chassis-path.h \
 	glib-ext.h \
 	lua-load-factory.h \
 	lua-scope.h \
