@@ -475,6 +475,7 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		is_finished = network_mysqld_proto_get_com_init_db(packet, con->parse.data, con);
 
 		break;
+	case COM_REFRESH:
 	case COM_STMT_RESET:
 	case COM_PING:
 	case COM_TIME:

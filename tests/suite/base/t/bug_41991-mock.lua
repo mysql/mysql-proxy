@@ -29,7 +29,7 @@ function connect_server()
 end
 
 function read_query(packet)
-	if packet:byte() ~= proxy.COM_REFRESH then
+	if packet:byte() ~= proxy.COM_QUERY then
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_OK
 		}
@@ -38,7 +38,7 @@ function read_query(packet)
 
 	proxy.response = {
 		type = proxy.MYSQLD_PACKET_ERR,
-		errmsg = "(bug_35669-mock) >" .. packet:sub(2) .. "<"
+		errmsg = "(bug_41991-mock) >" .. packet:sub(2) .. "<"
 	}
 	return proxy.PROXY_SEND_RESULT
 end
