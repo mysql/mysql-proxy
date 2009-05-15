@@ -457,39 +457,6 @@ int main_cmdline(int argc, char **argv) {
 		g_error("loading modules is not supported on this platform");
 	}
 
-#if defined(HAVE_LUA_H)
-# if defined(LUAEXTDIR)
-	/**
-	 * if the LUA_PATH or LUA_CPATH are not set, set a good default 
-	 */
-	if (!g_getenv(LUA_PATH)) {
-#if _WIN32
-		/** on Win32 glib uses _wputenv to set the env variable,
-		 *  but Lua uses getenv. Those two don't see each other,
-		 *  so we use _putenv. Since we only set ASCII chars, this
-		 *  is safe.
-		 */
-		_putenv(LUA_PATH "=!\\..\\" LUAEXTDIR "\\?.lua");
-#else
-		g_setenv(LUA_PATH, 
-				LUAEXTDIR "/?.lua", 1);
-#endif
-	}
-
-# endif
-
-# if defined(LUAEXTDIR)
-	if (!g_getenv(LUA_CPATH)) {
-#  if _WIN32
-		_putenv(LUA_CPATH "=!/?.dll");
-#  else
-		g_setenv(LUA_CPATH, 
-				LUAEXTDIR "/?.so", 1);
-#  endif
-	}
-# endif
-#endif
-
 #ifdef HAVE_GTHREAD	
 	g_thread_init(NULL);
 #endif
@@ -513,9 +480,6 @@ int main_cmdline(int argc, char **argv) {
 
 	srv = chassis_new();
 	srv->log = log; /* we need the log structure for the log-rotation */
-
-	/* assign the mysqld part to the */
-	network_mysqld_init(srv);
 
 	i = 0;
 	base_main_entries[i++].arg_data  = &(print_version);
@@ -579,11 +543,6 @@ int main_cmdline(int argc, char **argv) {
 #ifdef HAVE_EVENT_H
 		printf("  libevent: %s" CHASSIS_NEWLINE, event_get_version());
 #endif
-#ifdef HAVE_LUA_H
-		printf("  lua: %s" CHASSIS_NEWLINE, LUA_RELEASE);
-		printf("    LUA_CPATH: (default) %s" CHASSIS_NEWLINE, LUAEXTDIR);
-		printf("    LUA_PATH: (default) %s" CHASSIS_NEWLINE, LUAEXTDIR);
-#endif
 	}
 	
 	/* add the other options which can also appear in the configfile */
@@ -629,6 +588,63 @@ int main_cmdline(int argc, char **argv) {
 		exit_code = EXIT_FAILURE;
 		goto exit_nicely;
 	}
+
+	/* basic setup is done, base-dir is known, ... */
+
+#if defined(HAVE_LUA_H)
+	if (print_version) printf("  lua: %s" CHASSIS_NEWLINE, LUA_RELEASE);
+	/**
+	 * if the LUA_PATH or LUA_CPATH are not set, set a good default 
+	 *
+	 * we want to derive it from the basedir ...
+	 */
+	if (!g_getenv(LUA_PATH)) {
+		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?.lua", NULL);
+#if _WIN32
+		/** on Win32 glib uses _wputenv to set the env variable,
+		 *  but Lua uses getenv. Those two don't see each other,
+		 *  so we use _putenv. Since we only set ASCII chars, this
+		 *  is safe.
+		 */
+		gchar *env_path = g_strdup_printf("%s=%s", LUA_PATH, path);
+		_putenv(env_path);
+		g_free(env_path);
+#else
+		g_setenv(LUA_PATH, path, 1);
+#endif
+		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, path);
+
+		g_free(path);
+	} else {
+		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, g_getenv(LUA_PATH));
+	}
+
+	if (!g_getenv(LUA_CPATH)) {
+		/* each OS has its own way of declaring a shared-lib extension
+		 *
+		 * win32 has .dll
+		 * macosx has .so or .dylib
+		 * hpux has .sl
+		 */ 
+		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?." G_MODULE_SUFFIX, NULL);
+#  if _WIN32
+		gchar *env_path = g_strdup_printf("%s=%s", LUA_CPATH, path);
+		_putenv(env_path);
+		g_free(env_path);
+#  else
+		g_setenv(LUA_CPATH, path, 1);
+#  endif
+		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, path);
+
+		g_free(path);
+	} else {
+		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, g_getenv(LUA_CPATH));
+	}
+# endif
+
+	/* assign the mysqld part to the */
+	network_mysqld_init(srv); /* starts the also the lua-scope, LUA_PATH and LUA_CPATH have to be set before this being called */
+
 
 #ifdef HAVE_SIGACTION
 	/* register the sigsegv interceptor */
