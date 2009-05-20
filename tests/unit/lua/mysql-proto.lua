@@ -184,25 +184,60 @@ assert(tbl.username == "foobar", ("expected 'foobar', got %s"):format(tostring(t
 assert(tbl.database == "db", ("expected 'db', got %s"):format(tostring(tbl.database)))
 
 -- test 5.1 master.info format
-local masterinfofile = proto.from_masterinfo_string("15\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\n\n\n\n\n\n0\n")
+local masterinfofile = proto.from_masterinfo_string(
+"15\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\nca-cert.pem\n"
+.. "/usr/local/mysql/ssl/ca/\nclient-cert.pem\nssl_cipher\nclient-key.pem\n0\n")
+assert( masterinfofile["master_lines"] == 15)
 assert( masterinfofile["master_host"] == "127.0.0.1")
-assert( masterinfofile["master_ssl"] == 0)
 assert( masterinfofile["master_log_pos"] == 2143897)
 assert( masterinfofile["master_user"] == "root")
 assert( masterinfofile["master_connect_retry"] == 60)
 assert( masterinfofile["master_log_file"] == "hostname-bin.000024")
 assert( masterinfofile["master_port"] == 3306)
 assert( masterinfofile["master_password"] == "123")
+assert( masterinfofile["master_ssl"] == 0) 
+assert( masterinfofile["master_ssl_ca"] == "ca-cert.pem")
+assert( masterinfofile["master_ssl_capath"] == "/usr/local/mysql/ssl/ca/")
+assert( masterinfofile["master_ssl_cert"] == "client-cert.pem")
+assert( masterinfofile["master_ssl_cipher"] == "ssl_cipher")
+assert( masterinfofile["master_ssl_key"] == "client-key.pem")
 assert( masterinfofile["master_ssl_verify_server_cert"] == 0)
 
 -- test 4.1 and 5.0 master.info format
-local masterinfofile = proto.from_masterinfo_string("14\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\n\n\n\n\n\n")
+local masterinfofile = proto.from_masterinfo_string(
+"14\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\nca-cert.pem\n"
+.. "/usr/local/mysql/ssl/ca/\nclient-cert.pem\nssl_cipher\nclient-key.pem\n")
+
+assert( masterinfofile["master_lines"] == 14)
 assert( masterinfofile["master_host"] == "127.0.0.1")
-assert( masterinfofile["master_ssl"] == 0)
 assert( masterinfofile["master_log_pos"] == 2143897)
 assert( masterinfofile["master_user"] == "root")
 assert( masterinfofile["master_connect_retry"] == 60)
 assert( masterinfofile["master_log_file"] == "hostname-bin.000024")
 assert( masterinfofile["master_port"] == 3306)
-assert( masterinfofile["master_password"] == "123") 
+assert( masterinfofile["master_password"] == "123")
+assert( masterinfofile["master_ssl"] == 0)
+assert( masterinfofile["master_ssl_ca"] == "ca-cert.pem")
+assert( masterinfofile["master_ssl_capath"] == "/usr/local/mysql/ssl/ca/")
+assert( masterinfofile["master_ssl_cert"] == "client-cert.pem")
+assert( masterinfofile["master_ssl_cipher"] == "ssl_cipher")
+assert( masterinfofile["master_ssl_key"] == "client-key.pem")
 assert( masterinfofile["master_ssl_verify_server_cert"] == nil)
+
+-- test proto.to_masterinfo_string()
+
+local masterinfofile = proto.from_masterinfo_string(
+"15\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\nca-cert.pem\n"
+.. "/usr/local/mysql/ssl/ca/\nclient-cert.pem\nssl_cipher\nclient-key.pem\n0\n")
+
+assert( proto.to_masterinfo_string(masterinfofile) == 
+"15\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\nca-cert.pem\n"
+.. "/usr/local/mysql/ssl/ca/\nclient-cert.pem\nssl_cipher\nclient-key.pem\n0\n")
+
+local masterinfofile = proto.from_masterinfo_string(  
+"14\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\nca-cert.pem\n"
+.. "/usr/local/mysql/ssl/ca/\nclient-cert.pem\nssl_cipher\nclient-key.pem\n")
+
+assert( proto.to_masterinfo_string(masterinfofile) ==
+"14\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\nca-cert.pem\n"
+.. "/usr/local/mysql/ssl/ca/\nclient-cert.pem\nssl_cipher\nclient-key.pem\n")

@@ -118,9 +118,10 @@ int network_mysqld_masterinfo_get(network_packet *packet, network_mysqld_masteri
 	g_return_val_if_fail(info, -1);
 	g_return_val_if_fail(packet, -1);
 
-	err = err || network_mysqld_masterinfo_get_int32(packet, &lines);
-	info->lines = lines;
-	err = err || network_mysqld_masterinfo_get_string(packet, info->master_log_file);
+	/*err = err || network_mysqld_masterinfo_get_int32(packet, &lines);*/
+	/*info->master_lines = lines;*/
+        err = err || network_mysqld_masterinfo_get_int32(packet, &(info->master_lines));
+        err = err || network_mysqld_masterinfo_get_string(packet, info->master_log_file);
 	err = err || network_mysqld_masterinfo_get_int32(packet, &(info->master_log_pos));
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_host);
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_user);
@@ -133,7 +134,7 @@ int network_mysqld_masterinfo_get(network_packet *packet, network_mysqld_masteri
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_ssl_cert);
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_ssl_cipher);
 	err = err || network_mysqld_masterinfo_get_string(packet, info->master_ssl_key);
-	if (lines >= 15) {
+	if (info->master_lines >= 15) {
 		err = err || network_mysqld_masterinfo_get_int32(packet, &(info->master_ssl_verify_server_cert));
 	}
 	return err ? -1 : 0;
@@ -159,8 +160,8 @@ int network_mysqld_masterinfo_append(GString *packet, network_mysqld_masterinfo_
 	g_return_val_if_fail(info, -1);
 	g_return_val_if_fail(packet, -1);
 
-	err = err || network_mysqld_masterinfo_append_int32(packet, 15);
-	err = err || network_mysqld_masterinfo_append_string(packet, info->master_log_file);
+	err = err || network_mysqld_masterinfo_append_int32(packet, info->master_lines);
+        err = err || network_mysqld_masterinfo_append_string(packet, info->master_log_file);
 	err = err || network_mysqld_masterinfo_append_int32(packet, info->master_log_pos);
 	err = err || network_mysqld_masterinfo_append_string(packet, info->master_host);
 	err = err || network_mysqld_masterinfo_append_string(packet, info->master_user);
@@ -173,7 +174,9 @@ int network_mysqld_masterinfo_append(GString *packet, network_mysqld_masterinfo_
 	err = err || network_mysqld_masterinfo_append_string(packet, info->master_ssl_cert);
 	err = err || network_mysqld_masterinfo_append_string(packet, info->master_ssl_cipher);
 	err = err || network_mysqld_masterinfo_append_string(packet, info->master_ssl_key);
-	err = err || network_mysqld_masterinfo_append_int32(packet, info->master_ssl_verify_server_cert);
+	if (info->master_lines >= 15) {
+                err = err || network_mysqld_masterinfo_append_int32(packet, info->master_ssl_verify_server_cert);
+        }
 
 	return err ? -1 : 0;
 }
