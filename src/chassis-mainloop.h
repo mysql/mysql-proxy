@@ -62,7 +62,7 @@ struct chassis {
 	chassis_stats_t *stats;			/**< the overall chassis stats, includes lua and glib allocation stats */
 
 	/* network-io threads */
-	guint event_thread_count;
+	gint event_thread_count;
 
 	chassis_event_threads_t *threads;
 };
