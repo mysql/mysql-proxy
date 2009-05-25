@@ -1,1 +1,4 @@
-EXTRA_DIST = lua-classes.dot
+EXTRA_DIST = \
+	     lua-classes.dot \
+	     architecture.dot \
+	     architecture.txt
