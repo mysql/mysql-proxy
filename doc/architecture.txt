@@ -42,7 +42,25 @@ itself from the thread, send its wait-for-event request to the global event-queu
   Up to MySQL Proxy 0.8 the execution of the scripting code is single-threaded: a global mutex protects
 the plugin interface. As a connection is either sending packets or calling plugin function the network 
 events will be handled in parallel and only wait if several connections want to call a plugin function
-at the same time.
+
+Implementation
+..............
+
+In chassis-event-thread.c the chassis_event_thread_loop() is the event-thread itself. It gets setup by
+chassis_event_threads_init_thread() which registers itself to a pipe(), a classic simple pipe. That
+pipe is a common hack in libevent to map any kind of event to a the fd-based event-handlers like poll:
+
+  * the event_base_dispatch() blocks until a fd-event triggers
+  * timers, signals, ... can't interrupt event_base_dispatch() directly
+  * instead they cause a write(pipe_fd, ".", 1); which triggers a fd-event
+    which afterwards gets handled
+
+In chassis-event-thread.c we use the pipe to signal that something is in the global event-queue to be
+processed by one of the event-threads ... see chassis_event_handle(). All idling threads will process
+that even and will pull from the event queue in parallel to add the event to their events to listen for.
+
+To add a event to the event-queue you can call chassis_event_add() or chassis_event_add_local(). See 
+the source when to use which.
 
 Threaded Scripting
 ------------------
