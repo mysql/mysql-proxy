@@ -164,6 +164,7 @@ GQueue *network_connection_pool_get_conns(network_connection_pool *pool, GString
  *
  * @param pool connection pool to get the connection from
  * @param username (optional) name of the auth connection
+ * @param default_db (unused) unused name of the default-db
  */
 network_socket *network_connection_pool_get(network_connection_pool *pool,
 		GString *username,

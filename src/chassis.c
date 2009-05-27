@@ -59,9 +59,9 @@
  *     -# calls network_mysqld_con_handle() on the connection 
  *   - network_mysqld_con_handle() is the state-machine
  *     -# implements the states of the \ref protocol "MySQL Protocol"
- *     -# calls plugin functions (registered by e.g. network_mysqld_proxy_connection_init()) 
+ *     -# calls plugin functions (registered by e.g. network_mysqld_proxy_connection_new()) 
  * - network-mysqld-proxy.c
- *   - implements the \ref proxy_states "proxy specific states"
+ *   - implements the "proxy specific states"
  *
  * The other files only help those based main modules to do their job:
  *

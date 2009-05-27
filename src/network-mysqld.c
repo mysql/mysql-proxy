@@ -306,7 +306,6 @@ network_mysqld_con *network_mysqld_con_init() {
 /**
  * create a connection 
  *
- * @param srv    global context
  * @return       a connection context
  */
 network_mysqld_con *network_mysqld_con_new() {

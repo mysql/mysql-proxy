@@ -880,10 +880,7 @@ int network_mysqld_proto_get_err_packet(network_packet *packet, network_mysqld_e
  * @note the sqlstate has to match the SQL standard. If no matching SQL state is known, leave it at NULL
  *
  * @param packet      network packet
- * @param errmsg      the error message
- * @param errmsg_len  byte-len of the error-message
- * @param errorcode   mysql error-code we want to send
- * @param sqlstate    if none-NULL, 5-char SQL state to send, if NULL, default SQL state is used
+ * @param err_packet  the error structure
  *
  * @return 0 on success
  */

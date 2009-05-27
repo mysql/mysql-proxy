@@ -80,7 +80,7 @@ chassis *chassis_new() {
  *
  * closes all open connections, cleans up all plugins
  *
- * @param m      global context
+ * @param chas      global context
  */
 void chassis_free(chassis *chas) {
 	guint i;
