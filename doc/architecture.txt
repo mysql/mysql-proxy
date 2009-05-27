@@ -1,8 +1,118 @@
+===========
 MySQL Proxy
 ===========
 
-C10k
-----
+The MySQL Proxy is a simple program which sits between a mysql client and a mysql server and
+can inspect, transform and act on the data sent through it.
+
+You can use it for:
+* load balancing
+* fail over
+* query tracking
+* query analysis
+* ... and much more
+
+It is built of different components that which are stacked and can be used independently:
+
+* chassis
+  * commandline and configfiles
+  * logging
+  * daemon/service support
+  * plugin loading
+* protocol libraries
+  * MySQL
+    * client protocol
+    * binlog protocol
+    * myisam files
+    * frm files
+    * masterinfo files
+* network core
+  * connection life-cycle
+* plugins 
+  * proxy
+  * debug
+  * admin
+
+Chassis
+=======
+
+Configfile and Commandline Options
+----------------------------------
+
+GLib2 provides us with config-file parser and a command-line option parser. We want to expose 
+most options in the same way and accept them from the config-file and the command-line.
+
+The options are parsed in two steps:
+
+* extract the basic command-line options:
+  --help
+  --version
+  --defaults-file
+* process the defaults-file 
+* process the other command-line options to override the defaults-file
+
+@see src/chassis-keyfile.h and src/chassic.c
+
+Plugin Interface
+----------------
+
+The chassis provides the fundamentals for the plugin interface:
+
+* it can resolve the path for plugins
+* can load them in a portable way
+* does version checks
+* calls init and shutdown functions 
+* exposes the configuration options to the plugins
+
+@see src/chassis-plugin.h and struct chassis_plugin
+
+As the chassis is not MySQL specific it can load any kind of plugin as long as it 
+exposes the init and shutdown functions. 
+
+For the MySQL Proxy you usually load plugins like:
+
+* proxy
+* debug
+
+... which interface with MySQL Connection Life-Cycle (see below). 
+
+Core
+====
+
+The core exposes Connection Life Cycle to the plugins through callbacks. The plugins can
+decide how get from one state to the next. 
+
+Connection Life Cycle
+---------------------
+
+The MySQL Proxy protocol has 4 phases:
+
+* connect
+* authentification
+* query
+* disconnect
+
+@see lifecycle.msc
+
+The lifecycle image shows the default implementation of the proxy plugin. It implements all 
+the callbacks and exposes them to its scripting layer. It implements the listening and the
+connecting side and forwards packets between them
+
+Other plugins may implement only one side of the callbacks:
+* admin plugin implements only the listening side
+* client plugins implement only the connection side
+
+Scripting
+.........
+
+Most plugins implement a set of those callbacks and expose them to a scripting layer. 
+
+For now the scriping is provided by Lua, a simple, fast and easy to embed scripting language.
+We expose most of the internals into the scripting layer and provide modules to operate
+on the data that we pass into the scripting layer
+
+Network Core Layer
+------------------
 
   The MySQL Proxy network engine is meant to handle several thousands connections at the same time. We 
 want to use it for load-balancing and fail-over which means we have to handle the connections for
@@ -11,15 +121,6 @@ a larger group of MySQL backend servers nicely. We aim for 5k to 10k connections
 http://kegel.com/c10k.html#nb using libevent 1.4.x. 
   A event-driven design has a very small foot-print for idling connections: we just store the
 connection state and let it wait for a event. 
-
-Scripting
----------
-
-  Flexibility is key. From the start MySQL Proxy was meant to be extensible and customizable. We embedded
-a scripting language to control how the proxy core shall handle the processing of packets. You can 
-change the packets, reject packets or event inject packets into the network stream. The main work,
-the protocol handling, ... is all hidden in the core, the scripting layer only controls how the core
-shall operate.
 
 Threaded IO
 -----------
