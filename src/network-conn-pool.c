@@ -85,6 +85,10 @@ static void g_queue_free_all(gpointer q) {
 	g_queue_free(queue);
 }
 
+/**
+ * @deprecated: will be removed in 1.0
+ * @see network_connection_pool_new()
+ */
 network_connection_pool *network_connection_pool_init(void) {
 	return network_connection_pool_new();
 }

@@ -159,6 +159,15 @@ void t_network_socket_bind(void) {
 	network_socket_free(sock);
 }
 
+/**
+ * @test  check if the network_socket_connect() works by 
+ *   - setting up a listening socket
+ *   - connection to it
+ *   - write data to it
+ *   - read it back
+ *   - closing it
+ *   
+ */
 void t_network_socket_connect(void) {
 	network_socket *sock;
 	network_socket *client;
