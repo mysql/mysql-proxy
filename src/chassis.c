@@ -16,66 +16,6 @@
 
  $%ENDLICENSE%$ */
  
-
-/**
- * \mainpage
- *
- * \section Architecture
- *
- * MySQL Proxy is based around the C10k problem as described by http://kegel.com/c10k.html
- *
- * This leads to some basic features
- * - 10.000 concurrent connections in one program
- * - spreading the load over several backends
- * - each backend might be able to only handle 100 connections (max_connections)
- * 
- * We can implement 
- * - reusing idling backend connections 
- * - splitting client connections into several backend connections
- *
- * Most of the magic is happening in the scripting layer provided by lua (http://lua.org/) which
- * was picked as it:
- *
- * - is very easy to embed
- * - is small (200kb stripped) and efficient (see http://shootout.alioth.debian.org/gp4/benchmark.php?test=all&lang=all)
- * - is easy to read and write
- *
- * \section a walk through the code
- *
- * To understand the code you basicly only have to know about the three files documented below:
- *
- * - chassis.c
- *   - main()
- *     -# command-line handling
- *     -# plugin loading
- *     -# logging
- * - network-mysqld.c
- *   - network_mysqld_thread() (supposed be called as thread)
- *     -# registers event-halders (event_set(..., network_mysqld_con_accept, ...))
- *     -# calls event_base_dispatch() [libevent] in the mainloop 
- *   - network_mysqld_con_accept()
- *     -# is called when the listen()ing socket gets a incoming connection
- *     -# sets the event-handler for the established connection (e.g. network_mysqld_proxy_connection_init())
- *     -# calls network_mysqld_con_handle() on the connection 
- *   - network_mysqld_con_handle() is the state-machine
- *     -# implements the states of the \ref protocol "MySQL Protocol"
- *     -# calls plugin functions (registered by e.g. network_mysqld_proxy_connection_new()) 
- * - network-mysqld-proxy.c
- *   - implements the "proxy specific states"
- *
- * The other files only help those based main modules to do their job:
- *
- * - network-mysqld-proto.c
- *   - the byte functions around the \ref proto "MySQL protocol"
- * - network-socket.c
- *   - basic socket struct 
- * - network-mysqld-table.c
- *   - internal tables to select from on the admin interface (to be removed) 
- * - network-conn-pool.c
- *   - a connection pool for server connections 
- */
-
-
 /** @file
  * the user-interface for the MySQL Proxy @see main()
  *

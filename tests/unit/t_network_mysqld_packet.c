@@ -381,14 +381,26 @@ void test_mysqld_auth_with_pw(void) {
 	g_string_free(challenge, TRUE);
 }
 
+/**
+ * @test
+ *   network_mysqld_auth_response_new() and network_mysqld_auth_response_free() 
+ *   don't cause a crash 
+ */
 void t_auth_response_new() {
 	network_mysqld_auth_response *shake;
 
 	shake = network_mysqld_auth_response_new();
+	g_assert(shake);
 
 	network_mysqld_auth_response_free(shake);
 }
 
+/**
+ * @test
+ *   network_mysqld_proto_get_auth_response() can decode a string
+ *   network_mysqld_proto_append_auth_response() can encode the result
+ *     of the network_mysqld_proto_get_auth_response() 
+ */
 void t_mysqld_get_auth_response(void) {
 	const char raw_packet[] = 
 		"\205\246\3\0"
@@ -452,7 +464,10 @@ void t_mysqld_get_auth_response(void) {
 }
 
 
-
+/**
+ * @cond
+ *   don't include the main() function the docs
+ */
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
@@ -474,6 +489,7 @@ int main(int argc, char **argv) {
 
 	return g_test_run();
 }
+/** @endcond */
 #else
 int main() {
 	return 77;

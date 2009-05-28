@@ -1,68 +1,61 @@
-===========
-MySQL Proxy
-===========
+/**
+@mainpage
 
 The MySQL Proxy is a simple program which sits between a mysql client and a mysql server and
 can inspect, transform and act on the data sent through it.
 
 You can use it for:
-* load balancing
-* fail over
-* query tracking
-* query analysis
-* ... and much more
+@li load balancing
+@li fail over
+@li query tracking
+@li query analysis
+@li ... and much more
 
 It is built of different components that which are stacked and can be used independently:
 
-* chassis
+@li @ref page.chassis
   * commandline and configfiles
   * logging
   * daemon/service support
   * plugin loading
-* protocol libraries
+@li @ref protocol libraries
   * MySQL
     * client protocol
     * binlog protocol
     * myisam files
     * frm files
     * masterinfo files
-* network core
+@li @ref page.core
   * connection life-cycle
-* plugins 
-  * proxy
-  * debug
-  * admin
+@li plugins 
 
-Chassis
-=======
+@page page.chassis Chassis
 
-Configfile and Commandline Options
-----------------------------------
+@section section-chassisconfigfile Configfile and Commandline Options
 
 GLib2 provides us with config-file parser and a command-line option parser. We want to expose 
 most options in the same way and accept them from the config-file and the command-line.
 
 The options are parsed in two steps:
 
-* extract the basic command-line options:
-  --help
-  --version
-  --defaults-file
-* process the defaults-file 
-* process the other command-line options to override the defaults-file
+@li extract the basic command-line options:
+  \c --help
+  \c --version
+  \c --defaults-file
+@li process the defaults-file 
+@li process the other command-line options to override the defaults-file
 
 @see src/chassis-keyfile.h and src/chassic.c
 
-Plugin Interface
-----------------
+@section section-chassisplugin Plugin Interface
 
 The chassis provides the fundamentals for the plugin interface:
 
-* it can resolve the path for plugins
-* can load them in a portable way
-* does version checks
-* calls init and shutdown functions 
-* exposes the configuration options to the plugins
+@li it can resolve the path for plugins
+@li can load them in a portable way
+@li does version checks
+@li calls init and shutdown functions 
+@li exposes the configuration options to the plugins
 
 @see src/chassis-plugin.h and struct chassis_plugin
 
@@ -71,26 +64,24 @@ exposes the init and shutdown functions.
 
 For the MySQL Proxy you usually load plugins like:
 
-* proxy
-* debug
+@li proxy
+@li debug
 
-... which interface with MySQL Connection Life-Cycle (see below). 
+... which interface with MySQL @ref section-lifecycle (see below). 
 
-Core
-====
+@page page.core Network Core
 
 The core exposes Connection Life Cycle to the plugins through callbacks. The plugins can
 decide how get from one state to the next. 
 
-Connection Life Cycle
----------------------
+@section section-lifecycle Connection Life Cycle
 
 The MySQL Proxy protocol has 4 phases:
 
-* connect
-* authentification
-* query
-* disconnect
+@li connect
+@li authentification
+@li query
+@li disconnect
 
 @see lifecycle.msc
 
@@ -99,11 +90,10 @@ the callbacks and exposes them to its scripting layer. It implements the listeni
 connecting side and forwards packets between them
 
 Other plugins may implement only one side of the callbacks:
-* admin plugin implements only the listening side
-* client plugins implement only the connection side
+@li admin plugin implements only the listening side
+@li client plugins implement only the connection side
 
-Scripting
-.........
+@subsection section-scripting Scripting
 
 Most plugins implement a set of those callbacks and expose them to a scripting layer. 
 
@@ -111,8 +101,7 @@ For now the scriping is provided by Lua, a simple, fast and easy to embed script
 We expose most of the internals into the scripting layer and provide modules to operate
 on the data that we pass into the scripting layer
 
-Network Core Layer
-------------------
+@section section-network-core-layer Network Core Layer
 
   The MySQL Proxy network engine is meant to handle several thousands connections at the same time. We 
 want to use it for load-balancing and fail-over which means we have to handle the connections for
@@ -122,15 +111,16 @@ http://kegel.com/c10k.html#nb using libevent 1.4.x.
   A event-driven design has a very small foot-print for idling connections: we just store the
 connection state and let it wait for a event. 
 
-Threaded IO
------------
+@section section-threaded-io Threaded IO
 
   In MySQL 0.8 we added threaded network-io to allow the proxy to scale out with the numbers of CPUs 
 and network cards available.
 
 To enable network-threading you just start the proxy with:
 
+@verbatim
   --event-threads={2 * no-of-cores} (default: 0)
+@endverbatim
 
 A event-thread is a simple small thread around "event_base_dispatch()" which on a network- or time-event
 executes our core functions. These threads either execute the core functions or idle. If they idle 
@@ -144,16 +134,15 @@ itself from the thread, send its wait-for-event request to the global event-queu
 the plugin interface. As a connection is either sending packets or calling plugin function the network 
 events will be handled in parallel and only wait if several connections want to call a plugin function
 
-Implementation
-..............
+@subsection section-threaded-io-impl Implementation
 
 In chassis-event-thread.c the chassis_event_thread_loop() is the event-thread itself. It gets setup by
 chassis_event_threads_init_thread() which registers itself to a pipe(), a classic simple pipe. That
 pipe is a common hack in libevent to map any kind of event to a the fd-based event-handlers like poll:
 
-  * the event_base_dispatch() blocks until a fd-event triggers
-  * timers, signals, ... can't interrupt event_base_dispatch() directly
-  * instead they cause a write(pipe_fd, ".", 1); which triggers a fd-event
+@li the @c event_base_dispatch() blocks until a fd-event triggers
+@li timers, signals, ... can't interrupt @c event_base_dispatch() directly
+@li instead they cause a @c write(pipe_fd, ".", 1); which triggers a fd-event
     which afterwards gets handled
 
 In chassis-event-thread.c we use the pipe to signal that something is in the global event-queue to be
@@ -163,8 +152,7 @@ that even and will pull from the event queue in parallel to add the event to the
 To add a event to the event-queue you can call chassis_event_add() or chassis_event_add_local(). See 
 the source when to use which.
 
-Threaded Scripting
-------------------
+@subsection section-threaded-scripting Threaded Scripting
 
 Usually the scripts are small and only make simple decisions leaving most of the work to the network layer.
 In 0.9 we will make the scripting layer multi-threaded allow several scripting threads at the same time,
@@ -180,4 +168,4 @@ to send data around between independent Lua-states.
 
 
 
-  
+*/ 

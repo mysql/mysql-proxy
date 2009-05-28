@@ -41,6 +41,12 @@
 #include "chassis-log.h"
 #include "chassis-stats.h"
 
+/** @defgroup chassis Chassis
+ * 
+ * the chassis contains the set of functions that are used by all programs
+ *
+ * */
+/*@{*/
 typedef struct chassis_private chassis_private;
 typedef struct chassis chassis;
 typedef struct chassis_event_threads_t chassis_event_threads_t;
@@ -81,5 +87,6 @@ CHASSIS_API int chassis_mainloop(void *user_data);
 CHASSIS_API void chassis_set_shutdown(void);
 CHASSIS_API gboolean chassis_is_shutdown(void);
 CHASSIS_API gboolean chassis_resolve_path(chassis *chas, gchar **filename);
+/*@}*/
 
 #endif
