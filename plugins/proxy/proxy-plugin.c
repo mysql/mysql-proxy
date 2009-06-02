@@ -1580,7 +1580,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	 */
 	if (NULL == con->server) {
 		con->server = network_socket_new();
-		con->server->dst = network_address_copy(NULL, st->backend->addr);
+		network_address_copy(con->server->dst, st->backend->addr);
 	
 		st->backend->connected_clients++;
 
