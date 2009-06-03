@@ -10,3 +10,15 @@ trunk/tests/unit/sql-tokenizer.c
 ./.project
 ./.settings
 ./build
+./aclocal.m4
+./autom4te.cache
+./configure
+./install-sh
+./ylwrap
+./ltmain.sh
+./depcomp
+./config.sub
+./config.guess
+./config.h.in
+./compile
+./missing
