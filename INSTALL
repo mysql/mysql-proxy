@@ -3,17 +3,17 @@ Installation Instructions
 
 
 
-Installing from SVN
-===================
+Installing from Bazaar
+======================
 
-Get the SVN source from:
+Get the latest source from:
 
-  $ svn co http://svn.mysql.com/svnpublic/mysql-proxy/ mysql-proxy
+  $ bzr branch lp:mysql-proxy
 
 Later you can update the tree by running
 
   $ cd mysql-proxy/
-  $ svn up
+  $ bzr pull
 
 As you built from SVN none of the configure scripts is prepared. You need:
 
