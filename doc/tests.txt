@@ -1,0 +1,150 @@
+/**
+@page page.test-multithreading-network-io Network i/o Multithreading Testing
+
+
+@section testing_scenarios Testing scenarios:
+
+@li @ref page.test.idle_conn : Establish a lot of connections and let them sit idle
+(basic event handling testing).
+@li @ref page.test.short_lived_connections : Establish a lot of short-lived connections 
+quickly in succession from many clients
+(i.e. simulate fast queries from e.g. PHP apps without a connection pooler)
+@li @ref page.test.active_connections : Establish a lot of connections doing mainly 
+network i/o, such as selecting huge resultsets and/or inserting blobs.
+@li @ref page.test.semi_active_connections : The same as 3 but be active only on a subset 
+of the connections (if you have n network threads and m connections 
+only do work on m/n of them) - this tests the event distribution algorithm in the network i/o code
+(currently every event is distributed to an idle thread).
+@li @ref page.test.web_app : Run the MySQL Proxy under load as close to a production like web application environment as possible.
+
+
+@section variables Variables to tweak (per test scenario).
+
+@li <b>(c)</b> Number of connections.
+@li <b>(a)</b> Number of active connections (i.e. connections on which there actually is something going on).
+@li <b>(s_l) (size_lower)</b> and <b>(s_u) (size_upper)</b> Size of the resultsets/blobs on 
+each connection, that should be a range.
+@li <b>(r)</b> Rate of connection establishing.
+@li <b>(t)</b> Number of threads.
+@li We will start with no script at all to keep it simple.
+
+
+@section information_collected Information to collect.
+
+To start we will output all results to a csv file, for later analysis. And we will collect
+
+@li Query time (with and without proxy in between)
+@li Number of queries/seconds (with and without proxy in between)
+@li Network traffic  MB/Sec
+@li Proxy CPU and Memory usage.
+
+
+@section tools The tools we plan to use are:
+
+@li PHP for scripting and for web applications.
+@li jMeter for simulating web users of a web app.
+@li More to come as we develop more tests.
+
+
+@page page.test.idle_conn Idle Connections
+
+We will use a simple php script that will stablish a connection and stay idle (using sleep()) 
+for an specified number of minutes.
+
+@section section-idle_conn Idle Connections test variables
+
+On this test we will use different values for:
+
+@li c
+@li t
+@li r
+
+
+See @ref page.test-multithreading-network-io for meanings of the variables.
+
+@page page.test.short_lived_connections Short lived Connections
+
+
+We will resuse the scripts for @ref page.test.idle_conn and add a query like SELECT 1;
+
+@section section-short_lived_conn Short lived Connections test variables
+
+On this test we will use different values for:
+
+@li c
+@li t
+@li r
+@li a
+
+See @ref page.test-multithreading-network-io for meanings of the variables.
+
+
+
+@page page.test.active_connections Active Connections
+
+
+Here we will focus on large resultsets, BLOB/TEXT column types. As well as resultsets that bring back large number of rows.
+
+
+@section section-active_conn Active Connections test variables
+
+On this test we will use different values for:
+
+@li c
+@li t
+@li r
+@li a
+@li s_l
+@li s_u
+
+See @ref page.test-multithreading-network-io for meanings of the variables.
+
+
+
+@page page.test.semi_active_connections Subset Active Connections
+
+
+Here we will test how the MySQL Proxy distributes the load among the available threads.
+We will resuse the scripts for @ref page.test.idle_conn make the nesessary modifications.
+
+
+@section section-semi_active_conn Subset Active Connections test variables
+
+On this test we will use different values for:
+
+@li c
+@li t
+@li r
+@li a
+@li s_l
+@li s_u
+
+See @ref page.test-multithreading-network-io for meanings of the variables.
+
+
+@page page.test.web_app Web Application
+
+Using jMeter and a web application (SugarCRM), drive load through the proxy and let it run for weeks at the time.
+jMeter allows us to adjust the number of web users that go to the SugarCRM application, as well as collect information about response times, etc.
+
+We will modify our current implementation of jMeter to send the <b>same</b> queries all the time. 
+We currently use a random load which is not useful if you try to compare results.
+
+
+@section section-web_app Web Application test variables
+
+On this test we will use different values for:
+
+@li c
+@li t
+@li r
+@li a
+
+See @ref page.test-multithreading-network-io for meanings of the variables.
+
+
+
+
+
+
+*/ 
