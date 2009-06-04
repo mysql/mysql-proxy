@@ -340,7 +340,7 @@ network_mysqld_register_callback_ret network_mysqld_con_lua_register_callback(ne
 	q_p = lua_newuserdata(L, sizeof(GQueue *));               /* (sp += 1) 3 */
 	*q_p = st->injected.queries;
 
-	/**
+	/*
 	 * proxy.queries
 	 *
 	 * implement a queue
@@ -361,7 +361,7 @@ network_mysqld_register_callback_ret network_mysqld_con_lua_register_callback(ne
 
 	lua_setfield(L, -2, "queries"); /* proxy.queries = <userdata> */
 
-	/**
+	/*
 	 * proxy.connection is (mostly) read-only
 	 *
 	 * .thread_id  = ... thread-id against this server
@@ -377,7 +377,7 @@ network_mysqld_register_callback_ret network_mysqld_con_lua_register_callback(ne
 
 	lua_setfield(L, -2, "connection"); /* proxy.connection = <udata>     (sp -= 1) */
 
-	/**
+	/*
 	 * proxy.response knows 3 fields with strict types:
 	 *
 	 * .type = <int>

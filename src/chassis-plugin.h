@@ -69,6 +69,7 @@ CHASSIS_API GOptionEntry * chassis_plugin_get_options(chassis_plugin *p);
 /**
  * Retrieve the chassis plugin for a particular name.
  * 
+ * @param chas        a pointer to the chassis
  * @param plugin_name The name of the plugin to look up.
  * @return A pointer to a chassis_plugin structure
  * @retval NULL if there is no loaded chassis with this name

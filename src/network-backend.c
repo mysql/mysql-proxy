@@ -27,6 +27,10 @@
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
 
+/**
+ * @deprecated: will be removed in 1.0
+ * @see network_backend_new()
+ */
 network_backend_t *backend_init() {
 	return network_backend_new();
 }
@@ -42,6 +46,11 @@ network_backend_t *network_backend_new() {
 
 	return b;
 }
+
+/**
+ * @deprecated: will be removed in 1.0
+ * @see network_backend_free()
+ */
 void backend_free(network_backend_t *b) {
 	network_backend_free(b);
 }

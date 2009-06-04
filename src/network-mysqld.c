@@ -179,6 +179,7 @@
 #include "network-mysqld-packet.h"
 #include "network-conn-pool.h"
 #include "chassis-mainloop.h"
+#include "chassis-event-thread.h"
 #include "lua-scope.h"
 #include "glib-ext.h"
 
@@ -305,7 +306,6 @@ network_mysqld_con *network_mysqld_con_init() {
 /**
  * create a connection 
  *
- * @param srv    global context
  * @return       a connection context
  */
 network_mysqld_con *network_mysqld_con_new() {
@@ -761,8 +761,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 #define WAIT_FOR_EVENT(ev_struct, ev_type, timeout) \
 	event_set(&(ev_struct->event), ev_struct->fd, ev_type, network_mysqld_con_handle, user_data); \
-	event_base_set(srv->event_base, &(ev_struct->event));\
-	event_add(&(ev_struct->event), timeout);
+	chassis_event_add(srv, &(ev_struct->event));
 
 	/**
 	 * loop on the same connection as long as we don't end up in a stable state

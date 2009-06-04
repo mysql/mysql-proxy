@@ -1,5 +1,5 @@
-/* $%BEGINLICENSE%$
- Copyright (C) 2007-2008 MySQL AB, 2008 Sun Microsystems, Inc
+--[[ $%BEGINLICENSE%$
+ Copyright (C) 2008 MySQL AB, 2008 Sun Microsystems, Inc
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -14,25 +14,31 @@
  along with this program; if not, write to the Free Software
  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
- $%ENDLICENSE%$ */
- 
+ $%ENDLICENSE%$ --]]
+local proto = require("mysql.proto")
 
-#ifndef _CHASSIS_KEYFILE_H_
-#define _CHASSIS_KEYFILE_H_
+function connect_server()
+	proxy.response = {
+		type = proxy.MYSQLD_PACKET_RAW,
+		packets = {
+			proto.to_challenge_packet({})
+		}
+	}
 
-#include <glib.h>
+	return proxy.PROXY_SEND_RESULT
+end
 
-#include "chassis-exports.h"
+function read_query(packet)
+	if packet:byte() ~= proxy.COM_QUERY then
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK
+		}
+		return proxy.PROXY_SEND_RESULT
+	end
 
-/** @addtogroup chassis */
-/*@{*/
-/**
- * parse the configfile options into option entries
- *
- */
-CHASSIS_API int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *groupname, GOptionEntry *config_entries);
-
-/*@}*/
-
-#endif
-
+	proxy.response = {
+		type = proxy.MYSQLD_PACKET_ERR,
+		errmsg = "(bug_41991-mock) >" .. packet:sub(2) .. "<"
+	}
+	return proxy.PROXY_SEND_RESULT
+end

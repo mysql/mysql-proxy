@@ -15,24 +15,13 @@
  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
  $%ENDLICENSE%$ */
- 
 
-#ifndef _CHASSIS_KEYFILE_H_
-#define _CHASSIS_KEYFILE_H_
+#ifndef __CHASSIS_PATH_H__
+#define __CHASSIS_PATH_H__
 
 #include <glib.h>
 
-#include "chassis-exports.h"
-
-/** @addtogroup chassis */
-/*@{*/
-/**
- * parse the configfile options into option entries
- *
- */
-CHASSIS_API int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *groupname, GOptionEntry *config_entries);
-
-/*@}*/
+gchar *chassis_get_basedir(const gchar *prgname);
 
 #endif
 

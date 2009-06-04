@@ -16,66 +16,6 @@
 
  $%ENDLICENSE%$ */
  
-
-/**
- * \mainpage
- *
- * \section Architecture
- *
- * MySQL Proxy is based around the C10k problem as described by http://kegel.com/c10k.html
- *
- * This leads to some basic features
- * - 10.000 concurrent connections in one program
- * - spreading the load over several backends
- * - each backend might be able to only handle 100 connections (max_connections)
- * 
- * We can implement 
- * - reusing idling backend connections 
- * - splitting client connections into several backend connections
- *
- * Most of the magic is happening in the scripting layer provided by lua (http://lua.org/) which
- * was picked as it:
- *
- * - is very easy to embed
- * - is small (200kb stripped) and efficient (see http://shootout.alioth.debian.org/gp4/benchmark.php?test=all&lang=all)
- * - is easy to read and write
- *
- * \section a walk through the code
- *
- * To understand the code you basicly only have to know about the three files documented below:
- *
- * - chassis.c
- *   - main()
- *     -# command-line handling
- *     -# plugin loading
- *     -# logging
- * - network-mysqld.c
- *   - network_mysqld_thread() (supposed be called as thread)
- *     -# registers event-halders (event_set(..., network_mysqld_con_accept, ...))
- *     -# calls event_base_dispatch() [libevent] in the mainloop 
- *   - network_mysqld_con_accept()
- *     -# is called when the listen()ing socket gets a incoming connection
- *     -# sets the event-handler for the established connection (e.g. network_mysqld_proxy_connection_init())
- *     -# calls network_mysqld_con_handle() on the connection 
- *   - network_mysqld_con_handle() is the state-machine
- *     -# implements the states of the \ref protocol "MySQL Protocol"
- *     -# calls plugin functions (registered by e.g. network_mysqld_proxy_connection_init()) 
- * - network-mysqld-proxy.c
- *   - implements the \ref proxy_states "proxy specific states"
- *
- * The other files only help those based main modules to do their job:
- *
- * - network-mysqld-proto.c
- *   - the byte functions around the \ref proto "MySQL protocol"
- * - network-socket.c
- *   - basic socket struct 
- * - network-mysqld-table.c
- *   - internal tables to select from on the admin interface (to be removed) 
- * - network-conn-pool.c
- *   - a connection pool for server connections 
- */
-
-
 /** @file
  * the user-interface for the MySQL Proxy @see main()
  *
@@ -140,6 +80,7 @@
 #include "chassis-log.h"
 #include "chassis-keyfile.h"
 #include "chassis-mainloop.h"
+#include "chassis-path.h"
 
 #ifdef _WIN32
 static char **shell_argv;
@@ -394,6 +335,7 @@ int main_cmdline(int argc, char **argv) {
 	guint invoke_dbg_on_crash = 0;
 	guint auto_restart = 0;
 	guint max_files_number = 8192;
+	gint event_thread_count = 0;
 #ifndef _WIN32
 	struct rlimit max_files_rlimit;
 #endif
@@ -430,6 +372,7 @@ int main_cmdline(int argc, char **argv) {
 		{ "log-backtrace-on-crash",   0, 0, G_OPTION_ARG_NONE, NULL, "try to invoke debugger on crash", NULL },
 		{ "keepalive",                0, 0, G_OPTION_ARG_NONE, NULL, "try to restart the proxy if it crashed", NULL },
 		{ "max-open-files",           0, 0, G_OPTION_ARG_INT, NULL, "maximum number of open files (ulimit -n)", NULL},
+		{ "event-threads",            0, 0, G_OPTION_ARG_INT, NULL, "number of event-handling threads", NULL},
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -456,39 +399,6 @@ int main_cmdline(int argc, char **argv) {
 		g_error("loading modules is not supported on this platform");
 	}
 
-#if defined(HAVE_LUA_H)
-# if defined(DATADIR)
-	/**
-	 * if the LUA_PATH or LUA_CPATH are not set, set a good default 
-	 */
-	if (!g_getenv(LUA_PATH)) {
-#if _WIN32
-		/** on Win32 glib uses _wputenv to set the env variable,
-		 *  but Lua uses getenv. Those two don't see each other,
-		 *  so we use _putenv. Since we only set ASCII chars, this
-		 *  is safe.
-		 */
-		_putenv(LUA_PATH "=!\\..\\" DATADIR "\\?.lua");
-#else
-		g_setenv(LUA_PATH, 
-				DATADIR "/?.lua", 1);
-#endif
-	}
-
-# endif
-
-# if defined(LIBDIR)
-	if (!g_getenv(LUA_CPATH)) {
-#  if _WIN32
-		_putenv(LUA_CPATH "=!/?.dll");
-#  else
-		g_setenv(LUA_CPATH, 
-				LIBDIR "/?.so", 1);
-#  endif
-	}
-# endif
-#endif
-
 #ifdef HAVE_GTHREAD	
 	g_thread_init(NULL);
 #endif
@@ -513,9 +423,6 @@ int main_cmdline(int argc, char **argv) {
 	srv = chassis_new();
 	srv->log = log; /* we need the log structure for the log-rotation */
 
-	/* assign the mysqld part to the */
-	network_mysqld_init(srv);
-
 	i = 0;
 	base_main_entries[i++].arg_data  = &(print_version);
 	base_main_entries[i++].arg_data  = &(default_file);
@@ -536,6 +443,7 @@ int main_cmdline(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(invoke_dbg_on_crash);
 	main_entries[i++].arg_data  = &(auto_restart);
 	main_entries[i++].arg_data  = &(max_files_number);
+	main_entries[i++].arg_data  = &(srv->event_thread_count);
 
 	option_ctx = g_option_context_new("- MySQL App Shell");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
@@ -606,23 +514,12 @@ int main_cmdline(int argc, char **argv) {
 	 * this is necessary for finding files when we daemonize
 	 */
 	if (!base_dir) {
-		gchar *absolute_path;
-		gchar *bin_dir;
-		
-		if (g_path_is_absolute(argv[0])) {
-			absolute_path = g_strdup(argv[0]); /* No need to dup, just to get free right */
-		} else {
-			absolute_path = g_find_program_in_path(argv[0]);
-			if (absolute_path == NULL)
-				g_critical("can't find myself (%s) in PATH", argv[0]);
+		base_dir = chassis_get_basedir(argv[0]);
+		if (!base_dir) {
+			goto exit_nicely;
 		}
-		bin_dir = g_path_get_dirname(absolute_path);
-		base_dir = g_path_get_dirname(bin_dir);
+
 		auto_base_dir = 1;
-		
-		/* don't free base_dir, because we need it later */
-		g_free(absolute_path);
-		g_free(bin_dir);
 	}
 	
 	/* --basedir must be an absolute path, doesn't make sense otherwise */
@@ -634,6 +531,63 @@ int main_cmdline(int argc, char **argv) {
 		exit_code = EXIT_FAILURE;
 		goto exit_nicely;
 	}
+
+	/* basic setup is done, base-dir is known, ... */
+
+#if defined(HAVE_LUA_H)
+	if (print_version) printf("  lua: %s" CHASSIS_NEWLINE, LUA_RELEASE);
+	/**
+	 * if the LUA_PATH or LUA_CPATH are not set, set a good default 
+	 *
+	 * we want to derive it from the basedir ...
+	 */
+	if (!g_getenv(LUA_PATH)) {
+		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?.lua", NULL);
+#if _WIN32
+		/** on Win32 glib uses _wputenv to set the env variable,
+		 *  but Lua uses getenv. Those two don't see each other,
+		 *  so we use _putenv. Since we only set ASCII chars, this
+		 *  is safe.
+		 */
+		gchar *env_path = g_strdup_printf("%s=%s", LUA_PATH, path);
+		_putenv(env_path);
+		g_free(env_path);
+#else
+		g_setenv(LUA_PATH, path, 1);
+#endif
+		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, path);
+
+		g_free(path);
+	} else {
+		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, g_getenv(LUA_PATH));
+	}
+
+	if (!g_getenv(LUA_CPATH)) {
+		/* each OS has its own way of declaring a shared-lib extension
+		 *
+		 * win32 has .dll
+		 * macosx has .so or .dylib
+		 * hpux has .sl
+		 */ 
+		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?." G_MODULE_SUFFIX, NULL);
+#  if _WIN32
+		gchar *env_path = g_strdup_printf("%s=%s", LUA_CPATH, path);
+		_putenv(env_path);
+		g_free(env_path);
+#  else
+		g_setenv(LUA_CPATH, path, 1);
+#  endif
+		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, path);
+
+		g_free(path);
+	} else {
+		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, g_getenv(LUA_CPATH));
+	}
+# endif
+
+	/* assign the mysqld part to the */
+	network_mysqld_init(srv); /* starts the also the lua-scope, LUA_PATH and LUA_CPATH have to be set before this being called */
+
 
 #ifdef HAVE_SIGACTION
 	/* register the sigsegv interceptor */
@@ -658,11 +612,11 @@ int main_cmdline(int argc, char **argv) {
 	
 	/* Lets find the plugin directory relative the executable path */
 	if (!plugin_dir) {
-		/* for Win32 the default plugin dir is bin/ and not lib/package_name */
+		/* for Win32 the default plugin dir is bin/ and not lib/package_name/plugins */
 #ifdef WIN32
-		plugin_dir = g_strconcat(srv->base_dir, G_DIR_SEPARATOR_S, "bin", NULL);
+		plugin_dir = g_build_filename(srv->base_dir, "bin", NULL);
 #else
-		plugin_dir = g_strconcat(srv->base_dir, G_DIR_SEPARATOR_S, "lib", G_DIR_SEPARATOR_S, PACKAGE, NULL);
+		plugin_dir = g_build_filename(srv->base_dir, "lib", PACKAGE, "plugins", NULL);
 #endif
 	}
 	/* 
@@ -763,6 +717,7 @@ int main_cmdline(int argc, char **argv) {
 		g_free(plugin_filename);
 
 		if (print_version && p) {
+			if (0 == i) printf("  == plugins ==" CHASSIS_NEWLINE); /* print the == plugins line only once */
 			if (0 == strcmp(plugin_names[i], p->name)) {
                 printf("  %s: %s" CHASSIS_NEWLINE, p->name, p->version);
 			} else {
@@ -876,6 +831,16 @@ int main_cmdline(int argc, char **argv) {
 		exit_code = EXIT_FAILURE;
 		goto exit_nicely;
 	}
+
+	/* make sure that he max-thread-count isn't negative */
+	if (event_thread_count < 0) {
+		g_critical("unknown option: %s", argv[1]);
+
+		exit_code = EXIT_FAILURE;
+		goto exit_nicely;
+	}
+
+	srv->event_thread_count = event_thread_count;
 	
 #ifndef _WIN32	
 	signal(SIGPIPE, SIG_IGN);
@@ -976,7 +941,6 @@ int main_cmdline(int argc, char **argv) {
 		}
 	}
 #endif
-
 	if (chassis_mainloop(srv)) {
 		/* looks like we failed */
 

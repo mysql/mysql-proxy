@@ -31,6 +31,10 @@
 
 #include "chassis-plugin.h"
 
+/**
+ * @deprecated will be removed in 1.0
+ * @see chassis_plugin_new()
+ */
 chassis_plugin *chassis_plugin_init(void) {
 	return chassis_plugin_new();
 }

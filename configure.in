@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT(mysql-proxy, 0.7.0, mysql-proxy-discuss@lists.launchpad.net)
+AC_INIT(mysql-proxy, 0.8.0, mysql-proxy-discuss@lists.launchpad.net)
 AC_CONFIG_SRCDIR([src/chassis.c])
 
 AC_CANONICAL_TARGET
@@ -167,14 +167,13 @@ fi
  
 dnl Check if we are to build with bundled shared libraries,
 dnl in non standard location (just unpack a TAR anywhere).
-AC_MSG_CHECKING(if with using wrapper script and bundled libraries)
-AC_ARG_WITH(wrapper-script,
-	AC_HELP_STRING([--with-wrapper-script],[use wrapper script (default=yes)]),
-	[],
-	[WITH_WRAPPER_SCRIPT=yes])
-AS_IF([test "x$with_wrapper_script" = xno],
-		[WITH_WRAPPER_SCRIPT=no],
-		[WITH_WRAPPER_SCRIPT=yes]
+AC_MSG_CHECKING(if build will be self-contained)
+AC_ARG_ENABLE(self-contained,
+	AC_HELP_STRING([--enable-self-contained],[use wrapper script (default=no)])
+	)
+AS_IF([test "x$enable_self_contained" = xyes],
+		[WITH_WRAPPER_SCRIPT=yes],
+		[WITH_WRAPPER_SCRIPT=no]
 	)
 AC_MSG_RESULT($WITH_WRAPPER_SCRIPT)
 AM_CONDITIONAL(USE_WRAPPER_SCRIPT, test x$WITH_WRAPPER_SCRIPT = xyes)
@@ -184,8 +183,8 @@ AC_MSG_CHECKING(if with lua)
 AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua]),
 [WITH_LUA=$withval],[WITH_LUA=yes])
 
-AC_MSG_RESULT($WITH_LUA)
 if test "$WITH_LUA" != "no"; then
+ AC_MSG_RESULT($WITH_LUA)
  # try pkgconfig
  if test "$WITH_LUA" = "yes"; then
     LUAPC=lua
@@ -205,6 +204,8 @@ if test "$WITH_LUA" != "no"; then
 
  AC_SUBST(LUA_CFLAGS)
  AC_SUBST(LUA_LIBS)
+else
+ AC_MSG_ERROR([MySQL Proxy can't be built using --without-lua, lua 5.1 is required])
 fi
 
 PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.16.0, [
@@ -344,8 +345,10 @@ dnl cli plugin requires readline, so we disable it for now
 dnl AC_CONFIG_FILES([plugins/cli/Makefile])
 AC_CONFIG_FILES([plugins/debug/Makefile])
 
-dnl Create the wrapper script for starting mysql-proxy
+dnl Create the wrapper script for starting mysql-proxy in self-contained builds
 AC_CONFIG_FILES([scripts/Makefile])
+AC_CONFIG_FILES([scripts/mysql-myisam-dump:scripts/mysql-proxy-binwrapper.in], [chmod +x scripts/mysql-myisam-dump])
+AC_CONFIG_FILES([scripts/mysql-binlog-dump:scripts/mysql-proxy-binwrapper.in], [chmod +x scripts/mysql-binlog-dump])
 AC_CONFIG_FILES([scripts/mysql-proxy:scripts/mysql-proxy-binwrapper.in], [chmod +x scripts/mysql-proxy])
 
 AC_OUTPUT

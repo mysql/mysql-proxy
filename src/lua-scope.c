@@ -43,6 +43,10 @@ static int proxy_lua_panic (lua_State *L);
 
 static void *chassis_lua_alloc(void *userdata, void *ptr, size_t osize, size_t nsize);
 
+/**
+ * @deprecated will be removed in 1.0
+ * @see lua_scope_new()
+ */
 lua_scope *lua_scope_init(void) {
 	return lua_scope_new();
 }

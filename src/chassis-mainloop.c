@@ -42,6 +42,7 @@
 #include <glib.h>
 #include "chassis-plugin.h"
 #include "chassis-mainloop.h"
+#include "chassis-event-thread.h"
 #include "chassis-log.h"
 #include "chassis-stats.h"
 
@@ -51,7 +52,10 @@ static volatile int signal_shutdown;
 static volatile sig_atomic_t signal_shutdown;
 #endif
 
-
+/**
+ * @deprecated will be removed in 1.0
+ * @see chassis_new()
+ */
 chassis *chassis_init() {
 	return chassis_new();
 }
@@ -68,6 +72,8 @@ chassis *chassis_new() {
 	
 	chas->stats = chassis_stats_new();
 
+	chas->threads = chassis_event_threads_new();
+
 	return chas;
 }
 
@@ -77,7 +83,7 @@ chassis *chassis_new() {
  *
  * closes all open connections, cleans up all plugins
  *
- * @param m      global context
+ * @param chas      global context
  */
 void chassis_free(chassis *chas) {
 	guint i;
@@ -119,6 +125,8 @@ void chassis_free(chassis *chas) {
 	if (chas->user) g_free(chas->user);
 	
 	if (chas->stats) chassis_stats_free(chas->stats);
+
+	if (chas->threads) chassis_event_threads_free(chas->threads);
 
 	g_free(chas);
 }
@@ -192,23 +200,12 @@ static void event_log_use_glib(int libevent_log_level, const char *msg) {
 	g_log(G_LOG_DOMAIN, glib_log_level, "(libevent) %s", msg);
 }
 
-/**
- * init libevent
- *
- * kqueue has to be called after the fork() of daemonize
- *
- * @param m      global context
- */
-static void chassis_init_libevent(chassis *chas) {
-	chas->event_base  = event_init();
-
-	event_set_log_callback(event_log_use_glib);
-}
 
 int chassis_mainloop(void *_chas) {
 	chassis *chas = _chas;
 	guint i;
 	struct event ev_sigterm, ev_sigint, ev_sighup;
+	chassis_event_thread_t *mainloop_thread;
 
 #ifdef _WIN32
 	WORD wVersionRequested;
@@ -224,8 +221,19 @@ int chassis_mainloop(void *_chas) {
 		return err;	/* err is positive */
 	}
 #endif
-	/* init the event-handlers */
-	chassis_init_libevent(chas);
+	/* redirect logging from libevent to glib */
+	event_set_log_callback(event_log_use_glib);
+
+
+	/* add a event-handler for the "main" events */
+	mainloop_thread = chassis_event_thread_new();
+	chassis_event_threads_init_thread(chas->threads, mainloop_thread, chas);
+	chassis_event_threads_add(chas->threads, mainloop_thread);
+
+	chas->event_base = mainloop_thread->event_base; /* all global events go to the 1st thread */
+
+	g_assert(chas->event_base);
+
 
 	/* setup all plugins all plugins */
 	for (i = 0; i < chas->modules->len; i++) {
@@ -293,28 +301,32 @@ int chassis_mainloop(void *_chas) {
 	}
 #endif
 
-	/**
-	 * check once a second if we shall shutdown the proxy
-	 */
-	while (!chassis_is_shutdown()) {
-		struct timeval timeout;
-		int r;
+	if (chas->event_thread_count < 1) chas->event_thread_count = 0;
 
-		timeout.tv_sec = 1;
-		timeout.tv_usec = 0;
-
-		g_assert(event_base_loopexit(chas->event_base, &timeout) == 0);
-
-		r = event_base_dispatch(chas->event_base);
-
-		if (r == -1) {
-			if (errno == EINTR) continue;
-
-			g_critical("%s: event_base_dispatch() failed: %s (%d)", 
-					G_STRLOC, g_strerror(errno), errno);
-			break;
-		}
+	/* create the event-threads
+	 *
+	 * - dup the async-queue-ping-fds
+	 * - setup the events notification
+	 * */
+	for (i = 0; i < chas->event_thread_count; i++) {
+		chassis_event_thread_t *event_thread;
+	
+		event_thread = chassis_event_thread_new();
+		chassis_event_threads_init_thread(chas->threads, event_thread, chas);
+		chassis_event_threads_add(chas->threads, event_thread);
 	}
+
+	/* start the event threads */
+	if (chas->event_thread_count > 0) {
+		chassis_event_threads_start(chas->threads);
+	}
+
+	/**
+	 * handle signals and all basic events into the main-thread
+	 *
+	 * block until we are asked to shutdown
+	 */
+	chassis_event_thread_loop(mainloop_thread);
 
 	signal_del(&ev_sigterm);
 	signal_del(&ev_sigint);

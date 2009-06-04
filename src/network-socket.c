@@ -30,6 +30,14 @@
 #include <sys/types.h>
 #endif
 
+#ifdef HAVE_SYS_FILIO_H
+/**
+ * required for FIONREAD on solaris
+ */
+#include <sys/filio.h>
+#endif
+
+
 #include <arpa/inet.h> /** inet_ntoa */
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -119,8 +127,9 @@ int network_queue_append(network_queue *queue, GString *s) {
 /**
  * get a string from the head of the queue and leave the queue unchanged 
  *
- * @param  peek_len bytes to collect
- * @param  dest 
+ * @param  queue the queue to read from
+ * @param  peek_len  bytes to collect
+ * @param  dest      GString to write it. If NULL, we allow a new one and return it
  * @return NULL if not enough data
  *         if dest is not NULL, dest, otherwise a new GString containing the data
  */
@@ -253,8 +262,8 @@ void network_socket_free(network_socket *s) {
 /**
  * portable 'set non-blocking io'
  *
- * @param fd      socket-fd
- * @return        0
+ * @param sock    a socket
+ * @return        NETWORK_SOCKET_SUCCESS on success, NETWORK_SOCKET_ERROR on error
  */
 network_socket_retval_t network_socket_set_non_blocking(network_socket *sock) {
 	int ret;
@@ -283,9 +292,7 @@ network_socket_retval_t network_socket_set_non_blocking(network_socket *sock) {
  *
  * event handler for listening connections
  *
- * @param event_fd     fd on which the event was fired
- * @param events       the event that was fired
- * @param user_data    the listening connection handle
+ * @param srv    a listening socket 
  * 
  */
 network_socket *network_socket_accept(network_socket *srv) {
@@ -390,8 +397,8 @@ network_socket_retval_t network_socket_connect_finish(network_socket *sock) {
  *
  * the sock->addr has to be set before 
  * 
- * @param con    a socket 
- * @return       0 on connected, -1 on error, -2 for try again
+ * @param sock    a socket 
+ * @return        NETWORK_SOCKET_SUCCESS on connected, NETWORK_SOCKET_ERROR on error, NETWORK_SOCKET_ERROR_RETRY for try again
  * @see network_address_set_address()
  */
 network_socket_retval_t network_socket_connect(network_socket *sock) {
@@ -724,6 +731,7 @@ static network_socket_retval_t G_GNUC_UNUSED network_socket_write_send(network_s
 /**
  * write a content of con->send_queue to the socket
  *
+ * @param con         socket to read from
  * @param send_chunks number of chunks to send, if < 0 send all
  *
  * @returns NETWORK_SOCKET_SUCCESS on success, NETWORK_SOCKET_ERROR on error and NETWORK_SOCKET_WAIT_FOR_EVENT if the call would have blocked 

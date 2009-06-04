@@ -1,14 +1,19 @@
+luaextdir = ${pkglibdir}/lua
+plugindir = ${pkglibdir}/plugins
+
 
 BUILD_CPPFLAGS = $(LUA_CFLAGS) $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS)
-BUILD_CFLAGS   = -DDATADIR="\"$(pkgdatadir)\""  -DLIBDIR="\"$(pkglibdir)\""
+BUILD_CFLAGS   = -DLUAEXTDIR="\"$(luaextdir)\""  -DPLUGINDIR="\"$(plugindir)\""
 BUILD_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la $(GTHREAD_LIBS) libmysql-proxy.la
 
 BUILT_SOURCES =
 if USE_WRAPPER_SCRIPT
+## we are self-contained
+## put all the binaries into a "hidden" location, the wrapper scripts are in ./scripts/
+libexec_PROGRAMS = mysql-binlog-dump mysql-proxy mysql-myisam-dump
+else
 bin_PROGRAMS            = mysql-binlog-dump mysql-myisam-dump
 sbin_PROGRAMS			= mysql-proxy
-else
-sbin_PROGRAMS			= mysql-proxy mysql-binlog-dump mysql-myisam-dump
 endif
 
 mysql_proxy_SOURCES		= chassis.c 
@@ -27,11 +32,11 @@ mysql_myisam_dump_CFLAGS	= $(BUILD_CFLAGS)
 mysql_myisam_dump_LDADD		= $(BUILD_LDADD)
 
 
-pkglib_LTLIBRARIES = 
+lib_LTLIBRARIES = 
 
 ## the core library
-pkglib_LTLIBRARIES += libmysql-chassis.la
-pkglib_LTLIBRARIES += libmysql-proxy.la
+lib_LTLIBRARIES += libmysql-chassis.la
+lib_LTLIBRARIES += libmysql-proxy.la
 libmysql_proxy_la_SOURCES = \
 	network-mysqld.c \
 	network-mysqld-lua.c \
@@ -62,13 +67,15 @@ libmysql_chassis_la_SOURCES = \
 	chassis-plugin.c \
 	chassis-log.c \
 	chassis-mainloop.c \
+	chassis-event-thread.c \
 	chassis-keyfile.c \
+	chassis-path.c \
 	chassis-stats.c
 
 
 libmysql_chassis_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
-libmysql_chassis_la_CPPFLAGS = $(MYSQL_CFLAGS) $(EVENT_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
-libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMODULE_LIBS)
+libmysql_chassis_la_CPPFLAGS = $(MYSQL_CFLAGS) $(EVENT_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS)
+libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS)
 
 
 noinst_HEADERS=\
@@ -89,6 +96,8 @@ noinst_HEADERS=\
 	chassis-log.h \
 	chassis-keyfile.h \
 	chassis-mainloop.h \
+	chassis-path.h \
+	chassis-event-thread.h \
 	glib-ext.h \
 	lua-load-factory.h \
 	lua-scope.h \

@@ -1,11 +1,7 @@
-
-## install the wrapper script if requested
 if USE_WRAPPER_SCRIPT
-bin_SCRIPTS	    		= mysql-proxy
+## create wrappers for all the binaries defined in src/Makefile
+bin_SCRIPTS             = mysql-binlog-dump mysql-myisam-dump
+sbin_SCRIPTS		= mysql-proxy
+
+CLEANFILES = $(bin_SCRIPTS) $(sbin_SCRIPTS)
 endif
-
-EXTRA_DIST = \
-	mysql-proxy-binwrapper.in
-
-distclean-local:
-	-rm mysql-proxy

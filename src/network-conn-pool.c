@@ -85,6 +85,10 @@ static void g_queue_free_all(gpointer q) {
 	g_queue_free(queue);
 }
 
+/**
+ * @deprecated: will be removed in 1.0
+ * @see network_connection_pool_new()
+ */
 network_connection_pool *network_connection_pool_init(void) {
 	return network_connection_pool_new();
 }
@@ -164,6 +168,7 @@ GQueue *network_connection_pool_get_conns(network_connection_pool *pool, GString
  *
  * @param pool connection pool to get the connection from
  * @param username (optional) name of the auth connection
+ * @param default_db (unused) unused name of the default-db
  */
 network_socket *network_connection_pool_get(network_connection_pool *pool,
 		GString *username,

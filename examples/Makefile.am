@@ -1,9 +1,6 @@
-## for automake 1.9.6
-##
-## see http://www.mail-archive.com/automake@gnu.org/msg13232.html
-docdir = ${datadir}/doc/${PACKAGE}
+EXTRA_DIST=
 
-dist_doc_DATA=\
+example_scripts = \
 	tutorial-basic.lua \
 	tutorial-inject.lua \
 	tutorial-rewrite.lua \
@@ -18,5 +15,11 @@ dist_doc_DATA=\
 	tutorial-states.lua \
 	tutorial-routing.lua \
 	tutorial-monitor.lua
+
+if USE_WRAPPER_SCRIPT
+dist_doc_DATA = ${example_scripts}
+else
+EXTRA_DIST += ${example_scripts}
+endif
 
 # EXTRA_DIST=CMakeLists.txt

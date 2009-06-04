@@ -36,6 +36,10 @@
  */
 
 /*@{*/
+/**
+ * @test check that network_mysqld_masterinfo_new() returns non-NULL 
+ *   and that network_mysqld_masterinfo_free() doesn't crash
+ */
 void t_masterinfo_new(void) {
 	network_mysqld_masterinfo_t *info;
 
@@ -45,6 +49,12 @@ void t_masterinfo_new(void) {
 	network_mysqld_masterinfo_free(info);
 }
 
+/**
+ * @test 
+ *   network_mysqld_masterinfo_get() can decode a protocol string and
+ *   network_mysqld_masterinfo_append() can encode the internal structure and 
+ *     turns it back into the orignal string
+ */
 void t_masterinfo_get(void) {
 #define PACKET "15\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\n\n\n\n\n\n0\n"
 	network_mysqld_masterinfo_t *info;
@@ -81,6 +91,11 @@ void t_masterinfo_get(void) {
 
 	network_mysqld_masterinfo_free(info);
 }
+
+/**
+ * @cond
+ *   don't include the main() function the docs
+ */
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
@@ -90,6 +105,7 @@ int main(int argc, char **argv) {
 
 	return g_test_run();
 }
+/** @endcond */
 #else
 int main() {
 	return 77;

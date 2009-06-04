@@ -76,6 +76,10 @@ const struct {
 	{ NULL, 0, 0, 0 }
 };
 
+/**
+ * @deprecated will be removed in 1.0
+ * @see chassis_log_new()
+ */
 chassis_log *chassis_log_init(void) {
 	return chassis_log_new();
 }

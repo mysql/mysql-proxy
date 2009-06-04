@@ -18,14 +18,25 @@
 #
 # $%ENDLICENSE%$ 
 #
-# wrapper script for sbin/mysql-proxy
+# wrapper script for self-contained packaging
+#
+# we assume that this script is located in
+#
+#   {basedir}/bin/mysql-proxy
+#
+# and wants to call
+#
+#   {basedir}/libexec/mysql-proxy
+#
+# You can inject a wrapper like
+#
+#   $ MYSQL_PROXY_WRAPPER=valgrind ./sbin/mysql-proxy
+#
 
 scriptdir=`dirname $0`
 scriptname=`basename $0`
 scriptdir=`(cd "$scriptdir/"; pwd)`
 scriptdir=`dirname "$scriptdir"`
-@DYNLIB_PATH_VAR@="$scriptdir"/lib/@PACKAGE_NAME@
-LUA_PATH="$scriptdir"/share/@PACKAGE_NAME@/?.lua
-LUA_CPATH="$scriptdir"/lib/@PACKAGE_NAME@/?.so
-export @DYNLIB_PATH_VAR@ LUA_PATH LUA_CPATH
-exec "$scriptdir/sbin/$scriptname" "$@"
+@DYNLIB_PATH_VAR@="$scriptdir"/lib/
+export @DYNLIB_PATH_VAR@
+exec $MYSQL_PROXY_WRAPPER "$scriptdir/libexec/$scriptname" "$@"

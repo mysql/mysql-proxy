@@ -1,6 +1,7 @@
+luaextdir = ${pkglibdir}/lua/
 
-pkgdata_proxydir = $(pkgdatadir)/proxy
-dist_pkgdata_proxy_DATA = \
+pkglib_proxydir = $(luaextdir)/proxy
+dist_pkglib_proxy_DATA = \
 		 auto-config.lua \
 		 balance.lua \
 		 commands.lua \

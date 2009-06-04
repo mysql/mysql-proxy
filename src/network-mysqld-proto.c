@@ -66,8 +66,8 @@
  * _off is incremented on success 
  *
  * @param packet   the MySQL-packet to decode
- * @param _off     offset in into the packet 
- * @return the decoded number
+ * @param v        destination of the integer
+ * @return 0 on success, non-0 on error 
  *
  */
 int network_mysqld_proto_get_lenenc_int(network_packet *packet, guint64 *v) {
@@ -131,7 +131,6 @@ int network_mysqld_proto_get_lenenc_int(network_packet *packet, guint64 *v) {
  * a assertion makes sure that we can't skip over the end of the packet 
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
  * @param size   bytes to skip
  *
  */
@@ -147,7 +146,7 @@ int network_mysqld_proto_skip(network_packet *packet, gsize size) {
  * get a fixed-length integer from the network packet 
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
+ * @param v      destination of the integer
  * @param size   byte-len of the integer to decode
  * @return a the decoded integer
  */
@@ -199,8 +198,8 @@ int network_mysqld_proto_get_int_len(network_packet *packet, guint64 *v, gsize s
  * get a 8-bit integer from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return a the decoded integer
+ * @param v      dest for the number
+ * @return 0 on success, non-0 on error
  * @see network_mysqld_proto_get_int_len()
  */
 int network_mysqld_proto_get_int8(network_packet *packet, guint8 *v) {
@@ -219,8 +218,8 @@ int network_mysqld_proto_get_int8(network_packet *packet, guint8 *v) {
  * get a 8-bit integer from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return a the decoded integer
+ * @param v      dest for the number
+ * @return 0 on success, non-0 on error
  * @see network_mysqld_proto_get_int_len()
  */
 int network_mysqld_proto_peek_int8(network_packet *packet, guint8 *v) {
@@ -240,8 +239,8 @@ int network_mysqld_proto_peek_int8(network_packet *packet, guint8 *v) {
  * get a 16-bit integer from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return a the decoded integer
+ * @param v      dest for the number
+ * @return 0 on success, non-0 on error
  * @see network_mysqld_proto_get_int_len()
  */
 int network_mysqld_proto_get_int16(network_packet *packet, guint16 *v) {
@@ -260,8 +259,8 @@ int network_mysqld_proto_get_int16(network_packet *packet, guint16 *v) {
  * get a 16-bit integer from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return a the decoded integer
+ * @param v      dest for the number
+ * @return 0 on success, non-0 on error
  * @see network_mysqld_proto_get_int_len()
  */
 int network_mysqld_proto_peek_int16(network_packet *packet, guint16 *v) {
@@ -281,8 +280,8 @@ int network_mysqld_proto_peek_int16(network_packet *packet, guint16 *v) {
  * get a 24-bit integer from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return a the decoded integer
+ * @param v      dest for the number
+ * @return 0 on success, non-0 on error
  * @see network_mysqld_proto_get_int_len()
  */
 int network_mysqld_proto_get_int24(network_packet *packet, guint32 *v) {
@@ -302,8 +301,8 @@ int network_mysqld_proto_get_int24(network_packet *packet, guint32 *v) {
  * get a 32-bit integer from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return a the decoded integer
+ * @param v      dest for the number
+ * @return 0 on success, non-0 on error
  * @see network_mysqld_proto_get_int_len()
  */
 int network_mysqld_proto_get_int32(network_packet *packet, guint32 *v) {
@@ -320,8 +319,8 @@ int network_mysqld_proto_get_int32(network_packet *packet, guint32 *v) {
  * get a 6-byte integer from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return a the decoded integer
+ * @param v      dest for the number
+ * @return 0 on success, non-0 on error
  * @see network_mysqld_proto_get_int_len()
  */
 int network_mysqld_proto_get_int48(network_packet *packet, guint64 *v) {
@@ -338,8 +337,8 @@ int network_mysqld_proto_get_int48(network_packet *packet, guint64 *v) {
  * get a 8-byte integer from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return a the decoded integer
+ * @param v      dest for the number
+ * @return 0 on success, non-0 on error
  * @see network_mysqld_proto_get_int_len()
  */
 int network_mysqld_proto_get_int64(network_packet *packet, guint64 *v) {
@@ -350,7 +349,8 @@ int network_mysqld_proto_get_int64(network_packet *packet, guint64 *v) {
  * find a 8-bit integer in the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
+ * @param c      character to find
+ * @param pos    offset into the packet the 'c' was found
  * @return a the decoded integer
  * @see network_mysqld_proto_get_int_len()
  */
@@ -380,8 +380,9 @@ int network_mysqld_proto_find_int8(network_packet *packet, guint8 c, guint *pos)
  * get a string from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
+ * @param s      dest of the string
  * @param len    length of the string
+ * @return       0 on success, non-0 otherwise
  * @return the string (allocated) or NULL of len is 0
  */
 int network_mysqld_proto_get_string_len(network_packet *packet, gchar **s, gsize len) {
@@ -424,8 +425,9 @@ int network_mysqld_proto_get_string_len(network_packet *packet, gchar **s, gsize
  * variable length strings are prefixed with variable-length integer defining the length of the string
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return the string
+ * @param s      destination of the decoded string
+ * @param _len    destination of the length of the decoded string, if len is non-NULL
+ * @return 0 on success, non-0 on error
  * @see network_mysqld_proto_get_string_len(), network_mysqld_proto_get_lenenc_int()
  */
 int network_mysqld_proto_get_lenenc_string(network_packet *packet, gchar **s, guint64 *_len) {
@@ -452,8 +454,8 @@ int network_mysqld_proto_get_lenenc_string(network_packet *packet, gchar **s, gu
  * get a NUL-terminated string from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
- * @return       the string
+ * @param s      dest of the string
+ * @return       0 on success, non-0 otherwise
  * @see network_mysqld_proto_get_string_len()
  */
 int network_mysqld_proto_get_string(network_packet *packet, gchar **s) {
@@ -491,7 +493,6 @@ int network_mysqld_proto_get_string(network_packet *packet, gchar **s) {
  * get a GString from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
  * @param len    bytes to copy
  * @param out    a GString which carries the string
  * @return       0 on success, -1 on error
@@ -520,7 +521,6 @@ int network_mysqld_proto_get_gstring_len(network_packet *packet, gsize len, GStr
  * get a NUL-terminated GString from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
  * @param out    a GString which carries the string
  * @return       a pointer to the string in out
  *
@@ -551,9 +551,8 @@ int network_mysqld_proto_get_gstring(network_packet *packet, GString *out) {
  * get a variable-length GString from the network packet
  *
  * @param packet the MySQL network packet
- * @param _off   offset into the packet
  * @param out    a GString which carries the string
- * @return       a pointer to the string in out
+ * @return       0 on success, non-0 on error
  *
  * @see network_mysqld_proto_get_gstring_len(), network_mysqld_proto_get_lenenc_int()
  */

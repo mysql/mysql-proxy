@@ -41,8 +41,15 @@
 #include "chassis-log.h"
 #include "chassis-stats.h"
 
+/** @defgroup chassis Chassis
+ * 
+ * the chassis contains the set of functions that are used by all programs
+ *
+ * */
+/*@{*/
 typedef struct chassis_private chassis_private;
 typedef struct chassis chassis;
+typedef struct chassis_event_threads_t chassis_event_threads_t;
 
 struct chassis {
 	struct event_base *event_base;
@@ -59,6 +66,11 @@ struct chassis {
 	chassis_log *log;
 	
 	chassis_stats_t *stats;			/**< the overall chassis stats, includes lua and glib allocation stats */
+
+	/* network-io threads */
+	gint event_thread_count;
+
+	chassis_event_threads_t *threads;
 };
 
 CHASSIS_API chassis *chassis_init(void) G_GNUC_DEPRECATED;
@@ -75,5 +87,6 @@ CHASSIS_API int chassis_mainloop(void *user_data);
 CHASSIS_API void chassis_set_shutdown(void);
 CHASSIS_API gboolean chassis_is_shutdown(void);
 CHASSIS_API gboolean chassis_resolve_path(chassis *chas, gchar **filename);
+/*@}*/
 
 #endif
