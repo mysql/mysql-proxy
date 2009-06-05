@@ -152,9 +152,13 @@ struct network_mysqld_con {
 	network_mysqld_con_state_t state;
 
 	/**
-	 * The client and server side of the connection as it regards the low-level network implementation.
+	 * The server side of the connection as it pertains to the low-level network implementation.
 	 */
-	network_socket *server, *client;
+	network_socket *server
+	/**
+	 * The client side of the connection as it pertains to the low-level network implementation.
+	 */
+	network_socket *client;
 
 	/**
 	 * A boolean flag indicating that the data sent was larger that the max_packet_size.
