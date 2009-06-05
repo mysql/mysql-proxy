@@ -1,21 +1,23 @@
 /**
-@page page.test-multithreading-network-io Network i/o Multithreading Testing
+@page page.test-multithreading-network-io Test Network i/o Multithreading
 
 
 @section testing_scenarios Testing scenarios:
 
-@li @ref page.test.idle_conn : Establish a lot of connections and let them sit idle
+@li @ref section-test_idle_conn : Establish a lot of connections and let them sit idle
 (basic event handling testing).
-@li @ref page.test.short_lived_connections : Establish a lot of short-lived connections 
+@li @ref section-test_short_lived_connections : Establish a lot of short-lived connections 
 quickly in succession from many clients
 (i.e. simulate fast queries from e.g. PHP apps without a connection pooler)
-@li @ref page.test.active_connections : Establish a lot of connections doing mainly 
+@li @ref section-test_active_connections : Establish a lot of connections doing mainly 
 network i/o, such as selecting huge resultsets and/or inserting blobs.
-@li @ref page.test.semi_active_connections : The same as 3 but be active only on a subset 
+@li @ref section-test_semi_active_connections : The same as 3 but be active only on a subset 
 of the connections (if you have n network threads and m connections 
 only do work on m/n of them) - this tests the event distribution algorithm in the network i/o code
 (currently every event is distributed to an idle thread).
-@li @ref page.test.web_app : Run the MySQL Proxy under load as close to a production like web application environment as possible.
+@li @ref section-test_cont_test : Run the MySQL Proxy under load as close to a production like web application environment as possible.
+@li @ref section-test_ha_test : Kill different components and see how the MySQL Proxy reacts.
+@li @ref section-test_performance_test : This test applies to all previous test scenarios.
 
 
 @section variables Variables to tweak (per test scenario).
@@ -46,12 +48,12 @@ To start we will output all results to a csv file, for later analysis. And we wi
 @li More to come as we develop more tests.
 
 
-@page page.test.idle_conn Idle Connections
+@section section-test_idle_conn Idle Connections
 
 We will use a simple php script that will stablish a connection and stay idle (using sleep()) 
 for an specified number of minutes.
 
-@section section-idle_conn Idle Connections test variables
+@subsection section-idle_conn Idle Connections test variables
 
 On this test we will use different values for:
 
@@ -60,14 +62,12 @@ On this test we will use different values for:
 @li r
 
 
-See @ref page.test-multithreading-network-io for meanings of the variables.
-
-@page page.test.short_lived_connections Short lived Connections
+@section section-test_short_lived_connections Short lived Connections
 
 
 We will resuse the scripts for @ref page.test.idle_conn and add a query like SELECT 1;
 
-@section section-short_lived_conn Short lived Connections test variables
+@subsection section-short_lived_conn Short lived Connections test variables
 
 On this test we will use different values for:
 
@@ -76,17 +76,14 @@ On this test we will use different values for:
 @li r
 @li a
 
-See @ref page.test-multithreading-network-io for meanings of the variables.
 
-
-
-@page page.test.active_connections Active Connections
+@section section-test_active_connections Active Connections
 
 
 Here we will focus on large resultsets, BLOB/TEXT column types. As well as resultsets that bring back large number of rows.
 
 
-@section section-active_conn Active Connections test variables
+@subsection section-active_conn Active Connections test variables
 
 On this test we will use different values for:
 
@@ -97,18 +94,14 @@ On this test we will use different values for:
 @li s_l
 @li s_u
 
-See @ref page.test-multithreading-network-io for meanings of the variables.
-
-
-
-@page page.test.semi_active_connections Subset Active Connections
+@section section-test_semi_active_connections Subset Active Connections
 
 
 Here we will test how the MySQL Proxy distributes the load among the available threads.
 We will resuse the scripts for @ref page.test.idle_conn make the nesessary modifications.
 
 
-@section section-semi_active_conn Subset Active Connections test variables
+@subsection section-semi_active_conn Subset Active Connections test variables
 
 On this test we will use different values for:
 
@@ -119,19 +112,19 @@ On this test we will use different values for:
 @li s_l
 @li s_u
 
-See @ref page.test-multithreading-network-io for meanings of the variables.
 
 
-@page page.test.web_app Web Application
+@section section-test_cont_test Continuous Test
 
 Using jMeter and a web application (SugarCRM), drive load through the proxy and let it run for weeks at the time.
 jMeter allows us to adjust the number of web users that go to the SugarCRM application, as well as collect information about response times, etc.
 
-We will modify our current implementation of jMeter to send the <b>same</b> queries all the time. 
+We will modify our current implementation of jMeter to send the <b>same</b> set of queries all the time. 
 We currently use a random load which is not useful if you try to compare results.
 
+On this test we will monitor resources used by the proxy (CPU, Memory, etc)
 
-@section section-web_app Web Application test variables
+@subsection section-cont_test Continuous test variables
 
 On this test we will use different values for:
 
@@ -140,10 +133,37 @@ On this test we will use different values for:
 @li r
 @li a
 
-See @ref page.test-multithreading-network-io for meanings of the variables.
+
+@section section-test_ha_test HA Test
+
+Here we will force different failures and monitor how the MySQL Proxy handles those states.
+We will start by:
+@li Kill the MySQL Proxy (and test the keepalive option).
+@li Drop network packets (using a firewall rule).
+@li Kill the backend MySQL server.
+@li Kill the connections right after they have sent a query through the proxy.
+
+@subsection section-ha_test HA test variables
+
+On this test we will use different values for:
+
+@li c
+@li t
+@li r
+@li a
 
 
+@section section-test_performance_test Performance Test
 
+This isn't a different test, but it describes what we will do on all the different test scenarios.
+
+We will monitor resources used by the proxy process, including cpu and memory usage.
+We will also keep a record of:
+
+@li Queries/sec
+@li Query times (how long does the same query take to execute)
+
+We will store this information per build. This will allow us to detect regression.
 
 
 
