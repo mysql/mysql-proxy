@@ -154,7 +154,7 @@ struct network_mysqld_con {
 	/**
 	 * The server side of the connection as it pertains to the low-level network implementation.
 	 */
-	network_socket *server
+	network_socket *server;
 	/**
 	 * The client side of the connection as it pertains to the low-level network implementation.
 	 */
