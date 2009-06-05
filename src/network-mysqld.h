@@ -82,6 +82,23 @@ typedef struct {
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_cleanup);
 } network_mysqld_hooks;
 
+/**
+ * A structure containing the parsed packet for a command packet as well as the common parts necessary to find the correct
+ * packet parsing function.
+ * 
+ * The correct parsing function is chose by looking at both the current state as well as the command in this structure.
+ * 
+ * @todo Currently the plugins are responsible for setting the first two fields of this structure. We have to investigate
+ * how we can refactor this into a more generic way.
+ */
+struct network_mysqld_con_parse {
+	guint32 len;						/**< The overall length of the packet */
+	enum enum_server_command command;	/**< The command indicator from the MySQL Protocol */
+
+	gpointer data;						/**< An opaque pointer to a parsed command structure */
+	void (*data_free)(gpointer);		/**< A function pointer to the appropriate "free" function of data */
+};
+
 typedef enum { 
 	CON_STATE_INIT = 0, 
 	CON_STATE_CONNECT_SERVER = 1, 
@@ -105,66 +122,122 @@ typedef enum {
 	CON_STATE_CLOSE_SERVER = 17
 } network_mysqld_con_state_t;
 
-
+/**
+ * Encapsulates the state and callback functions for a MySQL protocol-based connection to and from MySQL Proxy.
+ * 
+ * New connection structures are created by the function responsible for handling the accept on a listen socket, which
+ * also is a network_mysqld_con structure, but only has a server set - there is no "client" for connections that we listen on.
+ * 
+ * The chassis itself does not listen on any sockets, this is left to each plugin. Plugins are free to create any number of
+ * connections to listen on, but most of them will only create one and reuse the network_mysqld_con_accept function to set up an
+ * incoming connection.
+ * 
+ * Each plugin can register callbacks for the various states in the MySQL Protocol, these are set in the member plugins.
+ * A plugin is not required to implement any callbacks at all, but only those that it wants to customize. Callbacks that
+ * are not set, will cause the MySQL Proxy core to simply forward the received data.
+ */
 struct network_mysqld_con {
 	/**
-	 * SERVER:
-	 * - CON_STATE_INIT
-	 * - CON_STATE_SEND_HANDSHAKE
-	 * - CON_STATE_READ_AUTH
-	 * - CON_STATE_SEND_AUTH_RESULT
-	 * - CON_STATE_READ_QUERY
-	 * - CON_STATE_SEND_QUERY_RESULT
-	 *
-	 * Proxy does all states
-	 *
-	 * replication client needs some init to work
-	 * - SHOW MASTER STATUS 
-	 *   to get the binlog-file and the pos 
+	 * The current/next state of this connection.
+	 * 
+	 * When the protocol state machine performs a transition, this variable will contain the next state,
+	 * otherwise, while performing the action at state, it will be set to the connection's current state
+	 * in the MySQL protocol.
+	 * 
+	 * Plugins may update it in a callback to cause an arbitrary state transition, however, this may result
+	 * reaching an invalid state leading to connection errors.
+	 * 
+	 * @see network_mysqld_con_handle
 	 */
-	network_mysqld_con_state_t state;                      /**< the current/next state of this connection */
+	network_mysqld_con_state_t state;
 
 	/**
-	 * the client and server side of the connection
-	 *
-	 * each connection has a internal state
-	 * - default_db
+	 * The client and server side of the connection as it regards the low-level network implementation.
 	 */
 	network_socket *server, *client;
 
+	/**
+	 * A boolean flag indicating that the data sent was larger that the max_packet_size.
+	 * 
+	 * This is used for commands that need to send large amounts of data, e.g. blobs, to correctly
+	 * parse the following packet received (which will not appear to have a valid packet header otherwise).
+	 */
 	int is_overlong_packet;
 
+	/**
+	 * Function pointers to the plugin's callbacks.
+	 * 
+	 * Plugins don't need set any of these, but if unset, the plugin will not have the opportunity to
+	 * alter the behavior of the corresponding protocol state.
+	 * 
+	 * @note In theory you could use functions from different plugins to handle the various states, but there is no guarantee that
+	 * this will work. Generally the plugins will assume that config is their own chassis_plugin_config (a plugin-private struct)
+	 * and violating this constraint may lead to a crash.
+	 * @see chassis_plugin_config
+	 */
 	network_mysqld_hooks plugins;
-	chassis_plugin_config *config; /** config for this plugin */
+	
+	/**
+	 * A pointer to a plugin-private struct describing configuration parameters.
+	 * 
+	 * @note The actual struct definition used is private to each plugin.
+	 */
+	chassis_plugin_config *config;
 
+	/**
+	 * A pointer back to the global, singleton chassis structure.
+	 */
 	chassis *srv; /* our srv object */
 
+	/**
+	 * A boolean flag indicating that this connection should only be used to accept incoming connections.
+	 * 
+	 * It does not follow the MySQL protocol by itself and its client network_socket will always be NULL.
+	 */
 	int is_listen_socket;
 
+	/**
+	 * An integer indicating the result received from a server after sending an authentication request.
+	 * 
+	 * This is used to differentiate between the old, pre-4.1 authentication and the new, 4.1+ one based on the response.
+	 */
 	guint8 auth_result_state;
 
-	/* if we don't need the resultset itself, we can forward it redirectly
-	 *
-	 * - set to TRUE _is_needed and we will buffer it
-	 * - set to FALSE and we'll try to forward the packets to the client 
-	 *   even before the full result-set is parsed
-	 *
-	 * _is_finished is used to track if we have read the full resultset (internal)
-	 * */
+	/** Flag indicating if we the plugin doesn't need the resultset itself.
+	 * 
+	 * If set to TRUE, the plugin needs to see the entire resultset and we will buffer it.
+	 * If set to FALSE, the plugin is not interested in the content of the resultset and we'll
+	 * try to forward the packets to the client directly, even before the full resultset is parsed.
+	 */
 	gboolean resultset_is_needed;
+	/**
+	 * Flag indicating whether we have seen all parts belonging to one resultset.
+	 */
 	gboolean resultset_is_finished;
 
+	/**
+	 * Flag indicating that we are processing packets from a LOAD DATA LOCAL command.
+	 */
 	gboolean in_load_data_local_state;
+	/**
+	 * Flag indicating that we have received a COM_QUIT command.
+	 * 
+	 * This is mainly used to differentiate between the case where the server closed the connection because of some error
+	 * or if the client asked it to close its side of the connection.
+	 * MySQL Proxy would report spurious errors for the latter case, if we failed to track this command.
+	 */
 	gboolean com_quit_seen;
 
-	struct {
-		guint32 len;
-		enum enum_server_command command;
+	/**
+	 * Contains the parsed packet.
+	 */
+	struct network_mysqld_con_parse parse;
 
-		gpointer data;
-		void (*data_free)(gpointer);
-	} parse;
-
+	/**
+	 * An opaque pointer to a structure describing extra connection state needed by the plugin.
+	 * 
+	 * The content and meaning is completely up to each plugin and the chassis will not access this in any way.
+	 */
 	void *plugin_con_state;
 };
 
