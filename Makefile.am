@@ -7,12 +7,25 @@ EXTRA_DIST = \
 		README.TESTS \
 		autogen.sh \
 		mysql-proxy.spec \
-		winbuild.bat
+		winbuild.bat \
+		doxygen-scripts
 
 ACLOCAL_AMFLAGS = -I m4
 
 dist-hook:
 	rm -rf `find $(distdir) -type d -name .bzr -print`
+
+## very basic documentation targets, there's no check for doxygen and related tools yet
+docs:
+	@cd $(top_srcdir) ; \
+	(cat Doxyfile ; echo PROJECT_NUMBER=$(PACKAGE_VERSION)) | doxygen - ; \
+	cd $(top_builddir)
+
+## pull out some bzr information from the current branch and set the documentation's project number accordingly
+docs-bzr:
+	@cd $(top_srcdir) ; \
+	(cat Doxyfile ; echo PROJECT_NUMBER=`sh doxygen-config/project_number_bzr.sh $(PACKAGE_VERSION)`) | doxygen - ; \
+	cd $(top_builddir)
 
 ## this check is in the toplevel Makefile intentionally,
 ## to catch the case when Lua is statically linked more than once 
