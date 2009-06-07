@@ -15,3 +15,5 @@ EXTRA_DIST=\
 	   run-tests.lua \
 	   lua-tests-wrapper.sh.in
 
+clean-local:
+	-rm `find . -type f -name "*.log"`
