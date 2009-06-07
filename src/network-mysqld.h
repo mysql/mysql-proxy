@@ -241,6 +241,8 @@ struct network_mysqld_con {
 	 * An opaque pointer to a structure describing extra connection state needed by the plugin.
 	 * 
 	 * The content and meaning is completely up to each plugin and the chassis will not access this in any way.
+	 * 
+	 * @note In practice, all current plugins and the chassis assume this to be network_mysqld_con_lua_t.
 	 */
 	void *plugin_con_state;
 };

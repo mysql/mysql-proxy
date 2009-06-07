@@ -268,9 +268,6 @@ static network_mysqld_lua_stmt_ret admin_lua_read_query(network_mysqld_con *con)
 		    0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("LOAD "))) return PROXY_SEND_QUERY;
 	}
 
-	/* reset the query status */
-	memset(&(st->injected.qstat), 0, sizeof(st->injected.qstat));
-	
 	network_injection_queue_reset(st->injected.queries);
 
 	/* ok, here we go */

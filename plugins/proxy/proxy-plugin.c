@@ -961,9 +961,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 	
 	}
 
-	/* reset the query status */
-	memset(&(st->injected.qstat), 0, sizeof(st->injected.qstat));
-	
 	network_injection_queue_reset(st->injected.queries);
 
 	/* ok, here we go */
