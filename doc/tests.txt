@@ -6,9 +6,10 @@
 @li @subpage tools
 
 @li @ref section-test_idle_conn : Establish a lot of connections and let them sit idle (basic event handling testing).
-@li @ref section-test_short_lived_connections : Establish a lot of short-lived connections quickly in succession from many clients (i.e. simulate fast queries from e.g. PHP apps without a connection pooler)
-@li @ref section-test_active_connections : Establish a lot of connections doing mainly network i/o, such as selecting huge resultsets and/or inserting blobs.
-@li @ref section-test_semi_active_connections : The same as 3 but be active only on a subset of the connections (if you have n network threads and m connections only do work on m/n of them) - this tests the event distribution algorithm in the network i/o code (currently every event is distributed to an idle thread).
+@li @ref section-test_short_lived_connections : Establish a lot of short-lived connections, quickly and in succession, 
+from many clients (i.e. simulating fast queries from e.g. PHP applications without a connection pooler).
+@li @ref section-test_active_connections : Establish a lot of connections, mainly doing network i/o. Such as selecting huge resultsets and/or inserting blobs.
+@li @ref section-test_semi_active_connections : The same as the previous test, but be active only on a subset of the connections (if you have n network threads and m connections only do work on m/n of them) - this tests the event distribution algorithm in the network i/o code (currently every event is distributed to an idle thread).
 @li @ref section-test_cont_test : Run the MySQL Proxy under load as close to a production like web application environment as possible.
 @li @ref section-test_ha_test : Kill different components and see how the MySQL Proxy reacts.
 @li @ref section-test_performance_test : This test applies to all previous test scenarios.
@@ -18,16 +19,16 @@
 
 @subsection section-test_idle_conn Idle Connections
 
-We will use a simple php script that will stablish a connection and stay idle (using sleep()) 
+We will use a simple php script that will stablish a connection, and stay idle (using PHP's sleep() function) 
 for an specified number of minutes.
 
 @subsection section-idle_conn Idle Connections test variables
 
 On this test we will use different values for:
 
-@li c
-@li t
-@li r
+@li <b>(c)</b> Number of connections.
+@li <b>(t)</b> Number of threads.
+@li <b>(r)</b> Rate of connection we establish.
 
 
 @subsection section-test_short_lived_connections Short lived Connections
@@ -39,10 +40,10 @@ We will resuse the scripts for @ref page.test.idle_conn and add a query like SEL
 
 On this test we will use different values for:
 
-@li c
-@li t
-@li r
-@li a
+@li <b>(c)</b> Number of connections.
+@li <b>(t)</b> Number of threads.
+@li <b>(r)</b> Rate of connection we establish.
+@li <b>(a)</b> Number of active connections (i.e. connections on which there actually is something going on).
 
 
 @subsection section-test_active_connections Active Connections
@@ -55,31 +56,32 @@ Here we will focus on large resultsets, BLOB/TEXT column types. As well as resul
 
 On this test we will use different values for:
 
-@li c
-@li t
-@li r
-@li a
-@li s_l
-@li s_u
+@li <b>(c)</b> Number of connections.
+@li <b>(t)</b> Number of threads.
+@li <b>(r)</b> Rate of connection we establish.
+@li <b>(a)</b> Number of active connections (i.e. connections on which there actually is something going on).
+@li <b>(s_l) (size_lower)</b> Lower size limit of the resultset on each connection.
+@li <b>(s_u) (size_upper)</b> Upper size limit of the resultset on each connection.
 
 @subsection section-test_semi_active_connections Subset Active Connections
 
 
 Here we will test how the MySQL Proxy distributes the load among the available threads.
-We will resuse the scripts for @ref page.test.idle_conn make the nesessary modifications.
+We will resuse the scripts for @ref page.test.idle_conn and make the nesessary modifications,
+to only have a subset of those connections as active connections.
 
 
 @subsection section-semi_active_conn Subset Active Connections test variables
 
 On this test we will use different values for:
 
-@li c
-@li t
-@li r
-@li a
-@li s_l
-@li s_u
 
+@li <b>(c)</b> Number of connections.
+@li <b>(t)</b> Number of threads.
+@li <b>(r)</b> Rate of connection we establish.
+@li <b>(a)</b> Number of active connections (i.e. connections on which there actually is something going on).
+@li <b>(s_l) (size_lower)</b> Lower size limit of the resultset on each connection.
+@li <b>(s_u) (size_upper)</b> Upper size limit of the resultset on each connection.
 
 
 @subsection section-test_cont_test Continuous Test
@@ -96,16 +98,16 @@ On this test we will monitor resources used by the proxy (CPU, Memory, etc)
 
 On this test we will use different values for:
 
-@li c
-@li t
-@li r
-@li a
+@li <b>(c)</b> Number of connections.
+@li <b>(t)</b> Number of threads.
+@li <b>(r)</b> Rate of connection we establish.
+@li <b>(a)</b> Number of active connections (i.e. connections on which there actually is something going on).
 
 
 @subsection section-test_ha_test HA Test
 
 Here we will force different failures and monitor how the MySQL Proxy handles those states.
-We will start by:
+We will:
 @li Kill the MySQL Proxy (and test the keepalive option).
 @li Drop network packets (using a firewall rule).
 @li Kill the backend MySQL server.
@@ -115,11 +117,10 @@ We will start by:
 
 On this test we will use different values for:
 
-@li c
-@li t
-@li r
-@li a
-
+@li <b>(c)</b> Number of connections.
+@li <b>(t)</b> Number of threads.
+@li <b>(r)</b> Rate of connection we establish.
+@li <b>(a)</b> Number of active connections (i.e. connections on which there actually is something going on).
 
 @subsection section-test_performance_test Performance Test
 
@@ -131,9 +132,10 @@ We will also keep a record of:
 @li Queries/sec
 @li Query times (how long does the same query take to execute)
 
+Each result will include all the information related to each test run, number of connections, threads, etc.
+This will show the impact of each setting on used resources.
+
 We will store this information per build. This will allow us to detect regression.
-
-
 
 
 @page variables Variables to tweak (per test scenario).
@@ -141,19 +143,22 @@ We will store this information per build. This will allow us to detect regressio
 @li <b>(c)</b> Number of connections.
 @li <b>(a)</b> Number of active connections (i.e. connections on which there actually is something going on).
 @li <b>(s_l) (size_lower)</b> and <b>(s_u) (size_upper)</b> Size of the resultsets/blobs on each connection, that should be a range.
-@li <b>(r)</b> Rate of connection establishing.
+@li <b>(r)</b> Rate of connection we establish.
 @li <b>(t)</b> Number of threads.
-@li We will start with no script at all to keep it simple.
+@li We will start with no script at all to keep the tests scenarios simple. But we plan on adding Lua scripts later on.
 
 
 @page information_collected Information to collect.
 
-To start we will output all results to a csv file, for later analysis. And we will collect
+To start we will output all results to a csv file, for later analysis. We will be able to easily create graphs as well.
+
+We will collect:
 
 @li Query time (with and without proxy in between)
 @li Number of queries/seconds (with and without proxy in between)
 @li Network traffic  MB/Sec
 @li Proxy CPU and Memory usage.
+@li All the settings we used to run each test.
 
 
 @page tools The tools we plan to use are:
