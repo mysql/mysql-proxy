@@ -24,7 +24,7 @@ docs:
 ## pull out some bzr information from the current branch and set the documentation's project number accordingly
 docs-bzr:
 	@cd $(top_srcdir) ; \
-	(cat Doxyfile ; echo PROJECT_NUMBER=`sh doxygen-config/project_number_bzr.sh $(PACKAGE_VERSION)`) | doxygen - ; \
+	(cat Doxyfile ; echo PROJECT_NUMBER=`sh doxygen-scripts/project_number_bzr.sh $(PACKAGE_VERSION)`) | doxygen - ; \
 	cd $(top_builddir)
 
 ## this check is in the toplevel Makefile intentionally,
