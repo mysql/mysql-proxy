@@ -64,34 +64,35 @@ exposes the init and shutdown functions.
 
 For the MySQL Proxy you usually load plugins like:
 
-@li proxy
-@li debug
+@li @ref page-plugin-proxy
+@li @ref page-plugin-admin
 
-... which interface with MySQL @ref section-lifecycle (see below). 
+... which interface with MySQL @ref section-lifecycle. 
 
 @page page-core Network Core
 
-The core exposes Connection Life Cycle to the plugins through callbacks. The plugins can
-decide how get from one state to the next. 
+The Network core is built around the socket handling and brings a client and server connection
+together. 
+
+@see network_socket
+@see network_mysqld_con
 
 @section section-lifecycle Connection Life Cycle
 
-The MySQL Proxy protocol has 4 phases:
+Connections can be in one of several states which are basicly resembling the 4 basic phases
+of the @ref protocol:
 
 @li connect
 @li authentification
 @li query
 @li disconnect
 
-@see lifecycle.msc
+The plugins can change the default behaviour of the network core and impliment one of three 
+basic plugins:
 
-The lifecycle image shows the default implementation of the proxy plugin. It implements all 
-the callbacks and exposes them to its scripting layer. It implements the listening and the
-connecting side and forwards packets between them
-
-Other plugins may implement only one side of the callbacks:
-@li admin plugin implements only the listening side
+@li @ref page-plugin-admin implements only the listening side
 @li client plugins implement only the connection side
+@li @ref page-plugin-proxy implements both sides 
 
 @subsection section-scripting Scripting
 
