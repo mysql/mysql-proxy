@@ -16,6 +16,8 @@
 
  $%ENDLICENSE%$ */
 
+/** @addtogroup unittests Unit tests */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,15 +31,10 @@
 
 #define START_TEST(x) void (x)(void)
 
-/**
- * Tests for the chassis basedir handling
- * @ingroup path
- */
-
 /*@{*/
 
 /**
- * load 
+ * @test Resolve a relative path against an absolute base directory.
  */
 START_TEST(test_path_basedir) {
 	gchar *filename;
@@ -57,6 +54,9 @@ START_TEST(test_path_basedir) {
 	chassis_free(chas);
 }
 
+/**
+ * @test Resolving a relative path against a missing base directory does not modify the relative directory.
+ */
 START_TEST(test_no_basedir) {
 	gchar *filename;
 	chassis *chas;
@@ -66,7 +66,7 @@ START_TEST(test_no_basedir) {
 	
 	filename = g_strdup("some/relative/path/file");
 	
-	/* resolving this path must lead to changing the filename */
+	/* resolving this path must not lead to changing the filename */
 	g_assert_cmpint(chassis_resolve_path(chas, &filename), ==, 0);
 	
 	g_assert_cmpint(g_strcmp0("some/relative/path/file", filename), ==, 0);
@@ -75,6 +75,9 @@ START_TEST(test_no_basedir) {
 	chassis_free(chas);
 }
 
+/**
+ * @test Resolving an absolute path against an absolute basedir has no effect and does not change the directory to be resolved.
+ */
 START_TEST(test_abspath_basedir) {
 	gchar *filename;
 	chassis *chas;

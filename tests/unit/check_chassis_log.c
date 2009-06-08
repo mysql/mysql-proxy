@@ -16,6 +16,8 @@
 
  $%ENDLICENSE%$ */
 
+/** @addtogroup unittests Unit tests */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,15 +31,10 @@
 
 #define START_TEST(x) void (x)(void)
 
-/**
- * Tests for the plugin interface
- * @ingroup plugin
- */
-
 /*@{*/
 
 /**
- * load 
+ * @test Test log message coalescing.
  */
 START_TEST(test_log_compress) {
 	chassis_log *l;
