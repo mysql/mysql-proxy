@@ -6,4 +6,5 @@ EXTRA_DIST = \
 	     chassis.txt \
 	     plugins.txt \
 	     tests.txt \
+	     scripting.txt \
 	     lifecycle.msc

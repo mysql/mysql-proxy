@@ -1,0 +1,42 @@
+/**
+
+@page page-scripting Lua Scripting
+
+The @ref page-plugin-proxy exposes the internals of the MySQL Protocol into a scripting layer allowing you to 
+change the behaviour of the proxy with a few lines of code without having to understand all the internals.
+
+@li @subpage page-examples
+@li @subpage page-lua-classes
+
+@page page-lua-classes Classes
+
+All structures structures are exposes as tables into Lua. If you want to know the clients username in the @c read_query() function
+you can check
+
+@verbatim
+  print(proxy.connection.client.username)
+@endverbatim
+
+Please check the class-diagram below:
+
+@li @c r if it is readable
+@li @c w if it is writable
+@li @c x if it is a function
+
+@dotfile doc/lua-classes.dot
+
+@page page-examples Tutorial
+
+@li @subpage page-examples-basic
+@li @subpage page-examples-states
+
+@page page-examples-basic a Minimal Example
+
+@include examples/tutorial-basic.lua
+
+@page page-examples-states States
+
+@include examples/tutorial-states.lua
+
+
+*/
