@@ -1,0 +1,84 @@
+/**
+@page page-chassis Chassis
+
+@section section-chassisconfigfile Configfile and Commandline Options
+
+GLib2 provides us with config-file parser and a command-line option parser. We want to expose 
+most options in the same way and accept them from the config-file and the command-line.
+
+The options are parsed in two steps:
+
+@li extract the basic command-line options:
+  \c --help
+  \c --version
+  \c --defaults-file
+@li process the defaults-file 
+@li process the other command-line options to override the defaults-file
+
+@see src/chassis-keyfile.h and src/chassic.c
+
+@section section-chassisplugin Plugin Interface
+
+The chassis provides the fundamentals for the plugin interface:
+
+@li it can resolve the path for plugins
+@li can load them in a portable way
+@li does version checks
+@li calls init and shutdown functions 
+@li exposes the configuration options to the plugins
+
+@see src/chassis-plugin.h and struct chassis_plugin
+
+As the chassis is not MySQL specific it can load any kind of plugin as long as it 
+exposes the init and shutdown functions. 
+
+For the MySQL Proxy you usually load plugins like:
+
+@li @ref page-plugin-proxy
+@li @ref page-plugin-admin
+
+... which interface with MySQL @ref section-lifecycle. 
+
+@section section-threaded-io Threaded IO
+
+  In MySQL 0.8 we added threaded network-io to allow the proxy to scale out with the numbers of CPUs 
+and network cards available.
+
+To enable network-threading you just start the proxy with:
+
+@verbatim
+  --event-threads={2 * no-of-cores} (default: 0)
+@endverbatim
+
+A event-thread is a simple small thread around "event_base_dispatch()" which on a network- or time-event
+executes our core functions. These threads either execute the core functions or idle. If they idle 
+they can read new events to wait for and add them to their wait-list.
+
+A connection can jump between event-threads: the idling event-thread is taking the wait-for-event
+request and executes the code. Whenever the connection has to wait for a event again it is unregister
+itself from the thread, send its wait-for-event request to the global event-queue again.
+
+  Up to MySQL Proxy 0.8 the execution of the scripting code is single-threaded: a global mutex protects
+the plugin interface. As a connection is either sending packets or calling plugin function the network 
+events will be handled in parallel and only wait if several connections want to call a plugin function
+
+@subsection section-threaded-io-impl Implementation
+
+In chassis-event-thread.c the chassis_event_thread_loop() is the event-thread itself. It gets setup by
+chassis_event_threads_init_thread() which registers itself to a pipe(), a classic simple pipe. That
+pipe is a common hack in libevent to map any kind of event to a the fd-based event-handlers like poll:
+
+@li the @c event_base_dispatch() blocks until a fd-event triggers
+@li timers, signals, ... can't interrupt @c event_base_dispatch() directly
+@li instead they cause a @c write(pipe_fd, ".", 1); which triggers a fd-event
+    which afterwards gets handled
+
+In chassis-event-thread.c we use the pipe to signal that something is in the global event-queue to be
+processed by one of the event-threads ... see chassis_event_handle(). All idling threads will process
+that even and will pull from the event queue in parallel to add the event to their events to listen for.
+
+To add a event to the event-queue you can call chassis_event_add() or chassis_event_add_local(). See 
+the source when to use which.
+
+
+*/
