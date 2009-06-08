@@ -22,7 +22,7 @@
 #endif
 
 /** 
- * @page proxy_states The internal states of the Proxy
+ * @page page-plugin-proxy Proxy plugin
  *
  * The MySQL Proxy implements the MySQL Protocol in its own way. 
  *

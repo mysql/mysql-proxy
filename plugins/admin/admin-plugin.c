@@ -15,7 +15,12 @@
  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
  $%ENDLICENSE%$ */
- 
+
+/**
+ * @page page-plugin-admin Administration plugin
+ * 
+ * Description forthcoming.
+ */
 
 #include <string.h>
 #include <stdlib.h>

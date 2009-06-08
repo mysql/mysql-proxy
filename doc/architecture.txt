@@ -13,23 +13,23 @@ You can use it for:
 
 It is built of different components that which are stacked and can be used independently:
 
-@li @ref page.chassis
+@li @subpage page-chassis
   * commandline and configfiles
   * logging
   * daemon/service support
   * plugin loading
-@li @ref protocol libraries
+@li @subpage protocol
   * MySQL
     * client protocol
     * binlog protocol
     * myisam files
     * frm files
     * masterinfo files
-@li @ref page.core
+@li @subpage page-core
   * connection life-cycle
-@li plugins 
+@li @ref page-plugins 
 
-@page page.chassis Chassis
+@page page-chassis Chassis
 
 @section section-chassisconfigfile Configfile and Commandline Options
 
@@ -69,7 +69,7 @@ For the MySQL Proxy you usually load plugins like:
 
 ... which interface with MySQL @ref section-lifecycle (see below). 
 
-@page page.core Network Core
+@page page-core Network Core
 
 The core exposes Connection Life Cycle to the plugins through callbacks. The plugins can
 decide how get from one state to the next. 
