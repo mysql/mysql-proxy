@@ -186,4 +186,26 @@ Building
 
 You should have a /usr/local/sbin/mysql-proxy now.
 
+Documentation
+=============
 
+MySQL Proxy uses doxygen for its documentation. In order to make the best use out of the documentation, you
+need to have these packages installed (and in your path):
+
+ - Doxygen: http://doxygen.org
+ - Graphviz: http://graphviz.org
+ - MSCGen: http://www.mcternan.me.uk/mscgen/
+
+All of these programs are available for various popular platforms.
+
+After installing these programs, generating the documentation is as simple as:
+
+  $ make docs
+or
+  $ make docs-bzr
+
+The latter command produces the same documentation as the first one, the only difference is that it will include more detailed
+information about the version the documentation was generated from, which is useful if you work with the source from Launchpad
+directly: The documentation's version number will include the revision number and the date of the last commit in your tree.
+
+MySQL Proxy's documentation is generated as HTML output in the doxygen/html/ directory.
