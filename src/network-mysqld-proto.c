@@ -47,7 +47,7 @@
 #define CRASHME() do { char *_crashme = NULL; *_crashme = 0; } while(0);
 
 /**
- * a handy marco for constant strings 
+ * a handy macro for constant strings 
  */
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
