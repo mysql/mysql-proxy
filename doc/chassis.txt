@@ -93,7 +93,7 @@ should get called whenever a new connection is made. For the Proxy plugin this i
 The accept handler is registered on the main thread's event_base (which is the same as the global chassis level event_base).
 After setting up the network_mysqld_con structure it then proceeds to call the state machine handler, network_mysqld_con_handle(),
 still on the main thread.<br>
-The state machine enters its start state @CON_STATE_INIT, which currently will @b always execute on the main thread.<br>
+The state machine enters its start state ::CON_STATE_INIT, which currently will @b always execute on the main thread.<br>
 At the first point where MySQL Proxy needs to interact with either the client or the server (either waiting for the socket
 to be readable or needing to establish a connection to a backend), network_mysqld_con_handle() will schedule an @em event
 @em wait @em request (a chassis_event_op_t). It does so by adding the event structure into a asynchronous queue and generating a
