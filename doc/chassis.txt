@@ -77,8 +77,12 @@ In chassis-event-thread.c we use the pipe to signal that something is in the glo
 processed by one of the event-threads ... see chassis_event_handle(). All idling threads will process
 that even and will pull from the event queue in parallel to add the event to their events to listen for.
 
-To add a event to the event-queue you can call chassis_event_add() or chassis_event_add_local(). See 
-the source when to use which.
-
+To add a event to the event-queue you can call chassis_event_add() or chassis_event_add_local(). In general
+all events are handled by the global event base, only in the case where we use the connection pool we force
+events for the server connection to be delivered to the same thread that added it to the pool.<br>
+If the event would be delivered to the global event base a different thread could pick it up and that would
+modify the unprotected connection pool datastructure, leading to race conditions and crashes. Making the
+internal datastructures threadsafe is part of the 0.9 release cycle, thus only the minimal amount of
+threadsafety is guaranteed right now.
 
 */
