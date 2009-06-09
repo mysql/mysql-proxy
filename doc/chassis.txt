@@ -87,9 +87,34 @@ threadsafety is guaranteed right now.
 
 A typical control flow is depicted below (this does not describe the case where a connection pool is involved).
 
+@msc
+    hscale = "1.5";
+    EventRequestQueue, MainThread, WorkerThread1, WorkerThread2;
+    --- [ label = "Accepting new connection "];
+    MainThread -> MainThread [ label = "network_mysqld_con_accept()" ];
+    MainThread -> MainThread [ label = "network_mysqld_con_handle()" ];
+
+    MainThread -> EventRequestQueue [ label = "Add wait-for-event request" ];
+    WorkerThread1 <- EventRequestQueue [ label = "Retrieve Event request" ];
+    WorkerThread1 -> WorkerThread1 [ label = "event_base_dispatch()" ];
+    ...;
+    WorkerThread1 -> WorkerThread1 [ label = "network_mysqld_con_handle()" ];
+    
+    WorkerThread1 -> EventRequestQueue [ label = "Add wait-for-event request" ];
+    
+    WorkerThread2 <- EventRequestQueue [ label = "Retrieve Event request" ];
+    WorkerThread2 -> WorkerThread2 [ label = "event_base_dispatch()" ];
+    ...;
+    WorkerThread2 -> WorkerThread2 [ label = "network_mysqld_con_handle()" ];
+    
+    WorkerThread2 -> EventRequestQueue [ label = "Add wait-for-event request" ];
+    ...;
+@endmsc
+
+
 In this example there are two event threads (<tt>--event-threads=2</tt>), each of which has its own @c event_base.
-@c Plugin could for example be the Proxy plugin, that opens a socket to listen on and sets the accept handler which
-should get called whenever a new connection is made. For the Proxy plugin this is network_mysqld_con_accept().<br>
+The network_mysqld_con_accept() could for example be from the Proxy plugin, that opens a socket to listen on and sets the accept handler which
+should get called whenever a new connection is made.<br>
 The accept handler is registered on the main thread's event_base (which is the same as the global chassis level event_base).
 After setting up the network_mysqld_con structure it then proceeds to call the state machine handler, network_mysqld_con_handle(),
 still on the main thread.<br>
