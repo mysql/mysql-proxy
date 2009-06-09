@@ -29,5 +29,5 @@ It is built of different components that which are stacked and can be used indep
   * connection life-cycle
 @li @ref page-plugins 
 
-
+@dotfile architecture.dot
 */ 
