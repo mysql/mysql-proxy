@@ -85,4 +85,59 @@ modify the unprotected connection pool datastructure, leading to race conditions
 internal datastructures threadsafe is part of the 0.9 release cycle, thus only the minimal amount of
 threadsafety is guaranteed right now.
 
+A typical control flow is depicted below (this does not describe the case where a connection pool is involved).
+
+In this example there are two event threads (<tt>--event-threads=2</tt>), each of which has its own @c event_base.
+@c Plugin could for example be the Proxy plugin, that opens a socket to listen on and sets the accept handler which
+should get called whenever a new connection is made. For the Proxy plugin this is network_mysqld_con_accept().<br>
+The accept handler is registered on the main thread's event_base (which is the same as the global chassis level event_base).
+After setting up the network_mysqld_con structure it then proceeds to call the state machine handler, network_mysqld_con_handle(),
+still on the main thread.<br>
+The state machine enters its start state @CON_STATE_INIT, which currently will @b always execute on the main thread.<br>
+At the first point where MySQL Proxy needs to interact with either the client or the server (either waiting for the socket
+to be readable or needing to establish a connection to a backend), network_mysqld_con_handle() will schedule an @em event
+@em wait @em request (a chassis_event_op_t). It does so by adding the event structure into a asynchronous queue and generating a
+file descriptor event by writing a single byte into the write file descriptor for the pipe mentioned above.
+
+Typically another thread will pick up this request from the queue (although in theory it could end up on the same thread
+that issued the wait request) which will then add it to its thread-local event_base to be notified whenever the file
+descriptor is ready.
+
+This process continues until a connection is closed by a client or server or a network error occurs causing the sockets to
+be closed. After that no new wait requests will be scheduled.
+
+A single thread can have any number of events added to its thread-local event_base. It is only when a new blocking I/O
+operation is necessary that the events can travel between threads, but not at any other point. Thus it is theoretically
+possible that one thread ends up with all the active sockets while the other threads are idling.<br>
+However, since waiting for network events happens quite frequently, active connections should spread among the threads
+fairly quickly, easing the pressure on the thread having the most active connections to process.
+
+Note that, even though not depicted below, the main thread currently takes part in processing events after the accept
+state. This is not ideal because all accepted connections need to go through a single thread. On the other hand, it has
+not shown up as a bottleneck yet.
+
+@msc
+    hscale = "1.5";
+    Plugin, MainThread, MainThreadEventBase, EventRequestQueue, WorkerThread1, WorkerThread1EventBase, WorkerThread2, WorkerThread2EventBase;
+    --- [ label = "Accepting new connection "];
+    Plugin -> MainThread [ label = "network_mysqld_con_accept()" ];
+    MainThread -> MainThread [ label = "network_mysqld_con_handle()" ];
+
+    MainThread -> EventRequestQueue [ label = "Add wait-for-event request" ];
+    WorkerThread1 <- EventRequestQueue [ label = "Retrieve Event request" ];
+    WorkerThread1 -> WorkerThread1EventBase [ label = "Wait for event on local event base" ];
+    ...;
+    WorkerThread1EventBase >> WorkerThread1 [ label = "Process event" ];
+    
+    WorkerThread1 -> EventRequestQueue [ label = "Add wait-for-event request" ];
+    
+    WorkerThread2 <- EventRequestQueue [ label = "Retrieve Event request" ];
+    WorkerThread2 -> WorkerThread2EventBase [ label = "Wait for event on local event base" ];
+    ...;
+    WorkerThread2EventBase >> WorkerThread2 [ label = "Process event" ];
+    
+    WorkerThread2 -> EventRequestQueue [ label = "Add wait-for-event request" ];
+    ...;
+@endmsc
+
 */
