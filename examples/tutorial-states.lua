@@ -25,16 +25,18 @@ function connect_server()
 	print("--> a client really wants to talk to a server")
 end
 
-function read_handshake( auth )
+function read_handshake( )
+	local con = proxy.connection
+
 	print("<-- let's send him some information about us")
-	print("    mysqld-version: " .. auth.mysqld_version)
-	print("    thread-id     : " .. auth.thread_id)
-	print("    scramble-buf  : " .. string.format("%q", auth.scramble))
-	print("    server-addr   : " .. auth.server_addr)
-	print("    client-addr   : " .. auth.client_addr)
+	print("    mysqld-version: " .. con.server.mysqld_version)
+	print("    thread-id     : " .. con.server.thread_id)
+	print("    scramble-buf  : " .. string.format("%q", con.server.scramble_buffer))
+	print("    server-addr   : " .. con.server.dst.address)
+	print("    client-addr   : " .. con.client.src.address)
 
 	-- lets deny clients from !127.0.0.1
-	if not auth.client_addr:match("^127.0.0.1:") then
+	if con.client.src.address ~= "127.0.0.1" then
 		proxy.response.type = proxy.MYSQLD_PACKET_ERR
 		proxy.response.errmsg = "only local connects are allowed"
 
@@ -44,13 +46,15 @@ function read_handshake( auth )
 	end
 end
 
-function read_auth( auth )
-	print("--> there, look, the client is responding to the server auth packet")
-	print("    username      : " .. auth.username)
-	print("    password      : " .. string.format("%q", auth.password))
-	print("    default_db    : " .. auth.default_db)
+function read_auth( )
+	local con = proxy.connection
 
-	if auth.username == "evil" then
+	print("--> there, look, the client is responding to the server auth packet")
+	print("    username      : " .. con.client.username)
+	print("    password      : " .. string.format("%q", con.client.scrambled_password))
+	print("    default_db    : " .. con.client.default_db)
+
+	if con.client.username == "evil" then
 		proxy.response.type = proxy.MYSQLD_PACKET_ERR
 		proxy.response.errmsg = "evil logins are not allowed"
 		

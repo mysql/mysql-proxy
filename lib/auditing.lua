@@ -18,17 +18,21 @@
 
 local user = ""
 
-function read_handshake( auth )
+function read_handshake( )
+	local con = proxy.connection
+
 	print("<-- let's send him some information about us")
-	print("    server-addr   : " .. auth.server_addr)
-	print("    client-addr   : " .. auth.client_addr)
+	print("    server-addr   : " .. con.server.dst.name)
+	print("    client-addr   : " .. con.client.src.name)
 end
 
-function read_auth( auth )
-	print("--> there, look, the client is responding to the server auth packet")
-	print("    username      : " .. auth.username)
+function read_auth( )
+	local con = proxy.connection
 
-	user = auth.username
+	print("--> there, look, the client is responding to the server auth packet")
+	print("    username      : " .. con.client.username)
+
+	user = con.client.username
 end
 
 function read_auth_result( auth )
