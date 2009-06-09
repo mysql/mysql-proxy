@@ -28,15 +28,64 @@ Please check the class-diagram below:
 @page page-examples Tutorial
 
 @li @subpage page-examples-basic
+@li @subpage page-examples-exectime
+@li @subpage page-examples-rewrite
+@li @subpage page-examples-warnings
+@li @subpage page-examples-resultset
+@li @subpage page-examples-union
+@li @subpage page-examples-inject
 @li @subpage page-examples-states
+@li @subpage page-examples-packets
+@li @subpage page-examples-tokenize
 
 @page page-examples-basic a Minimal Example
 
 @include examples/tutorial-basic.lua
 
+
+
+@page page-examples-exectime Execution Time
+
+@include examples/tutorial-query-time.lua
+
+
+@page page-examples-rewrite Rewriting Queries
+
+@include examples/tutorial-rewrite.lua
+
+
+@page page-examples-warnings Logging all warnings
+
+@include examples/tutorial-warnings.lua
+
+
+@page page-examples-resultset Creating resultsets
+
+@include examples/tutorial-resultset.lua
+
+
+@page page-examples-union Merging resultsets
+
+@include examples/tutorial-union.lua
+
+
+@page page-examples-inject Query Injection
+
+@include examples/tutorial-inject.lua
+
+
 @page page-examples-states States
 
 @include examples/tutorial-states.lua
 
+
+@page page-examples-packets Exploring the Packets content
+
+@include examples/tutorial-packets.lua
+
+
+@page page-examples-tokenize Tokenizing Queries
+
+@include examples/tutorial-tokenize.lua
 
 */
