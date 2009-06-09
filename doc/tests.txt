@@ -1,5 +1,30 @@
 /**
-@page page.test-multithreading-network-io Test Network I/O Multithreading
+@page page.test-multithreading-network-io Testing: Performance and Scalability
+
+Prior to the multithreading changes in MySQL Proxy 0.8 performance and scalability testing was rather limited in scope, mainly because the user did not have too many options tuning it.
+
+The rule of thumb given for estimating performance characteristics went as follows:
+
+In a single-threaded imlpementation, overall throughput of MySQL Proxy entirely depends on the workload. The variables are:
+ - Rate of connection establishment
+ - Ratio of active and idling connections
+ - Average and standard deviation of query execution times
+ - Average and standard deviation of result set sizes
+ - "Synchronicity" of network events (such as queries and result sets coming in)
+ - Execution time of the Lua script callbacks
+
+Note that none of these variables can be directly influenced by the users, maybe with the slight exception of the execution time of the Lua scripts, but even there exists a lower limit and it is usually hard to optimize those in a controlled way, since there's hardly any profiling tools available.
+The rule of thumb then is that the more time MySQL Proxy spends waiting for network events, the better. This observation results from the insight that with event-driven non-blocking I/O the "time in between" events can used to make progress on other connections.<br>
+However, the workload many of our targeted customers aim for is exactly the worst case for MySQL Proxy: Short execution times, small result sets, high rate of new incoming connections (think PHP), and a low rate of active to idle connections.<br>
+Events arriving at roughly the same point in time (the "synchronicity" point above) usually is beyond our and the user's control so we cannot influence that. But it has a high influence on overall throughput because in a single-threaded implementation the progress on the event coming on later would stall until the prior event has been processed.
+
+Careful measurements have shown that if you design a testing scenario in such a way that it targets the worst case, throughput could be as much as 75% worse than if connecting to the backend server directly. In practice this scenario happens rarely, but nonetheless it is unacceptable.
+
+Since the multithreading implementation address some of the points directly (by having more workers to make progress on the independent network events) much of the drawbacks should go away. Furthermore the user now has a directly tunable parameter to adapt MySQL Proxy to his workload: The number of network threads.
+
+The purpose of performance testing then is to quantify the impact architecture and implementation decisions have on the overall throughput, in order to verify our approach, to highlight areas where MySQL Proxy needs improvement and to prevent regressions.
+
+The rest of this document gives an overview of the testing scenarios we plan to employ to cover the above mentioned cases. They are not primarily meant to verify that MySQL Proxy is working correctly, although it is a sideeffect.
 
 @li @subpage variables
 @li @subpage information_collected
