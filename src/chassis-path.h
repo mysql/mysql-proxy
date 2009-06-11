@@ -20,8 +20,9 @@
 #define __CHASSIS_PATH_H__
 
 #include <glib.h>
+#include "chassis-exports.h"
 
-gchar *chassis_get_basedir(const gchar *prgname);
+CHASSIS_API gchar *chassis_get_basedir(const gchar *prgname);
 
 #endif
 

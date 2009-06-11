@@ -24,6 +24,7 @@
 #cmakedefine HAVE_UNISTD_H
 #cmakedefine HAVE_SYSLOG_H
 
+#cmakedefine HAVE_INET_NTOP
 #cmakedefine HAVE_GETCWD
 #cmakedefine HAVE_SIGNAL
 #cmakedefine HAVE_SRANDOM

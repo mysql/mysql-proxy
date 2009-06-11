@@ -27,7 +27,7 @@
 #include <stdlib.h> /* for realpath */
 #endif
 #include "chassis-path.h"
- 
+
 gchar *chassis_get_basedir(const gchar *prgname) {
 	gchar *absolute_path;
 	gchar *bin_dir;

@@ -16,9 +16,15 @@
 
  $%ENDLICENSE%$ */
 
+#include "config.h"
 #include <lua.h>
 
+#ifdef WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
+#endif
 
 #include "lua-env.h"
 #include "glib-ext.h"
@@ -39,25 +45,31 @@ static int proxy_address_get(lua_State *L) {
 	} else if (strleq(key, keysize, C("name"))) {
 		lua_pushlstring(L, S(addr->name));
 	} else if (strleq(key, keysize, C("address"))) {
+#ifdef HAVE_INET_NTOP
 		char dst_addr[INET6_ADDRSTRLEN];
+#endif
 		const char *str = NULL;
 
 		switch (addr->addr.common.sa_family) {
 		case AF_INET:
-			str = inet_ntop(addr->addr.common.sa_family, &addr->addr.ipv4.sin_addr, dst_addr, sizeof(dst_addr));
+			str = inet_ntoa(addr->addr.ipv4.sin_addr);
 			if (!str) {
 				/* it shouldn't really fail, how about logging it ? */ 
 			}
 			break;
+#ifdef HAVE_INET_NTOP
 		case AF_INET6:
 			str = inet_ntop(addr->addr.common.sa_family, &addr->addr.ipv6.sin6_addr, dst_addr, sizeof(dst_addr));
 			if (!str) {
 				/* it shouldn't really fail, how about logging it ? */ 
 			}
 			break;
+#endif
+#ifndef WIN32
 		case AF_UNIX:
 			str = addr->addr.un.sun_path;
 			break;
+#endif
 		default:
 			break;
 		}

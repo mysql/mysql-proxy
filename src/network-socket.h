@@ -51,8 +51,7 @@
 #define closesocket(x) close(x)
 #else
 #include <winsock2.h>
-
-#define socklen_t int
+#include <Ws2tcpip.h>
 #endif
 #include <glib.h>
 #include <event.h>

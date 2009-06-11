@@ -38,8 +38,7 @@
 #include <sys/socket.h>     /** struct sockaddr (freebsd and hp/ux need it) */
 #else
 #include <winsock2.h>
-
-#define socklen_t int
+#include <Ws2tcpip.h>
 #endif
 
 #include "network-exports.h"
