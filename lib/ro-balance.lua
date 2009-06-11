@@ -35,7 +35,6 @@
 --   how do we figure out it is back again ?
 
 require("proxy.auto-config")
-require("proxy.strict")
 
 local commands    = require("proxy.commands")
 
