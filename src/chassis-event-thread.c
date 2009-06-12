@@ -240,6 +240,15 @@ void chassis_event_threads_free(chassis_event_threads_t *threads) {
 	}
 	g_async_queue_unref(threads->event_queue);
 
+	/* close the notification pipe */
+	if (threads->event_notify_fds[0] != -1) {
+		close(threads->event_notify_fds[0]);
+	}
+	if (threads->event_notify_fds[1] != -1) {
+		close(threads->event_notify_fds[1]);
+	}
+
+
 	g_free(threads);
 }
 
