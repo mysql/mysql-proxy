@@ -108,6 +108,14 @@ void chassis_free(chassis *chas) {
 	/* free the pointers _AFTER_ the modules are shutdown */
 	if (chas->priv_free) chas->priv_free(chas, chas->priv);
 
+
+	if (chas->base_dir) g_free(chas->base_dir);
+	if (chas->user) g_free(chas->user);
+	
+	if (chas->stats) chassis_stats_free(chas->stats);
+
+	if (chas->threads) chassis_event_threads_free(chas->threads);
+
 #ifdef HAVE_EVENT_BASE_FREE
 	/* only recent versions have this call */
 
@@ -121,13 +129,6 @@ void chassis_free(chassis *chas) {
 	}
 #endif
 	
-	if (chas->base_dir) g_free(chas->base_dir);
-	if (chas->user) g_free(chas->user);
-	
-	if (chas->stats) chassis_stats_free(chas->stats);
-
-	if (chas->threads) chassis_event_threads_free(chas->threads);
-
 	g_free(chas);
 }
 
