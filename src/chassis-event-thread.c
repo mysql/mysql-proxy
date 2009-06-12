@@ -194,6 +194,7 @@ chassis_event_threads_t *chassis_event_threads_new() {
 
 void chassis_event_threads_free(chassis_event_threads_t *threads) {
 	guint i;
+	chassis_event_op_t *op;
 
 	if (!threads) return;
 
@@ -205,6 +206,11 @@ void chassis_event_threads_free(chassis_event_threads_t *threads) {
 	}
 
 	g_ptr_array_free(threads->event_threads, TRUE);
+
+	/* free the events that are still in the queue */
+	while ((op = g_async_queue_try_pop(threads->event_queue))) {
+		chassis_event_op_free(op);
+	}
 	g_async_queue_unref(threads->event_queue);
 
 	g_free(threads);
