@@ -31,6 +31,11 @@
 
 #define C(x) x, sizeof(x) - 1
 
+/**
+ * create a new event-op
+ *
+ * event-ops are async requests around event_add()
+ */
 chassis_event_op_t *chassis_event_op_new() {
 	chassis_event_op_t *e;
 
@@ -39,6 +44,9 @@ chassis_event_op_t *chassis_event_op_new() {
 	return e;
 }
 
+/**
+ * free a event-op
+ */
 void chassis_event_op_free(chassis_event_op_t *e) {
 	if (!e) return;
 
@@ -132,6 +140,9 @@ void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events
 	}
 }
 
+/**
+ * create the data structure for a new event-thread
+ */
 chassis_event_thread_t *chassis_event_thread_new() {
 	chassis_event_thread_t *event_thread;
 
@@ -140,6 +151,11 @@ chassis_event_thread_t *chassis_event_thread_new() {
 	return event_thread;
 }
 
+/**
+ * free the data-structures for a event-thread
+ *
+ * joins the event-thread, closes notification-pipe and free's the event-base
+ */
 void chassis_event_thread_free(chassis_event_thread_t *event_thread) {
 	gboolean is_thread = (event_thread->thr != NULL);
 
@@ -169,6 +185,12 @@ void chassis_event_thread_set_event_base(chassis_event_thread_t G_GNUC_UNUSED *e
 	g_private_set(tls_event_base_key, event_base);
 }
 
+/**
+ * create the event-threads handler
+ *
+ * provides the event-queue that is contains the event_ops from the event-threads
+ * and notifies all the idling event-threads for the new event-ops to process
+ */
 chassis_event_threads_t *chassis_event_threads_new() {
 	chassis_event_threads_t *threads;
 
@@ -192,6 +214,11 @@ chassis_event_threads_t *chassis_event_threads_new() {
 	return threads;
 }
 
+/**
+ * free all event-threads
+ *
+ * frees all the registered event-threads and event-queue
+ */
 void chassis_event_threads_free(chassis_event_threads_t *threads) {
 	guint i;
 	chassis_event_op_t *op;
@@ -216,6 +243,9 @@ void chassis_event_threads_free(chassis_event_threads_t *threads) {
 	g_free(threads);
 }
 
+/**
+ * add a event-thread to the event-threads handler
+ */
 void chassis_event_threads_add(chassis_event_threads_t *threads, chassis_event_thread_t *thread) {
 	g_ptr_array_add(threads->event_threads, thread);
 }
@@ -274,6 +304,13 @@ void *chassis_event_thread_loop(chassis_event_thread_t *event_thread) {
 	return NULL;
 }
 
+/**
+ * start all the event-threads 
+ *
+ * starts all the event-threads that got added by chassis_event_threads_add()
+ *
+ * @see chassis_event_threads_add
+ */
 void chassis_event_threads_start(chassis_event_threads_t *threads) {
 	guint i;
 
