@@ -152,10 +152,94 @@ are placed into /usr/share/doc/packages/mysql-proxy
 
 Windows
 -------
+Prerequisites:
+Visual C++ 2008 Express  -  http://www.microsoft.com/express/vc/ (free download, but needs free registration to use for more than 30 days)
+bzr (if using Launchpad) -  http://bazaar-vcs.org/Download
+MySQL Server (>5.0)      -  http://dev.mysql.com/downloads/ (5.1 recommended)
+7-Zip                    -  http://www.7-zip.org/ (to open tar.gz files)
+CMake (2.6)              -  http://www.cmake.org/files/v2.6/cmake-2.6.4-win32-x86.exe
+GLib2 (>=2.16)           -  http://www.gtk.org/download-windows.html you need both the "bin" and "dev" binary packages
+libevent (1.4.11)        -  source only: http://monkey.org/~provos/libevent/ (you need the exact version!)
+Lua (>=5.1.4) DLL9       -  from http://luaforge.net/frs/?group_id=110 get the file named lua5_1_4_Win32_dll9_lib.zip
+Flex                     -  binary only: http://gnuwin32.sourceforge.net/packages/flex.htm
 
-To be written...
+Compiling MySQL Proxy on Windows is a bit more involved, mostly because it has some dependencies that are unusual for
+native Windows and unlike on Linux, Windows does not have a package manager like rpm or apt.
+We do not use cygwin to avoid forcing users to install a complete Cygwin environment, even though Cygwin would make
+most of this straightforward.
+However, for all dependencies we need, with the exception of libevent, there are binary packages with DLLs available.
+Libevent must be compiled as a DLL, but MySQL Proxy comes with the patches and CMake files to transparently do so.
 
-C:\work\mysql-lb-win32\trunk>cmake -G "Visual Studio 8 2005" -DFLEX_EXECUTABLE="c:\Program Files\GnuWin32\bin\flex.exe" -DMYSQL_INCLUDE_DIRS="c:\Program Files\MySQL\MySQL Server 5.0\include" -DMYSQL_LIBRARY_DIRS="c:\Program Files\MySQL\MySQL Server 5.0\lib" -DGLIB_INCLUDE_DIRS="c:\Program Files\GTK2-Runtime\include\glib-2.0";"c:\Program Files\GTK2-Runtime\lib\glib-2.0\include" -DGLIB_LIBRARY_DIRS="c:\Program Files\GTK2-Runtime\lib" -DCMAKE_INSTALL_PREFIX=c:\work\install .
+After downloading all the packages from above install both Visual C++ 2008 Express, bzr, 7-Zip, CMake and MySQL Server
+as any other Windows application that comes with an installer.
+Attention: For the MySQL Server be sure to also install the "Developer Components".
+You only need to install the "C Include Files/Lib Files".
+It helps if you make sure to let the installers add their respective programs to the PATH variable, this makes dealing
+with them on the command line easier.
+
+Next, choose a directory where you will build MySQL Proxy and extract the dependencies to. A short path without spaces
+is preferred because it makes it easier to enter the paths when running CMake (this example will use c:\work).
+
+If you have downloaded the source package of MySQL Proxy, extract it to c:\work. If you are using the latest sources from
+Launchpad, you can use the Windows Explorer with the TortoiseBzr plugin to branch the sources to c:\work.
+This example will assume the MySQL Proxy sources are in c:\work\mysql-proxy.
+
+Extract Flex, the two GLib2 packages and Lua to c:\work.
+Note: Some files in the "dev" and "bin" GLib2 packages are identical, simply let 7-Zip overwrite them. The two packages are
+necessary because one contains the .lib files and the other contains the DLLs we need at runtime (they get copied into the
+installer package).
+
+At this point your folder structure in c:\work should look like this (omitting the subdirectories for brevity):
+c:\work\
+    flex\
+    glib\
+    lua\
+    mysql-proxy\
+
+Note that we have not extracted libevent yet. Since we will be building libevent from source with our DLL patches applied,
+we extract libevent into a subdirectory of the MySQL Proxy sources. Using 7-Zip extract the folder libevent-1.4.11-stable into:
+    c:\work\mysql-proxy\deps\
+Attention: When extracting libevent be sure to extract the folder, not the .tar file inside the .tar.gz archive (when opening
+libevent-1.4.11-stable.tar.gz 7-Zip will only follow the .gz part, double click on the libevent-1.4.11-stable.tar inside 7-Zip
+to be able to extract the folder, not the .tar archive!)
+At this point c:\work\mysql-proxy\deps\libevent-1.4.11-stable should be a folder containing source files.
+
+In a command line window, cd to c:\work\mysql-proxy.
+We recommend performing an out-of-source build, i.e. executing CMake from a different directory than were the sources are,
+because that makes it easy to throw away everything that was not part of the source archive - invaluable when fixing with build errors.
+
+Create a directory called "build":
+    mkdir build
+    cd build
+
+Inside the directory c:\work\mysql-proxy\build execute the following CMake command line (you may have to enable word wrapping in the program
+you use to read this since it's all on one line to avoid problems with copy/pasting the command):
+
+cmake -G "Visual Studio 9 2008" -DFLEX_EXECUTABLE=c:\work\flex\bin\flex -DMYSQL_INCLUDE_DIRS="c:\Program Files\MySQL\MySQL Server 5.1\include" -DGLIB_DEV_BASE_DIR=c:\work\glib -DLUA_INCLUDE_DIRS=c:\work\lua\include -DLUA_LIBRARY_DIRS=c:\work\lua -DCMAKE_INSTALL_PREFIX=c:\work\install -DCMAKE_BUILD_TYPE=Release ..
+
+This command should end with a line like this:
+-- Build files have been written to: C:/work/mysql-proxy/build
+
+Now we can actually compile MySQL Proxy:
+You can either open the Visual C++ IDE and open the mysql-proxy.sln Solution file in c:\work\mysql-proxy\build and build the solution, or
+use the vcbuild command from the command line. Both do the same thing.
+At this point, there will be lots of warnings during the compilation, but you can safely ignore them. However there should be no errors.
+
+The build should end in a line like:
+Build complete: 88 Projects succeeded, 0 Projects failed, 28 Projects skipped
+
+You cannot easily run MySQL Proxy from its build directory, because it will not find the necessary DLLs. To produce a ZIP file you can use
+to "install" MySQL Proxy use CPack (part of CMake):
+
+    cpack -G ZIP
+(Note: CPack also supports NSIS installers, so if you have NSIS installed you can use cpack -G NSIS)
+It will produce a ZIP file named like "mysql-proxy-0.7.2-win32.zip" in the directory c:\work\mysql-proxy\build.
+Simply extract this ZIP file to whereever you want to install MySQL Proxy. Inside the new directory there will be the familiar
+bin\mysql-proxy.exe command.
+Verify that it works by running:
+bin\mysql-proxy --help-all
+
+Whew that's it, we are done :)
 
 All other Platforms
 -------------------
