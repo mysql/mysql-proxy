@@ -160,7 +160,7 @@ MySQL Server (>5.0)      -  http://dev.mysql.com/downloads/ (5.1 recommended)
 CMake (2.6)              -  http://www.cmake.org/files/v2.6/cmake-2.6.4-win32-x86.exe
 GLib2 (>=2.16)           -  http://www.gtk.org/download-windows.html you need both the "bin" and "dev" binary packages
 libevent (1.4.11)        -  source only: http://monkey.org/~provos/libevent/ (you need the exact version!)
-Lua (>=5.1.4) DLL9       -  from http://luaforge.net/frs/?group_id=110 get the file named lua5_1_4_Win32_dll9_lib.zip
+Lua (>=5.1.4)            -  source only: http://www.lua.org/download.html
 Flex                     -  binary only: http://gnuwin32.sourceforge.net/packages/flex.htm
 
 Compiling MySQL Proxy on Windows is a bit more involved, mostly because it has some dependencies that are unusual for
@@ -193,8 +193,22 @@ At this point your folder structure in c:\work should look like this (omitting t
 c:\work\
     flex\
     glib\
-    lua\
+    lua-5.1.14\
     mysql-proxy\
+
+Since the Windows binaries available for Lua 5.1 are using a different version of Microsoft's C runtime dlls, we need to compile
+it ourselves. In order to make it work for MySQL Proxy, we need to add two compiler flags to the .bat file Lua provides for
+compiling with Visual Studio.
+In the file etc\luavs.bat, edit this line:
+@set MYCOMPILE=cl /nologo /MD /O2 /W3 /c /D_CRT_SECURE_NO_DEPRECATE
+to:
+@set MYCOMPILE=cl /nologo /MD /O2 /W3 /c /D_CRT_SECURE_NO_DEPRECATE /D_BIND_TO_CURRENT_MFC_VERSION=1 /D_BIND_TO_CURRENT_CRT_VERSION=1
+
+Then go to the Lua source directory and run the .bat file:
+cd c:\work\lua-5.1.4
+etc\luavs.bat
+
+The resulting src\lua51.dll is now linked to the correct runtime DLL and can be used with MySQL Proxy.
 
 Note that we have not extracted libevent yet. Since we will be building libevent from source with our DLL patches applied,
 we extract libevent into a subdirectory of the MySQL Proxy sources. Using 7-Zip extract the folder libevent-1.4.11-stable into:
@@ -215,7 +229,7 @@ Create a directory called "build":
 Inside the directory c:\work\mysql-proxy\build execute the following CMake command line (you may have to enable word wrapping in the program
 you use to read this since it's all on one line to avoid problems with copy/pasting the command):
 
-cmake -G "Visual Studio 9 2008" -DFLEX_EXECUTABLE=c:\work\flex\bin\flex -DMYSQL_INCLUDE_DIRS="c:\Program Files\MySQL\MySQL Server 5.1\include" -DGLIB_DEV_BASE_DIR=c:\work\glib -DLUA_INCLUDE_DIRS=c:\work\lua\include -DLUA_LIBRARY_DIRS=c:\work\lua -DCMAKE_INSTALL_PREFIX=c:\work\install -DCMAKE_BUILD_TYPE=Release ..
+cmake -G "Visual Studio 9 2008" -DFLEX_EXECUTABLE=c:\work\flex\bin\flex -DMYSQL_INCLUDE_DIRS="c:\Program Files\MySQL\MySQL Server 5.1\include" -DGLIB_DEV_BASE_DIR=c:\work\glib -DLUA_INCLUDE_DIRS=c:\work\lua-5.1.4\src -DLUA_LIBRARY_DIRS=c:\work\lua-5.1.4\src -DCMAKE_INSTALL_PREFIX=c:\work\install -DCMAKE_BUILD_TYPE=Release ..
 
 This command should end with a line like this:
 -- Build files have been written to: C:/work/mysql-proxy/build
@@ -223,6 +237,10 @@ This command should end with a line like this:
 Now we can actually compile MySQL Proxy:
 You can either open the Visual C++ IDE and open the mysql-proxy.sln Solution file in c:\work\mysql-proxy\build and build the solution, or
 use the vcbuild command from the command line. Both do the same thing.
+If you want to use the binaries on a different machine than where you compiled them on, be sure to build using the "Release" configuration!
+In the IDE there is a dropdown that let's you select it, or from the command line do:
+cd c:\work\mysql-proxy\build
+vcbuild mysql-proxy.sln "Release|Win32"
 At this point, there will be lots of warnings during the compilation, but you can safely ignore them. However there should be no errors.
 
 The build should end in a line like:
