@@ -64,7 +64,7 @@ IF(WIN32)
 		# SET(EVENT_LIBRARIES "libevent" CACHE PATH "")
 	# ENDIF(EVENT_BASE_DIR)
 	# need to set the lua library's name directly on win32
-	SET(LUA_LIBRARIES "lua5.1")
+	SET(LUA_LIBRARIES "lua51")
     
     # force the correct version for the redist manifest
     ADD_DEFINITIONS(-D_BIND_TO_CURRENT_MFC_VERSION=1 -D_BIND_TO_CURRENT_CRT_VERSION=1)
@@ -282,7 +282,7 @@ IF(WIN32)
 		DESTINATION bin
 	)
 	FIND_FILE(LUA_DLL
-		lua5.1.dll
+		lua51.dll
 		PATHS "${LUA_LIBRARY_DIRS}"
 		NO_DEFAULT_PATH
 	)
