@@ -65,6 +65,11 @@ IF(WIN32)
 	# ENDIF(EVENT_BASE_DIR)
 	# need to set the lua library's name directly on win32
 	SET(LUA_LIBRARIES "lua5.1")
+    
+    # force the correct version for the redist manifest
+    ADD_DEFINITIONS(-D_BIND_TO_CURRENT_MFC_VERSION=1 -D_BIND_TO_CURRENT_CRT_VERSION=1)
+    # turn off security warnings for system calls
+    ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS)
 ENDIF(WIN32)
 
 MESSAGE(STATUS "libevent at libs:${EVENT_LIBRARY_DIRS} incl:${EVENT_INCLUDE_DIRS}")

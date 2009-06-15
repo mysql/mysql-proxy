@@ -36,7 +36,3 @@
 #cmakedefine HAVE_GTHREAD
 #cmakedefine HAVE_GTHREAD_H
 
-#ifdef WIN32
-/* turn off "security" warnings for windows. */
-#define _CRT_SECURE_NO_WARNINGS
-#endif
