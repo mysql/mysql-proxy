@@ -28,9 +28,6 @@
  * @todo move the SQL based help out into a lua script
  */
 
-
-#define SVN_REVISION "$Rev$"
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
