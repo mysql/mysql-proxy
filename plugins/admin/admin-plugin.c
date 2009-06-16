@@ -46,7 +46,34 @@
  *
  * @li replace the hard-coded username, password by a real credential store @see network_mysqld_admin_plugin_apply_config()
  * @li provide a full fleged admin script that exposes all the internal stats @see lib/admin.lua
- * 
+ *
+ * @section plugin-admin-backends Backends 
+ *
+ * @b TODO The admin plugin should also be able to change and add the information about the backends
+ * while the MySQL Proxy is running. It is stored in the @c proxy.global.backends table can be mapped to SQL commands.
+ *
+ * @li support for @c SHOW @c CREATE @c TABLE should return @code
+ *   CREATE TABLE backends {
+ *     id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+ *     address VARCHAR(...) NOT NULL,
+ *     port INT,
+ *     is_enabled INT NOT NULL, -- 0 or 1, a bool
+ *   }
+ * @endcode
+ * @li getting all backends @code
+ *   SELECT * FROM backends;
+ *   SELECT * FROM backends WHERE id = 1;
+ * @endcode
+ * @li disable backends (a flag needs to be added to the backend code) @code
+ *   UPDATE backends SET is_enabled = 0;
+ * @endcode
+ * @li adding and removing backends like @code
+ *   INSERT INTO backends ( address, port ) VALUES ( "10.0.0.20", 3306 );
+ *   DELETE backends WHERE id = 1;
+ * @endcode
+ *
+ * In a similar way the @c config section of @c proxy.global should be exposed allowing the admin plugin to change the
+ * configuration at runtime. @see lib/proxy/auto-config.lua
  */
 
 #include <string.h>
