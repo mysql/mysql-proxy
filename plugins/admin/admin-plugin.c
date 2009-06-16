@@ -18,8 +18,35 @@
 
 /**
  * @page page-plugin-admin Administration plugin
+ *
+ * The admin plugin exposes the internals of the MySQL Proxy on a SQL interface 
+ * to the outside world. 
+ *
+ * @section plugin-admin-options Configuration
+ *
+ * @li @c --admin-address    defaults to @c :4041
+ * @li @c --admin-lua-script specifies the lua script to load that exposes handles the SQL statements
+ * @li @c --admin-username   username
+ * @li @c --admin-password   password
+ *
+ * @section plugin-admin-implementation Implementation
+ *
+ * The admin plugin handles two SQL queries by default that are used by the mysql commandline client when
+ * it logins to expose the version string and username. All other queries are returned with an error if they 
+ * are not handled by the Lua script (@c --admin-lua-script). 
+ *
+ * The script provides a @c read_query() function which returns a result-set in the same way as the proxy
+ * module does:
+ *
+ * @include lib/admin.lua
+ *
+ * @section plugin-admin-missing To fix before 1.0
+ *
+ * Before MySQL Proxy 1.0 we have to cleanup the admin plugin to:
+ *
+ * @li replace the hard-coded username, password by a real credential store @see network_mysqld_admin_plugin_apply_config()
+ * @li provide a full fleged admin script that exposes all the internal stats @see lib/admin.lua
  * 
- * Description forthcoming.
  */
 
 #include <string.h>
@@ -38,29 +65,6 @@
 #include "lua-env.h"
 
 #include <gmodule.h>
-
-/**
- * a simple query handler
- *
- * we handle the basic statements that the mysql-client sends us
- *
- * @todo we have to split the queries into a basic SQL syntax:
- *
- *   SELECT * 
- *     FROM table
- *   [WHERE field = value]
- *
- * - no joins
- * - no grouping
- *
- *   DELETE
- *     FROM table
- * 
- * - no WHERE clause
- *
- * - each table has to have a provider for a table 
- * - each plugin should able to provide tables as needed
- */
 
 #define C(x) x, sizeof(x) -1
 #define S(x) x->str, x->len
