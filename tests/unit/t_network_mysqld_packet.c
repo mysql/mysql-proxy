@@ -334,7 +334,7 @@ void test_mysqld_auth_with_pw(void) {
 			"%@R[SoWC"      /* part 1 */
 			"+L|LG_+R={tV"; /* part 2 */
 
-	GString *packet, *challenge;
+	GString *packet, *challenge, *hashed_password;
 	network_mysqld_auth_response *auth;
 
 	auth = network_mysqld_auth_response_new();
@@ -353,9 +353,13 @@ void test_mysqld_auth_with_pw(void) {
 	auth->charset         = 8;
 
 	challenge = g_string_new(NULL);
+	hashed_password = g_string_new(NULL);
 	g_string_append_len(challenge, raw_challenge, sizeof(raw_challenge) - 1);
 
-	network_mysqld_proto_scramble(auth->response, challenge, "123");
+	network_mysqld_proto_password_hash(hashed_password, C("123"));
+	network_mysqld_proto_scramble(auth->response, S(challenge), S(hashed_password));
+
+	g_string_free(hashed_password, TRUE);
 	
 	packet = g_string_new(NULL);
 
