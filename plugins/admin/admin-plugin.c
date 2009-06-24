@@ -231,6 +231,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 	network_socket *recv_sock, *send_sock;
 	network_mysqld_auth_response *auth;
 	GString *excepted_response;
+	GString *hashed_password;
 	
 	recv_sock = con->client;
 	send_sock = con->client;
@@ -256,12 +257,16 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 
 	/* check if the password matches */
 	excepted_response = g_string_new(NULL);
+	hashed_password = g_string_new(NULL);
 
 	if (!strleq(S(con->client->response->username), con->config->admin_username, strlen(con->config->admin_username))) {
 		network_mysqld_con_send_error_full(send_sock, C("unknown user"), 1045, "28000");
 		
 		con->state = CON_STATE_SEND_ERROR; /* close the connection after we have sent this packet */
-	} else if (network_mysqld_proto_scramble(excepted_response, recv_sock->challenge->challenge, con->config->admin_password)) {
+	} else if (network_mysqld_proto_password_hash(hashed_password, con->config->admin_password, strlen(con->config->admin_password))) {
+	} else if (network_mysqld_proto_scramble(excepted_response,
+				S(recv_sock->challenge->challenge),
+				S(hashed_password))) {
 		network_mysqld_con_send_error_full(send_sock, C("scrambling failed"), 1045, "28000");
 		
 		con->state = CON_STATE_SEND_ERROR; /* close the connection after we have sent this packet */
@@ -274,7 +279,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 	
 		con->state = CON_STATE_SEND_AUTH_RESULT;
 	}
-	
+
+	g_string_free(hashed_password, TRUE);	
 	g_string_free(excepted_response, TRUE);
 
 	recv_sock->packet_len = PACKET_LEN_UNSET;
