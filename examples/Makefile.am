@@ -14,6 +14,7 @@ example_scripts = \
 	tutorial-resultset.lua \
 	tutorial-states.lua \
 	tutorial-routing.lua \
+	tutorial-scramble.lua \
 	tutorial-monitor.lua
 
 if USE_WRAPPER_SCRIPT

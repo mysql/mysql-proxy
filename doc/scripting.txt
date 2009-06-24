@@ -37,6 +37,7 @@ Please check the class-diagram below:
 @li @subpage page-examples-states
 @li @subpage page-examples-packets
 @li @subpage page-examples-tokenize
+@li @subpage page-examples-scramble
 
 @page page-examples-basic a Minimal Example
 
@@ -88,4 +89,8 @@ Please check the class-diagram below:
 
 @include examples/tutorial-tokenize.lua
 
+
+@page page-examples-scramble Using the scramble functions
+
+@include examples/tutorial-scramble.lua
 */
