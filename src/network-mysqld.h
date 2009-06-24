@@ -50,6 +50,7 @@
 #include "network-conn-pool.h"
 #include "chassis-plugin.h"
 #include "chassis-mainloop.h"
+#include "chassis-timings.h"
 #include "sys-pedantic.h"
 #include "lua-scope.h"
 #include "network-backend.h"
@@ -57,6 +58,7 @@
 
 typedef struct network_mysqld_con network_mysqld_con; /* forward declaration */
 
+#define NETWORK_MYSQLD_CON_TRACK_TIME(con, name) chassis_timestamps_add(con->timestamps, name, __FILE__, __LINE__)
 
 /**
  * A macro that produces a plugin callback function pointer declaration.
@@ -330,6 +332,13 @@ struct network_mysqld_con {
 	 * @note In practice, all current plugins and the chassis assume this to be network_mysqld_con_lua_t.
 	 */
 	void *plugin_con_state;
+
+	/**
+	 * track the timestamps of the processing of the connection
+	 *
+	 * 
+	 */
+	chassis_timestamps_t *timestamps;
 };
 
 

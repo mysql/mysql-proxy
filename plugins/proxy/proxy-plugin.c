@@ -1117,6 +1117,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	int proxy_query = 1;
 	network_mysqld_lua_stmt_ret ret;
+	
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query::enter");
 
 	send_sock = NULL;
 	recv_sock = con->client;
@@ -1137,7 +1139,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 
 	con->parse.len = recv_sock->packet_len;
 
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query::enter_lua");
 	ret = proxy_lua_read_query(con);
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query::leave_lua");
 
 	/**
 	 * if we disconnected in read_query_result() we have no connection open
@@ -1194,6 +1198,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		con->state = CON_STATE_SEND_QUERY_RESULT;
 		con->resultset_is_finished = TRUE; /* we don't have more too send */
 	}
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query::done");
 
 	return NETWORK_SOCKET_SUCCESS;
 }
@@ -1291,6 +1296,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	injection *inj = NULL;
 
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query_result::enter");
+
 	recv_sock = con->server;
 	send_sock = con->client;
 
@@ -1354,7 +1361,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 			g_get_current_time(&(inj->ts_read_query_result_last));
 		}
 
+		NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query_result::enter_lua");
 		proxy_lua_read_query_result(con);
+		NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query_result::leave_lua");
 
 		/** recv_sock might be != con->server now */
 
@@ -1369,6 +1378,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 			con->state = CON_STATE_READ_QUERY;
 		}
 	}
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query_result::leave");
 	
 	return NETWORK_SOCKET_SUCCESS;
 }

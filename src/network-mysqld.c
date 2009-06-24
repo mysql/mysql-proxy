@@ -199,6 +199,7 @@ network_mysqld_con *network_mysqld_con_new() {
 	network_mysqld_con *con;
 
 	con = g_new0(network_mysqld_con, 1);
+	con->timestamps = chassis_timestamps_new();
 
 	return con;
 }
@@ -229,6 +230,7 @@ void network_mysqld_con_free(network_mysqld_con *con) {
 	/* we are still in the conns-array */
 
 	g_ptr_array_remove_fast(con->srv->priv->cons, con);
+	chassis_timestamps_free(con->timestamps);
 
 	g_free(con);
 }
@@ -648,11 +650,17 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 #define WAIT_FOR_EVENT(ev_struct, ev_type, timeout) \
 	event_set(&(ev_struct->event), ev_struct->fd, ev_type, network_mysqld_con_handle, user_data); \
-	chassis_event_add(srv, &(ev_struct->event));
+	chassis_event_add(srv, &(ev_struct->event)); 
 
 	/**
 	 * loop on the same connection as long as we don't end up in a stable state
 	 */
+
+	if (event_fd != -1) {
+		NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::done");
+	} else {
+		NETWORK_MYSQLD_CON_TRACK_TIME(con, "con_handle_start");
+	}
 	do {
 		ostate = con->state;
 		MYSQLPROXY_STATE_CHANGE(event_fd, events, con->state);
@@ -680,7 +688,51 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			/* FIXME: this comment has nothing to do with reality...
 			 * the server connection is still fine, 
 			 * let's keep it open for reuse */
+
 			plugin_call_cleanup(srv, con);
+
+			/* dump the timestamps of this connection */
+			if (1) {
+				GList *node;
+				guint64 abs_usec = 0;
+				guint64 wait_event_usec = 0;
+				guint64 lua_usec = 0;
+
+				for (node = con->timestamps->timestamps; node; node = node->next) {
+					chassis_timestamp_t *prev = node->prev ? node->prev->data : NULL;
+					chassis_timestamp_t *cur = node->data;
+					guint64 rel_usec = prev ? cur->usec - prev->usec: 0;
+					guint64 rel_cycles = prev ? cur->cycles - prev->cycles: 0;
+
+					abs_usec += rel_usec;
+
+					g_debug("%-35s usec=%8"G_GUINT64_FORMAT", cycles=%8"G_GUINT64_FORMAT", abs-usec=%8"G_GUINT64_FORMAT" (%s:%d)",
+							cur->name,
+							rel_usec,
+							rel_cycles,
+							abs_usec,
+							cur->filename, cur->line
+					       );
+
+					if (strstr(cur->name, "leave_lua")) {
+						lua_usec += rel_usec;
+					} else if (strstr(cur->name, "wait_for_event::done")) {
+						wait_event_usec += rel_usec;
+					}
+				}
+
+				g_debug("%-35s usec=%8"G_GUINT64_FORMAT"",
+						"abs wait-for-event::done",
+						wait_event_usec
+				       );
+				g_debug("%-35s usec=%8"G_GUINT64_FORMAT"",
+						"abs lua-exec::done",
+						lua_usec
+				       );
+
+
+			}
+
 			network_mysqld_con_free(con);
 
 			con = NULL;
@@ -728,6 +780,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					 * we have a server connection waiting to begin writable
 					 */
 					WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
+					NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::connect_server");
 					return;
 				} else {
 					/* try to get a connection to another backend,
@@ -771,6 +824,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				/* call us again when you have a event */
 				WAIT_FOR_EVENT(con->server, EV_READ, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_handshake");
 
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
@@ -811,6 +865,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_handshake");
 				
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
@@ -847,6 +902,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_READ, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_auth");
 
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
@@ -878,6 +934,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_auth");
 
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
@@ -914,6 +971,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->server, EV_READ, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_auth_result");
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
@@ -955,6 +1013,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_auth_result");
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
@@ -983,6 +1042,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_READ, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_auth_old_password");
 
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
@@ -1011,6 +1071,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_auth_old_password");
 
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
@@ -1044,6 +1105,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_READ, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_query");
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
@@ -1160,6 +1222,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_query");
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
@@ -1225,6 +1288,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					break;
 				case NETWORK_SOCKET_WAIT_FOR_EVENT:
 					WAIT_FOR_EVENT(con->server, EV_READ, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_query_result");
 					return;
 				case NETWORK_SOCKET_ERROR_RETRY:
 				case NETWORK_SOCKET_ERROR:
@@ -1266,6 +1330,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_query_result");
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
@@ -1307,6 +1372,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_error");
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
@@ -1324,6 +1390,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		event_fd = -1;
 		events   = 0;
 	} while (ostate != con->state);
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "con_handle_end");
 
 	return;
 }
@@ -1352,6 +1419,8 @@ void network_mysqld_con_accept(int G_GNUC_UNUSED event_fd, short events, void *u
 	/* looks like we open a client connection */
 	client_con = network_mysqld_con_new();
 	client_con->client = client;
+
+	NETWORK_MYSQLD_CON_TRACK_TIME(client_con, "accept");
 
 	network_mysqld_add_connection(listen_con->srv, client_con);
 
