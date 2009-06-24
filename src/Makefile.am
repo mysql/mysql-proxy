@@ -31,11 +31,36 @@ mysql_myisam_dump_CPPFLAGS	= $(BUILD_CPPFLAGS)
 mysql_myisam_dump_CFLAGS	= $(BUILD_CFLAGS)
 mysql_myisam_dump_LDADD		= $(BUILD_LDADD)
 
-
 lib_LTLIBRARIES = 
+
+lib_LTLIBRARIES += libchassis-timing.la
+libchassis_timing_la_SOURCES = \
+	chassis-timings.c \
+	my_rdtsc.c
+
+libchassis_timing_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
+libchassis_timing_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
+libchassis_timing_la_LIBADD   = $(GLIB_LIBS)
 
 ## the core library
 lib_LTLIBRARIES += libmysql-chassis.la
+libmysql_chassis_la_SOURCES = \
+	glib-ext.c \
+	lua-load-factory.c \
+	lua-scope.c \
+	chassis-plugin.c \
+	chassis-log.c \
+	chassis-mainloop.c \
+	chassis-event-thread.c \
+	chassis-keyfile.c \
+	chassis-path.c \
+	chassis-stats.c
+
+
+libmysql_chassis_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
+libmysql_chassis_la_CPPFLAGS = $(MYSQL_CFLAGS) $(EVENT_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS)
+libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS)
+
 lib_LTLIBRARIES += libmysql-proxy.la
 libmysql_proxy_la_SOURCES = \
 	network-mysqld.c \
@@ -58,25 +83,7 @@ libmysql_proxy_la_SOURCES = \
 
 libmysql_proxy_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
 libmysql_proxy_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
-libmysql_proxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la
-
-libmysql_chassis_la_SOURCES = \
-	glib-ext.c \
-	glib-ext-ref.c \
-	lua-load-factory.c \
-	lua-scope.c \
-	chassis-plugin.c \
-	chassis-log.c \
-	chassis-mainloop.c \
-	chassis-event-thread.c \
-	chassis-keyfile.c \
-	chassis-path.c \
-	chassis-stats.c
-
-
-libmysql_chassis_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
-libmysql_chassis_la_CPPFLAGS = $(MYSQL_CFLAGS) $(EVENT_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS)
-libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS)
+libmysql_proxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la libchassis-timing.la
 
 
 noinst_HEADERS=\
@@ -112,7 +119,8 @@ noinst_HEADERS=\
 	network-backend-lua.h \
 	disable-dtrace.h \
 	lua-registry-keys.h \
-	chassis-stats.h
+	chassis-stats.h \
+	my_rdtsc.h
 
 if ENABLE_DTRACE
 

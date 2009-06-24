@@ -63,6 +63,26 @@ AC_CHECK_HEADERS([\
 
 AC_CHECK_HEADERS([syslog.h])
 
+dnl my_rdtsc.h
+AC_CHECK_HEADERS([\
+	sys/time.h \
+	time.h \
+	asm/msr.h \
+	sys/timeb.h \
+	sys/times.h \
+	ia64intrin.h ])
+AC_CHECK_FUNCS([\
+	rdtscll \
+	ftime \
+	times \
+	clock_gettime \
+	get_hrtime \
+	read_real_time \
+	gettimeofday \
+	time
+	])
+
+
 
 DARWIN_HAS_LIBPROC_H=
 if test $ac_cv_header_libproc_h = yes; then
