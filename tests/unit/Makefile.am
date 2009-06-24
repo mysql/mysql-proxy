@@ -12,6 +12,7 @@ TESTS=\
 	t_network_injection \
 	t_network_mysqld_packet \
 	t_network_mysqld_masterinfo \
+	t_chassis_timings \
 	check_chassis_path
 
 check_PROGRAMS=$(TESTS)
@@ -36,6 +37,15 @@ t_network_mysqld_packet_SOURCES  = \
 
 t_network_mysqld_packet_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(LUA_CFLAGS)
 t_network_mysqld_packet_LDADD    = $(GLIB_LIBS) $(LUA_LIBS)
+
+t_chassis_timings_SOURCES  = \
+	t_chassis_timings.c \
+	$(top_srcdir)/src/chassis-timings.c \
+	$(top_srcdir)/src/my_rdtsc.c 
+
+t_chassis_timings_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) 
+t_chassis_timings_LDADD    = $(GLIB_LIBS)
+
 
 
 check_plugin_SOURCES  = check_plugin.c $(top_srcdir)/src/chassis-plugin.c
