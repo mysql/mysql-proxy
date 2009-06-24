@@ -332,7 +332,7 @@ int main_cmdline(int argc, char **argv) {
 	guint invoke_dbg_on_crash = 0;
 	guint auto_restart = 0;
 	guint max_files_number = 8192;
-	gint event_thread_count = 0;
+	gint event_thread_count = 1; /* there is always the main-thread */
 #ifndef _WIN32
 	struct rlimit max_files_rlimit;
 #endif
@@ -369,7 +369,7 @@ int main_cmdline(int argc, char **argv) {
 		{ "log-backtrace-on-crash",   0, 0, G_OPTION_ARG_NONE, NULL, "try to invoke debugger on crash", NULL },
 		{ "keepalive",                0, 0, G_OPTION_ARG_NONE, NULL, "try to restart the proxy if it crashed", NULL },
 		{ "max-open-files",           0, 0, G_OPTION_ARG_INT, NULL, "maximum number of open files (ulimit -n)", NULL},
-		{ "event-threads",            0, 0, G_OPTION_ARG_INT, NULL, "number of event-handling threads", NULL},
+		{ "event-threads",            0, 0, G_OPTION_ARG_INT, NULL, "number of event-handling threads (default: 1)", NULL},
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -830,8 +830,8 @@ int main_cmdline(int argc, char **argv) {
 	}
 
 	/* make sure that he max-thread-count isn't negative */
-	if (event_thread_count < 0) {
-		g_critical("unknown option: %s", argv[1]);
+	if (event_thread_count < 1) {
+		g_critical("--event-threads has to be >= 1, is %d", event_thread_count);
 
 		exit_code = EXIT_FAILURE;
 		goto exit_nicely;

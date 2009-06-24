@@ -302,14 +302,14 @@ int chassis_mainloop(void *_chas) {
 	}
 #endif
 
-	if (chas->event_thread_count < 1) chas->event_thread_count = 0;
+	if (chas->event_thread_count < 1) chas->event_thread_count = 1;
 
 	/* create the event-threads
 	 *
 	 * - dup the async-queue-ping-fds
 	 * - setup the events notification
 	 * */
-	for (i = 0; i < chas->event_thread_count; i++) {
+	for (i = 1; i < chas->event_thread_count; i++) { /* we already have 1 event-thread running, the main-thread */
 		chassis_event_thread_t *event_thread;
 	
 		event_thread = chassis_event_thread_new();
