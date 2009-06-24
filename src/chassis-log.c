@@ -144,6 +144,8 @@ void chassis_log_free(chassis_log *log) {
 	g_string_free(log->log_ts_str, TRUE);
 	g_string_free(log->last_msg, TRUE);
 
+	if (log->log_filename) g_free(log->log_filename);
+
 	g_free(log);
 }
 
