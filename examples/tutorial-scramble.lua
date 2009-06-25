@@ -17,26 +17,51 @@
  $%ENDLICENSE%$ --]]
 
 local password = assert(require("mysql.password"))
+local proto = assert(require("mysql.proto"))
 
 ---
--- show how to use the mysql.password functions 
+-- map usernames to another login
+local map_auth = {
+	"replace" = {
+		password = "me",
+		new_user = "root",
+		new_password = "secret"
+	}
+}
+
+---
+-- show how to use the mysql.password functions
+--
 function read_auth()
 	local c = proxy.connection.client
 	local s = proxy.connection.server
+
 	print(("for challenge %q the client sent %q"):format(
 		s.scramble_buffer,
 		c.scrambled_password
 	))
 
-	local cleartext = "123"
-	local hashed_password = password.hash(cleartext) -- same as sha1(cleartext)
-	local response  = password.scramble(s.scramble_buffer, hashed_password)
+	-- if we know this user, replace its credentials
+	local mapped = map_auth[c.username]
+	
+	if mapped and
+		password.check(
+			s.scramble_buffer,
+			c.scrambled_password,
+			password.hash(password.hash(mapped.password))
+		) then
 
-	print(("for challenge %q and password %q we would send %q"):format(
-		s.scramble_buffer,
-		cleartext,
-		response
-	))
+		proxy.queries:append(1, 
+			proto.to_response_packet({
+				username = mapped.new_user,
+				response = password.scramble(s.scramble_buffer, password.hash(mapped.new_password)),
+				charset  = 8, -- default charset
+				database = c.default_db,
+				max_packet_size = 1 * 1024 * 1024
+			})
+		)
 
-	-- your password is '123' the 'response' should match 'c.scrambled_password'
+		return proxy.PROXY_SEND_QUERY
+	end
 end
+
