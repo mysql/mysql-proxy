@@ -276,6 +276,7 @@ dnl CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILE
 
 EVENT_LIBS=
 AC_CHECK_LIB(event, event_init, EVENT_LIBS="-levent",AC_MSG_ERROR([libevent is required]))
+AC_CHECK_LIB(event, event_base_new, AC_DEFINE(HAVE_EVENT_BASE_NEW,[],[event_base_new()]),AC_MSG_ERROR([event_base_new() wasn't found in libevent. we need at least libevent 1.4]))
 AC_CHECK_LIB(event, event_base_free, AC_DEFINE(HAVE_EVENT_BASE_FREE,[],[having event_base_free()]))
 AC_CHECK_HEADERS([event.h])
 AC_SUBST(EVENT_LIBS)
