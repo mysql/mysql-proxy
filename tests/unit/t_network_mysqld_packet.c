@@ -357,7 +357,7 @@ void test_mysqld_auth_with_pw(void) {
 	g_string_append_len(challenge, raw_challenge, sizeof(raw_challenge) - 1);
 
 	network_mysqld_proto_password_hash(hashed_password, C("123"));
-	network_mysqld_proto_scramble(auth->response, S(challenge), S(hashed_password));
+	network_mysqld_proto_password_scramble(auth->response, S(challenge), S(hashed_password));
 
 	g_string_free(hashed_password, TRUE);
 	

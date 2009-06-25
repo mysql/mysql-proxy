@@ -119,8 +119,12 @@ NETWORK_API int network_mysqld_proto_append_lenenc_string(GString *packet, const
 
 NETWORK_API int network_mysqld_proto_password_hash(GString *response,
 		const char *password, gsize password_len);
-NETWORK_API int network_mysqld_proto_scramble(GString *response,
+NETWORK_API int network_mysqld_proto_password_scramble(GString *response,
 		const char *challenge, gsize challenge_len,
 		const char *hashed_password, gsize hashed_password_len);
+NETWORK_API gboolean network_mysqld_proto_password_check(
+		const char *challenge, gsize challenge_len,
+		const char *response, gsize response_len,
+		const char *double_hashed, gsize double_hashed_len);
 
 #endif

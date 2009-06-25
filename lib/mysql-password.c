@@ -57,7 +57,7 @@ static int lua_password_scramble(lua_State *L) {
 	GString *response;
 
 	response = g_string_new(NULL);	
-	network_mysqld_proto_scramble(response,
+	network_mysqld_proto_password_scramble(response,
 			challenge, challenge_len,
 			hashed_password, hashed_password_len);
 

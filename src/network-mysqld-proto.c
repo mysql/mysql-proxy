@@ -863,12 +863,17 @@ int network_mysqld_proto_password_hash(GString *response, const char *password, 
  *
  * @see network_mysqld_proto_password_hash
  */
-int network_mysqld_proto_scramble(GString *response,
+int network_mysqld_proto_password_scramble(GString *response,
 		const char *challenge, gsize challenge_len,
 		const char *hashed_password, gsize hashed_password_len) {
 	int i;
 	GChecksum *cs;
 	GString *step2;
+
+	g_return_val_if_fail(NULL != challenge, -1);
+	g_return_val_if_fail(20 == challenge_len, -1);
+	g_return_val_if_fail(NULL != hashed_password, -1);
+	g_return_val_if_fail(20 == hashed_password_len, -1);
 
 	/**
 	 * we have to run
@@ -912,6 +917,85 @@ int network_mysqld_proto_scramble(GString *response,
 
 	return 0;
 }
+
+/**
+ * unscramble the auth-response and get the hashed-password
+ *
+ * @param challenge        the challenge string as sent by the mysql-server
+ * @param challenge_len    length of the challenge
+ * @param response         auth response as sent by the client 
+ * @param response_len     length of response
+ * @param double_hashed    the double hashed password as stored in the mysql.server table (without * and unhexed)
+ * @param double_hashed_len length of double_hashed
+ *
+ * @see network_mysqld_proto_scramble
+ */
+gboolean network_mysqld_proto_password_check(
+		const char *challenge, gsize challenge_len,
+		const char *response, gsize response_len,
+		const char *double_hashed, gsize double_hashed_len) {
+	int i;
+	GChecksum *cs;
+	GString *step2, *hashed_password;
+	gboolean is_same;
+
+	g_return_val_if_fail(NULL != response, FALSE);
+	g_return_val_if_fail(20 == response_len, FALSE);
+	g_return_val_if_fail(NULL != challenge, FALSE);
+	g_return_val_if_fail(20 == challenge_len, FALSE);
+	g_return_val_if_fail(NULL != double_hashed, FALSE);
+	g_return_val_if_fail(20 == double_hashed_len, FALSE);
+
+	/**
+	 * to check we have to:
+	 *
+	 *   hashed_password = XOR( response, SHA1(challenge + double_hashed))
+	 *   double_hashed == SHA1(hashed_password)
+	 *
+	 * where SHA1(password) is the hashed_password and
+	 *       challenge      is ... challenge
+	 *       response       is the response of the client
+	 *
+	 *   XOR( hashed_password, SHA1(challenge + SHA1(hashed_password)))
+	 *
+	 */
+
+
+	/* 1. SHA1(challenge + double_hashed) */
+	cs = g_checksum_new(G_CHECKSUM_SHA1);
+	g_checksum_update(cs, (guchar *)challenge, challenge_len);
+	g_checksum_update(cs, (guchar *)double_hashed, double_hashed_len);
+	
+	hashed_password = g_string_sized_new(g_checksum_type_get_length(G_CHECKSUM_SHA1));
+	hashed_password->len = hashed_password->allocated_len;
+	g_checksum_get_digest(cs, (guchar *)hashed_password->str, &(hashed_password->len));
+	
+	g_checksum_free(cs);
+	
+	/* 2. XOR the response with SHA1(challenge + SHA1(hashed_password)) */
+	for (i = 0; i < 20; i++) {
+		hashed_password->str[i] = (guchar)response[i] ^ (guchar)hashed_password->str[i];
+	}
+	
+	/* 3. SHA1(hashed_password) */
+	cs = g_checksum_new(G_CHECKSUM_SHA1);
+	g_checksum_update(cs, (guchar *)hashed_password->str, hashed_password->len);
+
+	step2 = g_string_sized_new(g_checksum_type_get_length(G_CHECKSUM_SHA1));
+	step2->len = step2->allocated_len;
+	g_checksum_get_digest(cs, (guchar *)step2->str, &(step2->len));
+
+	g_checksum_free(cs);
+	
+	/* 4. the result of 3 should be the same what we got from the mysql.user table */
+	is_same = strleq(S(step2), double_hashed, double_hashed_len);
+
+	g_string_free(step2, TRUE);
+	g_string_free(hashed_password, TRUE);
+
+	return is_same;
+}
+
 
 network_packet *network_packet_new(void) {
 	network_packet *packet;

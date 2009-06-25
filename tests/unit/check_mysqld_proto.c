@@ -29,6 +29,7 @@
 
 #if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
+#define S(x) x->str, x->len
 
 /**
  * Tests for the MySQL Protocol Codec functions
@@ -371,6 +372,39 @@ void test_mysqld_proto_gstring_len(void) {
 	g_string_free(packet.data, TRUE);
 }
 
+void test_mysqld_password(void) {
+	GString *cleartext = g_string_new("123");
+	GString *hashed_password = g_string_new(NULL);
+	GString *double_hashed = g_string_new(NULL);
+	GString *challenge = g_string_new(NULL);
+	GString *response = g_string_new(NULL);
+
+	network_mysqld_proto_password_hash(hashed_password, S(cleartext));
+	network_mysqld_proto_password_hash(double_hashed, S(hashed_password));
+
+	/* should be the same as SELECT SHA1("123"); */
+	g_assert(0 == memcmp(hashed_password->str, C("\x40\xbd\x00\x15\x63\x08\x5f\xc3\x51\x65\x32\x9e\xa1\xff\x5c\x5e\xcb\xdb\xbe\xef")));
+	/* should be the same as SELECT PASSWORD("123"); */
+	g_assert(0 == memcmp(double_hashed->str, C("\x23\xAE\x80\x9D\xDA\xCA\xF9\x6A\xF0\xFD\x78\xED\x04\xB6\xA2\x65\xE0\x5A\xA2\x57")));
+
+	g_string_assign_len(challenge, C("01234567890123456789"));
+
+	network_mysqld_proto_password_scramble(response, 
+			S(challenge),
+			S(hashed_password));
+	
+	g_assert_cmpint(TRUE, ==, network_mysqld_proto_password_check(
+			S(challenge),
+			S(response),
+			S(double_hashed)));
+
+	g_string_free(response, TRUE);
+	g_string_free(challenge, TRUE);
+	g_string_free(hashed_password, TRUE);
+	g_string_free(double_hashed, TRUE);
+	g_string_free(cleartext, TRUE);
+}
+
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
@@ -381,6 +415,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/mysqld-proto-gstring-len", test_mysqld_proto_gstring_len);
 
 	g_test_add_func("/core/mysqld-proto-binlog-event", test_mysqld_binlog_events);
+	g_test_add_func("/core/mysqld-proto-password", test_mysqld_password);
 
 	return g_test_run();
 }
