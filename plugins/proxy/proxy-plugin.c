@@ -584,6 +584,16 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_auth(network_mysqld_con *con) 
 			}
 
 			break;
+		case PROXY_SEND_QUERY:
+			/* something is in the injection queue, pull it from there and replace the content of
+			 * original packet */
+
+			if (st->injected.queries->length) {
+				ret = PROXY_SEND_INJECTION;
+			} else {
+				ret = PROXY_NO_DECISION;
+			}
+			break;
 		default:
 			ret = PROXY_NO_DECISION;
 			break;
@@ -612,6 +622,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	network_mysqld_auth_response *auth;
 	int err = 0;
 	gboolean free_client_packet = TRUE;
+	network_mysqld_con_lua_t *st = con->plugin_con_state;
 
 	recv_sock = con->client;
 	send_sock = con->server;
@@ -649,6 +660,19 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		con->state = CON_STATE_SEND_AUTH_RESULT;
 
 		break;
+	case PROXY_SEND_INJECTION: {
+		injection *inj;
+
+		inj = g_queue_pop_head(st->injected.queries);
+
+		/* there might be no query, if it was banned */
+		network_mysqld_queue_append(send_sock->send_queue, S(inj->query), 1);
+
+		injection_free(inj);
+
+		con->state = CON_STATE_SEND_AUTH;
+
+		break; }
 	case PROXY_NO_DECISION:
 		/* if we don't have a backend (con->server), we just ack the client auth
 		 */
