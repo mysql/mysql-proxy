@@ -16,6 +16,7 @@
 
  $%ENDLICENSE%$ --]]
 local proto = assert(require("mysql.proto"))
+local password = assert(require("mysql.password"))
 
 ---
 -- err packet
@@ -241,3 +242,22 @@ local masterinfofile = proto.from_masterinfo_string(
 assert( proto.to_masterinfo_string(masterinfofile) ==
 "14\nhostname-bin.000024\n2143897\n127.0.0.1\nroot\n123\n3306\n60\n0\nca-cert.pem\n"
 .. "/usr/local/mysql/ssl/ca/\nclient-cert.pem\nssl_cipher\nclient-key.pem\n")
+
+-- test the password functions
+local challenge  = "01234567890123456789"
+local cleartext  = "123"
+local hashed     = password.hash(cleartext)
+local dbl_hashed = password.hash(hashed)
+local response   = password.scramble(challenge, hashed)
+
+assert(password.check(challenge, response, dbl_hashed))
+
+-- check that a forged response fails the password check
+local challenge  = "01234567890123456789"
+local cleartext  = "123"
+local hashed     = password.hash(cleartext)
+local dbl_hashed = password.hash(hashed)
+local response   = "09876543210987654321"
+
+assert(false == password.check(challenge, response, dbl_hashed))
+
