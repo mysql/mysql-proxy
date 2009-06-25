@@ -93,7 +93,7 @@ GString *g_string_dup(GString *src) {
  */
 gboolean strleq(const gchar *a, gsize a_len, const gchar *b, gsize b_len) {
 	if (a_len != b_len) return FALSE;
-	return (0 == strcmp(a, b));
+	return (0 == memcmp(a, b, a_len));
 }
 
 int g_string_get_time(GString *s, GTimeVal *gt) {
