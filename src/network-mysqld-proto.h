@@ -126,5 +126,10 @@ NETWORK_API gboolean network_mysqld_proto_password_check(
 		const char *challenge, gsize challenge_len,
 		const char *response, gsize response_len,
 		const char *double_hashed, gsize double_hashed_len);
+NETWORK_API int network_mysqld_proto_password_unscramble(
+		GString *hashed_password,
+		const char *challenge, gsize challenge_len,
+		const char *response, gsize response_len,
+		const char *double_hashed, gsize double_hashed_len);
 
 #endif

@@ -845,9 +845,7 @@ int network_mysqld_proto_password_hash(GString *response, const char *password, 
 	response->len = response->allocated_len; /* will be overwritten with the right value in the next step */
 	g_checksum_get_digest(cs, (guchar *)response->str, &(response->len));
 
-
 	g_checksum_free(cs);
-
 	
 	return 0;
 }
@@ -888,14 +886,8 @@ int network_mysqld_proto_password_scramble(GString *response,
 	 */
 
 	/* 1. SHA1(hashed_password) */
-	cs = g_checksum_new(G_CHECKSUM_SHA1);
-	g_checksum_update(cs, (guchar *)hashed_password, hashed_password_len);
-
-	step2 = g_string_sized_new(g_checksum_type_get_length(G_CHECKSUM_SHA1));
-	step2->len = step2->allocated_len;
-	g_checksum_get_digest(cs, (guchar *)step2->str, &(step2->len));
-
-	g_checksum_free(cs);
+	step2 = g_string_new(NULL);
+	network_mysqld_proto_password_hash(step2, hashed_password, hashed_password_len);
 
 	/* 2. SHA1(challenge + SHA1(hashed_password) */
 	cs = g_checksum_new(G_CHECKSUM_SHA1);
@@ -921,6 +913,7 @@ int network_mysqld_proto_password_scramble(GString *response,
 /**
  * unscramble the auth-response and get the hashed-password
  *
+ * @param hashed_password  dest of the hashed password
  * @param challenge        the challenge string as sent by the mysql-server
  * @param challenge_len    length of the challenge
  * @param response         auth response as sent by the client 
@@ -930,14 +923,13 @@ int network_mysqld_proto_password_scramble(GString *response,
  *
  * @see network_mysqld_proto_scramble
  */
-gboolean network_mysqld_proto_password_check(
+int network_mysqld_proto_password_unscramble(
+		GString *hashed_password,
 		const char *challenge, gsize challenge_len,
 		const char *response, gsize response_len,
 		const char *double_hashed, gsize double_hashed_len) {
 	int i;
 	GChecksum *cs;
-	GString *step2, *hashed_password;
-	gboolean is_same;
 
 	g_return_val_if_fail(NULL != response, FALSE);
 	g_return_val_if_fail(20 == response_len, FALSE);
@@ -966,7 +958,7 @@ gboolean network_mysqld_proto_password_check(
 	g_checksum_update(cs, (guchar *)challenge, challenge_len);
 	g_checksum_update(cs, (guchar *)double_hashed, double_hashed_len);
 	
-	hashed_password = g_string_sized_new(g_checksum_type_get_length(G_CHECKSUM_SHA1));
+	g_string_set_size(hashed_password, g_checksum_type_get_length(G_CHECKSUM_SHA1));
 	hashed_password->len = hashed_password->allocated_len;
 	g_checksum_get_digest(cs, (guchar *)hashed_password->str, &(hashed_password->len));
 	
@@ -976,16 +968,47 @@ gboolean network_mysqld_proto_password_check(
 	for (i = 0; i < 20; i++) {
 		hashed_password->str[i] = (guchar)response[i] ^ (guchar)hashed_password->str[i];
 	}
-	
+
+	return 0;
+}
+
+/**
+ * check if response and challenge match a double-hashed password
+ *
+ * @param challenge        the challenge string as sent by the mysql-server
+ * @param challenge_len    length of the challenge
+ * @param response         auth response as sent by the client 
+ * @param response_len     length of response
+ * @param double_hashed    the double hashed password as stored in the mysql.server table (without * and unhexed)
+ * @param double_hashed_len length of double_hashed
+ *
+ * @see network_mysqld_proto_scramble
+ */
+gboolean network_mysqld_proto_password_check(
+		const char *challenge, gsize challenge_len,
+		const char *response, gsize response_len,
+		const char *double_hashed, gsize double_hashed_len) {
+
+	GString *hashed_password, *step2;
+	gboolean is_same;
+
+	g_return_val_if_fail(NULL != response, FALSE);
+	g_return_val_if_fail(20 == response_len, FALSE);
+	g_return_val_if_fail(NULL != challenge, FALSE);
+	g_return_val_if_fail(20 == challenge_len, FALSE);
+	g_return_val_if_fail(NULL != double_hashed, FALSE);
+	g_return_val_if_fail(20 == double_hashed_len, FALSE);
+
+	hashed_password = g_string_new(NULL);
+
+	network_mysqld_proto_password_unscramble(hashed_password, 
+			challenge, challenge_len,
+			response, response_len,
+			double_hashed, double_hashed_len);
+
 	/* 3. SHA1(hashed_password) */
-	cs = g_checksum_new(G_CHECKSUM_SHA1);
-	g_checksum_update(cs, (guchar *)hashed_password->str, hashed_password->len);
-
-	step2 = g_string_sized_new(g_checksum_type_get_length(G_CHECKSUM_SHA1));
-	step2->len = step2->allocated_len;
-	g_checksum_get_digest(cs, (guchar *)step2->str, &(step2->len));
-
-	g_checksum_free(cs);
+	step2 = g_string_new(NULL);
+	network_mysqld_proto_password_hash(step2, S(hashed_password));
 	
 	/* 4. the result of 3 should be the same what we got from the mysql.user table */
 	is_same = strleq(S(step2), double_hashed, double_hashed_len);

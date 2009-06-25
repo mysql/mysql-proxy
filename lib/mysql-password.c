@@ -68,6 +68,30 @@ static int lua_password_scramble(lua_State *L) {
 	return 1;
 }
 
+static int lua_password_unscramble(lua_State *L) {
+	size_t challenge_len;
+	const char *challenge = luaL_checklstring(L, 1, &challenge_len);
+	size_t response_len;
+	const char *response = luaL_checklstring(L, 2, &response_len);
+	size_t dbl_hashed_password_len;
+	const char *dbl_hashed_password = luaL_checklstring(L, 3, &dbl_hashed_password_len);
+
+	GString *hashed_password = g_string_new(NULL);
+
+	network_mysqld_proto_password_unscramble(
+			hashed_password,
+			challenge, challenge_len,
+			response, response_len,
+			dbl_hashed_password, dbl_hashed_password_len);
+	
+	lua_pushlstring(L, S(hashed_password));
+
+	g_string_free(hashed_password, TRUE);
+	
+	return 1;
+}
+
+
 static int lua_password_check(lua_State *L) {
 	size_t challenge_len;
 	const char *challenge = luaL_checklstring(L, 1, &challenge_len);
@@ -102,8 +126,9 @@ static void set_info (lua_State *L) {
 
 static const struct luaL_reg mysql_passwordlib[] = {
 	{"hash", lua_password_hash},
-        {"scramble", lua_password_scramble},
-        {"check", lua_password_check},
+	{"scramble", lua_password_scramble},
+	{"unscramble", lua_password_unscramble},
+	{"check", lua_password_check},
 	{NULL, NULL},
 };
 

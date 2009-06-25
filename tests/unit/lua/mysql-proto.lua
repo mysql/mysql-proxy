@@ -249,6 +249,7 @@ local cleartext  = "123"
 local hashed     = password.hash(cleartext)
 local dbl_hashed = password.hash(hashed)
 local response   = password.scramble(challenge, hashed)
+assert(password.unscramble(challenge, response, dbl_hashed) == hashed)
 
 assert(password.check(challenge, response, dbl_hashed))
 
@@ -258,6 +259,7 @@ local cleartext  = "123"
 local hashed     = password.hash(cleartext)
 local dbl_hashed = password.hash(hashed)
 local response   = "09876543210987654321"
+assert(password.unscramble(challenge, response, dbl_hashed) ~= hashed)
 
 assert(false == password.check(challenge, response, dbl_hashed))
 
