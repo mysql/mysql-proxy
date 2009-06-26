@@ -22,7 +22,7 @@ local proto = assert(require("mysql.proto"))
 ---
 -- map usernames to another login
 local map_auth = {
-	"replace" = {
+	["replace"] = {
 		password = "me",
 		new_user = "root",
 		new_password = "secret"
