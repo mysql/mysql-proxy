@@ -323,6 +323,8 @@ void *chassis_event_thread_loop(chassis_event_thread_t *event_thread) {
 void chassis_event_threads_start(chassis_event_threads_t *threads) {
 	guint i;
 
+	g_message("%s: starting %d threads", G_STRLOC, threads->event_threads->len - 1);
+
 	for (i = 1; i < threads->event_threads->len; i++) { /* the 1st is the main-thread and already set up */
 		chassis_event_thread_t *event_thread = threads->event_threads->pdata[i];
 		GError *gerr = NULL;
@@ -330,6 +332,7 @@ void chassis_event_threads_start(chassis_event_threads_t *threads) {
 		event_thread->thr = g_thread_create((GThreadFunc)chassis_event_thread_loop, event_thread, TRUE, &gerr);
 
 		if (gerr) {
+			g_critical("%s: %s", G_STRLOC, gerr->message);
 			g_error_free(gerr);
 			gerr = NULL;
 		}
