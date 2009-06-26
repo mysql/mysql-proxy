@@ -318,7 +318,7 @@ int chassis_mainloop(void *_chas) {
 	}
 
 	/* start the event threads */
-	if (chas->event_thread_count > 0) {
+	if (chas->event_thread_count > 1) {
 		chassis_event_threads_start(chas->threads);
 	}
 
