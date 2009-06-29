@@ -24,52 +24,49 @@ digraph states {
   connect [ shape=record ];
   disconnect [ shape=record ];
 
-  subgraph client { 
+  subgraph cluster_client { 
     label = "client";
     style = filled;
-    color = black;
-    rank = same;
     node [ style=filled, fillcolor=lightblue ];
     connect; 
-    auth; 
-    oldauth; 
-    query; 
-    local;
+    auth_response; 
+    auth_old; 
+    command; 
+    command_local;
   }
 
-  subgraph server { 
+  subgraph cluster_server { 
     label = "server";
     style = filled;
-    rank = same; 
     node [ style=filled, fillcolor=orange ];
-    handshake; 
-    authres; 
-    result; 
-    infile;
+    auth_challenge; 
+    auth_result; 
+    command_result; 
+    command_infile;
   }
   
   subgraph { 
     edge [ fontcolor=blue, color=blue, fontsize=10, fontname=Helvetica ];
 
-    connect->handshake [ label = "connecting server" ];
-    auth->authres [ label = "capabilities, password, default-db", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Client_Authentication_Packet" ]; 
-    oldauth->authres [ label = "scrambled password" ] ; 
-    query->result [ label = "command (COM_*)", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Command_Packet" ] ;
-    query->infile [ label = "LOAD DATA INFILE LOCAL" ];
-    local->result [ label = "file content"];
+    connect->auth_challenge [ label = "connecting server" ];
+    auth_response->auth_result [ label = "capabilities, password, default-db", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Client_Authentication_Packet" ]; 
+    auth_old->auth_result [ label = "scrambled password" ] ; 
+    command->command_result [ label = "command (COM_*)", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Command_Packet" ] ;
+    command->command_infile [ label = "LOAD DATA INFILE LOCAL" ];
+    command_local->command_result [ label = "file content"];
   }
 
   subgraph {
     edge [ fontcolor=red, color=red, fontsize=10, fontname=Helvetica ];
-    handshake->disconnect [ label = "ERR: host denied", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
-    handshake->auth [ label = "0x10: handshake", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Handshake_Initialization_Packet" ];
-    authres->oldauth [ label = "EOF: old password reauth" ];
-    authres->query [ label = "OK: auth done", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#OK_Packet" ];
-    authres->disconnect [ label = "ERR: auth failed", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
-    result->query [ label = "result for COM_*", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Result_Set_Header_Packet" ] ;
-    result->disconnect [ label = "COM_QUIT" ];
-    result->result [ label = "COM_BINLOG_DUMP" ];
-    infile->local [ label = "EOF: filename" ];
+    auth_challenge->disconnect [ label = "ERR: host denied", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
+    auth_challenge->auth_response [ label = "0x10: auth_challenge", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Handshake_Initialization_Packet" ];
+    auth_result->auth_old [ label = "EOF: old password reauth" ];
+    auth_result->command [ label = "OK: auth done", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#OK_Packet" ];
+    auth_result->disconnect [ label = "ERR: auth failed", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
+    command_result->command [ label = "OK|ERR|Resultset", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Result_Set_Header_Packet" ] ;
+    command_result->disconnect [ label = "command = COM_QUIT" ];
+    command_result->command_result [ label = "command = COM_BINLOG_DUMP" ];
+    command_infile->command_local [ label = "EOF: filename" ];
   }
 }
 @enddot
