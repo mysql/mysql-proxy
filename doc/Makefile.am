@@ -1,6 +1,7 @@
 EXTRA_DIST = \
 	     lua-classes.dot \
 	     architecture.dot \
+	     architecture-overview.dot \
 	     architecture.txt \
 	     core.txt \
 	     chassis.txt \

@@ -1,0 +1,80 @@
+/*
+  the building blocks of the proxy
+
+  You may use "dot" from graphviz to generate human consumable output
+  like PNG or PDF:
+ 
+    $ dot -T pdf -o architecture.pdf architecture.dot
+    $ dot -T png -o architecture.png architecture.dot
+
+  or you generate a image-map
+
+    $ dot -T cmapx -o architecture.map -Tpng -o architecture.png architecture.dot && \
+      echo '<img src="architecture.png" border="0" usemap="#g"/>' > architecture.html && \
+      cat architecture.map >> architecture.html
+*/
+digraph G {
+	node [
+		shape = "plaintext"
+		fontname = "Courier"
+		fontsize = 10
+	]
+
+	subgraph network {
+		rank = "same";
+		Blocks [
+			label = <
+				<table border="1" cellborder="1">
+				 <tr>
+				  <td bgcolor="black" port="head" colspan="4">
+				   <font color="white">MySQL Proxy</font>
+				  </td>
+				 </tr>
+				 <tr>
+				  <td border="1" port="script" colspan="4">script</td>
+				 </tr>
+				 <tr>
+				  <td border="1" port="plugin" colspan="4">plugin</td>
+				 </tr>
+				 <tr>
+				  <td border="1" port="proxy" colspan="4">network core</td>
+				 </tr>
+				</table>
+				>
+		]
+
+		Clients [
+			label = <
+				<table border="1" cellborder="1">
+				 <tr>
+				  <td bgcolor="grey" port="head">
+				   <font color="white">Clients</font>
+				  </td>
+				 </tr>
+				 <tr>
+				  <td border="1" port="app">app</td>
+				 </tr>
+				</table>
+				>
+		];
+
+		Backend [
+			label = <
+				<table border="1" cellborder="1">
+				 <tr>
+				  <td bgcolor="grey" port="head">
+				   <font color="white">MySQL Server</font>
+				  </td>
+				 </tr>
+				 <tr>
+				  <td border="1" port="port">:3306</td>
+				 </tr>
+				</table>
+				>
+
+		];
+	}
+
+	Clients:app:e -> Blocks:w;
+	Blocks:e -> Backend:port:w;
+}
