@@ -20,45 +20,46 @@ digraph G {
 		fontsize = 10
 	]
 
-	subgraph network {
-		rank = "same";
-		Blocks [
-			label = <
-				<table border="1" cellborder="1">
-				 <tr>
-				  <td bgcolor="black" port="head" colspan="4">
-				   <font color="white">MySQL Proxy</font>
-				  </td>
-				 </tr>
-				 <tr>
-				  <td border="1" port="script" colspan="4">script</td>
-				 </tr>
-				 <tr>
-				  <td border="1" port="plugin" colspan="4">plugin</td>
-				 </tr>
-				 <tr>
-				  <td border="1" port="proxy" colspan="4">network core</td>
-				 </tr>
-				</table>
-				>
-		]
-
-		Clients [
+	rank = "same";
+	rankdir = "LR";
+	subgraph clients {
+		Clients1 [
 			label = <
 				<table border="1" cellborder="1">
 				 <tr>
 				  <td bgcolor="grey" port="head">
-				   <font color="white">Clients</font>
+				   <font color="white">Client</font>
 				  </td>
 				 </tr>
+				 <tr border="0"><td border="0"><table border="0">
 				 <tr>
 				  <td border="1" port="app">app</td>
 				 </tr>
 				</table>
+				</td></tr></table>
 				>
 		];
 
-		Backend [
+		Clients2 [
+			label = <
+				<table border="1" cellborder="1">
+				 <tr>
+				  <td bgcolor="grey" port="head">
+				   <font color="white">Client</font>
+				  </td>
+				 </tr>
+				 <tr border="0"><td border="0"><table border="0">
+				 <tr>
+				  <td border="1" port="app">app</td>
+				 </tr>
+				</table>
+				</td></tr></table>
+				>
+		];
+	}
+
+	subgraph backends {
+		Backend1 [
 			label = <
 				<table border="1" cellborder="1">
 				 <tr>
@@ -66,15 +67,62 @@ digraph G {
 				   <font color="white">MySQL Server</font>
 				  </td>
 				 </tr>
+				 <tr border="0"><td border="0"><table border="0">
 				 <tr>
-				  <td border="1" port="port">:3306</td>
+				  <td border="1" port="port">10.0.0.1:3306</td>
 				 </tr>
 				</table>
+				</td></tr></table>
 				>
 
 		];
+
+		Backend2 [
+			label = <
+				<table border="1" cellborder="1">
+				 <tr>
+				  <td bgcolor="grey" port="head">
+				   <font color="white">MySQL Server</font>
+				  </td>
+				 </tr>
+				 <tr border="0"><td border="0"><table border="0">
+				 <tr>
+				  <td border="1" port="port">10.0.0.2:3306</td>
+				 </tr>
+				</table>
+				</td></tr></table>
+				>
+
+		];
+
 	}
 
-	Clients:app:e -> Blocks:w;
-	Blocks:e -> Backend:port:w;
+	Blocks [
+		label = <
+			<table border="1" cellborder="1">
+			 <tr>
+			  <td bgcolor="black" port="head">
+			   <font color="white">MySQL Proxy</font>
+			  </td>
+			 </tr>
+			 <tr border="0"><td border="0"><table border="0">
+			 <tr>
+			  <td border="1" port="script">script</td>
+			 </tr>
+			 <tr>
+			  <td border="1" port="plugin">plugin</td>
+			 </tr>
+			 <tr>
+			  <td border="1" port="proxy">network core</td>
+			 </tr>
+			</table>
+			</td></tr></table>
+			>
+	]
+
+
+	Clients1:app:e -> Blocks:w;
+	Clients2:app:e -> Blocks:w;
+	Blocks:e -> Backend1:port:w;
+	Blocks:e -> Backend2:port:w;
 }
