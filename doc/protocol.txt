@@ -1,0 +1,126 @@
+/** 
+@page protocol MySQL Protocol
+
+The MySQL Protocol is spilt into the four phases:
+
+@dot
+digraph {
+connect -> auth;
+auth -> command;
+command -> disconnect;
+command -> command;
+connect -> disconnect;
+auth -> disconnect;
+}
+@enddot
+
+The client and the server send and receive packets as documented in http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol 
+
+@dot
+digraph states {
+  graph [rankdir=LR];
+  node [fontname=Helvetica, fontsize=10];
+
+  connect [ shape=record ];
+  disconnect [ shape=record ];
+
+  subgraph client { 
+    label = "client";
+    style = filled;
+    color = black;
+    rank = same;
+    node [ style=filled, fillcolor=lightblue ];
+    connect; 
+    auth; 
+    oldauth; 
+    query; 
+    local;
+  }
+
+  subgraph server { 
+    label = "server";
+    style = filled;
+    rank = same; 
+    node [ style=filled, fillcolor=orange ];
+    handshake; 
+    authres; 
+    result; 
+    infile;
+  }
+  
+  subgraph { 
+    edge [ fontcolor=blue, color=blue, fontsize=10, fontname=Helvetica ];
+
+    connect->handshake [ label = "connecting server" ];
+    auth->authres [ label = "capabilities, password, default-db", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Client_Authentication_Packet" ]; 
+    oldauth->authres [ label = "scrambled password" ] ; 
+    query->result [ label = "command (COM_*)", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Command_Packet" ] ;
+    query->infile [ label = "LOAD DATA INFILE LOCAL" ];
+    local->result [ label = "file content"];
+  }
+
+  subgraph {
+    edge [ fontcolor=red, color=red, fontsize=10, fontname=Helvetica ];
+    handshake->disconnect [ label = "ERR: host denied", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
+    handshake->auth [ label = "0x10: handshake", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Handshake_Initialization_Packet" ];
+    authres->oldauth [ label = "EOF: old password reauth" ];
+    authres->query [ label = "OK: auth done", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#OK_Packet" ];
+    authres->disconnect [ label = "ERR: auth failed", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
+    result->query [ label = "result for COM_*", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Result_Set_Header_Packet" ] ;
+    result->disconnect [ label = "COM_QUIT" ];
+    result->result [ label = "COM_BINLOG_DUMP" ];
+    infile->local [ label = "EOF: filename" ];
+  }
+}
+@enddot
+
+The @ref page-core exposes all the states to the @ref page-plugins.
+
+@section section-protocol-use-cases Use Cases
+
+-# the client connects to the server and waits for data to return @msc
+  client, backend;
+  --- [ label = "connect to backend" ];
+  client->backend  [ label = "INIT" ];
+@endmsc
+-# the auth-phase handles the new SHA1-style passwords and the old scramble() passwords 
+  -# 4.1+ passwords @msc
+  client, backend;
+  --- [ label = "authenticate" ];
+  backend->client [ label = "HANDSHAKE" ];
+  client->backend [ label = "AUTH" ];
+  backend->client [ label = "AUTH_RESULT" ];
+@endmsc
+  -# pre-4.1 passwords @msc
+  client, backend;
+  --- [ label = "authenticate" ];
+  backend->client [ label = "HANDSHAKE" ];
+  client->backend [ label = "AUTH" ];
+  backend->client [ label = "OLD_PASSWORD_SCRAMBLE" ];
+  client->backend [ label = "OLD_PASSWORD_AUTH" ];
+  backend->client [ label = "AUTH_RESULT" ];
+@endmsc
+-# the query-phase repeats 
+  -# COM_QUERY and friends @msc
+  client, backend;
+  --- [ label = "query result phase" ];
+  client->backend [ label = "QUERY" ];
+  backend->client [ label = "QUERY_RESULT" ];
+@endmsc
+  -# COM_QUIT @msc
+  client, backend;
+  --- [ label = "query result phase" ];
+  client->backend [ label = "QUERY" ];
+  backend->client [ label = "connection close" ];
+@endmsc
+  -# COM_BINLOG_DUMP @msc
+  client, backend;
+  --- [ label = "query result phase" ];
+  client->backend [ label = "QUERY" ];
+  backend->client [ label = "QUERY_RESULT" ];
+  ... [ label = "more binlog entries" ];
+  backend->client [ label = "QUERY_RESULT"];
+@endmsc
+ */
+
+
