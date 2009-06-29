@@ -1,9 +1,8 @@
 /**
 
-@page page-plugins Plugins
+@page page-plugins Plugin and Scripting Layer
 
-MySQL Proxy is made up of several different parts, and what is usually being referred to as <em>MySQL Proxy</em> is in fact 
-the @link page-plugin-proxy Proxy plugin@endlink.
+What is usually being referred to as <em>MySQL Proxy</em> is in fact the @link page-plugin-proxy Proxy plugin@endlink.
 
 While the @ref page-chassis and @ref page-core make up an important part, it is really the plugins that make MySQL Proxy so flexible.
 
