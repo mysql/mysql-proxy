@@ -15,11 +15,8 @@ Internally the MySQL Proxy is a stack of:
 
 @dotfile architecture-overview.dot
 
-It is based in a @subpage page-core that exposes the phases of the life-cycle of the
+It is based on a @subpage page-core that exposes the phases of the
 @subpage protocol to a @ref page-plugins.
-
-
-The @ref protocol is split up into 4 phases:
 
 @dot
 digraph {
@@ -33,9 +30,7 @@ auth -> disconnect;
 
 @enddot
 
-While the @ref page-core is scalable to a larger number of connections, the plugin/scripting
-layer hides the complexity from the end-users and simplifies the customization. Each of the phases of
-the life-cycle lead to several more states.
+Each of the phases of the life-cycle lead to several more protocol-states. For example the auth phase is made up of at least 3 packets:
 
 @msc
 	Client, Proxy, Server;
@@ -43,12 +38,22 @@ the life-cycle lead to several more states.
 	Client -> Proxy [ label = "accept()" ];
 	Proxy -> Proxy [ label = "script: connect_server()" ];
 	Proxy -> Server [ label = "connect()" ];
+	...;
 	Server -> Proxy [ label = "recv(auth-challenge)" ];
-	Proxy -> Proxy [ label = "script: read_auth()" ];
+	Proxy -> Proxy [ label = "script: read_handshake()" ];
 	Proxy -> Client [ label = "send(auth-challenge)" ];
+	Client -> Proxy [ label = "recv(auth-response)" ];
+	Proxy -> Proxy [ label = "script: read_auth()" ];
+	Server -> Proxy [ label = "send(auth-response)" ];
+	Server -> Proxy [ label = "recv(auth-result)" ];
+	Proxy -> Proxy [ label = "script: read_auth_result()" ];
+	Proxy -> Client [ label = "send(auth-result)" ];
 	...;
 	
 @endmsc
+
+While the @ref page-core is scalable to a larger number of connections, the plugin/scripting
+layer hides the complexity from the end-users and simplifies the customization. 
 
 @section section-stack-of-libs Chassis, libraries and Plugins
 
