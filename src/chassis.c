@@ -662,11 +662,12 @@ int main_cmdline(int argc, char **argv) {
 		((strlen(executable_name) >= sizeof(pname) - 1) && \
 		0 == strcmp(executable_name + strlen(executable_name) - (sizeof(pname) - 1), pname) \
 		)
-
-		/* on Windows allow for the executable suffix */
 #ifdef WIN32
-		if(g_str_has_suffix(argv[0], ".exe")) {
-			executable_name = g_strndup(argv[0], strlen(argv[0]) - 4);	/* 4 is the length of ".exe" */
+		/* on Windows allow for the executable and -svc suffix */
+		if (g_str_has_suffix(argv[0], "-svc.exe")) {
+			executable_name = g_strndup(argv[0], strlen(argv[0]) - (sizeof(".-svc.exe") - 1));
+		} else if (g_str_has_suffix(argv[0], ".exe")) {
+			executable_name = g_strndup(argv[0], strlen(argv[0]) - (sizeof(".exe") - 1));
 		} else {
 			executable_name = g_strdup(argv[0]);
 		}
