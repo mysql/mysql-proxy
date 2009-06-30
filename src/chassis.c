@@ -609,12 +609,7 @@ int main_cmdline(int argc, char **argv) {
 	
 	/* Lets find the plugin directory relative the executable path */
 	if (!plugin_dir) {
-		/* for Win32 the default plugin dir is bin/ and not lib/package_name/plugins */
-#ifdef WIN32
-		plugin_dir = g_build_filename(srv->base_dir, "bin", NULL);
-#else
 		plugin_dir = g_build_filename(srv->base_dir, "lib", PACKAGE, "plugins", NULL);
-#endif
 	}
 	/* 
 	 * these are used before we gathered all the options
