@@ -93,7 +93,7 @@ ENDIF(WIN32)
 
 IF(WIN32)
 	# Windows finds the dlls in bin/
-	INSTALL(TARGETS mysql-proxy 
+	INSTALL(TARGETS mysql-proxy mysql-proxy-svc
 		RUNTIME DESTINATION bin
 		LIBRARY DESTINATION lib/mysql-proxy
 	)
