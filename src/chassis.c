@@ -566,12 +566,13 @@ int main_cmdline(int argc, char **argv) {
 		 * macosx has .so or .dylib
 		 * hpux has .sl
 		 */ 
-		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?." G_MODULE_SUFFIX, NULL);
 #  if _WIN32
+		gchar *path = g_build_filename(base_dir, "bin", "lua-?." G_MODULE_SUFFIX, NULL);
 		gchar *env_path = g_strdup_printf("%s=%s", LUA_CPATH, path);
 		_putenv(env_path);
 		g_free(env_path);
 #  else
+		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?." G_MODULE_SUFFIX, NULL);
 		g_setenv(LUA_CPATH, path, 1);
 #  endif
 		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, path);
