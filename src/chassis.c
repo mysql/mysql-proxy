@@ -665,7 +665,7 @@ int main_cmdline(int argc, char **argv) {
 #ifdef WIN32
 		/* on Windows allow for the executable and -svc suffix */
 		if (g_str_has_suffix(argv[0], "-svc.exe")) {
-			executable_name = g_strndup(argv[0], strlen(argv[0]) - (sizeof(".-svc.exe") - 1));
+			executable_name = g_strndup(argv[0], strlen(argv[0]) - (sizeof("-svc.exe") - 1));
 		} else if (g_str_has_suffix(argv[0], ".exe")) {
 			executable_name = g_strndup(argv[0], strlen(argv[0]) - (sizeof(".exe") - 1));
 		} else {
