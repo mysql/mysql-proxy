@@ -1,15 +1,13 @@
-MACRO(CHASSIS_PLUGIN _plugin_name)
-	SET(_la_name "${CMAKE_SHARED_LIBRARY_PREFIX}${_plugin_name}.la")
-	SET(_so_name "${CMAKE_SHARED_LIBRARY_PREFIX}${_plugin_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-	FILE(WRITE ${_la_name} "dlname=\"${_so_name}\"\n")
-	IF(WIN32)
-		FILE(APPEND ${_la_name} "libdir=\"../bin\"\n")
-	ELSE(WIN32)
-		FILE(APPEND ${_la_name} "libdir=\"./lib/\"\n")
-	ENDIF(WIN32)
-
-	FILE(APPEND ${_la_name} "installed=yes\n")
-	
-	INSTALL(FILES ${_la_name} DESTINATION lib/mysql-proxy)
-ENDMACRO(CHASSIS_PLUGIN _plugin_name)
+MACRO(CHASSIS_PLUGIN_INSTALL _plugin_name)
+	IF(NOT WIN32)
+		INSTALL(TARGETS ${_plugin_name}
+			DESTINATION lib/mysql-proxy/plugins)
+	ELSE(NOT WIN32)
+		## on win32 the lua module gets prefixed with lua- and end up in bin/
+		INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}${_plugin_name}${CMAKE_SHARED_LIBRARY_SUFFIX}
+			DESTINATION bin/
+			RENAME plugin-${_plugin_name}${CMAKE_SHARED_LIBRARY_SUFFIX}
+		)
+	ENDIF(NOT WIN32)
+ENDMACRO(CHASSIS_PLUGIN_INSTALL _plugin_name)
 

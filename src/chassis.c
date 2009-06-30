@@ -610,7 +610,11 @@ int main_cmdline(int argc, char **argv) {
 	
 	/* Lets find the plugin directory relative the executable path */
 	if (!plugin_dir) {
+#ifdef WIN32
+		plugin_dir = g_build_filename(srv->base_dir, "bin", NULL);
+#else
 		plugin_dir = g_build_filename(srv->base_dir, "lib", PACKAGE, "plugins", NULL);
+#endif
 	}
 	/* 
 	 * these are used before we gathered all the options
@@ -689,7 +693,7 @@ int main_cmdline(int argc, char **argv) {
 	/* load the plugins */
 	for (i = 0; plugin_names && plugin_names[i]; i++) {
 #ifdef WIN32
-#define G_MODULE_PREFIX ""
+#define G_MODULE_PREFIX "plugin-" /* we build the plugins with a prefix on win32 to avoid name-clashing in bin/ */
 #else
 #define G_MODULE_PREFIX "lib"
 #endif
