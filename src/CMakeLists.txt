@@ -75,6 +75,23 @@ TARGET_LINK_LIBRARIES(mysql-proxy
 )
 
 IF(WIN32)
+	ADD_EXECUTABLE(mysql-proxy-svc chassis.c)
+	TARGET_LINK_LIBRARIES(mysql-proxy-svc
+		${GLIB_LIBRARIES} 
+		${GMODULE_LIBRARIES} 
+		${GTHREAD_LIBRARIES} 
+		${LUA_LIBRARIES}
+		${EVENT_LIBRARIES}
+		mysql-chassis
+		mysql-chassis-proxy
+	)
+	SET_TARGET_PROPERTIES(mysql-proxy-svc
+		PROPERTIES
+		COMPILE_DEFINITIONS WIN32_AS_SERVICE
+	)
+ENDIF(WIN32)
+
+IF(WIN32)
 	# Windows finds the dlls in bin/
 	INSTALL(TARGETS mysql-proxy 
 		RUNTIME DESTINATION bin

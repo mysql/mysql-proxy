@@ -1099,7 +1099,7 @@ int main_win32(int argc, char **argv) {
  * We eventually fall down through to main_cmdline, even on Windows.
  */
 int main(int argc, char **argv) {
-#ifdef WIN32
+#ifdef WIN32_AS_SERVICE
 	return main_win32(argc, argv);
 #else
 	return main_cmdline(argc, argv);
