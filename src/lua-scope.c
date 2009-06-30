@@ -240,13 +240,13 @@ lua_State *lua_scope_load_script(lua_scope *sc, const gchar *name) {
 		
 		if (0 != g_stat(name, &st)) {
 			gchar *errmsg;
+
 			/* stat() failed, ... not good */
+			errmsg = g_strdup_printf("%s: stat(%s) failed: %s (%d)",
+				       G_STRLOC, name, g_strerror(errno), errno);
 
 			lua_pop(L, 2); /* cachedscripts. + cachedscripts.<name> */
 
-			errmsg = g_strdup_printf("%s: stat(%s) failed: %s (%d)",
-				       G_STRLOC, name, g_strerror(errno), errno);
-			
 			lua_pushstring(L, errmsg);
 
 			g_free(errmsg);
