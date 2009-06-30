@@ -6,5 +6,5 @@ INSTALL(FILES
 	tokenizer.lua
 	test.lua
 
-	DESTINATION share/mysql-proxy/proxy/
+	DESTINATION lib/mysql-proxy/lua/proxy/
 )
