@@ -1,6 +1,8 @@
 0.8.0 
 
   * added a threaded event handling layer
+  * fixed too small listen backlog() (#43278)
+  * added support to change the auth-response on the way to the backend
 
 0.7.1 - 2009-05-15
 
