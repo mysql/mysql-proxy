@@ -504,8 +504,8 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 		return NETWORK_SOCKET_ERROR;
 	}
 
-	if (-1 == listen(con->fd, 8)) {
-		g_critical("%s: listen(%s, 8) failed: %s (%d)",
+	if (-1 == listen(con->fd, 128)) {
+		g_critical("%s: listen(%s, 128) failed: %s (%d)",
 				G_STRLOC,
 				con->dst->name->str,
 				g_strerror(errno), errno);
