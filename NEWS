@@ -4,6 +4,12 @@
   * fixed too small listen backlog() (#43278)
   * added support to change the auth-response on the way to the backend
 
+0.7.2 - 2009-06-12
+
+  * fixed memory leak proxy plugin (#45272)
+  * added CMake build files
+  * fixed portability issues for Win32
+
 0.7.1 - 2009-05-15
 
   * fixed connection close at COM_REFRESH
