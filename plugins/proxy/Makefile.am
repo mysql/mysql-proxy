@@ -7,5 +7,5 @@ libproxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) $(top_builddir
 libproxy_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) -I$(top_srcdir)/src/
 noinst_HEADERS = proxy-plugin.h
 
-# EXTRA_DIST=CMakeLists.txt
+EXTRA_DIST=CMakeLists.txt
 

@@ -12,8 +12,9 @@ TESTS_ENVIRONMENT = \
 TESTS=base
 
 EXTRA_DIST=\
-	   run-tests.lua \
-	   lua-tests-wrapper.sh.in
+	run-tests.lua \
+	lua-tests-wrapper.sh.in \
+	CMakeLists.txt
 
 clean-local:
 	-rm `find . -type f -name "*.log"`

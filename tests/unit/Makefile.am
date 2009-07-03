@@ -113,7 +113,7 @@ t_network_injection_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAG
 t_network_injection_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)
 
 
-# EXTRA_DIST = CMakeLists.txt
+EXTRA_DIST = CMakeLists.txt
 
 ## remove the test-output
 distclean-local:

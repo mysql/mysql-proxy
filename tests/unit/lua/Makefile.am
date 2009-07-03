@@ -13,4 +13,4 @@ TESTS_ENVIRONMENT = \
 	DYLD_LIBRARY_PATH="${top_builddir}/src/.libs/" \
 	lua 
 
-EXTRA_DIST=$(TESTS)
+EXTRA_DIST=$(TESTS) CMakeLists.txt

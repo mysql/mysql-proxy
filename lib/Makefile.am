@@ -75,5 +75,6 @@ EXTRA_DIST += \
 	chassis.def \
 	lpeg.def \
 	mysql.def \
-	posix.def 
+	posix.def \
+	CMakeLists.txt
 

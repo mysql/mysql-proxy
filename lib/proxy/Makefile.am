@@ -9,4 +9,4 @@ dist_pkglib_proxy_DATA = \
 		 tokenizer.lua \
 		 test.lua
 
-# EXTRA_DIST=CMakeLists.txt
+EXTRA_DIST=CMakeLists.txt
