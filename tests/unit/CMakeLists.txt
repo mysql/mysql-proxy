@@ -72,6 +72,7 @@ TARGET_LINK_LIBRARIES(check_loadscript
 ADD_EXECUTABLE(check_chassis_path
 	check_chassis_path.c 
 	../../src/chassis-log.c 
+	../../src/chassis-event-thread.c
 	../../src/chassis-mainloop.c 
 	../../src/chassis-plugin.c
 	../../src/chassis-stats.c 

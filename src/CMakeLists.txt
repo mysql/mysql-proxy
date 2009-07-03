@@ -21,6 +21,7 @@ SET(chassis_sources
 	lua-load-factory.c
 	lua-scope.c
 	chassis-plugin.c
+  chassis-event-thread.c
 	chassis-log.c
 	chassis-mainloop.c
 	chassis-keyfile.c
