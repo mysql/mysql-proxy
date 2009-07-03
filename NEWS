@@ -4,11 +4,14 @@
   * fixed too small listen backlog() (#43278)
   * added support to change the auth-response on the way to the backend
 
-0.7.2 - 2009-06-12
+0.7.2 - 2009-06-30
 
   * fixed memory leak proxy plugin (#45272)
+  * fixed ro-balance.lua (#45408)
   * added CMake build files
   * fixed portability issues for Win32
+  * added mysql-proxy-svc on Win32
+  * updated INSTALL file to cover all the build steps on win32
 
 0.7.1 - 2009-05-15
 
