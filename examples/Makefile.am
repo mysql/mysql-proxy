@@ -2,20 +2,20 @@ EXTRA_DIST=
 
 example_scripts = \
 	tutorial-basic.lua \
-	tutorial-inject.lua \
-	tutorial-rewrite.lua \
-	tutorial-query-time.lua \
-	tutorial-packets.lua \
-	tutorial-warnings.lua \
-	tutorial-union.lua \
 	tutorial-constants.lua \
+	tutorial-inject.lua \
 	tutorial-keepalive.lua \
-	tutorial-tokenize.lua \
+	tutorial-monitor.lua \
+	tutorial-packets.lua \
+	tutorial-query-time.lua \
 	tutorial-resultset.lua \
-	tutorial-states.lua \
+	tutorial-rewrite.lua \
 	tutorial-routing.lua \
 	tutorial-scramble.lua \
-	tutorial-monitor.lua
+	tutorial-states.lua \
+	tutorial-tokenize.lua \
+	tutorial-union.lua \
+	tutorial-warnings.lua
 
 if USE_WRAPPER_SCRIPT
 dist_doc_DATA = ${example_scripts}
@@ -23,4 +23,4 @@ else
 EXTRA_DIST += ${example_scripts}
 endif
 
-# EXTRA_DIST=CMakeLists.txt
+EXTRA_DIST+=CMakeLists.txt
