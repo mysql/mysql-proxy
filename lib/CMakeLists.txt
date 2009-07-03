@@ -1,0 +1,154 @@
+ADD_SUBDIRECTORY(proxy)
+
+INSTALL(FILES
+	active-queries.lua
+	active-transactions.lua
+	analyze-query.lua
+	auditing.lua
+	commit-obfuscator.lua
+	commit-obfuscator.msc
+	histogram.lua
+	load-multi.lua
+	ro-balance.lua
+	rw-splitting.lua
+	xtab.lua
+
+	DESTINATION share/mysql-proxy/
+)
+
+INCLUDE_DIRECTORIES(${GLIB_INCLUDE_DIRS})
+LINK_DIRECTORIES(${GLIB_LIBRARY_DIRS})
+
+INCLUDE_DIRECTORIES(${LUA_INCLUDE_DIRS})
+LINK_DIRECTORIES(${LUA_LIBRARY_DIRS})
+
+INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/)
+INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}) # for config.h
+
+INCLUDE_DIRECTORIES(${MYSQL_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${EVENT_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR}) ## for the generated header file
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}) ## for the packaged header file
+
+IF(FLEX_EXECUTABLE)
+	FILE(REMOVE "${CMAKE_CURRENT_SOURCE_DIR}/sql-tokenizer.c")
+	ADD_CUSTOM_COMMAND(
+		OUTPUT  "${CMAKE_CURRENT_BINARY_DIR}/sql-tokenizer.c"
+		DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sql-tokenizer.l"
+		COMMAND ${FLEX_EXECUTABLE} 
+			-o"${CMAKE_CURRENT_BINARY_DIR}/sql-tokenizer.c"
+			"${CMAKE_CURRENT_SOURCE_DIR}/sql-tokenizer.l"
+	)
+ENDIF(FLEX_EXECUTABLE)
+
+
+SET(LUA_GLIB2_SOURCES
+	glib2.c
+)
+SET(LUA_LFS_SOURCES
+	lfs.c
+)
+SET(LUA_MYSQL_SOURCES
+	mysql-proto.c
+	sql-tokenizer.c 
+	sql-tokenizer-lua.c 
+)
+
+SET(LUA_CHASSIS_SOURCES
+	chassis.c
+)
+
+SET(LUA_LPEG_SOURCES
+	lpeg.c
+)
+
+IF(WIN32)
+	SET(LUA_GLIB2_SOURCES ${LUA_GLIB2_SOURCES} glib2.def)
+	SET(LUA_LFS_SOURCES ${LUA_LFS_SOURCES} lfs.def)
+	SET(LUA_MYSQL_SOURCES ${LUA_MYSQL_SOURCES} mysql.def)
+	SET(LUA_CHASSIS_SOURCES ${LUA_CHASSIS_SOURCES} chassis.def)
+	SET(LUA_LPEG_SOURCES ${LUA_LPEG_SOURCES} lpeg.def)
+ENDIF(WIN32)
+
+ADD_LIBRARY(glib2   SHARED ${LUA_GLIB2_SOURCES})
+ADD_LIBRARY(lfs     SHARED ${LUA_LFS_SOURCES})
+ADD_LIBRARY(mysql   SHARED ${LUA_MYSQL_SOURCES})
+ADD_LIBRARY(chassis SHARED ${LUA_CHASSIS_SOURCES})
+ADD_LIBRARY(lpeg    SHARED ${LUA_LPEG_SOURCES})
+
+
+### 
+## building the lua extensions that can be loaded with require()
+##
+## if possible don't link them against liblua.a, the caller will provide all the symbols
+## on win32 we have to link against it, but they have a .dll by default
+
+IF(WIN32)
+	## win32 is the only platform that needs reference to the lua.dll at linktime
+	SET(LUA_SHARED_LIBRARIES ${LUA_LIBRARIES})
+
+	TARGET_LINK_LIBRARIES(lfs
+		${LUA_SHARED_LIBRARIES})
+	TARGET_LINK_LIBRARIES(lpeg
+		${LUA_SHARED_LIBRARIES})
+ELSE(WIN32)
+	SET(LUA_SHARED_LIBRARIES )
+ENDIF(WIN32)
+
+IF(APPLE)
+	## MacOSX may have a static liblua and we don't want to link that in
+	SET_TARGET_PROPERTIES(
+		glib2 lfs lpeg
+		PROPERTIES 
+			LINK_FLAGS "-undefined dynamic_lookup")
+ENDIF(APPLE)
+
+TARGET_LINK_LIBRARIES(glib2
+	${LUA_SHARED_LIBRARIES}
+	${GLIB_LIBRARIES}
+)
+TARGET_LINK_LIBRARIES(mysql 
+	${LUA_SHARED_LIBRARIES}
+	${GLIB_LIBRARIES}
+	mysql-chassis-proxy
+)
+TARGET_LINK_LIBRARIES(chassis 
+	${LUA_SHARED_LIBRARIES}
+	${GLIB_LIBRARIES}
+	mysql-chassis
+)
+
+
+IF(NOT WIN32)
+	## remove the "lib" prefix on Unix platforms to make the modules loadable
+	INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}glib2${CMAKE_SHARED_LIBRARY_SUFFIX}
+		DESTINATION lib/mysql-proxy/
+		RENAME glib2${CMAKE_SHARED_LIBRARY_SUFFIX}
+	)
+
+	INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}lfs${CMAKE_SHARED_LIBRARY_SUFFIX}
+		DESTINATION lib/mysql-proxy/
+		RENAME lfs${CMAKE_SHARED_LIBRARY_SUFFIX}
+	)
+
+	INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}mysql${CMAKE_SHARED_LIBRARY_SUFFIX}
+		DESTINATION lib/mysql-proxy/
+		RENAME mysql${CMAKE_SHARED_LIBRARY_SUFFIX}
+	)
+	INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}chassis${CMAKE_SHARED_LIBRARY_SUFFIX}
+		DESTINATION lib/mysql-proxy/
+		RENAME chassis${CMAKE_SHARED_LIBRARY_SUFFIX}
+	)
+	INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}lpeg${CMAKE_SHARED_LIBRARY_SUFFIX}
+		DESTINATION lib/mysql-proxy/
+		RENAME lpeg${CMAKE_SHARED_LIBRARY_SUFFIX}
+	)
+
+ELSE(NOT WIN32)
+	## win32 already names them correctly
+	INSTALL(TARGETS glib2 lfs mysql chassis lpeg
+		RUNTIME DESTINATION bin/
+		LIBRARY DESTINATION lib/mysql-proxy/
+	)
+ENDIF(NOT WIN32)
+

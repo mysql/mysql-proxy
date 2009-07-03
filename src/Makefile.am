@@ -53,8 +53,8 @@ libmysql_proxy_la_SOURCES = \
 	network-injection.c \
 	network-injection-lua.c \
 	network-backend.c \
-	lua-env.c \
-	network-backend-lua.c
+	network-backend-lua.c \
+	lua-env.c
 
 libmysql_proxy_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
 libmysql_proxy_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)

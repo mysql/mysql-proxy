@@ -1,131 +1,127 @@
-include(UsePkgConfig)
-include(CheckIncludeFiles)
-include(CheckFunctionExists)
-INCLUDE(CheckTypeSize)
+INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}) # for config.h
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
 
-include_directories (${AGENT_SOURCE_DIR}/)
+INCLUDE_DIRECTORIES(${GLIB_INCLUDE_DIRS})
+LINK_DIRECTORIES(${GLIB_LIBRARY_DIRS})
 
-pkgconfig(glib-2.0 GLIB_INC_DIR GLIB_LIB_DIR GLIB_LDFLAGS GLIB_CFLAGS)
-MESSAGE(STATUS "GLIB_INC_DIR ${GLIB_INC_DIR}")
-MESSAGE(STATUS "GLIB_LIB_DIR ${GLIB_LIB_DIR}")
-MESSAGE(STATUS "GLIB_LDFLAGS ${GLIB_LDFLAGS}")
-MESSAGE(STATUS "GLIB_CFLAGS ${GLIB_CFLAGS}")
+INCLUDE_DIRECTORIES(${MYSQL_INCLUDE_DIRS})
+LINK_DIRECTORIES(${MYSQL_LIBRARY_DIRS})
 
-pkgconfig(libxml-2.0 XML_INC_DIR XML_LIB_DIR XML_LDFLAGS XML_CFLAGS)
-MESSAGE(STATUS "XML_INC_DIR ${XML_INC_DIR}")
-MESSAGE(STATUS "XML_LIB_DIR ${XML_LIB_DIR}")
-MESSAGE(STATUS "XML_LDFLAGS ${XML_LDFLAGS}")
-MESSAGE(STATUS "XML_CFLAGS ${XML_CFLAGS}")
+INCLUDE_DIRECTORIES(${LUA_INCLUDE_DIRS})
+LINK_DIRECTORIES(${LUA_LIBRARY_DIRS})
 
-link_directories(${GLIB_LIB_DIR})
-include_directories(${GLIB_LIB_DIR}/glib-2.0/include ${GLIB_INC_DIR}/glib-2.0/)
-include_directories(/usr/include/mysql/ /usr/local/mysql/include/)
-INCLUDE_DIRECTORIES(${XML_INC_DIR}/libxml2 ${XML_INC_DIR})
-# LINK_DIRECTORIES(/usr/lib64/mysql/)
-LINK_DIRECTORIES(/usr/local/mysql/lib)
+INCLUDE_DIRECTORIES(${EVENT_INCLUDE_DIRS})
+LINK_DIRECTORIES(${EVENT_LIBRARY_DIRS})
 
-CHECK_INCLUDE_FILES(inttypes.h HAVE_INTTYPES_H)
-IF (HAVE_INTTYPES_H) 
-  ADD_DEFINITIONS(-DHAVE_INTTYPES_H) 
-ENDIF(HAVE_INTTYPES_H)
+STRING(REPLACE "." "" SHARED_LIBRARY_SUFFIX ${CMAKE_SHARED_LIBRARY_SUFFIX})
+ADD_DEFINITIONS(-DSHARED_LIBRARY_SUFFIX="${SHARED_LIBRARY_SUFFIX}")
 
-CHECK_INCLUDE_FILES(unistd.h HAVE_UNISTD_H)
-IF (HAVE_UNISTD_H) 
-  ADD_DEFINITIONS(-DHAVE_UNISTD_H) 
-ENDIF(HAVE_UNISTD_H)
+SET(chassis_sources 
+	glib-ext.c
+	lua-load-factory.c
+	lua-scope.c
+	chassis-plugin.c
+	chassis-log.c
+	chassis-mainloop.c
+	chassis-keyfile.c
+	chassis-path.c
+	chassis-stats.c
+)
 
-CHECK_INCLUDE_FILES(sys/time.h HAVE_SYS_TIME_H)
-IF (HAVE_SYS_TIME_H) 
-  ADD_DEFINITIONS(-DHAVE_SYS_TIME_H) 
-ENDIF(HAVE_SYS_TIME_H)
+SET(proxy_sources 
+	network-mysqld.c 
+	network-mysqld-lua.c 
+	network-mysqld-proto.c 
+	network-mysqld-binlog.c 
+	network-mysqld-packet.c 
+	network-mysqld-masterinfo.c 
+	network-conn-pool.c  
+	network-conn-pool-lua.c  
+	network-socket.c
+	network-socket-lua.c
+	network-address.c
+	network-address-lua.c
+	network-injection.c
+	network-injection-lua.c
+	network-backend.c
+	network-backend-lua.c
+	lua-env.c
+)
 
-CHECK_INCLUDE_FILES(sys/filio.h HAVE_SYS_FILIO_H)
-IF (HAVE_SYS_FILIO_H) 
-  ADD_DEFINITIONS(-DHAVE_SYS_FILIO_H) 
-ENDIF(HAVE_SYS_FILIO_H)
+ADD_LIBRARY(mysql-chassis SHARED ${chassis_sources})
+ADD_LIBRARY(mysql-chassis-proxy SHARED ${proxy_sources})
+ADD_EXECUTABLE(mysql-proxy chassis.c)
 
-CHECK_INCLUDE_FILES(sys/socket.h HAVE_SYS_SOCKET_H)
-IF (HAVE_SYS_SOCKET_H) 
-  ADD_DEFINITIONS(-DHAVE_SYS_SOCKET_H) 
-ENDIF(HAVE_SYS_SOCKET_H)
+TARGET_LINK_LIBRARIES(mysql-chassis 
+	${GLIB_LIBRARIES} 
+	${GMODULE_LIBRARIES} 
+	${GTHREAD_LIBRARIES} 
+	${LUA_LIBRARIES}
+	${EVENT_LIBRARIES}
+)
 
-CHECK_INCLUDE_FILES(sys/resource.h HAVE_SYS_RESOURCE_H)
-IF (HAVE_SYS_RESOURCE_H) 
-  ADD_DEFINITIONS(-DHAVE_SYS_RESOURCE_H) 
-ENDIF(HAVE_SYS_RESOURCE_H)
+TARGET_LINK_LIBRARIES(mysql-chassis-proxy
+	mysql-chassis
+)
 
-CHECK_INCLUDE_FILES(sys/ioctl.h HAVE_SYS_IOCTL_H)
-IF (HAVE_SYS_IOCTL_H) 
-  ADD_DEFINITIONS(-DHAVE_SYS_IOCTL_H) 
-ENDIF(HAVE_SYS_IOCTL_H)
+TARGET_LINK_LIBRARIES(mysql-proxy 
+	${GLIB_LIBRARIES} 
+	${GMODULE_LIBRARIES} 
+	${GTHREAD_LIBRARIES} 
+	${LUA_LIBRARIES}
+	${EVENT_LIBRARIES}
+	mysql-chassis
+	mysql-chassis-proxy
+)
 
-CHECK_INCLUDE_FILES(stdlib.h HAVE_STDLIB_H)
-IF (HAVE_STDLIB_H) 
-  ADD_DEFINITIONS(-DHAVE_STDLIB_H) 
-ENDIF(HAVE_STDLIB_H)
-
-CHECK_INCLUDE_FILES(sys/sockio.h HAVE_SYS_SOCKIO_H)
-IF (HAVE_SYS_SOCKIO_H) 
-  ADD_DEFINITIONS(-DHAVE_SYS_SOCKIO_H) 
-ENDIF(HAVE_SYS_SOCKIO_H)
-
-CHECK_INCLUDE_FILES(net/if.h HAVE_NET_IF_H)
-IF (HAVE_NET_IF_H) 
-  ADD_DEFINITIONS(-DHAVE_NET_IF_H) 
-ENDIF(HAVE_NET_IF_H)
-
-CHECK_INCLUDE_FILES(net/if_dl.h HAVE_NET_IF_DL_H)
-IF (HAVE_NET_IF_DL_H) 
-  ADD_DEFINITIONS(-DHAVE_NET_IF_DL_H) 
-ENDIF(HAVE_NET_IF_DL_H)
-
-CHECK_INCLUDE_FILES(netinet/in.h HAVE_NETINET_IN_H)
-IF (HAVE_NETINET_IN_H) 
-  ADD_DEFINITIONS(-DHAVE_NETINET_IN_H) 
-ENDIF(HAVE_NETINET_IN_H)
-
-CHECK_FUNCTION_EXISTS(signal HAVE_SIGNAL)
-IF (HAVE_SIGNAL) 
-  ADD_DEFINITIONS(-DHAVE_SIGNAL) 
-ENDIF(HAVE_SIGNAL)
-
-CHECK_FUNCTION_EXISTS(srandom HAVE_SRANDOM)
-IF (HAVE_SRANDOM) 
-  ADD_DEFINITIONS(-DHAVE_SRANDOM) 
-ENDIF(HAVE_SRANDOM)
-
-SET(LUALIBS )
-CHECK_INCLUDE_FILES(lua.h HAVE_LUA_H)
-IF (HAVE_LUA_H) 
-  ADD_DEFINITIONS(-DHAVE_LUA_H) 
-  SET(LUALIBS lua m)
-ENDIF(HAVE_LUA_H)
-
-SET(EVENTLIBS )
-CHECK_INCLUDE_FILES(event.h HAVE_EVENT_H)
-IF (HAVE_EVENT_H) 
-  ADD_DEFINITIONS(-DHAVE_EVENT_H) 
-  SET(EVENTLIBS event)
-ENDIF(HAVE_EVENT_H)
-
-IF(NOT WIN32)
-  IF(HAVE_EVENT_H)
-    SET(proxy_sources 
-	network-mysqld.c
-	network-mysqld-proxy.c
-	network-mysqld-server.c
-	network-mysqld-proto.c
-	network-mysqld-table.c
+IF(WIN32)
+	# Windows finds the dlls in bin/
+	INSTALL(TARGETS mysql-proxy 
+		RUNTIME DESTINATION bin
+		LIBRARY DESTINATION lib/mysql-proxy
 	)
-  
-    ADD_EXECUTABLE(mysql-proxy mysql-proxy.c ${proxy_sources})
-    TARGET_LINK_LIBRARIES(mysql-proxy glib-2.0 ${LUALIBS} ${EVENTLIBS})
-  ENDIF(HAVE_EVENT_H)
-ENDIF(NOT WIN32)
+ELSE(WIN32)
+	# Unix platforms provide a wrapper script to avoid relinking at install time
+	
+	# figure out the correct name of the shared linker lookup path for this system, default to LD_LIBRARY_PATH
+	SET(DYNLIB_PATH_VAR "LD_LIBRARY_PATH")
+	
+	IF("AIX" STREQUAL ${CMAKE_SYSTEM_NAME})
+		SET(DYNLIB_PATH_VAR "LIBPATH")
+	ENDIF("AIX" STREQUAL ${CMAKE_SYSTEM_NAME})
+	
+	IF("HP-UX" STREQUAL ${CMAKE_SYSTEM_NAME})
+		SET(DYNLIB_PATH_VAR "SHLIB_PATH")
+	ENDIF("HP-UX" STREQUAL ${CMAKE_SYSTEM_NAME})
+	
+	IF(APPLE)
+		SET(DYNLIB_PATH_VAR "DYLD_LIBRARY_PATH")
+	ENDIF(APPLE)
+	
+	# write the wrapper script, which uses DYNLIB_PATH_VAR
+	CONFIGURE_FILE(
+		${CMAKE_SOURCE_DIR}/scripts/mysql-proxy-binwrapper.in 
+		${PROJECT_BINARY_DIR}/mysql-proxy.sh
+		@ONLY
+	)
+	INSTALL(FILES ${PROJECT_BINARY_DIR}/mysql-proxy.sh
+		DESTINATION bin/
+		PERMISSIONS OWNER_EXECUTE OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+		RENAME mysql-proxy
+	)
 
-# ADD_EXECUTABLE(proxy-test proxy-test.c)
-# TARGET_LINK_LIBRARIES(proxy-test mysqlclient m z glib-2.0)
+	INSTALL(TARGETS mysql-proxy
+		RUNTIME DESTINATION libexec
+	)
+ENDIF(WIN32)
 
-# ADD_EXECUTABLE(trx-id trx-id.c)
-# TARGET_LINK_LIBRARIES(trx-id mysqlclient m z glib-2.0 gthread-2.0)
+INSTALL(TARGETS mysql-chassis 
+	RUNTIME DESTINATION bin
+	LIBRARY DESTINATION lib
+)
+
+INSTALL(TARGETS mysql-chassis-proxy 
+	RUNTIME DESTINATION bin
+	LIBRARY DESTINATION lib
+)
 

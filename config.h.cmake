@@ -31,3 +31,6 @@
 #cmakedefine HAVE_WRITEV
 
 #cmakedefine HAVE_SOCKLEN_T
+
+#cmakedefine HAVE_GTHREAD
+#cmakedefine HAVE_GTHREAD_H

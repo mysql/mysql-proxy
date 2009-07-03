@@ -1,0 +1,257 @@
+PROJECT(mysql-proxy C)
+
+SET(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+
+INCLUDE(CheckIncludeFiles)
+INCLUDE(CheckFunctionExists)
+INCLUDE(CheckLibraryExists)
+INCLUDE(FindPkgConfig)
+INCLUDE(CheckTypeSize)
+INCLUDE(ChassisPlugin)
+INCLUDE(CTest)
+INCLUDE(InstallRequiredSystemLibraries)
+INCLUDE(Tar)
+
+ENABLE_TESTING()
+
+EXECUTE_PROCESS(COMMAND bzr version-info --custom --template="{branch_nick} revision {revno}"
+								TIMEOUT 5
+								OUTPUT_VARIABLE	BZR_INFO
+								OUTPUT_STRIP_TRAILING_WHITESPACE
+								)
+MESSAGE(STATUS "building from branch ${BZR_INFO}")
+SET(CPACK_PACKAGE_VERSION_MAJOR "0")
+SET(CPACK_PACKAGE_VERSION_MINOR "7")
+SET(CPACK_PACKAGE_VERSION_PATCH "2")
+SET(CPACK_PACKAGE_VENDOR "MySQL")
+## SET(CPACK_*) before the INCLUDE(CPack)
+INCLUDE(CPack)
+
+IF(WIN32) 
+	## make sure we only use the smallest set of 
+	## headers on win32. Otherwise we get clashes 
+	## between winsock2.h and winsock.h
+	ADD_DEFINITIONS(-DWIN32_LEAN_AND_MEAN)
+	## statically link in the threadsafe C runtime so we don't have to distribute it
+	## but only do it for release builds
+	#STRING(REPLACE "/MD"  "/MT"  CMAKE_C_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
+ENDIF(WIN32)
+
+INCLUDE(deps/CMakeLists.txt OPTIONAL)
+
+## if the paths are not set, use pkg-config to fetch them
+SET(GLIB_INCLUDE_DIRS  CACHE PATH "glib-2.0 include dir [see pkg-config glib-2.0 --cflags]")
+SET(GLIB_LIBRARY_DIRS  CACHE PATH "glib-2.0 library dir [see pkg-config glib-2.0 --libs]")
+SET(GMODULE_INCLUDE_DIRS  CACHE PATH "gmodule-2.0 include dir [see pkg-config gmodule-2.0 --cflags]")
+SET(GMODULE_LIBRARY_DIRS  CACHE PATH "gmodule-2.0 library dir [see pkg-config gmodule-2.0 --libs]")
+SET(GTHREAD_INCLUDE_DIRS  CACHE PATH "gthread-2.0 include dir [see pkg-config gthread-2.0 --cflags]")
+SET(GTHREAD_LIBRARY_DIRS  CACHE PATH "gthread-2.0 library dir [see pkg-config gthread-2.0 --libs]")
+SET(MYSQL_INCLUDE_DIRS CACHE PATH "MySQL include dir")
+SET(MYSQL_LIBRARY_DIRS CACHE PATH "MySQL library dir")
+SET(LUA_INCLUDE_DIRS   CACHE PATH "lua-5.1 include dir")
+SET(LUA_LIBRARY_DIRS   CACHE PATH "lua-5.1 library dir")
+SET(EVENT_INCLUDE_DIRS CACHE PATH "libevent include dir")
+SET(EVENT_LIBRARY_DIRS CACHE PATH "libevent library dir")
+
+MESSAGE(STATUS "libevent at libs:${EVENT_LIBRARY_DIRS} incl:${EVENT_INCLUDE_DIRS}")
+MESSAGE(STATUS "liblua   at libs:${LUA_LIBRARY_DIRS} incl:${LUA_INCLUDE_DIRS}")
+MESSAGE(STATUS "glib2.0  at libs:${GLIB_LIBRARY_DIRS} incl:${GLIB_INCLUDE_DIRS}")
+MESSAGE(STATUS "gthread  at libs:${GTHREAD_LIBRARY_DIRS} incl:${GTHREAD_INCLUDE_DIRS}")
+MESSAGE(STATUS "gmodule  at libs:${GMODULE_LIBRARY_DIRS} incl:${GMODULE_INCLUDE_DIRS}")
+
+IF(NOT GLIB_INCLUDE_DIRS) 
+	SET(__pkg_config_checked_GLIB 0)
+	PKG_CHECK_MODULES(GLIB REQUIRED glib-2.0>=2.16)
+	ADD_DEFINITIONS(-DHAVE_GLIB)
+ENDIF(NOT GLIB_INCLUDE_DIRS) 
+
+IF(NOT GMODULE_INCLUDE_DIRS) 
+	PKG_CHECK_MODULES(GMODULE REQUIRED gmodule-2.0>=2.16)
+	ADD_DEFINITIONS(-DHAVE_GMODULE)
+ENDIF(NOT GMODULE_INCLUDE_DIRS) 
+
+IF(NOT GTHREAD_INCLUDE_DIRS) 
+	PKG_CHECK_MODULES(GTHREAD REQUIRED gthread-2.0>=2.16)
+ENDIF(NOT GTHREAD_INCLUDE_DIRS) 
+
+IF(NOT LUA_INCLUDE_DIRS)
+	SET(__pkg_config_checked_LUA 0)
+	PKG_SEARCH_MODULE(LUA lua5.1;lua>=5.1)
+	ADD_DEFINITIONS(-DHAVE_LUA)
+ENDIF(NOT LUA_INCLUDE_DIRS) 
+FIND_PROGRAM(LUA_EXECUTABLE NAMES lua DOC "full path of lua")
+
+MACRO(_mysql_config VAR _regex _opt)
+	EXECUTE_PROCESS(COMMAND ${MYSQL_CONFIG_EXECUTABLE} ${_opt}
+		OUTPUT_VARIABLE _mysql_config_output
+		)
+
+	SET(_var   ${_mysql_config_output})
+	STRING(REGEX MATCHALL "${_regex}([^ ]+)" _mysql_config_output "${_mysql_config_output}")
+	STRING(REGEX REPLACE "^[ \t]+" "" _mysql_config_output "${_mysql_config_output}")
+	STRING(REGEX REPLACE "[\r\n]$" "" _mysql_config_output "${_mysql_config_output}")
+	STRING(REGEX REPLACE "${_regex}" "" _mysql_config_output "${_mysql_config_output}")
+	SEPARATE_ARGUMENTS(_mysql_config_output)
+	SET(${VAR} ${_mysql_config_output})
+ENDMACRO(_mysql_config _regex _opt)
+
+IF(NOT MYSQL_INCLUDE_DIRS)
+	FIND_PROGRAM(MYSQL_CONFIG_EXECUTABLE NAMES mysql_config DOC "full path of mysql_config")
+	IF(NOT MYSQL_CONFIG_EXECUTABLE)
+		MESSAGE(SEND_ERROR "mysql_config wasn't found, -DMYSQL_CONFIG_EXECUTABLE=...")
+	ENDIF(NOT MYSQL_CONFIG_EXECUTABLE)
+
+	_MYSQL_CONFIG(MYSQL_INCLUDE_DIRS "(^| )-I" "--include")
+	_MYSQL_CONFIG(MYSQL_LIBRARIES    "(^| )-l" "--libs")
+	_MYSQL_CONFIG(MYSQL_LIBRARY_DIRS "(^| )-L" "--libs")
+ELSE(NOT MYSQL_INCLUDE_DIRS)
+	SET(MYSQL_LIBRARIES libmysql)
+ENDIF(NOT MYSQL_INCLUDE_DIRS) 
+
+SET(CMAKE_REQUIRED_INCLUDES 
+	${EVENT_INCLUDE_DIRS}
+	${LUA_INCLUDE_DIRS}
+	${MYSQL_INCLUDE_DIRS}
+	${GLIB_INCLUDE_DIRS}
+	${GTHREAD_INCLUDE_DIRS}
+)
+
+MESSAGE(STATUS "checking in dirs: ${CMAKE_REQUIRED_INCLUDES}")
+
+CHECK_INCLUDE_FILES(sys/types.h;event.h HAVE_EVENT_H)
+CHECK_INCLUDE_FILES(inttypes.h   HAVE_INTTYPES_H)
+CHECK_INCLUDE_FILES(lua.h        HAVE_LUA_H)
+CHECK_INCLUDE_FILES(netinet/in.h HAVE_NETINET_IN_H)
+CHECK_INCLUDE_FILES(net/if.h     HAVE_NET_IF_H)
+CHECK_INCLUDE_FILES(net/if_dl.h  HAVE_NET_IF_DL_H)
+CHECK_INCLUDE_FILES(stddef.h     HAVE_STDDEF_H)
+CHECK_INCLUDE_FILES(stdint.h     HAVE_STDINT_H)
+CHECK_INCLUDE_FILES(stdlib.h     HAVE_STDLIB_H)
+CHECK_INCLUDE_FILES(signal.h     HAVE_SIGNAL_H)
+CHECK_INCLUDE_FILES(syslog.h     HAVE_SYSLOG_H)
+CHECK_INCLUDE_FILES(sys/filio.h  HAVE_SYS_FILIO_H)
+CHECK_INCLUDE_FILES(sys/ioctl.h  HAVE_SYS_IOCTL_H)
+CHECK_INCLUDE_FILES(sys/socket.h HAVE_SYS_SOCKET_H)
+CHECK_INCLUDE_FILES(sys/sockio.h HAVE_SYS_SOCKIO_H)
+CHECK_INCLUDE_FILES(sys/time.h   HAVE_SYS_TIME_H)
+CHECK_INCLUDE_FILES(sys/types.h  HAVE_SYS_TYPES_H)
+CHECK_INCLUDE_FILES(sys/uio.h    HAVE_SYS_UIO_H)
+CHECK_INCLUDE_FILES(sys/un.h     HAVE_SYS_UN_H)
+CHECK_INCLUDE_FILES(time.h       HAVE_TIME_H)
+CHECK_INCLUDE_FILES(unistd.h     HAVE_UNISTD_H)
+CHECK_INCLUDE_FILES(mysql.h      HAVE_MYSQL_H)
+CHECK_INCLUDE_FILES(glib.h       HAVE_GLIB_H)
+CHECK_INCLUDE_FILES(glib/gthread.h    HAVE_GTHREAD_H)
+CHECK_INCLUDE_FILES(pwd.h        HAVE_PWD_H)
+
+CHECK_FUNCTION_EXISTS(getcwd     HAVE_GETCWD)
+CHECK_FUNCTION_EXISTS(signal     HAVE_SIGNAL)
+CHECK_FUNCTION_EXISTS(strerror   HAVE_STRERROR)
+CHECK_FUNCTION_EXISTS(srandom    HAVE_SRANDOM)
+CHECK_FUNCTION_EXISTS(writev     HAVE_WRITEV)
+# check for gthread actually being present
+CHECK_LIBRARY_EXISTS(gthread-2.0 g_thread_init ${GTHREAD_LIBRARY_DIRS} HAVE_GTHREAD)
+
+IF(${HAVE_SYS_SOCKET_H})
+	SET(CMAKE_EXTRA_INCLUDE_FILES sys/socket.h)
+	CHECK_TYPE_SIZE(socklen_t        HAVE_SOCKLEN_T)
+	SET(CMAKE_EXTRA_INCLUDE_FILES )
+ENDIF(${HAVE_SYS_SOCKET_H})
+
+IF(EVENT_LIBRARY_DIRS)
+	FIND_LIBRARY(EVENT_LIBRARIES 
+		NAMES event 
+		PATHS ${EVENT_LIBRARY_DIRS} 
+		NO_DEFAULT_PATH
+		)
+ELSE(EVENT_LIBRARY_DIRS)
+	FIND_LIBRARY(EVENT_LIBRARIES event)
+ENDIF(EVENT_LIBRARY_DIRS)
+
+FIND_PROGRAM(FLEX_EXECUTABLE NAMES flex DOC "full path of flex")
+IF(NOT FLEX_EXECUTABLE)
+	MESSAGE(SEND_ERROR "flex wasn't found, -DFLEX_EXECUTABLE=...")
+ENDIF(NOT FLEX_EXECUTABLE)
+
+CONFIGURE_FILE(config.h.cmake config.h)
+ADD_DEFINITIONS(-DHAVE_CONFIG_H)
+
+IF(NOT BUILD_NUMBER)
+	SET(BUILD_NUMBER 0)
+ENDIF(NOT BUILD_NUMBER)
+
+SET(PACKAGE_VERSION_ID "${CPACK_PACKAGE_VERSION_MAJOR}${CPACK_PACKAGE_VERSION_MINOR}${CPACK_PACKAGE_VERSION_PATCH}")
+SET(PACKAGE_STRING "${CMAKE_PROJECT_NAME} ${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
+ADD_DEFINITIONS(-DPACKAGE_VERSION_ID=0x${PACKAGE_VERSION_ID} -DPACKAGE_STRING="${PACKAGE_STRING}" -DPACKAGE="${CMAKE_PROJECT_NAME}")
+## set the default-paths for the .lua files and its modules
+IF(WIN32)
+	## yes, we want a \\ in C
+	## that needs a \\\\ throw the shell
+	## and \\\\\\\\\ in the cmake land
+	ADD_DEFINITIONS(-DLIBDIR=\\"lib\\\\\\\\mysql-proxy\\")
+	ADD_DEFINITIONS(-DDATADIR=\\"share\\\\\\\\mysql-proxy\\")
+ELSE(WIN32)
+	ADD_DEFINITIONS(-DLIBDIR="lib/mysql-proxy/")
+	ADD_DEFINITIONS(-DDATADIR="share/mysql-proxy/")
+ENDIF(WIN32)
+
+
+ADD_SUBDIRECTORY(src build-src)
+ADD_SUBDIRECTORY(plugins build-plugins)
+ADD_SUBDIRECTORY(tests build-tests)
+ADD_SUBDIRECTORY(examples)
+ADD_SUBDIRECTORY(lib build-lib)
+
+
+## make sure glib-2.0 is part of the install
+IF(WIN32)
+	FIND_FILE(GLIB_DLL 
+		libglib-2.0-0.dll 
+		PATHS "${GLIB_LIBRARY_DIRS}/../bin/"
+		NO_DEFAULT_PATH
+		)
+	INSTALL(PROGRAMS 
+		${GLIB_DLL}
+		DESTINATION bin
+	)
+	FIND_FILE(GMODULE_DLL 
+		libgmodule-2.0-0.dll 
+		PATHS "${GLIB_LIBRARY_DIRS}/../bin/"
+		NO_DEFAULT_PATH
+		)
+	INSTALL(PROGRAMS 
+		${GMODULE_DLL}
+		DESTINATION bin
+	)
+	FIND_FILE(GTHREAD_DLL 
+		libgthread-2.0-0.dll 
+		PATHS "${GLIB_LIBRARY_DIRS}/../bin/"
+		NO_DEFAULT_PATH
+		)
+	INSTALL(PROGRAMS 
+		${GTHREAD_DLL}
+		DESTINATION bin
+	)
+
+	FIND_FILE(MYSQL_DLL 
+		libmysql.dll 
+		PATHS "${MYSQL_LIBRARY_DIRS}"
+		NO_DEFAULT_PATH
+		)
+	INSTALL(PROGRAMS 
+		${MYSQL_DLL}
+		DESTINATION bin
+	)
+	
+	# copy the VS2008 runtime libaries as part of the install
+	# find the absolute path 
+	MESSAGE(STATUS "looking for redist in $ENV{VCINSTALLDIR}/redist/x86/Microsoft.VC90.CRT")
+	FIND_PATH(VC_REDIST_PATH NAMES msvcr90.dll PATHS "$ENV{VCINSTALLDIR}/redist/x86/Microsoft.VC90.CRT" NO_DEFAULT_PATH)
+	INSTALL(
+		DIRECTORY ${VC_REDIST_PATH}
+		DESTINATION bin
+	)
+ENDIF(WIN32)
+
