@@ -180,8 +180,6 @@ void chassis_event_thread_free(chassis_event_thread_t *event_thread) {
  * @see chassis_event_add_local()
  */
 void chassis_event_thread_set_event_base(chassis_event_thread_t G_GNUC_UNUSED *e, struct event_base *event_base) {
-	tls_event_base_key = g_private_new(NULL);
-
 	g_private_set(tls_event_base_key, event_base);
 }
 
@@ -193,6 +191,8 @@ void chassis_event_thread_set_event_base(chassis_event_thread_t G_GNUC_UNUSED *e
  */
 chassis_event_threads_t *chassis_event_threads_new() {
 	chassis_event_threads_t *threads;
+
+	tls_event_base_key = g_private_new(NULL);
 
 	threads = g_new0(chassis_event_threads_t, 1);
 
