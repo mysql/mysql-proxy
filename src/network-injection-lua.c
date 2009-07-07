@@ -35,6 +35,74 @@
 
 
 /**
+ * a ref-counted c-structure
+ *
+ */
+typedef struct {
+	gpointer udata;
+	GDestroyNotify udata_free;
+
+	gint ref_count;
+} GRef;
+
+static int proxy_resultset_lua_push_ref(lua_State *L, GRef *ref);
+
+/**
+ * create a new reference object 
+ *
+ * @see g_ref_unref
+ */
+GRef *g_ref_new() {
+	GRef *ref;
+
+	ref = g_new0(GRef, 1);
+	ref->ref_count = 0;
+	ref->udata     = NULL;
+	
+	return ref;
+}
+
+/**
+ * set the referenced data and its free-function
+ *
+ * increments the ref-counter by one
+ */
+void g_ref_set(GRef *ref, gpointer udata, GDestroyNotify udata_free) {
+	g_return_if_fail(ref->ref_count == 0);
+	
+	ref->udata = udata;
+	ref->udata_free = udata_free;
+	ref->ref_count = 1;
+}
+
+/**
+ * increment the ref counter 
+ */
+void g_ref_ref(GRef *ref) {
+	g_return_if_fail(ref->ref_count > 0);
+	
+	ref->ref_count++;
+}
+
+/**
+ * unreference a object
+ *
+ * if no other object references this free the object
+ */
+void g_ref_unref(GRef *ref) {
+	if (ref->ref_count == 0) {
+		/* not set yet */
+	} else if (--ref->ref_count == 0) {
+		if (ref->udata_free) {
+			ref->udata_free(ref->udata);
+			ref->udata = NULL;
+		}
+		g_free(ref);
+	}
+}
+
+
+/**
  * proxy.queries:append(id, packet[, { options }])
  *
  *   id:      opaque numeric id (numeric)
@@ -137,15 +205,17 @@ void proxy_getqueuemetatable(lua_State *L) {
  * Free a resultset struct when the corresponding Lua userdata is garbage collected.
  */
 static int proxy_resultset_gc(lua_State *L) {
-	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, 1);
-	
-	proxy_resultset_free(res);
+	GRef *ref = *(GRef **)luaL_checkself(L);
+
+	g_ref_unref(ref);
     
 	return 0;
 }
 
 static int proxy_resultset_fields_len(lua_State *L) {
-	GPtrArray *fields = *(GPtrArray **)luaL_checkself(L);
+	GRef *ref = *(GRef **)luaL_checkself(L);
+	proxy_resultset_t *res = ref->udata;
+	GPtrArray *fields = res->fields;
     lua_pushinteger(L, fields->len);
     return 1;
 }
@@ -182,7 +252,9 @@ static const struct luaL_reg methods_proxy_resultset_fields_field[] = {
  *
  */
 static int proxy_resultset_fields_get(lua_State *L) {
-	GPtrArray *fields = *(GPtrArray **)luaL_checkself(L);
+	GRef *ref = *(GRef **)luaL_checkself(L);
+	proxy_resultset_t *res = ref->udata;
+	GPtrArray *fields = res->fields;
 	MYSQL_FIELD *field;
 	MYSQL_FIELD **field_p;
 	lua_Integer ndx = luaL_checkinteger(L, 2);
@@ -218,7 +290,8 @@ static int proxy_resultset_fields_get(lua_State *L) {
  *
  */
 static int proxy_resultset_rows_iter(lua_State *L) {
-	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, lua_upvalueindex(1));
+	GRef *ref = *(GRef **)lua_touserdata(L, lua_upvalueindex(1));
+	proxy_resultset_t *res = ref->udata;
 	network_packet packet;
 	GPtrArray *fields = res->fields;
 	gsize i;
@@ -316,14 +389,38 @@ static int parse_resultset_fields(proxy_resultset_t *res) {
 	return 0;
 }
 
+static int proxy_resultset_fields_gc(lua_State *L) {
+	GRef *ref = *(GRef **)luaL_checkself(L);
+
+	g_ref_unref(ref);
+    
+	return 0;
+}
+
 static const struct luaL_reg methods_proxy_resultset_fields[] = {
 	{ "__index", proxy_resultset_fields_get },
 	{ "__len", proxy_resultset_fields_len },
+	{ "__gc", proxy_resultset_fields_gc },
 	{ NULL, NULL },
 };
 
+static int proxy_resultset_fields_lua_push_ref(lua_State *L, GRef *ref) {
+	GRef **ref_p;
+
+	g_ref_ref(ref);
+	
+	ref_p = lua_newuserdata(L, sizeof(GRef *));
+	*ref_p = ref;
+
+	proxy_getmetatable(L, methods_proxy_resultset_fields);
+	lua_setmetatable(L, -2);
+
+	return 1;
+}
+
 static int proxy_resultset_get(lua_State *L) {
-	proxy_resultset_t *res = *(proxy_resultset_t **)luaL_checkself(L);
+	GRef *ref = *(GRef **)luaL_checkself(L);
+	proxy_resultset_t *res = ref->udata;
 	gsize keysize = 0;
 	const char *key = luaL_checklstring(L, 2, &keysize);
     
@@ -331,18 +428,12 @@ static int proxy_resultset_get(lua_State *L) {
 		if (!res->result_queue) {
 			luaL_error(L, ".resultset.fields isn't available if 'resultset_is_needed ~= true'");
 		} else {
-			GPtrArray **fields_p;
-		
 			if (0 != parse_resultset_fields(res)) {
 				/* failed */
 			}
 		
 			if (res->fields) {
-				fields_p = lua_newuserdata(L, sizeof(res->fields));
-				*fields_p = res->fields;
-		    
-				proxy_getmetatable(L, methods_proxy_resultset_fields);
-				lua_setmetatable(L, -2); /* tie the metatable to the table   (sp -= 1) */
+				proxy_resultset_fields_lua_push_ref(L, ref);
 			} else {
 				lua_pushnil(L);
 			}
@@ -358,7 +449,7 @@ static int proxy_resultset_get(lua_State *L) {
 			if (res->rows_chunk_head) {
 				res->row    = res->rows_chunk_head;
 
-				lua_pushvalue(L, 1); /* push the first param down the iterator to keep it referenced */
+				proxy_resultset_lua_push_ref(L, ref);
 		    
 				lua_pushcclosure(L, proxy_resultset_rows_iter, 1);
 			} else {
@@ -430,11 +521,29 @@ static const struct luaL_reg methods_proxy_resultset[] = {
 	{ NULL, NULL },
 };
 
-static int proxy_resultset_lua_push(lua_State *L, proxy_resultset_t *_res) {
-	proxy_resultset_t **res_p;
+static int proxy_resultset_lua_push_ref(lua_State *L, GRef *ref) {
+	GRef **ref_p;
+
+	g_ref_ref(ref);
 	
-	res_p = lua_newuserdata(L, sizeof(proxy_resultset_t *));
-	*res_p = _res;
+	ref_p = lua_newuserdata(L, sizeof(GRef *));
+	*ref_p = ref;
+
+	proxy_getmetatable(L, methods_proxy_resultset);
+	lua_setmetatable(L, -2);
+
+	return 1;
+}
+
+static int proxy_resultset_lua_push(lua_State *L, proxy_resultset_t *_res) {
+	GRef **ref_p;
+	GRef *ref;
+
+	ref = g_ref_new();
+	g_ref_set(ref, _res, (GDestroyNotify)proxy_resultset_free);
+	
+	ref_p = lua_newuserdata(L, sizeof(GRef *));
+	*ref_p = ref;
 
 	proxy_getmetatable(L, methods_proxy_resultset);
 	lua_setmetatable(L, -2);
