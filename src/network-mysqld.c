@@ -1053,8 +1053,9 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
-			if (recv_sock->challenge &&
-			    recv_sock->challenge->server_version > 50113 && recv_sock->challenge->server_version < 50118) {
+			if (con->server &&
+			    con->server->challenge &&
+			    con->server->challenge->server_version > 50113 && con->server->challenge->server_version < 50118) {
 				/**
 				 * Bug #25371
 				 *
@@ -1063,11 +1064,18 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				 * we can auto-correct the issue if needed and remove the second packet
 				 * Some clients handle this issue and expect a double ERR packet.
 				 */
-				GString *packet = g_queue_peek_head(recv_sock->recv_queue->chunks);
+				network_packet packet;
+				guint8 com;
 
-				if (packet->str[NET_HEADER_SIZE] == COM_CHANGE_USER) {
+				packet.data = g_queue_peek_head(recv_sock->recv_queue->chunks);
+				packet.offset = 0;
+
+				if (0 == network_mysqld_proto_skip_network_header(&packet) &&
+				    0 == network_mysqld_proto_get_int8(&packet, &com)  &&
+				    com == COM_CHANGE_USER) {
+					con->client->packet_id++;
 					network_mysqld_con_send_error(con->client, C("COM_CHANGE_USER is broken on 5.1.14-.17, please upgrade the MySQL Server"));
-					con->state = CON_STATE_SEND_ERROR;
+					con->state = CON_STATE_SEND_QUERY_RESULT;
 					break;
 				}
 			}
