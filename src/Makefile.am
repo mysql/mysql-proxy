@@ -62,6 +62,7 @@ libmysql_proxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) libmysql
 
 libmysql_chassis_la_SOURCES = \
 	glib-ext.c \
+	glib-ext-ref.c \
 	lua-load-factory.c \
 	lua-scope.c \
 	chassis-plugin.c \
@@ -99,6 +100,7 @@ noinst_HEADERS=\
 	chassis-path.h \
 	chassis-event-thread.h \
 	glib-ext.h \
+	glib-ext-ref.h \
 	lua-load-factory.h \
 	lua-scope.h \
 	lua-env.h \

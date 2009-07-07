@@ -24,6 +24,7 @@
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"
 #include "glib-ext.h"
+#include "glib-ext-ref.h"
 #include "lua-env.h"
 #include "lua-scope.h"
 
@@ -34,72 +35,7 @@
 ((t2.tv_sec - t1.tv_sec) * 1000000.0 + (t2.tv_usec - t1.tv_usec))
 
 
-/**
- * a ref-counted c-structure
- *
- */
-typedef struct {
-	gpointer udata;
-	GDestroyNotify udata_free;
-
-	gint ref_count;
-} GRef;
-
 static int proxy_resultset_lua_push_ref(lua_State *L, GRef *ref);
-
-/**
- * create a new reference object 
- *
- * @see g_ref_unref
- */
-GRef *g_ref_new() {
-	GRef *ref;
-
-	ref = g_new0(GRef, 1);
-	ref->ref_count = 0;
-	ref->udata     = NULL;
-	
-	return ref;
-}
-
-/**
- * set the referenced data and its free-function
- *
- * increments the ref-counter by one
- */
-void g_ref_set(GRef *ref, gpointer udata, GDestroyNotify udata_free) {
-	g_return_if_fail(ref->ref_count == 0);
-	
-	ref->udata = udata;
-	ref->udata_free = udata_free;
-	ref->ref_count = 1;
-}
-
-/**
- * increment the ref counter 
- */
-void g_ref_ref(GRef *ref) {
-	g_return_if_fail(ref->ref_count > 0);
-	
-	ref->ref_count++;
-}
-
-/**
- * unreference a object
- *
- * if no other object references this free the object
- */
-void g_ref_unref(GRef *ref) {
-	if (ref->ref_count == 0) {
-		/* not set yet */
-	} else if (--ref->ref_count == 0) {
-		if (ref->udata_free) {
-			ref->udata_free(ref->udata);
-			ref->udata = NULL;
-		}
-		g_free(ref);
-	}
-}
 
 
 /**

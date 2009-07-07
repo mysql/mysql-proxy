@@ -18,6 +18,7 @@ ADD_DEFINITIONS(-DSHARED_LIBRARY_SUFFIX="${SHARED_LIBRARY_SUFFIX}")
 
 SET(chassis_sources 
 	glib-ext.c
+	glib-ext-ref.c
 	lua-load-factory.c
 	lua-scope.c
 	chassis-plugin.c
