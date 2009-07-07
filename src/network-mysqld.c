@@ -801,20 +801,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				con->state = CON_STATE_ERROR;
 				break;
 			}
-
-			if (recv_sock->challenge &&
-			    recv_sock->challenge->server_version > 50113 && recv_sock->challenge->server_version < 50118) {
-				/**
-				 * Bug #25371
-				 *
-				 * COM_CHANGE_USER returns 2 ERR packets instead of one
-				 *
-				 * we can auto-correct the issue if needed and remove the second packet
-				 * Some clients handle this issue and expect a double ERR packet.
-				 */
-
-				con->state = CON_STATE_ERROR;
-			}
 	
 			break; }
 		case CON_STATE_SEND_HANDSHAKE: 
@@ -1066,6 +1052,25 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			}
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
+
+			if (recv_sock->challenge &&
+			    recv_sock->challenge->server_version > 50113 && recv_sock->challenge->server_version < 50118) {
+				/**
+				 * Bug #25371
+				 *
+				 * COM_CHANGE_USER returns 2 ERR packets instead of one
+				 *
+				 * we can auto-correct the issue if needed and remove the second packet
+				 * Some clients handle this issue and expect a double ERR packet.
+				 */
+				GString *packet = g_queue_peek_head(recv_sock->recv_queue->chunks);
+
+				if (packet->str[NET_HEADER_SIZE] == COM_CHANGE_USER) {
+					network_mysqld_con_send_error(con->client, C("COM_CHANGE_USER is broken on 5.1.14-.17, please upgrade the MySQL Server"));
+					con->state = CON_STATE_SEND_ERROR;
+					break;
+				}
+			}
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:
