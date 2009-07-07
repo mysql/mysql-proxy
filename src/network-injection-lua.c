@@ -144,17 +144,6 @@ static int proxy_resultset_gc(lua_State *L) {
 	return 0;
 }
 
-/**
- * Free a resultset struct when the corresponding Lua userdata is garbage collected.
- */
-static int proxy_resultset_gc_light(lua_State *L) {
-	proxy_resultset_t *res = *(proxy_resultset_t **)lua_touserdata(L, 1);
-	
-	g_free(res);
-    
-	return 0;
-}
-
 static int proxy_resultset_fields_len(lua_State *L) {
 	GPtrArray *fields = *(GPtrArray **)luaL_checkself(L);
     lua_pushinteger(L, fields->len);
@@ -333,11 +322,6 @@ static const struct luaL_reg methods_proxy_resultset_fields[] = {
 	{ NULL, NULL },
 };
 
-static const struct luaL_reg methods_proxy_resultset_light[] = {
-	{ "__gc", proxy_resultset_gc_light },
-	{ NULL, NULL },
-};
-
 static int proxy_resultset_get(lua_State *L) {
 	proxy_resultset_t *res = *(proxy_resultset_t **)luaL_checkself(L);
 	gsize keysize = 0;
@@ -369,26 +353,13 @@ static int proxy_resultset_get(lua_State *L) {
 		} else if (res->qstat.binary_encoded) {
 			luaL_error(L, ".resultset.rows isn't available for prepared statements");
 		} else {
-			proxy_resultset_t *rows;
-			proxy_resultset_t **rows_p;
-		
-			parse_resultset_fields(res);
+			parse_resultset_fields(res); /* set up the ->rows_chunk_head pointer */
 		
 			if (res->rows_chunk_head) {
+				res->row    = res->rows_chunk_head;
+
+				lua_pushvalue(L, 1); /* push the first param down the iterator to keep it referenced */
 		    
-				rows = proxy_resultset_new();
-				rows->rows_chunk_head = res->rows_chunk_head;
-				rows->row    = rows->rows_chunk_head;
-				rows->fields = res->fields;
-		    
-				/* push the parameters on the stack */
-				rows_p = lua_newuserdata(L, sizeof(rows));
-				*rows_p = rows;
-		    
-				proxy_getmetatable(L, methods_proxy_resultset_light);
-				lua_setmetatable(L, -2);
-		    
-				/* return a interator */
 				lua_pushcclosure(L, proxy_resultset_rows_iter, 1);
 			} else {
 				lua_pushnil(L);
@@ -459,6 +430,18 @@ static const struct luaL_reg methods_proxy_resultset[] = {
 	{ NULL, NULL },
 };
 
+static int proxy_resultset_lua_push(lua_State *L, proxy_resultset_t *_res) {
+	proxy_resultset_t **res_p;
+	
+	res_p = lua_newuserdata(L, sizeof(proxy_resultset_t *));
+	*res_p = _res;
+
+	proxy_getmetatable(L, methods_proxy_resultset);
+	lua_setmetatable(L, -2);
+
+	return 1;
+}
+
 static int proxy_injection_get(lua_State *L) {
 	injection *inj = *(injection **)luaL_checkself(L);
 	gsize keysize = 0;
@@ -477,10 +460,8 @@ static int proxy_injection_get(lua_State *L) {
 	} else if (strleq(key, keysize, C("resultset"))) {
 		/* fields, rows */
 		proxy_resultset_t *res;
-		proxy_resultset_t **res_p;
         
-		res_p = lua_newuserdata(L, sizeof(res));
-		*res_p = res = proxy_resultset_new();
+		res = proxy_resultset_new();
 
 		/* only expose the resultset if really needed 
 		   FIXME: if the resultset is encoded in binary form, we can't provide it either.
@@ -491,9 +472,8 @@ static int proxy_injection_get(lua_State *L) {
 		res->qstat = inj->qstat;
 		res->rows  = inj->rows;
 		res->bytes = inj->bytes;
-        
-		proxy_getmetatable(L, methods_proxy_resultset);
-		lua_setmetatable(L, -2);
+	
+		proxy_resultset_lua_push(L, res);
 	} else {
 		g_message("%s.%d: inj[%s] ... not found", __FILE__, __LINE__, key);
         
