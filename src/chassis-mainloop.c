@@ -132,8 +132,8 @@ void chassis_free(chassis *chas) {
 	g_free(chas);
 }
 
-
-void chassis_set_shutdown(void ) {
+void chassis_set_shutdown_location(const gchar* location) {
+	if (signal_shutdown == 0) g_message("Initiating shutdown, requested from %s", (location != NULL ? location : "signal handler"));
 	signal_shutdown = 1;
 }
 
@@ -142,7 +142,7 @@ gboolean chassis_is_shutdown() {
 }
 
 static void sigterm_handler(int G_GNUC_UNUSED fd, short G_GNUC_UNUSED event_type, void G_GNUC_UNUSED *_data) {
-	chassis_set_shutdown();
+	chassis_set_shutdown_location(NULL);
 }
 
 static void sighup_handler(int G_GNUC_UNUSED fd, short G_GNUC_UNUSED event_type, void *_data) {
