@@ -4,6 +4,7 @@ TESTS_ENVIRONMENT = \
 	MYSQL_TEST_BIN="${MYSQL_TEST_BIN}" \
 	LUA_USER_PATH="${top_srcdir}/lib/?.lua" \
 	LUA_CPATH=".libs/?.so;${top_builddir}/lib/.libs/?.so" \
+	MYSQL_PROXY_VERSION="${PACKAGE_VERSION}" \
 	top_builddir=${top_builddir} \
 	builddir=${builddir} \
 	srcdir=${srcdir}/ \

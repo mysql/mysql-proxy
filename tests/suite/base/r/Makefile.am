@@ -8,6 +8,7 @@ EXTRA_DIST = \
 		change_user.result \
 		client_address.result \
 		chain1.result \
+		constants.result \
 		error_struct.result \
 		failover.result \
 		load_multi.result \

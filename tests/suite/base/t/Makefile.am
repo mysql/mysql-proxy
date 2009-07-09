@@ -32,6 +32,10 @@ EXTRA_DIST = \
 		client_address-mock.lua \
 		client_address.test \
 		client_address.options \
+		constants-test.lua \
+		constants-mock.lua \
+		constants.test \
+		constants.options \
 		default.options \
 		error_struct.lua \
 		error_struct.test \
