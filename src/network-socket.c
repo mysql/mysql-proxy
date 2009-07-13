@@ -182,15 +182,24 @@ GString *network_queue_pop_string(network_queue *queue, gsize steal_len, GString
 		return NULL;
 	}
 
-	if (!dest) {
-		dest = g_string_sized_new(steal_len);
-	}
-	
-	g_assert_cmpint(dest->allocated_len, >, steal_len);
-
 	while ((chunk = g_queue_peek_head(queue->chunks))) {
 		gsize we_have = we_want < (chunk->len - queue->offset) ? we_want : (chunk->len - queue->offset);
 
+		if (!dest && (queue->offset == 0) && (chunk->len == steal_len)) {
+			/* optimize the common case that we want to have to full chunk
+			 *
+			 * if dest is null, we can remove the GString from the queue and return it directly without
+			 * copying it
+			 */
+			dest = g_queue_pop_head(queue->chunks);
+			queue->len -= we_have;
+			return dest;
+		}
+
+		if (!dest) {
+			/* if we don't have a dest-buffer yet, create one */
+			dest = g_string_sized_new(steal_len);
+		}
 		g_string_append_len(dest, chunk->str + queue->offset, we_have);
 
 		queue->offset += we_have;
