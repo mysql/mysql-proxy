@@ -508,7 +508,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 		break;
 	} 
 
-	challenge_packet = g_string_new(NULL);
+	challenge_packet = g_string_sized_new(packet.data->len); /* the packet we generate will be likely as large as the old one. should save some reallocs */
 	network_mysqld_proto_append_auth_challenge(challenge_packet, challenge);
 	network_mysqld_queue_append(send_sock->send_queue, S(challenge_packet), recv_sock->packet_id);
 
