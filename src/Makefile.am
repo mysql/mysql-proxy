@@ -46,6 +46,7 @@ libchassis_timing_la_LIBADD   = $(GLIB_LIBS)
 lib_LTLIBRARIES += libmysql-chassis.la
 libmysql_chassis_la_SOURCES = \
 	glib-ext.c \
+	glib-ext-ref.c \
 	lua-load-factory.c \
 	lua-scope.c \
 	chassis-plugin.c \
