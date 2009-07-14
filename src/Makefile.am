@@ -121,6 +121,7 @@ noinst_HEADERS=\
 	disable-dtrace.h \
 	lua-registry-keys.h \
 	chassis-stats.h \
+	chassis-timing.h \
 	my_rdtsc.h
 
 if ENABLE_DTRACE

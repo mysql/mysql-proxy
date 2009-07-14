@@ -28,6 +28,8 @@ SET(chassis_sources
 	chassis-keyfile.c
 	chassis-path.c
 	chassis-stats.c
+	chassis-timing.c
+	my_rdtsc.c
 )
 
 SET(proxy_sources 
