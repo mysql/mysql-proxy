@@ -129,24 +129,21 @@ void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events
 	chassis *chas = event_thread->chas;
 	chassis_event_op_t *op;
 	char ping[1024];
-
-	/* flush the pipe */
-	while (read(event_thread->notify_fd, ping, sizeof(ping)) > 0);
+	guint received = 0;
+	gssize removed;
 
 	while ((op = g_async_queue_try_pop(chas->threads->event_queue))) {
 		chassis_event_op_apply(op, event_base);
 
 		chassis_event_op_free(op);
 
-		g_usleep(1000); /* all idling threads wakeup at the same time and we have to make sure
-				   that all of them get a fair chance to get a event from the queue
+		received++;
+	}
 
-				   if we one thread grabs them all, we end up with one thread handling
-				   everything which is basicly single-threading the design
-				   
-				   adding the 1ms delay gives all the thread a fair chance and shouldn't
-				   cause too much trouble. In the end, this is just a test to see
-				   if the above idea stands */
+	/* the pipe has one . per event, remove as many as we received */
+	while (received > 0 && 
+	       (removed = read(event_thread->notify_fd, ping, MIN(received, sizeof(ping)))) > 0) {
+		received -= removed;
 	}
 }
 
