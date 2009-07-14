@@ -137,6 +137,16 @@ void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events
 		chassis_event_op_apply(op, event_base);
 
 		chassis_event_op_free(op);
+
+		g_usleep(1000); /* all idling threads wakeup at the same time and we have to make sure
+				   that all of them get a fair chance to get a event from the queue
+
+				   if we one thread grabs them all, we end up with one thread handling
+				   everything which is basicly single-threading the design
+				   
+				   adding the 1ms delay gives all the thread a fair chance and shouldn't
+				   cause too much trouble. In the end, this is just a test to see
+				   if the above idea stands */
 	}
 }
 
