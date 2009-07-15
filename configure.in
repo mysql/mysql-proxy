@@ -83,6 +83,23 @@ AC_CHECK_FUNCS([\
 	])
 
 
+# When compiling with Sun Studio C / C++ we need to include
+# my_timer_cycles.il, an "inline templates" separate file,
+# on the command line. It has assembly code, "rd %tick" for
+# SPARC or "rdtsc" for x86.
+RDTSC_SPARC_ASSEMBLY=""
+case $CC_VERSION in
+  *Sun*C*)
+    RDTSC_SPARC_ASSEMBLY="my_timer_cycles.il"
+    ;;
+esac
+case $CXX_VERSION in
+  *Sun*C++*)
+    RDTSC_SPARC_ASSEMBLY="my_timer_cycles.il"
+    ;;
+esac
+
+AC_SUBST([RDTSC_SPARC_ASSEMBLY])
 
 DARWIN_HAS_LIBPROC_H=
 if test $ac_cv_header_libproc_h = yes; then

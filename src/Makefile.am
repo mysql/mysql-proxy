@@ -39,7 +39,7 @@ libchassis_timing_la_SOURCES = \
 	my_rdtsc.c
 
 libchassis_timing_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
-libchassis_timing_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
+libchassis_timing_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) @RDTSC_SPARC_ASSEMBLY@
 libchassis_timing_la_LIBADD   = $(GLIB_LIBS)
 
 ## the core library
@@ -154,4 +154,4 @@ endif
 # test_latency_CPPFLAGS= $(MYSQL_INCLUDE) $(GLIB_CFLAGS)
 # test_latency_LDADD= $(MYSQL_LIBS) $(GLIB_LIBS)
 
-EXTRA_DIST=test-latency.c proxy-dtrace-provider.d CMakeLists.txt
+EXTRA_DIST=test-latency.c proxy-dtrace-provider.d CMakeLists.txt my_timer_cycles.il
