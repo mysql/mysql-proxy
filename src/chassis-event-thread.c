@@ -279,8 +279,9 @@ int chassis_event_threads_init_thread(chassis_event_threads_t *threads, chassis_
 	event_thread->chas = chas;
 
 	event_thread->notify_fd = dup(threads->event_notify_fds[0]);
-
+#if 0
 	evutil_make_socket_nonblocking(event_thread->notify_fd);
+#endif
 
 	event_set(&(event_thread->notify_fd_event), event_thread->notify_fd, EV_READ | EV_PERSIST, chassis_event_handle, event_thread);
 	event_base_set(event_thread->event_base, &(event_thread->notify_fd_event));
