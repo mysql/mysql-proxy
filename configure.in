@@ -50,21 +50,21 @@ AM_PROG_CC_C_O
 dnl more automake stuff
 AM_C_PROTOTYPES
 
-# Print version of CC and CXX compiler (if they support --version)
-case $SYSTEM_TYPE in
-  *netware*)
+# Print version of CC compiler (if they support --version)
+
+# netware's CC
+AC_MSG_CHECKING([C Compiler version])
 CC_VERSION=`$CC -version | grep -i version`
-    ;;
-  *)
-CC_VERSION=`$CC --version | sed 1q`
-    ;;
-esac
-if test $? -eq "0"
-then
-  AC_MSG_CHECKING("C Compiler version")
-  AC_MSG_RESULT("$CC $CC_VERSION")
+if test x"$CC_VERSION" = x; then
+	CC_VERSION=`$CC --version | sed 1q`
+	if test x"$CC_VERSION" = x; then
+		CC_VERSION=`$CC -V | grep '^cc'`
+	fi
+fi
+if test x"$CC_VERSION" = x; then
+  AC_MSG_RESULT([$CC $CC_VERSION])
 else
-CC_VERSION=""
+  AC_MSG_RESULT(failed)
 fi
 AC_SUBST(CC_VERSION)
 
