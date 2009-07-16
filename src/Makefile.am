@@ -37,9 +37,13 @@ lib_LTLIBRARIES += libchassis-timing.la
 libchassis_timing_la_SOURCES = \
 	chassis-timings.c \
 	my_rdtsc.c
+if USE_SUNCC_ASSEMBLY
+libchassis_timing_la_SOURCES += \
+	my_timer_cycles.il
+endif
 
 libchassis_timing_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
-libchassis_timing_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) @RDTSC_SPARC_ASSEMBLY@
+libchassis_timing_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
 libchassis_timing_la_LIBADD   = $(GLIB_LIBS)
 
 ## the core library

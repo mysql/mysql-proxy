@@ -50,6 +50,25 @@ AM_PROG_CC_C_O
 dnl more automake stuff
 AM_C_PROTOTYPES
 
+# Print version of CC and CXX compiler (if they support --version)
+case $SYSTEM_TYPE in
+  *netware*)
+CC_VERSION=`$CC -version | grep -i version`
+    ;;
+  *)
+CC_VERSION=`$CC --version | sed 1q`
+    ;;
+esac
+if test $? -eq "0"
+then
+  AC_MSG_CHECKING("C Compiler version")
+  AC_MSG_RESULT("$CC $CC_VERSION")
+else
+CC_VERSION=""
+fi
+AC_SUBST(CC_VERSION)
+
+
 dnl libtool
 
 dnl we don't want to get static libs of the lua-libs
@@ -103,19 +122,13 @@ AC_CHECK_FUNCS([\
 # my_timer_cycles.il, an "inline templates" separate file,
 # on the command line. It has assembly code, "rd %tick" for
 # SPARC or "rdtsc" for x86.
-RDTSC_SPARC_ASSEMBLY=""
+RDTSC_SPARC_ASSEMBLY="no"
 case $CC_VERSION in
   *Sun*C*)
-    RDTSC_SPARC_ASSEMBLY="my_timer_cycles.il"
+    RDTSC_SPARC_ASSEMBLY="yes"
     ;;
 esac
-case $CXX_VERSION in
-  *Sun*C++*)
-    RDTSC_SPARC_ASSEMBLY="my_timer_cycles.il"
-    ;;
-esac
-
-AC_SUBST([RDTSC_SPARC_ASSEMBLY])
+AM_CONDITIONAL(USE_SUNCC_ASSEMBLY, test x$RDTSC_SPARC_ASSEMBLY = yes)
 
 DARWIN_HAS_LIBPROC_H=
 if test $ac_cv_header_libproc_h = yes; then
