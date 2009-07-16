@@ -128,7 +128,7 @@ case $CC_VERSION in
     RDTSC_SPARC_ASSEMBLY="yes"
     ;;
 esac
-AM_CONDITIONAL(USE_SUNCC_ASSEMBLY, test x$RDTSC_SPARC_ASSEMBLY = yes)
+AM_CONDITIONAL(USE_SUNCC_ASSEMBLY, test x$RDTSC_SPARC_ASSEMBLY = xyes)
 
 DARWIN_HAS_LIBPROC_H=
 if test $ac_cv_header_libproc_h = yes; then
