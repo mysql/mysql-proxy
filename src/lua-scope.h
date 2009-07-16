@@ -37,9 +37,8 @@ typedef struct {
 	lua_State *L;
 	int L_ref;
 #endif
-#ifdef HAVE_GTHREAD
 	GMutex *mutex;
-#endif
+
 	int L_top;
 } lua_scope;
 

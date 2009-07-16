@@ -396,9 +396,7 @@ int main_cmdline(int argc, char **argv) {
 		g_error("loading modules is not supported on this platform");
 	}
 
-#ifdef HAVE_GTHREAD	
 	g_thread_init(NULL);
-#endif
 
 	log = chassis_log_new();
 	log->min_lvl = G_LOG_LEVEL_MESSAGE; /* display messages while parsing or loading plugins */

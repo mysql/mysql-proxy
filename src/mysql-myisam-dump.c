@@ -1179,9 +1179,7 @@ int main(int argc, char **argv) {
 # endif
 #endif
 
-#ifdef HAVE_GTHREAD	
 	g_thread_init(NULL);
-#endif
 
 	log = chassis_log_new();
 	log->min_lvl = G_LOG_LEVEL_MESSAGE; /* display messages while parsing or loading plugins */
