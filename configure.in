@@ -12,24 +12,40 @@ AC_CONFIG_HEADER([config.h])
 
 AM_MAINTAINER_MODE
 
+dnl check environment
+AC_AIX
+AC_ISC_POSIX
+
+AC_EXEEXT
+
+
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_LD
 AC_PROG_INSTALL
 AC_PROG_AWK
+dnl we need flex
 AC_PROG_LEX
+
+AC_MSG_CHECKING([if lex is flex])
+if test x$LEX = x; then
+	AC_MSG_ERROR([flex wasn't found, flex is required])
+fi
+dnl run $ac_cv_prog_LEX and see if it understands --version and returns flex
+_o=`$LEX --version | $GREP flex`
+if test x$? = x0; then
+	AC_MSG_RESULT([$_o, yes])
+else
+	AC_MSG_RESULT(no)
+	AC_MSG_ERROR(['$LEX --version' does not indicate that this is flex, but flex is required])
+fi
+
 AC_PROG_CPP
 dnl AC_PROG_CXX
 AC_PROG_LN_S
 AC_PROG_SED
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
-
-dnl check environment
-AC_AIX
-AC_ISC_POSIX
-
-AC_EXEEXT
 
 dnl more automake stuff
 AM_C_PROTOTYPES
