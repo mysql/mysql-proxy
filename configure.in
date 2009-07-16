@@ -50,29 +50,6 @@ AM_PROG_CC_C_O
 dnl more automake stuff
 AM_C_PROTOTYPES
 
-# Print version of CC compiler (if they support --version)
-
-# netware's CC
-AC_MSG_CHECKING([$CC version])
-case $CC in
-	cc-5.0)
-		CC_VERSION=`$CC -V | grep '^cc' | head -1`
-		;;
-	gcc)
-		CC_VERSION=`$CC --version | sed 1q`
-		;;
-	*)
-		CC_VERSION=`$CC -version | grep -i version`
-		;;
-esac
-if test x"$CC_VERSION" = x; then
-  AC_MSG_ERROR([failed to detect version of $CC])
-else
-  AC_MSG_RESULT([$CC_VERSION])
-fi
-AC_SUBST(CC_VERSION)
-
-
 dnl libtool
 
 dnl we don't want to get static libs of the lua-libs
@@ -126,13 +103,16 @@ AC_CHECK_FUNCS([\
 # my_timer_cycles.il, an "inline templates" separate file,
 # on the command line. It has assembly code, "rd %tick" for
 # SPARC or "rdtsc" for x86.
-RDTSC_SPARC_ASSEMBLY="no"
-case $CC_VERSION in
-  *Sun*C*)
-    RDTSC_SPARC_ASSEMBLY="yes"
-    ;;
-esac
-AM_CONDITIONAL(USE_SUNCC_ASSEMBLY, test x$RDTSC_SPARC_ASSEMBLY = xyes)
+
+# sun cc output the version info on stderr
+AC_MSG_CHECKING([cc is Sun CC])
+IS_SUNCC=no
+SUNCC_VERSION=`$CC -V 2>&1 | grep '^cc: Sun C'`
+if test $? -eq "0"; then
+	IS_SUNCC=yes
+fi
+AM_CONDITIONAL(USE_SUNCC_ASSEMBLY, test x$IS_SUNCC = xyes)
+AC_MSG_RESULT([$IS_SUNCC $SUNCC_VERSION])
 
 DARWIN_HAS_LIBPROC_H=
 if test $ac_cv_header_libproc_h = yes; then
