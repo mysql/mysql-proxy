@@ -53,18 +53,22 @@ AM_C_PROTOTYPES
 # Print version of CC compiler (if they support --version)
 
 # netware's CC
-AC_MSG_CHECKING([C Compiler version])
-CC_VERSION=`$CC -version | grep -i version`
+AC_MSG_CHECKING([$CC version])
+case $CC in
+	cc-5.0)
+		CC_VERSION=`$CC -V | grep '^cc' | head -1`
+		;;
+	gcc)
+		CC_VERSION=`$CC --version | sed 1q`
+		;;
+	*)
+		CC_VERSION=`$CC -version | grep -i version`
+		;;
+esac
 if test x"$CC_VERSION" = x; then
-	CC_VERSION=`$CC --version | sed 1q`
-	if test x"$CC_VERSION" = x; then
-		CC_VERSION=`$CC -V | grep '^cc'`
-	fi
-fi
-if test x"$CC_VERSION" = x; then
-  AC_MSG_RESULT([$CC $CC_VERSION])
+  AC_MSG_ERROR([failed to detect version of $CC])
 else
-  AC_MSG_RESULT(failed)
+  AC_MSG_RESULT([$CC_VERSION])
 fi
 AC_SUBST(CC_VERSION)
 
