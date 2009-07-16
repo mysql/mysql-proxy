@@ -27,18 +27,13 @@ AC_PROG_AWK
 dnl we need flex
 AC_PROG_LEX
 
-AC_MSG_CHECKING([if lex is flex])
-if test x$LEX = x; then
-	AC_MSG_ERROR([flex wasn't found, flex is required])
+dnl AC_PROG_LEX returns LEX=: in case it didn't found flex or lex
+dnl we replace it by 'missing' to give the user a useful errormsg
+if test x$LEX = x:; then
+	AM_MISSING_PROG(LEXMISSING, flex)
+	LEX=$LEXMISSING
 fi
-dnl run $ac_cv_prog_LEX and see if it understands --version and returns flex
-_o=`$LEX --version | $GREP flex`
-if test x$? = x0; then
-	AC_MSG_RESULT([$_o, yes])
-else
-	AC_MSG_RESULT(no)
-	AC_MSG_ERROR(['$LEX --version' does not indicate that this is flex, but flex is required])
-fi
+
 
 AC_PROG_CPP
 dnl AC_PROG_CXX
