@@ -67,7 +67,12 @@ typedef struct {
 NETWORK_API network_packet *network_packet_new(void);
 NETWORK_API void network_packet_free(network_packet *packet);
 
-
+typedef enum {
+	NETWORK_MYSQLD_LENENC_TYPE_INT,
+	NETWORK_MYSQLD_LENENC_TYPE_NULL,
+	NETWORK_MYSQLD_LENENC_TYPE_EOF,
+	NETWORK_MYSQLD_LENENC_TYPE_ERR
+} network_mysqld_lenenc_type;
 
 NETWORK_API int network_mysqld_proto_skip(network_packet *packet, gsize size);
 NETWORK_API int network_mysqld_proto_skip_network_header(network_packet *packet);
@@ -102,6 +107,7 @@ NETWORK_API int network_mysqld_proto_get_lenenc_gstring(network_packet *packet, 
 NETWORK_API int network_mysqld_proto_get_gstring_len(network_packet *packet, gsize len, GString *out);
 NETWORK_API int network_mysqld_proto_get_gstring(network_packet *packet, GString *out);
 
+NETWORK_API int network_mysqld_proto_peek_lenenc_type(network_packet *packet, network_mysqld_lenenc_type *type);
 NETWORK_API int network_mysqld_proto_get_lenenc_int(network_packet *packet, guint64 *v);
 
 NETWORK_API MYSQL_FIELD *network_mysqld_proto_fielddef_new(void);

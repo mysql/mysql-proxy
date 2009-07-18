@@ -634,10 +634,10 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 	network_packet packet;
 	guint64 field_count;
-	guint8 type;
 	guint i;
 	int err = 0;
 	guint32 capabilities = CLIENT_PROTOCOL_41;
+	network_mysqld_lenenc_type lenenc_type;
     
 	/*
 	 * read(6, "\1\0\0\1", 4)                  = 4
@@ -658,7 +658,27 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 	
+	err = err || network_mysqld_proto_peek_lenenc_type(&packet, &lenenc_type);
+
+	if (err) return NULL; /* packet too short */
+
+	/* make sure that we have a valid length-encoded integer here */
+	switch (lenenc_type) {
+	case NETWORK_MYSQLD_LENENC_TYPE_INT:
+		break;
+	default:
+		/* we shouldn't be here, we expected to get a valid length-encoded field count */
+		return NULL;
+	}
+	
 	err = err || network_mysqld_proto_get_lenenc_int(&packet, &field_count);
+	
+	if (err) return NULL; /* packet to short */
+
+	if (field_count == 0) {
+		/* shouldn't happen, the upper layer should have checked that this is a OK packet */
+		return NULL;
+	}
     
 	/* the next chunk, the field-def */
 	for (i = 0; i < field_count; i++) {
@@ -713,14 +733,14 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 				err = err || network_mysqld_proto_get_int8(&packet, &flags);
 				err = err || network_mysqld_proto_get_int8(&packet, (guint8 *)&field->decimals);
 
-				field->flags = flags;
+				if (!err) field->flags = flags;
 			} else {
 				/* well */
 			}
 
 		}
         
-		g_ptr_array_add(fields, field);
+		g_ptr_array_add(fields, field); /* even if we had an error, append it so that we can free it later */
 
 		if (err) return NULL;
 	}
@@ -735,8 +755,8 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 	
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 
-	err = err || network_mysqld_proto_get_int8(&packet, &type); /* the byte after the net-header is a EOF */
-	err = err || (type != MYSQLD_PACKET_EOF);
+	err = err || network_mysqld_proto_peek_lenenc_type(&packet, &lenenc_type);
+	err = err || (lenenc_type != NETWORK_MYSQLD_LENENC_TYPE_EOF);
 
 	if (err) return NULL;
     

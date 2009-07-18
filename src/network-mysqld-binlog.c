@@ -266,7 +266,7 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 		 * the null-bit count is columns/8 
 		 */
 
-		event->event.table_map_event.null_bits_len = (int)((event->event.table_map_event.columns_len+7)/8);
+		if (!err) event->event.table_map_event.null_bits_len = (int)((event->event.table_map_event.columns_len+7)/8);
 		err = err || network_mysqld_proto_get_string_len(
 				packet,
 				&event->event.table_map_event.null_bits,

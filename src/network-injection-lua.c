@@ -231,62 +231,67 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 	network_packet packet;
 	GPtrArray *fields = res->fields;
 	gsize i;
-	guint8 status;
 	int err = 0;
+	network_mysqld_lenenc_type lenenc_type;
     
 	GList *chunk = res->row;
     
-	if (chunk == NULL) return 0;
+	g_return_val_if_fail(chunk != NULL, 0);
 
 	packet.data = chunk->data;
 	packet.offset = 0;
 
-	network_mysqld_proto_skip_network_header(&packet);
-
-	err = err || network_mysqld_proto_get_int8(&packet, &status);
+	err = err || network_mysqld_proto_skip_network_header(&packet);
+	err = err || network_mysqld_proto_peek_lenenc_type(&packet, &lenenc_type);
+	g_return_val_if_fail(err == 0, 0); /* protocol error */
     
-	/* if we find the 2nd EOF packet we are done */
-	if (status == MYSQLD_PACKET_EOF &&
-	    packet.data->len < 10) {
+	switch (lenenc_type) {
+	case NETWORK_MYSQLD_LENENC_TYPE_ERR:
+		/* a ERR packet instead of real rows
+		 *
+		 * like "explain select fld3 from t2 ignore index (fld3,not_existing)"
+		 *
+		 * see mysql-test/t/select.test
+		 */
+	case NETWORK_MYSQLD_LENENC_TYPE_EOF:
+		/* if we find the 2nd EOF packet we are done */
 		return 0;
+	case NETWORK_MYSQLD_LENENC_TYPE_INT:
+	case NETWORK_MYSQLD_LENENC_TYPE_NULL:
+		break;
 	}
     
-	/* a ERR packet instead of real rows
-	 *
-	 * like "explain select fld3 from t2 ignore index (fld3,not_existing)"
-	 *
-	 * see mysql-test/t/select.test
-	 *  */
-	if (status == MYSQLD_PACKET_ERR) {
-		return 0;
-	}
-
-	packet.offset--; /* well, either it is ERR, EOF or a length-encoded field-length, parse it again */
-
 	lua_newtable(L);
     
 	for (i = 0; i < fields->len; i++) {
 		guint64 field_len;
         
-		err = err || network_mysqld_proto_get_lenenc_int(&packet, &field_len);
-		if (err) luaL_error(L, "%s: row-data is invalid", G_STRLOC);
+		err = err || network_mysqld_proto_peek_lenenc_type(&packet, &lenenc_type);
+		g_return_val_if_fail(err == 0, 0); /* protocol error */
 
-		if (field_len == 251) { /** @todo use constant */
+		switch (lenenc_type) {
+		case NETWORK_MYSQLD_LENENC_TYPE_NULL:
 			lua_pushnil(L);
-		} else {
-			/**
-			 * @todo we only support fields in the row-iterator < 16M (packet-len)
-			 */
-			g_assert_cmpint(field_len, <=, packet.data->len);
-			g_assert_cmpint(packet.offset + field_len, <=, packet.data->len);
+			break;
+		case NETWORK_MYSQLD_LENENC_TYPE_INT:
+			err = err || network_mysqld_proto_get_lenenc_int(&packet, &field_len);
+			err = err || !(field_len <= packet.data->len); /* just to check that we don't overrun by the addition */
+			err = err || !(packet.offset + field_len <= packet.data->len); /* check that we have enough string-bytes for the length-encoded string */
+			if (err) return luaL_error(L, "%s: row-data is invalid", G_STRLOC);
             
 			lua_pushlstring(L, packet.data->str + packet.offset, field_len);
 
-			network_mysqld_proto_skip(&packet, field_len);
+			err = err || network_mysqld_proto_skip(&packet, field_len);
+			break;
+		default:
+			/* EOF and ERR should come up here */
+			err = 1;
+			break;
 		}
-        
+
 		/* lua starts its tables at 1 */
 		lua_rawseti(L, -2, i + 1);
+		g_return_val_if_fail(err == 0, 0); /* protocol error */
 	}
     
 	res->row = res->row->next;

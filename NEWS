@@ -2,7 +2,8 @@
 
   * added a threaded event handling layer
   * added support to change the auth-response on the way to the backend
-  * added timing infrastruture 
+  * added timing infrastruture
+  * fixed handling of broken length encoded data in resultsets
   * fixed version encoding in win32 (#45996)
   * fixed too small listen backlog() (#43278)
   * fixed configure check if flex is really installed (#45766)

@@ -130,45 +130,58 @@ static int network_mysqld_resultset_master_status(chassis *UNUSED_PARAM(chas), n
 	/* a data row */
 	while (NULL != (chunk = chunk->next)) {
 		network_packet packet;
-		guint8 status;
+		network_mysqld_lenenc_type lenenc_type;
 
 		packet.data = chunk->data;
 		packet.offset = 0;
 
-		err = err || network_mysqld_proto_get_int8(&packet, &status);
+		err = err || network_mysqld_proto_peek_lenenc_type(&packet, &lenenc_type);
+		if (err) break; /* proto error */
 
-		/* if we find the 2nd EOF packet we are done */
-		if (status == MYSQLD_PACKET_EOF &&
-		    packet.data->len < 10) break;
+		if (lenenc_type == NETWORK_MYSQLD_LENENC_TYPE_EOF) break; /* last packet */
 
 		for (i = 0; i < fields->len; i++) {
 			guint64 field_len;
-			err = err || network_mysqld_proto_get_lenenc_int(&packet, &field_len);
+			err = err || network_mysqld_proto_peek_lenenc_type(&packet, &lenenc_type);
 
-			if (i == 0) {
-				g_assert(field_len > 0);
-				/* Position */
-				
-				if (st->binlog_file) g_free(st->binlog_file);
+			switch (lenenc_type) {
+			case NETWORK_MYSQLD_LENENC_TYPE_INT:
+				err = err || network_mysqld_proto_get_lenenc_int(&packet, &field_len);
 
-				err = err || network_mysqld_proto_get_string_len(&packet, &st->binlog_file, field_len);
-			} else if (i == 1) {
-				/* is a string */
-				gchar *num;
+				if (i == 0) {
+					gchar *s;
+					/* Position */
 
-				g_assert(field_len > 0);
+					err = err || !(field_len > 0);
+					err = err || network_mysqld_proto_get_string_len(&packet, &s, field_len);
 
-				st->binlog_pos = 0;
+					if (!err) {
+						if (st->binlog_file) g_free(st->binlog_file);
+						st->binlog_file = s;
+					}
+				} else if (i == 1) {
+					/* is a string */
+					gchar *num;
 
-				err = err || network_mysqld_proto_get_string_len(&packet, &num, field_len);
-				st->binlog_pos = g_ascii_strtoull(num, NULL, 10);
-			} else {
-				err = err || network_mysqld_proto_skip(&packet, field_len);
+					err = err || !(field_len > 0);
+					err = err || network_mysqld_proto_get_string_len(&packet, &num, field_len);
+					if (!err) {
+						st->binlog_pos = g_ascii_strtoull(num, NULL, 10);
+					}
+				} else {
+					/* extra fields we don't expect */
+					err = err || network_mysqld_proto_skip(&packet, field_len);
+				}
+			default:
+				/* we don't expect a ERR, EOF or NULL here */
+				break;
 			}
 		}
 
-		g_message("reading binlog from: binlog-file: %s, binlog-pos: %d", 
-				st->binlog_file, st->binlog_pos);
+		if (!err) {
+			g_message("reading binlog from: binlog-file: %s, binlog-pos: %d", 
+					st->binlog_file, st->binlog_pos);
+		}
 	}
 
 	return err ? -1 : 0;

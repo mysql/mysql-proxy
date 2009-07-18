@@ -61,6 +61,43 @@
 /*@{*/
 
 /**
+ * extract the type of the object that is placed where a length-encoded string is expected
+ *
+ * reads a byte from the packet and checks if it either a:
+ * - integer
+ * - NULL
+ * - a ERR packet
+ * - a EOF packet
+ */
+int network_mysqld_proto_peek_lenenc_type(network_packet *packet, network_mysqld_lenenc_type *type) {
+	guint off = packet->offset;
+	unsigned char *bytestream = (unsigned char *)packet->data->str;
+
+	g_return_val_if_fail(off < packet->data->len, -1);
+
+	if (bytestream[off] < 251) { /* */
+		*type = NETWORK_MYSQLD_LENENC_TYPE_INT;
+	} else if (bytestream[off] == 251) { /* NULL */
+		*type = NETWORK_MYSQLD_LENENC_TYPE_NULL;
+	} else if (bytestream[off] == 252) { /* 2 byte length*/
+		*type = NETWORK_MYSQLD_LENENC_TYPE_INT;
+	} else if (bytestream[off] == 253) { /* 3 byte */
+		*type = NETWORK_MYSQLD_LENENC_TYPE_INT;
+	} else if (bytestream[off] == 254) { /* 8 byte OR EOF */
+		if (off == 4 && 
+		    packet->data->len - packet->offset < 8) {
+			*type = NETWORK_MYSQLD_LENENC_TYPE_EOF;
+		} else {
+			*type = NETWORK_MYSQLD_LENENC_TYPE_INT;
+		}
+	} else {
+		*type = NETWORK_MYSQLD_LENENC_TYPE_ERR;
+	}
+
+	return 0;
+}
+
+/**
  * decode a length-encoded integer from a network packet
  *
  * _off is incremented on success 
@@ -78,8 +115,6 @@ int network_mysqld_proto_get_lenenc_int(network_packet *packet, guint64 *v) {
 	g_return_val_if_fail(off < packet->data->len, -1);
 	
 	if (bytestream[off] < 251) { /* */
-		ret = bytestream[off];
-	} else if (bytestream[off] == 251) { /* NULL in row-data */
 		ret = bytestream[off];
 	} else if (bytestream[off] == 252) { /* 2 byte length*/
 		g_return_val_if_fail(off + 2 < packet->data->len, -1);
@@ -113,6 +148,8 @@ int network_mysqld_proto_get_lenenc_int(network_packet *packet, guint64 *v) {
 		g_critical("%s: bytestream[%d] is %d", 
 			G_STRLOC,
 			off, bytestream[off]);
+
+		/* either ERR (255) or NULL (251) */
 
 		return -1;
 	}
