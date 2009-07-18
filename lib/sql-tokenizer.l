@@ -473,7 +473,7 @@ guint g_istr_hash(gconstpointer v) {
 	guint32 h = 5381;
 	
 	while ((c = *p++)) {
-		h = ((h << 5) + h) + g_ascii_toupper(*p);
+		h = ((h << 5) + h) + g_ascii_toupper(c);
 	}
 	
 	return h;

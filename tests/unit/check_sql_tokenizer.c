@@ -365,9 +365,16 @@ g_assert_cmpstr(token->text->str, ==, t_text);
 } END_TEST
 /* @} */
 
+void test_g_istr_hash() {
+	g_assert_cmpint(g_istr_hash("foo"), ==, g_istr_hash("foo"));
+	g_assert_cmpint(g_istr_hash("foo"), !=, g_istr_hash("boo"));
+}
+
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
+
+	g_test_add_func("/core/hash_str_i", test_g_istr_hash);
 
 	g_test_add_func("/core/tokenizer", test_tokenizer);
 	g_test_add_func("/core/tokenizer_token2name", test_token2name);
