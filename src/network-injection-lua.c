@@ -300,13 +300,10 @@ static int proxy_resultset_rows_iter(lua_State *L) {
  * @return if this is not a result-set we return -1
  */
 static int parse_resultset_fields(proxy_resultset_t *res) {
-	GString *packet;
 	GList *chunk;
 
 	g_return_val_if_fail(res->result_queue != NULL, -1);
     
-	packet = res->result_queue->head->data;
-
 	if (res->fields) return 0;
 
    	/* parse the fields */
