@@ -467,6 +467,141 @@ void t_mysqld_get_auth_response(void) {
 	g_string_free(packet.data, TRUE);
 }
 
+typedef struct {
+	const char *s;
+	size_t s_len;
+} strings;
+
+void t_resultset_fields_works(void) {
+	strings packets[] = {
+		{ C("\1\0\0\1\2") }, /* 2 fields */
+		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
+		{ C("&\0\0\3\3def\0\6STATUS\0\5Value\5Value\f\10\0\0\2\0\0\375\1\0\0\0\0") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ C("\23\0\0\5\17Aborted_clients\00298") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ NULL, 0 }
+	};
+	int i;
+	network_queue *q;
+	GPtrArray *fields;
+
+	q = network_queue_new();
+
+	for (i = 0; packets[i].s; i++) {
+		network_queue_append(q, g_string_new_len(packets[i].s, packets[i].s_len));
+	}
+
+	fields = g_ptr_array_new();
+	g_assert(NULL != network_mysqld_proto_get_fielddefs(q->chunks->head, fields));
+
+	network_queue_free(q);
+}
+
+void t_resultset_fields_parse_err(void) {
+	strings packets[] = {
+		{ C("\1\0\0\1\377") }, /* err-packet */
+		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
+		{ C("&\0\0\3\3def\0\6STATUS\0\5Value\5Value\f\10\0\0\2\0\0\375\1\0\0\0\0") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ C("\23\0\0\5\17Aborted_clients\00298") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ NULL, 0 }
+	};
+	int i;
+	network_queue *q;
+	GPtrArray *fields;
+
+	q = network_queue_new();
+
+	for (i = 0; packets[i].s; i++) {
+		network_queue_append(q, g_string_new_len(packets[i].s, packets[i].s_len));
+	}
+
+	fields = g_ptr_array_new();
+	g_assert(NULL == network_mysqld_proto_get_fielddefs(q->chunks->head, fields));
+
+	network_queue_free(q);
+}
+
+void t_resultset_fields_parse_null(void) {
+	strings packets[] = {
+		{ C("\1\0\0\1\373") }, /* NULL */
+		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
+		{ C("&\0\0\3\3def\0\6STATUS\0\5Value\5Value\f\10\0\0\2\0\0\375\1\0\0\0\0") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ C("\23\0\0\5\17Aborted_clients\00298") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ NULL, 0 }
+	};
+	int i;
+	network_queue *q;
+	GPtrArray *fields;
+
+	q = network_queue_new();
+
+	for (i = 0; packets[i].s; i++) {
+		network_queue_append(q, g_string_new_len(packets[i].s, packets[i].s_len));
+	}
+
+	fields = g_ptr_array_new();
+	g_assert(NULL == network_mysqld_proto_get_fielddefs(q->chunks->head, fields));
+
+	network_queue_free(q);
+}
+
+void t_resultset_fields_parse_low(void) {
+	strings packets[] = {
+		{ C("\1\0\0\1\2") }, /* 2 fields */
+		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ C("\23\0\0\5\17Aborted_clients\00298") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ NULL, 0 }
+	};
+	int i;
+	network_queue *q;
+	GPtrArray *fields;
+
+	q = network_queue_new();
+
+	for (i = 0; packets[i].s; i++) {
+		network_queue_append(q, g_string_new_len(packets[i].s, packets[i].s_len));
+	}
+
+	fields = g_ptr_array_new();
+	g_assert(NULL == network_mysqld_proto_get_fielddefs(q->chunks->head, fields));
+
+	network_queue_free(q);
+}
+
+void t_resultset_fields_parse_high(void) {
+	strings packets[] = {
+		{ C("\1\0\0\1\2") }, /* 2 fields */
+		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
+		{ C("&\0\0\3\3def\0\6STATUS\0\5Value\5Value\f\10\0\0\2\0\0\375\1\0\0\0\0") },
+		{ C("&\0\0\3\3def\0\6STATUS\0\5Value\5Value\f\10\0\0\2\0\0\375\1\0\0\0\0") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ C("\23\0\0\5\17Aborted_clients\00298") },
+		{ C("\5\0\0\4\376\0\0\"\0") }, /* EOF */
+		{ NULL, 0 }
+	};
+	int i;
+	network_queue *q;
+	GPtrArray *fields;
+
+	q = network_queue_new();
+
+	for (i = 0; packets[i].s; i++) {
+		network_queue_append(q, g_string_new_len(packets[i].s, packets[i].s_len));
+	}
+
+	fields = g_ptr_array_new();
+	g_assert(NULL == network_mysqld_proto_get_fielddefs(q->chunks->head, fields));
+
+	network_queue_free(q);
+}
+
 
 /**
  * @cond
@@ -490,6 +625,12 @@ int main(int argc, char **argv) {
 	
 	g_test_add_func("/core/mysqld-proto-auth-response-new", t_auth_response_new);
 	g_test_add_func("/core/mysqld-proto-get-auth-response", t_mysqld_get_auth_response);
+	
+	g_test_add_func("/core/resultset-fields", t_resultset_fields_works);
+	g_test_add_func("/core/resultset-fields-broken-proto-err", t_resultset_fields_parse_err);
+	g_test_add_func("/core/resultset-fields-broken-proto-null", t_resultset_fields_parse_null);
+	g_test_add_func("/core/resultset-fields-broken-proto-field-count-low", t_resultset_fields_parse_low);
+	g_test_add_func("/core/resultset-fields-broken-proto-field-count-high", t_resultset_fields_parse_high);
 
 	return g_test_run();
 }

@@ -33,10 +33,12 @@ t_network_mysqld_packet_SOURCES  = \
 	t_network_mysqld_packet.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
+	$(top_srcdir)/src/network-socket.c \
+	$(top_srcdir)/src/network-address.c \
 	$(top_srcdir)/src/glib-ext.c
 
 t_network_mysqld_packet_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(LUA_CFLAGS)
-t_network_mysqld_packet_LDADD    = $(GLIB_LIBS) $(LUA_LIBS)
+t_network_mysqld_packet_LDADD    = $(GLIB_LIBS) $(LUA_LIBS) $(EVENT_LIBS)
 
 t_chassis_timings_SOURCES  = \
 	t_chassis_timings.c \

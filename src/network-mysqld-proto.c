@@ -112,24 +112,24 @@ int network_mysqld_proto_get_lenenc_int(network_packet *packet, guint64 *v) {
 	guint64 ret = 0;
 	unsigned char *bytestream = (unsigned char *)packet->data->str;
 
-	g_return_val_if_fail(off < packet->data->len, -1);
+	if (off >= packet->data->len) return -1;
 	
 	if (bytestream[off] < 251) { /* */
 		ret = bytestream[off];
 	} else if (bytestream[off] == 252) { /* 2 byte length*/
-		g_return_val_if_fail(off + 2 < packet->data->len, -1);
+		if (off + 2 >= packet->data->len) return -1;
 		ret = (bytestream[off + 1] << 0) | 
 			(bytestream[off + 2] << 8) ;
 		off += 2;
 	} else if (bytestream[off] == 253) { /* 3 byte */
-		g_return_val_if_fail(off + 3 < packet->data->len, -1);
+		if (off + 3 >= packet->data->len) return -1;
 		ret = (bytestream[off + 1]   <<  0) | 
 			(bytestream[off + 2] <<  8) |
 			(bytestream[off + 3] << 16);
 
 		off += 3;
 	} else if (bytestream[off] == 254) { /* 8 byte */
-		g_return_val_if_fail(off + 8 < packet->data->len, -1);
+		if (off + 8 >= packet->data->len) return -1;
 		ret = (bytestream[off + 5] << 0) |
 			(bytestream[off + 6] << 8) |
 			(bytestream[off + 7] << 16) |

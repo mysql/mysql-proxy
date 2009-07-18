@@ -639,20 +639,6 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 	guint32 capabilities = CLIENT_PROTOCOL_41;
 	network_mysqld_lenenc_type lenenc_type;
     
-	/*
-	 * read(6, "\1\0\0\1", 4)                  = 4
-	 * read(6, "\2", 1)                        = 1
-	 * read(6, "6\0\0\2", 4)                   = 4
-	 * read(6, "\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0", 54) = 54
-	 * read(6, "&\0\0\3", 4)                   = 4
-	 * read(6, "\3def\0\6STATUS\0\5Value\5Value\f\10\0\0\2\0\0\375\1\0\0\0\0", 38) = 38
-	 * read(6, "\5\0\0\4", 4)                  = 4
-	 * read(6, "\376\0\0\"\0", 5)              = 5
-	 * read(6, "\23\0\0\5", 4)                 = 4
-	 * read(6, "\17Aborted_clients\00298", 19) = 19
-	 *
-	 */
-
 	packet.data = chunk->data;
 	packet.offset = 0;
 
