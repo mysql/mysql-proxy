@@ -369,7 +369,7 @@ void proxy_lua_dumpstack(lua_State *L) {
 				printf("'%s'", lua_tostring(L, i));
 				break;
 			case LUA_TBOOLEAN:
-				printf(lua_toboolean(L, i) ? "true" : "false");
+				printf("%s", lua_toboolean(L, i) ? "true" : "false");
 				break;
 			case LUA_TNUMBER:
 				printf("'%g'", lua_tonumber(L, i));
