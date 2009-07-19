@@ -520,6 +520,8 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 					&pre_bits,
 					event->event.row_event.null_bits_len);
 
+			if (err) break;
+
 			pre_fields = network_mysqld_proto_fields_new_full(tbl->fields, 
 					pre_bits, 
 					event->event.row_event.null_bits_len);

@@ -803,10 +803,12 @@ int network_mysqld_proto_get_frm(network_packet *packet, network_mysqld_frm *frm
 			err = err || network_mysqld_proto_get_int8(packet, &u8_p14); /* geom_type || charset */
 			err = err || network_mysqld_proto_get_int16(packet, &col->comment_len);
 
-			if (u8_p14 == MYSQL_TYPE_GEOMETRY) {
-				col->geom_type = u8_p14;
-			} else {
-				col->charset = u8_p14;
+			if (!err) {
+				if (u8_p14 == MYSQL_TYPE_GEOMETRY) {
+					col->geom_type = u8_p14;
+				} else {
+					col->charset = u8_p14;
+				}
 			}
 
 			g_ptr_array_add(frm->columns, col);
@@ -823,7 +825,7 @@ int network_mysqld_proto_get_frm(network_packet *packet, network_mysqld_frm *frm
 
 			/* find the next NAMES_SEP_CHAR as string-term */
 			err = err || network_mysqld_proto_find_int8(packet, '\xff', &pos);
-			if (pos) {
+			if (!err && pos) {
 				err = err || network_mysqld_proto_get_gstring_len(packet, pos - 1, col->name);
 			}
 			err = err || network_mysqld_proto_skip(packet, 1); /* skip the \xff */
@@ -846,14 +848,14 @@ int network_mysqld_proto_get_frm(network_packet *packet, network_mysqld_frm *frm
 				guint8 term_nul;
 
 				err = err || network_mysqld_proto_peek_int8(packet, &term_nul);
-				if (term_nul == '\x00') {
+				if (!err && (term_nul == '\x00')) {
 					err = err || network_mysqld_proto_skip(packet, 1); /* the term-nul */
 					break;
 				}
 		
 				s = g_string_new("");	
 				err = err || network_mysqld_proto_find_int8(packet, '\xff', &pos);
-				if (pos) {
+				if (!err && pos) {
 					err = err || network_mysqld_proto_get_gstring_len(packet, pos - 1, s);
 				}
 				err = err || network_mysqld_proto_skip(packet, 1); /* skip the \xff */
