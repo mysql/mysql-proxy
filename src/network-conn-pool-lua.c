@@ -240,7 +240,7 @@ network_socket *network_connection_pool_lua_swap(network_mysqld_con *con, int ba
 	network_socket *send_sock;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	chassis_private *g = con->srv->priv;
-	GString empty_username = { C(""), 0 };
+	GString empty_username = { "", 0, 0 };
 
 	/*
 	 * we can only change to another backend if the backend is already
