@@ -43,7 +43,7 @@
 
 #include "network-exports.h"
 
-#ifdef _hpux
+#ifdef __hpux
 /* see http://curl.haxx.se/mail/lib-2009-04/0287.html */
 typedef int network_socklen_t;
 #else
