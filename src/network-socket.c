@@ -373,7 +373,7 @@ static network_socket_retval_t network_socket_connect_setopts(network_socket *so
  */
 network_socket_retval_t network_socket_connect_finish(network_socket *sock) {
 	int so_error = 0;
-	socklen_t so_error_len = sizeof(so_error);
+	network_socklen_t so_error_len = sizeof(so_error);
 
 	/**
 	 * we might get called a 2nd time after a connect() == EINPROGRESS

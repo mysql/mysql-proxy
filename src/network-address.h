@@ -43,6 +43,13 @@
 
 #include "network-exports.h"
 
+#ifdef _hpux
+/* see http://curl.haxx.se/mail/lib-2009-04/0287.html */
+typedef int network_socklen_t;
+#else
+typedef socklen_t network_socklen_t;
+#endif
+
 typedef struct {
 	union {
 		struct sockaddr_in ipv4;
@@ -55,7 +62,7 @@ typedef struct {
 
 	GString *name; 
 
-	socklen_t len;
+	network_socklen_t len;
 } network_address;
 
 NETWORK_API network_address *network_address_new(void);
