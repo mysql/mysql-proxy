@@ -39,7 +39,7 @@
 chassis_event_op_t *chassis_event_op_new() {
 	chassis_event_op_t *e;
 
-	e = g_new0(chassis_event_op_t, 1);
+	e = g_slice_new0(chassis_event_op_t);
 
 	return e;
 }
@@ -50,7 +50,7 @@ chassis_event_op_t *chassis_event_op_new() {
 void chassis_event_op_free(chassis_event_op_t *e) {
 	if (!e) return;
 
-	g_free(e);
+	g_slice_free(chassis_event_op_t, e);
 }
 
 /**
