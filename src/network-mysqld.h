@@ -177,7 +177,6 @@ typedef struct {
  * how we can refactor this into a more generic way.
  */
 struct network_mysqld_con_parse {
-	guint32 len;						/**< The overall length of the packet */
 	enum enum_server_command command;	/**< The command indicator from the MySQL Protocol */
 
 	gpointer data;						/**< An opaque pointer to a parsed command structure */
@@ -372,6 +371,7 @@ NETWORK_API void network_mysqld_con_reset_command_response_state(network_mysqld_
 NETWORK_API network_socket_retval_t network_mysqld_read(chassis *srv, network_socket *con);
 NETWORK_API network_socket_retval_t network_mysqld_write(chassis *srv, network_socket *con);
 NETWORK_API network_socket_retval_t network_mysqld_write_len(chassis *srv, network_socket *con, int send_chunks);
+NETWORK_API network_socket_retval_t network_mysqld_con_get_packet(chassis G_GNUC_UNUSED*chas, network_socket *con);
 
 struct chassis_private {
 	GPtrArray *cons;                          /**< array(network_mysqld_con) */
@@ -384,6 +384,6 @@ struct chassis_private {
 NETWORK_API int network_mysqld_init(chassis *srv);
 NETWORK_API void network_mysqld_add_connection(chassis *srv, network_mysqld_con *con);
 NETWORK_API void network_mysqld_con_handle(int event_fd, short events, void *user_data);
-NETWORK_API int network_mysqld_queue_append(network_queue *queue, const char *data, size_t len, int packet_id);
+NETWORK_API int network_mysqld_queue_append(network_queue *queue, const char *data, size_t len, guint8 *packet_id);
 
 #endif

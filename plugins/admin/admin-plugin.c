@@ -236,12 +236,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 	recv_sock = con->client;
 	send_sock = con->client;
 
-	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
+	packet.data = g_queue_peek_head(recv_sock->recv_queue->chunks);
 	packet.offset = 0;
-
-	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) {
-		return NETWORK_SOCKET_SUCCESS; /* we are not finished yet */
-	}
 
 	/* decode the packet */
 	network_mysqld_proto_skip_network_header(&packet);
@@ -283,7 +279,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 	g_string_free(hashed_password, TRUE);	
 	g_string_free(excepted_response, TRUE);
 
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 	
 
@@ -454,10 +449,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 	
 	packet = chunk->data;
 
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
-
-	con->parse.len = recv_sock->packet_len;
-
 	ret = admin_lua_read_query(con);
 
 	switch (ret) {
@@ -477,7 +468,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 		break;
 	}
 
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
 	return NETWORK_SOCKET_SUCCESS;

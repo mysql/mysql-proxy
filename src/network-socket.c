@@ -233,8 +233,6 @@ network_socket *network_socket_new() {
 	s->recv_queue = network_queue_new();
 	s->recv_queue_raw = network_queue_new();
 
-	s->packet_len = PACKET_LEN_UNSET;
-
 	s->default_db = g_string_new(NULL);
 	s->fd           = -1;
 

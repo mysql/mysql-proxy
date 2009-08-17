@@ -205,17 +205,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
 	packet.offset = 0;
 
-	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) {
-		/**
-		 * packet is too short, looks nasty.
-		 *
-		 * report an error and let the core send a error to the 
-		 * client
-		 */
-
-		return NETWORK_SOCKET_ERROR;
-	}
-
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 	if (err) return NETWORK_SOCKET_ERROR;
 
@@ -224,8 +213,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 
 	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
-	recv_sock->packet_len = PACKET_LEN_UNSET;
-	
 	if (err) {
 		network_mysqld_auth_challenge_free(shake);
 		return NETWORK_SOCKET_ERROR;
@@ -278,13 +265,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 
 	recv_sock = con->server;
 
-	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
+	packet.data = g_queue_peek_head(recv_sock->recv_queue->chunks);
 	packet.offset = 0;
-
-	/* we aren't finished yet */
-	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) {
-		return NETWORK_SOCKET_SUCCESS;
-	}
 
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 	err = err || network_mysqld_proto_peek_int8(&packet, &status);
@@ -318,8 +300,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 
 		return NETWORK_SOCKET_ERROR;
 	} 
-
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 
 	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
@@ -370,7 +350,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 	packet.data = chunk->data;
 	packet.offset = 0;
 
-	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS; /* packet isn't finished yet */
 #if 0
 	g_message("%s.%d: packet-len: %08x, packet-id: %d, command: COM_(%02x)", 
 			__FILE__, __LINE__,
@@ -477,8 +456,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 
 	if (chunk->data) g_string_free(chunk->data, TRUE);
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 
 	return NETWORK_SOCKET_SUCCESS;
 }

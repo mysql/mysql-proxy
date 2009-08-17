@@ -109,6 +109,7 @@
  * a handy marco for constant strings 
  */
 #define C(x) x, sizeof(x) - 1
+#define S(x) x->str, x->len
 
 /**
  * call the cleanup callback for the current connection
@@ -259,18 +260,37 @@ static void dump_str(const char *msg, const unsigned char *s, size_t len) {
 }
 #endif
 
-int network_mysqld_queue_append(network_queue *queue, const char *data, size_t len, int packet_id) {
-	unsigned char header[4];
-	GString *s;
+int network_mysqld_queue_append(network_queue *queue, const char *data, size_t packet_len, guint8 *_packet_id) {
+	guint8 packet_id = *_packet_id;
+	gsize packet_offset = 0;
 
-	network_mysqld_proto_set_header(header, len, packet_id);
+	do {
+		GString *s;
+		unsigned char header[4];
+		gsize cur_packet_len = MIN(packet_len, PACKET_LEN_MAX);
 
-	s = g_string_sized_new(len + 4);
+		s = g_string_sized_new(packet_len + 4);
 
-	g_string_append_len(s, (gchar *)header, 4);
-	g_string_append_len(s, data, len);
+		network_mysqld_proto_set_header(header, cur_packet_len, packet_id++);
+		g_string_append_len(s, (gchar *)header, 4);
+		g_string_append_len(s, data + packet_offset, cur_packet_len);
 
-	network_queue_append(queue, s);
+		network_queue_append(queue, s);
+
+		if (packet_len == PACKET_LEN_MAX) {
+			s = g_string_sized_new(4);
+
+			network_mysqld_proto_set_header(header, 0, packet_id++);
+			g_string_append_len(s, (gchar *)header, 4);
+
+			network_queue_append(queue, s);
+		}
+
+		packet_len -= cur_packet_len;
+		packet_offset += cur_packet_len;
+	} while (packet_len > 0);
+
+	*_packet_id = packet_id;
 
 	return 0;
 }
@@ -300,7 +320,7 @@ int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, 
 
 	network_mysqld_proto_append_ok_packet(packet, ok_packet);
 	
-	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
+	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, &con->packet_id);
 
 	g_string_free(packet, TRUE);
 	network_mysqld_ok_packet_free(ok_packet);
@@ -348,7 +368,7 @@ int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, 
 
 	network_mysqld_proto_append_err_packet(packet, err_packet);
 
-	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, con->packet_id);
+	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, &con->packet_id);
 
 	network_mysqld_err_packet_free(err_packet);
 	g_string_free(packet, TRUE);
@@ -372,15 +392,48 @@ int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize
 }
 
 /**
+ * get a full packet from the raw queue and move it to the packet queue 
+ */
+network_socket_retval_t network_mysqld_con_get_packet(chassis G_GNUC_UNUSED*chas, network_socket *con) {
+	GString *packet = NULL;
+	GString header;
+	char header_str[NET_HEADER_SIZE + 1] = "";
+	guint32 packet_len;
+
+	/** 
+	 * read the packet header (4 bytes)
+	 */
+	header.str = header_str;
+	header.allocated_len = sizeof(header_str);
+	header.len = 0;
+
+	/* read the packet len if the leading packet */
+	if (!network_queue_peek_string(con->recv_queue_raw, NET_HEADER_SIZE, &header)) {
+		/* too small */
+
+		return NETWORK_SOCKET_WAIT_FOR_EVENT;
+	}
+
+	packet_len = network_mysqld_proto_get_packet_len(&header);
+	con->packet_id  = network_mysqld_proto_get_packet_id(&header);
+	
+	/* move the packet from the raw queue to the recv-queue */
+	if ((packet = network_queue_pop_string(con->recv_queue_raw, packet_len + NET_HEADER_SIZE, NULL))) {
+		network_queue_append(con->recv_queue, packet);
+	} else {
+		return NETWORK_SOCKET_WAIT_FOR_EVENT;
+	}
+
+	return NETWORK_SOCKET_SUCCESS;
+}
+
+/**
  * read a MySQL packet from the socket
  *
  * the packet is added to the con->recv_queue and contains a full mysql packet
  * with packet-header and everything 
  */
 network_socket_retval_t network_mysqld_read(chassis G_GNUC_UNUSED*chas, network_socket *con) {
-	GString *packet = NULL;
-
-	/* check if the recv_queue is clean up to now */
 	switch (network_socket_read(con)) {
 	case NETWORK_SOCKET_WAIT_FOR_EVENT:
 		return NETWORK_SOCKET_WAIT_FOR_EVENT;
@@ -393,36 +446,7 @@ network_socket_retval_t network_mysqld_read(chassis G_GNUC_UNUSED*chas, network_
 		break;
 	}
 
-	/** 
-	 * read the packet header (4 bytes)
-	 */
-	if (con->packet_len == PACKET_LEN_UNSET) {
-		GString header;
-		char header_str[NET_HEADER_SIZE + 1] = "";
-
-		header.str = header_str;
-		header.allocated_len = sizeof(header_str);
-		header.len = 0;
-
-		if (!network_queue_peek_string(con->recv_queue_raw, NET_HEADER_SIZE, &header)) {
-			/* too small */
-
-			return NETWORK_SOCKET_WAIT_FOR_EVENT;
-		}
-
-		con->packet_len = network_mysqld_proto_get_header((unsigned char *)(header_str));
-		con->packet_id  = (unsigned char)(header_str[3]); /* packet-id if the next packet */
-	}
-/* TODO: convert to DTrace probe
-	g_debug("[%s] read packet id %d of length %d", G_STRLOC, con->packet_id, con->packet_len + NET_HEADER_SIZE); */
-	/* move the packet from the raw queue to the recv-queue */
-	if ((packet = network_queue_pop_string(con->recv_queue_raw, con->packet_len + NET_HEADER_SIZE, NULL))) {
-		network_queue_append(con->recv_queue, packet);
-	} else {
-		return NETWORK_SOCKET_WAIT_FOR_EVENT;
-	}
-
-	return NETWORK_SOCKET_SUCCESS;
+	return network_mysqld_con_get_packet(chas, con);
 }
 
 network_socket_retval_t network_mysqld_write(chassis G_GNUC_UNUSED*chas, network_socket *con) {
@@ -539,11 +563,8 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 		packet = chunk->data;
 
 		/* we aren't finished yet */
-		if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
-
 		network_queue_append(send_sock->send_queue, packet);
 
-		recv_sock->packet_len = PACKET_LEN_UNSET;
 		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
 		/**
@@ -1096,24 +1117,30 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 		case CON_STATE_READ_QUERY: {
 			network_socket *recv_sock;
+			network_packet last_packet;
+
 			recv_sock = con->client;
 
 			g_assert(events == 0 || event_fd == recv_sock->fd);
 
-			switch (network_mysqld_read(srv, recv_sock)) {
-			case NETWORK_SOCKET_SUCCESS:
-				break;
-			case NETWORK_SOCKET_WAIT_FOR_EVENT:
-				WAIT_FOR_EVENT(con->client, EV_READ, NULL);
-				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_query");
-				return;
-			case NETWORK_SOCKET_ERROR_RETRY:
-			case NETWORK_SOCKET_ERROR:
-				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_QUERY) returned an error", __FILE__, __LINE__);
-				con->state = CON_STATE_ERROR;
-				return;
-			}
-			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
+			do { 
+				switch (network_mysqld_read(srv, recv_sock)) {
+				case NETWORK_SOCKET_SUCCESS:
+					break;
+				case NETWORK_SOCKET_WAIT_FOR_EVENT:
+					WAIT_FOR_EVENT(con->client, EV_READ, NULL);
+					NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_query");
+					return;
+				case NETWORK_SOCKET_ERROR_RETRY:
+				case NETWORK_SOCKET_ERROR:
+					g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_QUERY) returned an error", __FILE__, __LINE__);
+					con->state = CON_STATE_ERROR;
+					return;
+				}
+				if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
+
+				last_packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
+			} while (last_packet.data->len == PACKET_LEN_MAX + NET_HEADER_SIZE);
 
 			if (con->server &&
 			    con->server->challenge &&
@@ -1156,7 +1183,13 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			break; }
 		case CON_STATE_SEND_QUERY:
-			/* send the query to the server */
+			/* send the query to the server
+			 *
+			 * this state will loop until all the packets from the send-queue are flushed 
+			 *
+			 * we have to handle LOAD DATA INFILE LOCAL which can only happen for COM_QUERY packets
+			 */
+
 			if (con->server->send_queue->offset == 0) {
 				/* only parse the packets once */
 				network_packet packet;
@@ -1168,23 +1201,12 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				packet.data = chunk->data;
 				packet.offset = 0;
 
-				/* only parse once and don't care about the blocking read */
+				/*  */
 				if (con->parse.command == COM_QUERY) {
 					network_mysqld_com_query_result_track_state(&packet, con->parse.data);
-				} else if (con->is_overlong_packet) {
-					/* the last packet was a over-long packet
-					 * this is the same command, just more data */
-	
-					if (con->parse.len != PACKET_LEN_MAX) {
-						con->is_overlong_packet = 0;
-					}
 				} else {
 					con->parse.command = packet.data->str[4];
 	
-					if (con->parse.len == PACKET_LEN_MAX) {
-						con->is_overlong_packet = 1;
-					}
-		
 					/* init the parser for the commands */
 					switch (con->parse.command) {
 					case COM_QUERY:
@@ -1217,7 +1239,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				}
 			}
 	
-			switch (network_socket_write(con->server, 1)) {
+			switch (network_mysqld_write(srv, con->server)) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
@@ -1237,11 +1259,12 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
+#if 0
 			/* in case we are waiting for LOAD DATA LOCAL INFILE data on this connection,
 			 we need to read the sentinel zero-length packet, too. Otherwise we will block
 			 this connection. Bug#37404
 			 */
-			if (con->is_overlong_packet || con->in_load_data_local_state) {
+			if (con->in_load_data_local_state) {
 				/* the last packet of LOAD DATA LOCAL INFILE is zero-length, signalling "no more data following" */
 				if (con->parse.len == 0) {
 					con->state = CON_STATE_READ_QUERY_RESULT;
@@ -1251,6 +1274,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				}
 				break;
 			}
+#endif
 
 			/* some statements don't have a server response */
 			switch (con->parse.command) {
@@ -1474,7 +1498,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	 */
 
 	network_mysqld_proto_append_lenenc_int(s, fields->len); /* the field-count */
-	network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+	network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
 
 	for (i = 0; i < fields->len; i++) {
 		MYSQL_FIELD *field = fields->pdata[i];
@@ -1503,7 +1527,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 		/* this is in the docs, but not on the network */
 		network_mysqld_proto_append_lenenc_string(s, field->def);         /* default-value */
 #endif
-		network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+		network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
 	}
 
 	g_string_truncate(s, 0);
@@ -1513,7 +1537,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	g_string_append_len(s, "\x00\x00", 2); /* warning count */
 	g_string_append_len(s, "\x02\x00", 2); /* flags */
 	
-	network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+	network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
 
 	for (i = 0; i < rows->len; i++) {
 		GPtrArray *row = rows->pdata[i];
@@ -1523,7 +1547,8 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 		for (j = 0; j < row->len; j++) {
 			network_mysqld_proto_append_lenenc_string(s, row->pdata[j]);
 		}
-		network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+
+		network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
 	}
 
 	g_string_truncate(s, 0);
@@ -1533,7 +1558,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	g_string_append_len(s, "\x00\x00", 2); /* warning count */
 	g_string_append_len(s, "\x02\x00", 2); /* flags */
 
-	network_mysqld_queue_append(con->send_queue, s->str, s->len, con->packet_id++);
+	network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
 
 	g_string_free(s, TRUE);
 

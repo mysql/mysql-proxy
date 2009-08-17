@@ -55,7 +55,6 @@
 #define MYSQLD_PACKET_EOF  (0xfe) /* 0xfe */
 #define MYSQLD_PACKET_ERR  (0xff) /* 0xff */
 
-#define PACKET_LEN_UNSET   (0xffffffff)
 #define PACKET_LEN_MAX     (0x00ffffff)
 
 typedef struct {
@@ -116,7 +115,8 @@ NETWORK_API void network_mysqld_proto_fielddef_free(MYSQL_FIELD *fielddef);
 NETWORK_API GPtrArray *network_mysqld_proto_fielddefs_new(void);
 NETWORK_API void network_mysqld_proto_fielddefs_free(GPtrArray *fielddefs);
 
-NETWORK_API size_t network_mysqld_proto_get_header(unsigned char *header);
+NETWORK_API guint32 network_mysqld_proto_get_packet_len(GString *_header);
+NETWORK_API guint8 network_mysqld_proto_get_packet_id(GString *_header);
 NETWORK_API int network_mysqld_proto_set_header(unsigned char *header, size_t len, unsigned char id);
 
 NETWORK_API int network_mysqld_proto_append_lenenc_int(GString *packet, guint64 len);

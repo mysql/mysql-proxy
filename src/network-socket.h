@@ -83,7 +83,6 @@ typedef struct {
 	network_address *src; /**< getsockname() */
 	network_address *dst; /**< getpeername() */
 
-	guint32 packet_len; /**< the packet_len is a 24bit unsigned int */
 	guint8  packet_id;  /**< id which increments for each packet in the stream */
 
 	network_queue *recv_queue;

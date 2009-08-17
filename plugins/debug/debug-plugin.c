@@ -303,8 +303,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 	chunk = recv_sock->recv_queue->chunks->tail;
 	s = chunk->data;
 
-	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS; /* we are not finished yet */
-
 	/* the password is fine */
 	send_sock = con->client;
 
@@ -314,7 +312,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 
 	g_string_free(chunk->data, TRUE);
 
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
 	con->state = CON_STATE_SEND_AUTH_RESULT;
@@ -332,14 +329,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 	chunk = recv_sock->recv_queue->chunks->tail;
 	s = chunk->data;
 
-	if (s->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
-	
 	plugin_debug_con_handle_stmt(chas, con, s);
 		
-	con->parse.len = recv_sock->packet_len;
-
 	g_string_free(chunk->data, TRUE);
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 

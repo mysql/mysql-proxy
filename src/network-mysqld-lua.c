@@ -840,7 +840,7 @@ int network_mysqld_con_lua_handle_proxy_response(network_mysqld_con *con, const 
 			if (lua_isstring(L, -1)) { /** proxy.response.packets[i] */
 				str = lua_tolstring(L, -1, &str_len);
 
-				network_mysqld_queue_append(con->client->send_queue, str, str_len, con->client->packet_id++);
+				network_mysqld_queue_append(con->client->send_queue, str, str_len, &con->client->packet_id);
 	
 				lua_pop(L, 1); /* pop value */
 			} else if (lua_isnil(L, -1)) {

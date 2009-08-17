@@ -478,7 +478,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 
 	challenge = network_mysqld_auth_challenge_new();
 	if (network_mysqld_proto_get_auth_challenge(&packet, challenge)) {
-		recv_sock->packet_len = PACKET_LEN_UNSET;
  		g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
 		network_mysqld_auth_challenge_free(challenge);
@@ -499,7 +498,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 		/* the client overwrote and wants to send its own packet
 		 * it is already in the queue */
 
-		recv_sock->packet_len = PACKET_LEN_UNSET;
  		g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
 		return NETWORK_SOCKET_ERROR;
@@ -510,11 +508,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 
 	challenge_packet = g_string_sized_new(packet.data->len); /* the packet we generate will be likely as large as the old one. should save some reallocs */
 	network_mysqld_proto_append_auth_challenge(challenge_packet, challenge);
-	network_mysqld_queue_append(send_sock->send_queue, S(challenge_packet), recv_sock->packet_id);
+	network_mysqld_queue_append(send_sock->send_queue, S(challenge_packet), &recv_sock->packet_id);
 
 	g_string_free(challenge_packet, TRUE);
 
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
 	/* copy the pack to the client */
@@ -630,8 +627,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
  	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
 	packet.offset = 0;
 
-	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS; /* we are not finished yet */
-
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 	if (err) return NETWORK_SOCKET_ERROR;
 
@@ -644,7 +639,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		return NETWORK_SOCKET_ERROR;
 	}
 	if (!(auth->capabilities & CLIENT_PROTOCOL_41)) {
-		network_mysqld_queue_append(con->client->send_queue, C("\xff\xd7\x07" "4.0 protocol is not supported"), con->client->packet_id + 1);
+		con->client->packet_id++;
+		network_mysqld_queue_append(con->client->send_queue, C("\xff\xd7\x07" "4.0 protocol is not supported"), &con->client->packet_id);
 		return NETWORK_SOCKET_ERROR;
 	}
 
@@ -662,11 +658,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		break;
 	case PROXY_SEND_INJECTION: {
 		injection *inj;
+		guint8 packet_id = 1;
 
 		inj = g_queue_pop_head(st->injected.queries);
 
 		/* there might be no query, if it was banned */
-		network_mysqld_queue_append(send_sock->send_queue, S(inj->query), 1);
+		network_mysqld_queue_append(send_sock->send_queue, S(inj->query), &packet_id);
 
 		injection_free(inj);
 
@@ -679,6 +676,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		if (!con->server) {
 			GString *auth_resp_packet;
 			network_mysqld_ok_packet_t *ok_packet;
+			guint8 packet_id = 2;
 
 			con->state = CON_STATE_SEND_AUTH_RESULT;
 		
@@ -689,7 +687,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 			network_mysqld_proto_append_ok_packet(auth_resp_packet, ok_packet);
 
 			network_mysqld_queue_append(recv_sock->send_queue, 
-					S(auth_resp_packet), 2);
+					S(auth_resp_packet), &packet_id);
 
 			network_mysqld_ok_packet_free(ok_packet);
 			g_string_free(auth_resp_packet, TRUE);
@@ -706,6 +704,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		if (con->server->is_authed) {
 			if (config->pool_change_user) {
 				GString *com_change_user = g_string_new(NULL);
+				guint8 packet_id = 0;
+
 				/* copy incl. the nul */
 				g_string_append_c(com_change_user, COM_CHANGE_USER);
 				g_string_append_len(com_change_user, con->client->response->username->str, con->client->response->username->len + 1); /* nul-term */
@@ -719,7 +719,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 				
 				network_mysqld_queue_append(send_sock->send_queue, 
 						S(com_change_user), 
-						0);
+						&packet_id);
 
 				/**
 				 * the server is already authenticated, the client isn't
@@ -732,6 +732,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 				con->state = CON_STATE_SEND_AUTH;
 			} else {
 				GString *auth_resp;
+				guint8 packet_id;
+
 				/* check if the username and client-scramble are the same as in the previous authed
 				 * connection */
 
@@ -762,9 +764,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 					network_mysqld_ok_packet_free(ok_packet);
 				}
 
+				packet_id = 2;
 				network_mysqld_queue_append(recv_sock->send_queue, 
 						S(auth_resp), 
-						2);
+						&packet_id);
 
 				g_string_free(auth_resp, TRUE);
 			}
@@ -781,7 +784,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		break;
 	}
 
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 	if (free_client_packet) {
 		g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 	} else {
@@ -891,9 +893,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	chunk = recv_sock->recv_queue->chunks->tail;
 	packet = chunk->data;
 
-	/* we aren't finished yet */
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
-
 	/* send the auth result to the client */
 	if (con->server->is_authed) {
 		/**
@@ -945,7 +944,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	/**
 	 * we handled the packet on the server side, free it
 	 */
-	recv_sock->packet_len = PACKET_LEN_UNSET;
 	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 	
 	con->state = CON_STATE_SEND_AUTH_RESULT;
@@ -1029,9 +1027,16 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 		 */
 		lua_getfield_literal(L, -1, C("read_query"));
 		if (lua_isfunction(L, -1)) {
+			luaL_Buffer b;
+			int i;
 
 			/* pass the packet as parameter */
-			lua_pushlstring(L, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE);
+			luaL_buffinit(L, &b);
+			/* iterate over the packets and append them all together */
+			for (i = 0; NULL != (packet = g_queue_peek_nth(recv_sock->recv_queue->chunks, i)); i++) {
+				luaL_addlstring(&b, packet->str + NET_HEADER_SIZE, packet->len - NET_HEADER_SIZE);
+			}
+			luaL_pushresult(&b);
 
 			if (lua_pcall(L, 1, 1, 0) != 0) {
 				/* hmm, the query failed */
@@ -1112,7 +1117,6 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	GString *packet;
-	GList *chunk;
 	network_socket *recv_sock, *send_sock;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	int proxy_query = 1;
@@ -1123,21 +1127,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	send_sock = NULL;
 	recv_sock = con->client;
 	st->injected.sent_resultset = 0;
-
-	chunk = recv_sock->recv_queue->chunks->head;
-
-	if (recv_sock->recv_queue->chunks->length != 1) {
-		g_message("%s.%d: client-recv-queue-len = %d", __FILE__, __LINE__, recv_sock->recv_queue->chunks->length);
-	}
-	
-	packet = chunk->data;
-
-	if (packet->len != recv_sock->packet_len + NET_HEADER_SIZE) {
-		g_warning("%s: malformed packet, simply sending it on. raw length != protocol length (%d != %d)", G_STRLOC, (int)packet->len, (int)recv_sock->packet_len + NET_HEADER_SIZE);
-		return NETWORK_SOCKET_SUCCESS;
-	};
-
-	con->parse.len = recv_sock->packet_len;
 
 	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query::enter_lua");
 	ret = proxy_lua_read_query(con);
@@ -1160,17 +1149,19 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	switch (ret) {
 	case PROXY_NO_DECISION:
 	case PROXY_SEND_QUERY:
-		/* no injection, pass on the chunk as is */
-		send_sock->packet_id = recv_sock->packet_id;
+		/* no injection, pass on the chunks as is */
+		while ((packet = g_queue_pop_head(recv_sock->recv_queue->chunks))) {
+			send_sock->packet_id = network_mysqld_proto_get_packet_id(packet);
 
-		network_queue_append(send_sock->send_queue, packet);
+			network_queue_append(send_sock->send_queue, packet);
+		}
 		con->resultset_is_needed = FALSE; /* we don't want to buffer the result-set */
 
 		break;
 	case PROXY_SEND_RESULT: 
 		proxy_query = 0;
 		
-		g_string_free(chunk->data, TRUE);
+		while ((packet = g_queue_pop_head(recv_sock->recv_queue->chunks))) g_string_free(packet, TRUE);
 
 		break; 
 	case PROXY_SEND_INJECTION: {
@@ -1178,19 +1169,17 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 
 		inj = g_queue_peek_head(st->injected.queries);
 		con->resultset_is_needed = inj->resultset_is_needed; /* let the lua-layer decide if we want to buffer the result or not */
+		send_sock->packet_id = recv_sock->packet_id; /* we replaced the packet sent by the client, so the same packet_id */
 
 		/* there might be no query, if it was banned */
-		network_mysqld_queue_append(send_sock->send_queue, inj->query->str, inj->query->len, 0);
+		network_mysqld_queue_append(send_sock->send_queue, S(inj->query), &send_sock->packet_id);
 
-		g_string_free(chunk->data, TRUE);
+		while ((packet = g_queue_pop_head(recv_sock->recv_queue->chunks))) g_string_free(packet, TRUE);
 
 		break; }
 	default:
 		g_error("%s.%d: ", __FILE__, __LINE__);
 	}
-
-	recv_sock->packet_len = PACKET_LEN_UNSET;
-	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
 
 	if (proxy_query) {
 		con->state = CON_STATE_SEND_QUERY;
@@ -1216,6 +1205,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	network_socket *recv_sock, *send_sock;
 	injection *inj;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
+	guint8 packet_id;
 
 	send_sock = con->server;
 	recv_sock = con->client;
@@ -1249,8 +1239,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 		return NETWORK_SOCKET_SUCCESS;
 	}
 
-	con->parse.len = recv_sock->packet_len;
-
 	/* looks like we still have queries in the queue, 
 	 * push the next one 
 	 */
@@ -1269,7 +1257,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	g_assert(inj);
 	g_assert(send_sock);
 
-	network_mysqld_queue_append(send_sock->send_queue, S(inj->query), 0);
+	send_sock->packet_id = 0;
+	network_mysqld_queue_append(send_sock->send_queue, S(inj->query), &send_sock->packet_id);
 
 	network_mysqld_con_reset_command_response_state(con);
 
@@ -1291,7 +1280,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	int is_finished = 0;
 	network_packet packet;
-	GList *chunk;
 	network_socket *recv_sock, *send_sock;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	injection *inj = NULL;
@@ -1301,15 +1289,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	recv_sock = con->server;
 	send_sock = con->client;
 
-	chunk = recv_sock->recv_queue->chunks->tail;
-	packet.data = chunk->data;
+	/* check if the last packet is valid */
+	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
 	packet.offset = 0;
-
-	/**
-	 * check if we want to forward the statement to the client 
-	 *
-	 * if not, clean the send-queue 
-	 */
 
 	if (0 != st->injected.queries->length) {
 		inj = g_queue_peek_head(st->injected.queries);
@@ -1322,17 +1304,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		g_get_current_time(&(inj->ts_read_query_result_first));
 	}
 
-	if (packet.data->len != recv_sock->packet_len + NET_HEADER_SIZE) return NETWORK_SOCKET_SUCCESS;
-
 	is_finished = network_mysqld_proto_get_query_result(&packet, con);
 	if (is_finished == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
 
 	con->resultset_is_finished = is_finished;
 
-	network_queue_append(send_sock->send_queue, packet.data);
-
-	g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-	recv_sock->packet_len = PACKET_LEN_UNSET;
+	/* copy the packet over to the send-queue */
+	network_queue_append(send_sock->send_queue, g_queue_pop_tail(recv_sock->recv_queue->chunks));
 
 	if (is_finished) {
 		/**
@@ -1643,6 +1621,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		con->state = CON_STATE_READ_HANDSHAKE;
 	} else {
 		GString *auth_packet;
+		guint8 packet_id;
+
 		/**
 		 * send the old hand-shake packet
 		 */
@@ -1651,9 +1631,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 		network_mysqld_proto_append_auth_challenge(auth_packet, con->server->challenge);
 
 		/* remove the idle-handler from the socket */
+		packet_id = 0;
 		network_mysqld_queue_append(con->client->send_queue, 
 				S(auth_packet),
-			       	0); /* packet-id */
+			       	&packet_id); /* packet-id */
 
 		g_string_free(auth_packet, TRUE);
 		

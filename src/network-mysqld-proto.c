@@ -681,7 +681,7 @@ void network_mysqld_proto_fielddefs_free(GPtrArray *fields) {
  * @return 0
  */
 int network_mysqld_proto_set_header(unsigned char *header, size_t length, unsigned char id) {
-	g_assert(length <= PACKET_LEN_MAX);
+	g_assert_cmpint(length, <=, PACKET_LEN_MAX);
 
 	header[0] = (length >>  0) & 0xFF;
 	header[1] = (length >>  8) & 0xFF;
@@ -698,9 +698,25 @@ int network_mysqld_proto_set_header(unsigned char *header, size_t length, unsign
  * @return the packet length
  * @see network_mysqld_proto_set_header()
  */
-size_t network_mysqld_proto_get_header(unsigned char *header) {
+guint32 network_mysqld_proto_get_packet_len(GString *_header) {
+	unsigned char *header = (unsigned char *)_header->str;
+
 	return header[0] | header[1] << 8 | header[2] << 16;
 }
+
+/**
+ * decode the packet length from a packet header
+ *
+ * @param header the first 3 bytes of the network packet
+ * @return the packet length
+ * @see network_mysqld_proto_set_header()
+ */
+guint8 network_mysqld_proto_get_packet_id(GString *_header) {
+	unsigned char *header = (unsigned char *)_header->str;
+
+	return header[3];
+}
+
 
 /**
  * append the variable-length integer to the packet

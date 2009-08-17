@@ -44,11 +44,17 @@
  * how to handle > 16M ?
  */
 void test_mysqld_proto_header(void) {
+	GString h;
 	unsigned char header[4];
 	size_t length = 1256;
+	int id = 25;
 
-	g_assert(0 == network_mysqld_proto_set_header(header, length, 0));
-	g_assert(length == network_mysqld_proto_get_header(header));
+	h.str = (char *)header;
+	h.len = sizeof(header);
+
+	g_assert(0 == network_mysqld_proto_set_header(header, length, id));
+	g_assert(length == network_mysqld_proto_get_packet_len(&h));
+	g_assert(id == network_mysqld_proto_get_packet_id(&h));
 }
 
 /**
