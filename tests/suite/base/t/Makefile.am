@@ -54,6 +54,10 @@ EXTRA_DIST = \
 		mysql-40.lua \
 		no_backend.lua \
 		no_backend.test \
+		overlong-test.lua \
+		overlong-mock.lua \
+		overlong.options \
+		overlong.test \
 		raw_packets.lua \
 		raw_packets.test \
 		resultset-test.lua \

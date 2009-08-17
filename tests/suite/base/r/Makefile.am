@@ -14,6 +14,7 @@ EXTRA_DIST = \
 		load_multi.result \
 		mysql-40.result \
 		no_backend.result \
+		overlong.result \
 		pooling.result \
 		raw_packets.result \
 		resultset.result \
