@@ -384,6 +384,9 @@ struct chassis_private {
 NETWORK_API int network_mysqld_init(chassis *srv);
 NETWORK_API void network_mysqld_add_connection(chassis *srv, network_mysqld_con *con);
 NETWORK_API void network_mysqld_con_handle(int event_fd, short events, void *user_data);
-NETWORK_API int network_mysqld_queue_append(network_queue *queue, const char *data, size_t len, guint8 *packet_id);
+NETWORK_API int network_mysqld_queue_append(network_socket *sock, network_queue *queue, const char *data, size_t len);
+NETWORK_API int network_mysqld_queue_append_raw(network_socket *sock, network_queue *queue, GString *data);
+NETWORK_API int network_mysqld_queue_reset(network_socket *sock);
+NETWORK_API int network_mysqld_queue_sync(network_socket *dst, network_socket *src);
 
 #endif

@@ -117,7 +117,10 @@ NETWORK_API void network_mysqld_proto_fielddefs_free(GPtrArray *fielddefs);
 
 NETWORK_API guint32 network_mysqld_proto_get_packet_len(GString *_header);
 NETWORK_API guint8 network_mysqld_proto_get_packet_id(GString *_header);
-NETWORK_API int network_mysqld_proto_set_header(unsigned char *header, size_t len, unsigned char id);
+NETWORK_API int network_mysqld_proto_append_packet_len(GString *header, guint32 len);
+NETWORK_API int network_mysqld_proto_append_packet_id(GString *header, guint8 id);
+NETWORK_API int network_mysqld_proto_set_packet_len(GString *header, guint32 len);
+NETWORK_API int network_mysqld_proto_set_packet_id(GString *header, guint8 id);
 
 NETWORK_API int network_mysqld_proto_append_lenenc_int(GString *packet, guint64 len);
 NETWORK_API int network_mysqld_proto_append_lenenc_string_len(GString *packet, const char *s, guint64 len);

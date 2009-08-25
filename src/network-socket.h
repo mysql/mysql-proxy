@@ -83,7 +83,8 @@ typedef struct {
 	network_address *src; /**< getsockname() */
 	network_address *dst; /**< getpeername() */
 
-	guint8  packet_id;  /**< id which increments for each packet in the stream */
+	guint8   last_packet_id; /**< internal tracking of the packet_id's the automaticly set the next good packet-id */
+	gboolean packet_id_is_reset; /**< internal tracking of the packet_id sequencing */
 
 	network_queue *recv_queue;
 	network_queue *recv_queue_raw;

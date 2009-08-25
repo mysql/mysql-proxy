@@ -241,7 +241,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 
 	network_mysqld_proto_append_auth_response(auth_packet, auth);
 
-	network_mysqld_queue_append(send_sock->send_queue, S(auth_packet), send_sock->packet_id + 1);
+	network_mysqld_queue_append(send_sock, send_sock->send_queue, S(auth_packet));
 
 	network_mysqld_auth_response_free(auth);
 	network_mysqld_auth_challenge_free(shake);
@@ -304,7 +304,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_auth_result) {
 	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
 	send_sock = con->server;
-	network_mysqld_queue_append(send_sock->send_queue, C(query_packet), 0);
+	network_mysqld_queue_append(send_sock, send_sock->send_queue, C(query_packet));
 
 	con->state = CON_STATE_SEND_QUERY;
 
@@ -397,10 +397,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 		break;
 	}
 
-	network_mysqld_queue_append(send_sock->send_queue, 
+	network_mysqld_queue_append(send_sock,
+			send_sock->send_queue, 
 			packet.data->str + NET_HEADER_SIZE, 
-			packet.data->len - NET_HEADER_SIZE, 
-			recv_sock->packet_id);
+			packet.data->len - NET_HEADER_SIZE);
 
 	/* ... */
 	if (is_finished) {
@@ -434,7 +434,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_query_result) {
 			network_mysqld_proto_append_binlog_dump(query_packet, dump);
 		       	
 			send_sock = con->server;
-			network_mysqld_queue_append(send_sock->send_queue, query_packet->str, query_packet->len, 0);
+			network_mysqld_queue_append(send_sock, send_sock->send_queue, S(query_packet));
 
 			network_mysqld_binlog_dump_free(dump);
 		

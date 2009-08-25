@@ -260,19 +260,98 @@ static void dump_str(const char *msg, const unsigned char *s, size_t len) {
 }
 #endif
 
-int network_mysqld_queue_append(network_queue *queue, const char *data, size_t packet_len, guint8 *_packet_id) {
-	guint8 packet_id = *_packet_id;
+int network_mysqld_queue_reset(network_socket *sock) {
+	sock->packet_id_is_reset = TRUE;
+
+	return 0;
+}
+
+/**
+ * synchronize the packet-ids of two network-sockets 
+ */
+int network_mysqld_queue_sync(network_socket *dst, network_socket *src) {
+	g_assert_cmpint(src->packet_id_is_reset, ==, FALSE);
+
+	if (dst->packet_id_is_reset == FALSE) {
+		/* this shouldn't really happen */
+	}
+
+	dst->last_packet_id = src->last_packet_id - 1;
+
+	return 0;
+}
+
+/**
+ * appends a raw MySQL packet to the queue 
+ *
+ * the packet is append the queue directly and shouldn't be used by the caller afterwards anymore
+ * and has to by in the MySQL Packet format
+ *
+ */
+int network_mysqld_queue_append_raw(network_socket *sock, network_queue *queue, GString *data) {
+	guint32 packet_len;
+	guint8  packet_id;
+
+	/* check that the length header is valid */
+	if (queue != sock->send_queue &&
+	    queue != sock->recv_queue) {
+		g_critical("%s: queue = %p doesn't belong to sock %p",
+				G_STRLOC,
+				(void *)queue,
+				(void *)sock);
+		return -1;
+	}
+
+	g_assert_cmpint(data->len, >=, 4);
+
+	packet_len = network_mysqld_proto_get_packet_len(data);
+	packet_id  = network_mysqld_proto_get_packet_id(data);
+
+	g_assert_cmpint(packet_len, ==, data->len - 4);
+
+	if (sock->packet_id_is_reset) {
+		/* the ->last_packet_id is undefined, accept what we get */
+		sock->last_packet_id = packet_id;
+		sock->packet_id_is_reset = FALSE;
+	} else if (packet_id != (guint8)(sock->last_packet_id + 1)) {
+		sock->last_packet_id++;
+
+		g_critical("%s: packet-id %d doesn't match for socket's last packet %d, patching it",
+				G_STRLOC,
+				packet_id,
+				sock->last_packet_id);
+		network_mysqld_proto_set_packet_id(data, sock->last_packet_id);
+	} else {
+		sock->last_packet_id++;
+	}
+
+	network_queue_append(queue, data);
+
+	return 0;
+}
+
+/**
+ * appends a payload to the queue
+ *
+ * the packet is copied and prepened with the mysql packet header before it is appended to the queue
+ * if neccesary the payload is spread over multiple mysql packets
+ */
+int network_mysqld_queue_append(network_socket *sock, network_queue *queue, const char *data, size_t packet_len) {
 	gsize packet_offset = 0;
 
 	do {
 		GString *s;
-		unsigned char header[4];
 		gsize cur_packet_len = MIN(packet_len, PACKET_LEN_MAX);
 
 		s = g_string_sized_new(packet_len + 4);
 
-		network_mysqld_proto_set_header(header, cur_packet_len, packet_id++);
-		g_string_append_len(s, (gchar *)header, 4);
+		if (sock->packet_id_is_reset) {
+			sock->packet_id_is_reset = FALSE;
+			sock->last_packet_id = 0xff; /** the ++last_packet_id will make sure we send a 0 */
+		}
+
+		network_mysqld_proto_append_packet_len(s, cur_packet_len);
+		network_mysqld_proto_append_packet_id(s, ++sock->last_packet_id);
 		g_string_append_len(s, data + packet_offset, cur_packet_len);
 
 		network_queue_append(queue, s);
@@ -280,8 +359,8 @@ int network_mysqld_queue_append(network_queue *queue, const char *data, size_t p
 		if (packet_len == PACKET_LEN_MAX) {
 			s = g_string_sized_new(4);
 
-			network_mysqld_proto_set_header(header, 0, packet_id++);
-			g_string_append_len(s, (gchar *)header, 4);
+			network_mysqld_proto_append_packet_len(s, 0);
+			network_mysqld_proto_append_packet_id(s, ++sock->last_packet_id);
 
 			network_queue_append(queue, s);
 		}
@@ -289,8 +368,6 @@ int network_mysqld_queue_append(network_queue *queue, const char *data, size_t p
 		packet_len -= cur_packet_len;
 		packet_offset += cur_packet_len;
 	} while (packet_len > 0);
-
-	*_packet_id = packet_id;
 
 	return 0;
 }
@@ -320,7 +397,8 @@ int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, 
 
 	network_mysqld_proto_append_ok_packet(packet, ok_packet);
 	
-	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, &con->packet_id);
+	network_mysqld_queue_append(con, con->send_queue, S(packet));
+	network_mysqld_queue_reset(con);
 
 	g_string_free(packet, TRUE);
 	network_mysqld_ok_packet_free(ok_packet);
@@ -368,7 +446,8 @@ int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, 
 
 	network_mysqld_proto_append_err_packet(packet, err_packet);
 
-	network_mysqld_queue_append(con->send_queue, packet->str, packet->len, &con->packet_id);
+	network_mysqld_queue_append(con, con->send_queue, S(packet));
+	network_mysqld_queue_reset(con);
 
 	network_mysqld_err_packet_free(err_packet);
 	g_string_free(packet, TRUE);
@@ -399,6 +478,7 @@ network_socket_retval_t network_mysqld_con_get_packet(chassis G_GNUC_UNUSED*chas
 	GString header;
 	char header_str[NET_HEADER_SIZE + 1] = "";
 	guint32 packet_len;
+	guint8  packet_id;
 
 	/** 
 	 * read the packet header (4 bytes)
@@ -415,10 +495,23 @@ network_socket_retval_t network_mysqld_con_get_packet(chassis G_GNUC_UNUSED*chas
 	}
 
 	packet_len = network_mysqld_proto_get_packet_len(&header);
-	con->packet_id  = network_mysqld_proto_get_packet_id(&header);
-	
+	packet_id  = network_mysqld_proto_get_packet_id(&header);
+
 	/* move the packet from the raw queue to the recv-queue */
 	if ((packet = network_queue_pop_string(con->recv_queue_raw, packet_len + NET_HEADER_SIZE, NULL))) {
+		if (con->packet_id_is_reset) {
+			con->last_packet_id = packet_id;
+			con->packet_id_is_reset = FALSE;
+		} else if (packet_id != (guint8)(con->last_packet_id + 1)) {
+			g_critical("%s: received packet-id %d, but expected %d ... out of sync.",
+					G_STRLOC,
+					packet_id,
+					con->last_packet_id + 1);
+			return NETWORK_SOCKET_ERROR;
+		} else {
+			con->last_packet_id = packet_id;
+		}
+	
 		network_queue_append(con->recv_queue, packet);
 	} else {
 		return NETWORK_SOCKET_WAIT_FOR_EVENT;
@@ -1162,7 +1255,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				if (0 == network_mysqld_proto_skip_network_header(&packet) &&
 				    0 == network_mysqld_proto_get_int8(&packet, &com)  &&
 				    com == COM_CHANGE_USER) {
-					con->client->packet_id++;
 					network_mysqld_con_send_error(con->client, C("COM_CHANGE_USER is broken on 5.1.14-.17, please upgrade the MySQL Server"));
 					con->state = CON_STATE_SEND_QUERY_RESULT;
 					break;
@@ -1498,7 +1590,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	 */
 
 	network_mysqld_proto_append_lenenc_int(s, fields->len); /* the field-count */
-	network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
+	network_mysqld_queue_append(con, con->send_queue, S(s));
 
 	for (i = 0; i < fields->len; i++) {
 		MYSQL_FIELD *field = fields->pdata[i];
@@ -1527,7 +1619,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 		/* this is in the docs, but not on the network */
 		network_mysqld_proto_append_lenenc_string(s, field->def);         /* default-value */
 #endif
-		network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
+		network_mysqld_queue_append(con, con->send_queue, S(s));
 	}
 
 	g_string_truncate(s, 0);
@@ -1537,7 +1629,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	g_string_append_len(s, "\x00\x00", 2); /* warning count */
 	g_string_append_len(s, "\x02\x00", 2); /* flags */
 	
-	network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
+	network_mysqld_queue_append(con, con->send_queue, S(s));
 
 	for (i = 0; i < rows->len; i++) {
 		GPtrArray *row = rows->pdata[i];
@@ -1548,7 +1640,7 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 			network_mysqld_proto_append_lenenc_string(s, row->pdata[j]);
 		}
 
-		network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
+		network_mysqld_queue_append(con, con->send_queue, S(s));
 	}
 
 	g_string_truncate(s, 0);
@@ -1558,7 +1650,8 @@ int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GP
 	g_string_append_len(s, "\x00\x00", 2); /* warning count */
 	g_string_append_len(s, "\x02\x00", 2); /* flags */
 
-	network_mysqld_queue_append(con->send_queue, S(s), &con->packet_id);
+	network_mysqld_queue_append(con, con->send_queue, S(s));
+	network_mysqld_queue_reset(con);
 
 	g_string_free(s, TRUE);
 

@@ -680,15 +680,32 @@ void network_mysqld_proto_fielddefs_free(GPtrArray *fields) {
  * @param id      sequence-id of the packet
  * @return 0
  */
-int network_mysqld_proto_set_header(unsigned char *header, size_t length, unsigned char id) {
+int network_mysqld_proto_set_packet_len(GString *_header, guint32 length) {
+	unsigned char *header = (unsigned char *)_header->str;
+
 	g_assert_cmpint(length, <=, PACKET_LEN_MAX);
 
 	header[0] = (length >>  0) & 0xFF;
 	header[1] = (length >>  8) & 0xFF;
 	header[2] = (length >> 16) & 0xFF;
+	
+	return 0;
+}
+
+int network_mysqld_proto_set_packet_id(GString *_header, guint8 id) {
+	unsigned char *header = (unsigned char *)_header->str;
+
 	header[3] = id;
 
 	return 0;
+}
+
+int network_mysqld_proto_append_packet_len(GString *_header, guint32 length) {
+	return network_mysqld_proto_append_int24(_header, length);
+}
+
+int network_mysqld_proto_append_packet_id(GString *_header, guint8 id) {
+	return network_mysqld_proto_append_int8(_header, id);
 }
 
 /**

@@ -46,13 +46,14 @@
 void test_mysqld_proto_header(void) {
 	GString h;
 	unsigned char header[4];
-	size_t length = 1256;
-	int id = 25;
+	guint32 length = 1256;
+	guint8 id = 25;
 
 	h.str = (char *)header;
 	h.len = sizeof(header);
 
-	g_assert(0 == network_mysqld_proto_set_header(header, length, id));
+	g_assert(0 == network_mysqld_proto_set_packet_len(&h, length));
+	g_assert(0 == network_mysqld_proto_set_packet_id(&h, id));
 	g_assert(length == network_mysqld_proto_get_packet_len(&h));
 	g_assert(id == network_mysqld_proto_get_packet_id(&h));
 }

@@ -34,6 +34,8 @@
 
 #include <gmodule.h>
 
+#define C(x) x, sizeof(x) - 1
+
 /**
  * debug plugin
  *
@@ -77,8 +79,6 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 	GPtrArray *rows;
 	GPtrArray *row;
 
-#define C(x) x, sizeof(x) -1
-	
 	switch(s->str[NET_HEADER_SIZE]) {
 	case COM_QUERY:
 		fields = NULL;
@@ -101,7 +101,6 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 			g_ptr_array_add(row, g_strdup("MySQL Enterprise Agent"));
 			g_ptr_array_add(rows, row);
 
-			con->client->packet_id++;
 			network_mysqld_con_send_resultset(con->client, fields, rows);
 			
 		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("select USER()"))) {
@@ -118,13 +117,10 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 			g_ptr_array_add(row, g_strdup("root"));
 			g_ptr_array_add(rows, row);
 
-			con->client->packet_id++;
 			network_mysqld_con_send_resultset(con->client, fields, rows);
 		} else {
 			MYSQL_FIELD *field = NULL;
 			lua_State *L = chas->priv->sc->L;
-
-			con->client->packet_id++;
 
 			if (0 == luaL_loadstring(L, s->str + NET_HEADER_SIZE + 1) &&
 			    0 == lua_pcall(L, 0, 1, 0)) {
@@ -257,15 +253,13 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 	case COM_QUIT:
 		break;
 	case COM_INIT_DB:
-		con->client->packet_id++;
 		network_mysqld_con_send_ok(con->client);
 		break;
 	default:
-		con->client->packet_id++;
 		network_mysqld_con_send_error(con->client, C("unknown COM_*"));
 		break;
 	}
-#undef C					
+
 	return 0;
 }
 
@@ -286,7 +280,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_con_init) {
 		"\x00"             /* 13-byte filler */
 		;
 
-	network_mysqld_queue_append(con->client->send_queue, (gchar *)handshake, (sizeof(handshake) - 1), 0);
+	network_mysqld_queue_append(con->client, con->client->send_queue, C(handshake));
 	
 	con->state = CON_STATE_SEND_HANDSHAKE;
 
@@ -305,8 +299,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 
 	/* the password is fine */
 	send_sock = con->client;
-
-	send_sock->packet_id = recv_sock->packet_id + 1;
 
 	network_mysqld_con_send_ok(send_sock);
 

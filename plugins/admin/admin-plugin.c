@@ -135,7 +135,6 @@ int network_mysqld_con_handle_stmt(chassis G_GNUC_UNUSED *chas, network_mysqld_c
 			g_ptr_array_add(row, g_strdup("MySQL Enterprise Agent"));
 			g_ptr_array_add(rows, row);
 
-			con->client->packet_id++;
 			network_mysqld_con_send_resultset(con->client, fields, rows);
 			
 		} else if (0 == g_ascii_strncasecmp(s->str + NET_HEADER_SIZE + 1, C("select USER()"))) {
@@ -152,10 +151,8 @@ int network_mysqld_con_handle_stmt(chassis G_GNUC_UNUSED *chas, network_mysqld_c
 			g_ptr_array_add(row, g_strdup("root"));
 			g_ptr_array_add(rows, row);
 
-			con->client->packet_id++;
 			network_mysqld_con_send_resultset(con->client, fields, rows);
 		} else {
-			con->client->packet_id++;
 			network_mysqld_con_send_error(con->client, C("(admin-server) query not known"));
 		}
 
@@ -183,11 +180,9 @@ int network_mysqld_con_handle_stmt(chassis G_GNUC_UNUSED *chas, network_mysqld_c
 	case COM_QUIT:
 		break;
 	case COM_INIT_DB:
-		con->client->packet_id++;
 		network_mysqld_con_send_ok(con->client);
 		break;
 	default:
-		con->client->packet_id++;
 		network_mysqld_con_send_error(con->client, C("unknown COM_*"));
 		break;
 	}
@@ -213,7 +208,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_con_init) {
 	network_mysqld_proto_append_auth_challenge(packet, challenge);
 	con->client->challenge = challenge;
 
-	network_mysqld_queue_append(con->client->send_queue, S(packet), 0);
+	network_mysqld_queue_append(con->client, con->client->send_queue, S(packet));
 
 	g_string_free(packet, TRUE);
 	
@@ -249,8 +244,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 	
 	con->client->response = auth;
 	
-	send_sock->packet_id = recv_sock->packet_id + 1;
-
 	/* check if the password matches */
 	excepted_response = g_string_new(NULL);
 	hashed_password = g_string_new(NULL);
@@ -314,12 +307,10 @@ static network_mysqld_lua_stmt_ret admin_lua_read_query(network_mysqld_con *con)
 		case REGISTER_CALLBACK_SUCCESS:
 			break;
 		case REGISTER_CALLBACK_LOAD_FAILED:
-			con->client->packet_id++;
 			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to load. Check the error log."));
 			con->state = CON_STATE_SEND_ERROR;
 			return PROXY_SEND_RESULT;
 		case REGISTER_CALLBACK_EXECUTE_FAILED:
-			con->client->packet_id++;
 			network_mysqld_con_send_error(con->client, C("MySQL Proxy Lua script failed to execute. Check the error log."));
 			con->state = CON_STATE_SEND_ERROR;
 			return PROXY_SEND_RESULT;
@@ -375,8 +366,6 @@ static network_mysqld_lua_stmt_ret admin_lua_read_query(network_mysqld_con *con)
 				 *
 				 */
 	
-				con->client->packet_id++;
-
 				if (network_mysqld_con_lua_handle_proxy_response(con, con->config->lua_script)) {
 					/**
 					 * handling proxy.response failed
@@ -453,7 +442,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 
 	switch (ret) {
 	case PROXY_NO_DECISION:
-		con->client->packet_id++;
 		network_mysqld_con_send_error(con->client, C("need a resultset + proxy.PROXY_SEND_RESULT"));
 		con->state = CON_STATE_SEND_ERROR;
 		break;
@@ -461,7 +449,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_query) {
 		con->state = CON_STATE_SEND_QUERY_RESULT;
 		break; 
 	default:
-		con->client->packet_id++;
 		network_mysqld_con_send_error(con->client, C("need a resultset + proxy.PROXY_SEND_RESULT ... got something else"));
 
 		con->state = CON_STATE_SEND_ERROR;

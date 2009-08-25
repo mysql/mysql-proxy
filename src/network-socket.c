@@ -235,6 +235,7 @@ network_socket *network_socket_new() {
 
 	s->default_db = g_string_new(NULL);
 	s->fd           = -1;
+	s->packet_id_is_reset = TRUE;
 
 	s->src = network_address_new();
 	s->dst = network_address_new();
