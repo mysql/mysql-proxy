@@ -7,6 +7,7 @@
   * fixed version encoding in win32 (#45996)
   * fixed too small listen backlog() (#43278)
   * fixed configure check if flex is really installed (#45766)
+  * fixed handling of >16M packets (#35202)
 
 0.7.2 - 2009-06-30
 
