@@ -39,15 +39,32 @@ function read_query(packet)
 		return proxy.PROXY_SEND_RESULT
 	end
 
-	proxy.response = {
-		type = proxy.MYSQLD_PACKET_OK,
-		resultset = {
-			fields = {
-				{ name = "Result", type = proxy.MYSQL_TYPE_STRING },
-			},
-			rows = { { "1" }  }
+	if packet:sub(2, #("SELECT LENGTH") + 1) == "SELECT LENGTH" then
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = {
+				fields = {
+					{ name = "length", type = proxy.MYSQL_TYPE_STRING },
+				},
+				rows = { { #packet }  }
+			}
 		}
-	}
+	elseif packet:sub(2, #("SELECT ") + 1) == "SELECT " then
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = {
+				fields = {
+					{ name = "length", type = proxy.MYSQL_TYPE_STRING },
+				},
+				rows = { { packet:sub(2 + #("SELECT ")) } }
+			}
+		}
+	else
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_ERR,
+			errmsg = "mock doesn't know how to handle query"
+		}
+	end
 
 	return proxy.PROXY_SEND_RESULT
 end

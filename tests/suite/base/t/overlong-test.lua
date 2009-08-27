@@ -26,10 +26,39 @@ function read_query(packet)
 		return proxy.PROXY_SEND_RESULT
 	end
 
-	if packet:sub(2) == "SELECT STR_REPEAT(\"x\", 16 * 1024 * 1024)" then
-		proxy.queries:append(1, string.char(3) .. "SELECT \""..("x"):rep(16 * 1024 * 1024 - 14 - 2).."\" AS f", { resultset_is_needed = true } )
+	if packet:sub(2) == "SELECT LONG_STRING" then
+		-- return a 16M string
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = {
+				fields = {
+					{ name = "LONG_STRING", type = proxy.MYSQL_TYPE_STRING },
+				},
+				rows = { { ("x"):rep(16 * 1024 * 1024 + 1) } }
+			}
+		}
+		return proxy.PROXY_SEND_RESULT
+	elseif packet:sub(2, #("SELECT REPLACE") + 1) == "SELECT REPLACE" then
+		-- replace the long query by a small one
+		proxy.queries:append(1, string.char(3) .. "SELECT \"xxx\"", { resultset_is_needed = false } )
+		return proxy.PROXY_SEND_QUERY
+	elseif packet:sub(2, #("SELECT SMALL_QUERY") + 1) == "SELECT SMALL_QUERY" then
+		-- replace the small query by a long one
+		proxy.queries:append(1, string.char(3) .. "SELECT " .. ("x"):rep(16 * 1024 * 1024 + 1) , { resultset_is_needed = false } )
+		return proxy.PROXY_SEND_QUERY
+	elseif packet:sub(2, #("SELECT LENGTH") + 1) == "SELECT LENGTH" then
+		-- forward the LENGTH queries AS IS 
+		return
+	elseif packet:sub(2, #("SELECT RESULT") + 1) == "SELECT RESULT" then
+		-- pass this query to the result-set handler
+		proxy.queries:append(2, packet, { resultset_is_needed = true } )
+		return proxy.PROXY_SEND_QUERY
+	elseif packet:sub(2, #("SELECT SMALL_RESULT") + 1) == "SELECT SMALL_RESULT" then
+		-- pass this query to the result-set handler
+		proxy.queries:append(2, string.char(3) .. "SELECT " .. ("x"):rep(16 * 1024 * 1024 + 1) , { resultset_is_needed = true } )
 		return proxy.PROXY_SEND_QUERY
 	else
+		-- everything feed through the proxy 
 		proxy.queries:append(1, packet, { resultset_is_needed = false } )
 		return proxy.PROXY_SEND_QUERY
 	end
@@ -41,11 +70,12 @@ function read_query_result(inj)
 			type = proxy.MYSQLD_PACKET_OK,
 			resultset = {
 				fields = {
-					{ name = "f", type = proxy.MYSQL_TYPE_STRING },
+					{ name = "result", type = proxy.MYSQL_TYPE_STRING },
 				},
-				rows = { { "foo"  }  }
+				rows = { { "PASSED"  }  }
 			}
 		}
 		return proxy.PROXY_SEND_RESULT
 	end
 end
+
