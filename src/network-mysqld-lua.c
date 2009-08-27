@@ -857,6 +857,8 @@ int network_mysqld_con_lua_handle_proxy_response(network_mysqld_con *con, const 
 
 		lua_pop(L, 1); /* .packets */
 
+		network_mysqld_queue_reset(con->client); /* reset the packet-id checks */
+
 		break; }
 	default:
 		g_message("proxy.response.type is unknown: %d", resp_type);
