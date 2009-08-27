@@ -315,11 +315,12 @@ int network_mysqld_queue_append_raw(network_socket *sock, network_queue *queue, 
 		sock->packet_id_is_reset = FALSE;
 	} else if (packet_id != (guint8)(sock->last_packet_id + 1)) {
 		sock->last_packet_id++;
-
+#if 0
 		g_critical("%s: packet-id %d doesn't match for socket's last packet %d, patching it",
 				G_STRLOC,
 				packet_id,
 				sock->last_packet_id);
+#endif
 		network_mysqld_proto_set_packet_id(data, sock->last_packet_id);
 	} else {
 		sock->last_packet_id++;
