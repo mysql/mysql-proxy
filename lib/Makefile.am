@@ -78,3 +78,5 @@ EXTRA_DIST += \
 	posix.def \
 	CMakeLists.txt
 
+DISTCLEANFILES = \
+	sql-tokenizer.c

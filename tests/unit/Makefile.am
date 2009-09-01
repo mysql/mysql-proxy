@@ -20,6 +20,9 @@ check_sql_tokenizer_SOURCES  = check_sql_tokenizer.c $(top_srcdir)/lib/sql-token
 check_sql_tokenizer_CPPFLAGS = -I$(top_srcdir)/lib/ $(GLIB_CFLAGS)
 check_sql_tokenizer_LDADD    = $(GLIB_LIBS)
 
+DISTCLEANFILES = \
+	sql-tokenizer.c
+
 check_mysqld_proto_SOURCES  = \
 	check_mysqld_proto.c \
 	$(top_srcdir)/src/network-mysqld-binlog.c \
