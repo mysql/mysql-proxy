@@ -198,7 +198,7 @@ function read_query( packet )
 		return proxy.PROXY_SEND_RESULT
 	end
 
-	proxy.queries:append(1, packet)
+	proxy.queries:append(1, packet, { resultset_is_needed = true })
 
 	-- read/write splitting 
 	--
@@ -278,7 +278,7 @@ function read_query( packet )
 		print("    server default db: " .. s.default_db)
 		print("    client default db: " .. c.default_db)
 		print("    syncronizing")
-		proxy.queries:prepend(2, string.char(proxy.COM_INIT_DB) .. c.default_db)
+		proxy.queries:prepend(2, string.char(proxy.COM_INIT_DB) .. c.default_db, { resultset_is_needed = true })
 	end
 
 	-- send to master
