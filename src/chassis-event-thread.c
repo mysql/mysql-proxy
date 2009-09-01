@@ -27,6 +27,17 @@
 #include <unistd.h> /* for write() */
 #endif
 
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>	/* for SOCK_STREAM and AF_UNIX/AF_INET */
+#endif
+
+#ifdef WIN32
+#include <winsock2.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#undef WIN32_LEAN_AND_MEAN
+#endif
+
 #include "chassis-event-thread.h"
 
 #define C(x) x, sizeof(x) - 1
@@ -208,13 +219,18 @@ chassis_event_threads_t *chassis_event_threads_new() {
 	 * the event-thread write a byte to the ping-pipe to trigger a fd-event when
 	 * something is available in the event-async-queues
 	 */
-	if (0 != pipe(threads->event_notify_fds)) {
-		g_error("%s: pipe() failed: %s (%d)", 
+#ifdef WIN32
+#define PIPE_ADDRESS_FAMILY AF_INET
+#else
+#define PIPE_ADDRESS_FAMILY AF_UNIX
+#endif
+	if (0 != evutil_socketpair(PIPE_ADDRESS_FAMILY, SOCK_STREAM, 0, threads->event_notify_fds)) {
+		g_error("%s: evutil_socketpair() failed: %s (%d)", 
 				G_STRLOC,
 				g_strerror(errno),
 				errno);
 	}
-
+#undef PIPE_ADDRESS_FAMILY
 	threads->event_threads = g_ptr_array_new();
 	threads->event_queue = g_async_queue_new();
 
