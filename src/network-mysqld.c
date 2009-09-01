@@ -1374,6 +1374,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			case COM_STMT_SEND_LONG_DATA: /* not acked */
 			case COM_STMT_CLOSE:
 				con->state = CON_STATE_READ_QUERY;
+				if (con->client) network_mysqld_queue_reset(con->client);
+				if (con->server) network_mysqld_queue_reset(con->server);
 				break;
 			case COM_QUERY:
 				if (network_mysqld_com_query_result_is_load_data(con->parse.data)) {
