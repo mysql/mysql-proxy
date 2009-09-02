@@ -22,6 +22,8 @@
 
 #if defined(mysql_chassis_EXPORTS)
 #define CHASSIS_API __declspec(dllexport)
+#elif defined(mysql_chassis_STATIC)
+#define CHASSIS_API 
 #else
 #define CHASSIS_API extern __declspec(dllimport)
 #endif

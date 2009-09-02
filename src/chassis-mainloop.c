@@ -87,7 +87,9 @@ chassis *chassis_new() {
  */
 void chassis_free(chassis *chas) {
 	guint i;
+#ifdef HAVE_EVENT_BASE_FREE
 	const char *version;
+#endif
 
 	if (!chas) return;
 
@@ -205,7 +207,10 @@ static void event_log_use_glib(int libevent_log_level, const char *msg) {
 int chassis_mainloop(void *_chas) {
 	chassis *chas = _chas;
 	guint i;
-	struct event ev_sigterm, ev_sigint, ev_sighup;
+	struct event ev_sigterm, ev_sigint;
+#ifdef SIGHUP
+	struct event ev_sighup;
+#endif
 	chassis_event_thread_t *mainloop_thread;
 
 #ifdef _WIN32
@@ -309,7 +314,7 @@ int chassis_mainloop(void *_chas) {
 	 * - dup the async-queue-ping-fds
 	 * - setup the events notification
 	 * */
-	for (i = 1; i < chas->event_thread_count; i++) { /* we already have 1 event-thread running, the main-thread */
+	for (i = 1; i < (guint)chas->event_thread_count; i++) { /* we already have 1 event-thread running, the main-thread */
 		chassis_event_thread_t *event_thread;
 	
 		event_thread = chassis_event_thread_new();

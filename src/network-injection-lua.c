@@ -48,6 +48,10 @@ typedef enum {
  * _append() and _prepend() have the same behaviour, parameters, ... 
  * just different in position
  */
+#ifdef WIN32
+#pragma warning (push)
+#pragma warning (disable : 4715) /* don't warn about the unreached assert at the end of this function */
+#endif
 static int proxy_queue_add(lua_State *L, proxy_queue_add_t type) {
 	GQueue *q = *(GQueue **)luaL_checkself(L);
 	int resp_type = luaL_checkinteger(L, 2);
@@ -100,6 +104,9 @@ static int proxy_queue_add(lua_State *L, proxy_queue_add_t type) {
 
 	g_assert_not_reached();
 }
+#ifdef WIN32
+#pragma warning (pop) /* restore the pragma state from before this function */
+#endif
 
 /**
  * proxy.queries:append(id, packet[, { options }])

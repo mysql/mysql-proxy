@@ -35,8 +35,11 @@
 #include <winsock2.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <io.h>	/* for write and friends */
 #undef WIN32_LEAN_AND_MEAN
 #endif
+
+#include <event.h>
 
 #include "chassis-event-thread.h"
 

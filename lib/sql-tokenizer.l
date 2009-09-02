@@ -30,6 +30,11 @@
 #include <unistd.h>
 #endif
 
+#ifdef WIN32
+#include <io.h>  /* for read */
+#include <stdlib.h>  /* for exit */
+#endif
+
 #define YY_DECL int sql_tokenizer_internal(GPtrArray *tokens)
 
 static void sql_token_append(GPtrArray *tokens, sql_token_id token_id, gchar *text);

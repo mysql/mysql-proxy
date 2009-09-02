@@ -334,8 +334,11 @@ network_socket *network_socket_accept(network_socket *srv) {
 }
 
 static network_socket_retval_t network_socket_connect_setopts(network_socket *sock) {
+#ifdef WIN32
+	char val = 1;	/* Win32 setsockopt wants a const char* instead of the UNIX void*...*/
+#else
 	int val = 1;
-
+#endif
 	/**
 	 * set the same options as the mysql client 
 	 */
@@ -371,7 +374,11 @@ static network_socket_retval_t network_socket_connect_setopts(network_socket *so
  *
  */
 network_socket_retval_t network_socket_connect_finish(network_socket *sock) {
+#ifdef WIN32
+	char so_error = 0;	/* Win32 wants a char* instead of UNIX' void*...*/
+#else
 	int so_error = 0;
+#endif
 	network_socklen_t so_error_len = sizeof(so_error);
 
 	/**
@@ -472,8 +479,11 @@ network_socket_retval_t network_socket_connect(network_socket *sock) {
  * @see network_address_set_address()
  */
 network_socket_retval_t network_socket_bind(network_socket * con) {
+#ifdef WIN32
+	char val = 1;	/* Win32 setsockopt wants a const char* instead of the UNIX void*...*/
+#else
 	int val = 1;
-
+#endif
 	g_return_val_if_fail(con->dst, NETWORK_SOCKET_ERROR);
 	g_return_val_if_fail(con->dst->name->len > 0, NETWORK_SOCKET_ERROR);
 	g_return_val_if_fail(con->fd < 0, NETWORK_SOCKET_ERROR); /* socket is already bound */

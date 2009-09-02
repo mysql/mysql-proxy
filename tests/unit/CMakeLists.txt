@@ -117,6 +117,11 @@ TARGET_LINK_LIBRARIES(t_network_backend
 	${EVENT_LIBRARIES}
 )
 
+IF(WIN32)
+# turn off _declspec(dllimport) in tests, since we link statically
+set_property(TARGET check_chassis_log check_plugin check_mysqld_proto check_loadscript check_chassis_path t_network_injection t_network_backend
+             APPEND PROPERTY COMPILE_DEFINITIONS "mysql_chassis_proxy_STATIC" COMPILE_DEFINITIONS "mysql_chassis_STATIC")
+ENDIF(WIN32)
 
 ## adding all tests
 

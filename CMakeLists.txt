@@ -34,10 +34,6 @@ IF(WIN32)
 	## headers on win32. Otherwise we get clashes 
 	## between winsock2.h and winsock.h
 	ADD_DEFINITIONS(-DWIN32_LEAN_AND_MEAN)
-	## statically link in the threadsafe C runtime so we don't have to distribute it
-	## but only do it for release builds
-	#STRING(REPLACE "/MD"  "/MT"  CMAKE_C_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
-	
 	MESSAGE(STATUS "using glib base directory ${GLIB_DEV_BASE_DIR}")
 	SET(GLIB_DEV_BASE_DIR CACHE PATH "GLib2-dev directory")
 	IF(GLIB_DEV_BASE_DIR)
@@ -69,7 +65,9 @@ IF(WIN32)
     # force the correct version for the redist manifest
     ADD_DEFINITIONS(-D_BIND_TO_CURRENT_MFC_VERSION=1 -D_BIND_TO_CURRENT_CRT_VERSION=1)
     # turn off security warnings for system calls
-    ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS)
+    ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS -D_SCL_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE)
+    # turn off common warnings that completely harmless in our case.
+    ADD_DEFINITIONS(/wd4005 /wd4113 /wd4244 /wd4273 /wd4996)
 ENDIF(WIN32)
 
 MESSAGE(STATUS "libevent at libs:${EVENT_LIBRARY_DIRS} incl:${EVENT_INCLUDE_DIRS}")

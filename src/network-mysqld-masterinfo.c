@@ -112,7 +112,6 @@ static int network_mysqld_masterinfo_get_int32(network_packet *packet, guint32 *
  * get the master-info structure from the internal representation 
  */
 int network_mysqld_masterinfo_get(network_packet *packet, network_mysqld_masterinfo_t *info) {
-	guint32 lines;
 	int err = 0;
 
 	g_return_val_if_fail(info, -1);
