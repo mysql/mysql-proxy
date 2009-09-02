@@ -223,17 +223,21 @@ chassis_event_threads_t *chassis_event_threads_new() {
 	 * something is available in the event-async-queues
 	 */
 #ifdef WIN32
-#define PIPE_ADDRESS_FAMILY AF_INET
+	if (0 != evutil_socketpair(AF_INET, SOCK_STREAM, 0, threads->event_notify_fds)) {
+		g_error("%s: evutil_socketpair() failed: %s (%d)", 
+				G_STRLOC,
+				g_strerror(WSAGetLastError()),
+				WSAGetLastError());
+	}
 #else
-#define PIPE_ADDRESS_FAMILY AF_UNIX
-#endif
-	if (0 != evutil_socketpair(PIPE_ADDRESS_FAMILY, SOCK_STREAM, 0, threads->event_notify_fds)) {
+	if (0 != evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, threads->event_notify_fds)) {
 		g_error("%s: evutil_socketpair() failed: %s (%d)", 
 				G_STRLOC,
 				g_strerror(errno),
 				errno);
 	}
-#undef PIPE_ADDRESS_FAMILY
+#endif
+
 	threads->event_threads = g_ptr_array_new();
 	threads->event_queue = g_async_queue_new();
 
