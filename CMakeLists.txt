@@ -11,7 +11,7 @@ INCLUDE(FindPkgConfig)
 INCLUDE(CheckTypeSize)
 INCLUDE(ChassisPlugin)
 INCLUDE(CTest)
-INCLUDE(InstallRequiredSystemLibraries)
+#INCLUDE(InstallRequiredSystemLibraries)
 INCLUDE(Tar)
 
 ENABLE_TESTING()
@@ -293,8 +293,8 @@ IF(WIN32)
 	MESSAGE(STATUS "looking for redist in $ENV{VCINSTALLDIR}/redist/x86/Microsoft.VC90.CRT")
 	FIND_PATH(VC_REDIST_PATH NAMES msvcr90.dll PATHS "$ENV{VCINSTALLDIR}/redist/x86/Microsoft.VC90.CRT" NO_DEFAULT_PATH)
 	INSTALL(
-		DIRECTORY ${VC_REDIST_PATH}
-		DESTINATION bin
+        DIRECTORY ${VC_REDIST_PATH}
+        DESTINATION bin
 	)
 ENDIF(WIN32)
 

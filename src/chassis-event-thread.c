@@ -222,21 +222,19 @@ chassis_event_threads_t *chassis_event_threads_new() {
 	 * the event-thread write a byte to the ping-pipe to trigger a fd-event when
 	 * something is available in the event-async-queues
 	 */
-#ifdef WIN32
-	if (0 != evutil_socketpair(AF_INET, SOCK_STREAM, 0, threads->event_notify_fds)) {
-		g_error("%s: evutil_socketpair() failed: %s (%d)", 
-				G_STRLOC,
-				g_strerror(WSAGetLastError()),
-				WSAGetLastError());
-	}
-#else
+
 	if (0 != evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, threads->event_notify_fds)) {
+		int err;
+#ifdef WIN32
+		err = WSAGetLastError();
+#else
+		err = errno;
+#endif	
 		g_error("%s: evutil_socketpair() failed: %s (%d)", 
 				G_STRLOC,
-				g_strerror(errno),
-				errno);
+				g_strerror(err),
+				err);
 	}
-#endif
 
 	threads->event_threads = g_ptr_array_new();
 	threads->event_queue = g_async_queue_new();

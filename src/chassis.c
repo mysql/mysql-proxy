@@ -336,6 +336,9 @@ int main_cmdline(int argc, char **argv) {
 #ifndef _WIN32
 	struct rlimit max_files_rlimit;
 #endif
+#ifdef WIN32
+	WSADATA wsaData;
+#endif
 	gchar *log_level = NULL;
 
 	GKeyFile *keyfile = NULL;
@@ -402,6 +405,12 @@ int main_cmdline(int argc, char **argv) {
 	log->min_lvl = G_LOG_LEVEL_MESSAGE; /* display messages while parsing or loading plugins */
 
 #ifdef _WIN32
+	if (0 != WSAStartup(MAKEWORD( 2, 2 ), &wsaData)) {
+		g_critical("WSAStartup failed to initialize the socket library.\n");
+
+		exit_code = EXIT_FAILURE;
+		goto exit_nicely;
+	}
 	if (win32_running_as_service) {
 		log->use_windows_applog = TRUE;
 		log->event_source_handle = RegisterEventSource(NULL, "mysql-monitor-agent");	/* TODO: get the actual executable name here */
@@ -1059,7 +1068,7 @@ int main_win32(int argc, char **argv) {
 		{ NULL, NULL } 
 	};
 
-	if (0 != WSAStartup(MAKEWORD( 1, 1 ), &wsaData)) {
+	if (0 != WSAStartup(MAKEWORD( 2, 2 ), &wsaData)) {
 		g_critical("WSAStartup failed to initialize the socket library.\n");
 
 		return -1;

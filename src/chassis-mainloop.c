@@ -213,20 +213,6 @@ int chassis_mainloop(void *_chas) {
 #endif
 	chassis_event_thread_t *mainloop_thread;
 
-#ifdef _WIN32
-	WORD wVersionRequested;
-	WSADATA wsaData;
-	int err;
-
-	wVersionRequested = MAKEWORD( 2, 2 );
-
-	err = WSAStartup( wVersionRequested, &wsaData );
-	if ( err != 0 ) {
-		/* Tell the user that we could not find a usable */
-		/* WinSock DLL.                                  */
-		return err;	/* err is positive */
-	}
-#endif
 	/* redirect logging from libevent to glib */
 	event_set_log_callback(event_log_use_glib);
 
