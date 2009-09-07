@@ -374,24 +374,23 @@ static network_socket_retval_t network_socket_connect_setopts(network_socket *so
  *
  */
 network_socket_retval_t network_socket_connect_finish(network_socket *sock) {
-#ifdef WIN32
-	char so_error = 0;	/* Win32 wants a char* instead of UNIX' void*...*/
-#else
 	int so_error = 0;
-#endif
 	network_socklen_t so_error_len = sizeof(so_error);
 
 	/**
 	 * we might get called a 2nd time after a connect() == EINPROGRESS
 	 */
-	if (getsockopt(sock->fd, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len)) {
 #ifdef _WIN32
+	/* need to cast to get rid of the compiler warning. otherwise identical to the UNIX version below. */
+	if (getsockopt(sock->fd, SOL_SOCKET, SO_ERROR, (char*)&so_error, &so_error_len)) {
 		errno = WSAGetLastError();
+#else
+	if (getsockopt(sock->fd, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len)) {
 #endif
 		/* getsockopt failed */
-		g_critical("%s: getsockopt(%s) failed: %s", 
+		g_critical("%s: getsockopt(%s) failed: %s (%d)", 
 				G_STRLOC,
-				sock->dst->name->str, g_strerror(errno));
+				sock->dst->name->str, g_strerror(errno), errno);
 		return NETWORK_SOCKET_ERROR;
 	}
 

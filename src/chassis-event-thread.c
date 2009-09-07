@@ -35,7 +35,8 @@
 #include <winsock2.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#include <io.h>	/* for write and friends */
+#include <io.h>	/* for write, read, _pipe etc */
+#include <fcntl.h>
 #undef WIN32_LEAN_AND_MEAN
 #endif
 
@@ -99,7 +100,7 @@ void chassis_event_add(chassis *chas, struct event *ev) {
 	op->ev   = ev;
 	g_async_queue_push(chas->threads->event_queue, op);
 
-	write(chas->threads->event_notify_fds[1], C(".")); /* ping the event handler */
+	send(chas->threads->event_notify_fds[1], C("."), 0); /* ping the event handler */
 }
 
 GPrivate *tls_event_base_key = NULL;
@@ -156,7 +157,7 @@ void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events
 
 	/* the pipe has one . per event, remove as many as we received */
 	while (received > 0 && 
-	       (removed = read(event_thread->notify_fd, ping, MIN(received, sizeof(ping)))) > 0) {
+	       (removed = recv(event_thread->notify_fd, ping, MIN(received, sizeof(ping)), 0)) > 0) {
 		received -= removed;
 	}
 }
@@ -222,20 +223,18 @@ chassis_event_threads_t *chassis_event_threads_new() {
 	 * the event-thread write a byte to the ping-pipe to trigger a fd-event when
 	 * something is available in the event-async-queues
 	 */
-
 	if (0 != evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, threads->event_notify_fds)) {
 		int err;
 #ifdef WIN32
 		err = WSAGetLastError();
 #else
 		err = errno;
-#endif	
+#endif
 		g_error("%s: evutil_socketpair() failed: %s (%d)", 
 				G_STRLOC,
 				g_strerror(err),
 				err);
 	}
-
 	threads->event_threads = g_ptr_array_new();
 	threads->event_queue = g_async_queue_new();
 
@@ -296,10 +295,24 @@ void chassis_event_threads_add(chassis_event_threads_t *threads, chassis_event_t
  * @see chassis_event_handle()
  */ 
 int chassis_event_threads_init_thread(chassis_event_threads_t *threads, chassis_event_thread_t *event_thread, chassis *chas) {
+#ifdef WIN32
+	LPWSAPROTOCOL_INFO lpProtocolInfo;
+#endif
 	event_thread->event_base = event_base_new();
 	event_thread->chas = chas;
-
+#ifdef WIN32
+	lpProtocolInfo = g_malloc(sizeof(WSAPROTOCOL_INFO));
+	if (SOCKET_ERROR == WSADuplicateSocket(threads->event_notify_fds[0], GetCurrentProcessId(), lpProtocolInfo)) {
+		g_error("%s: Could not duplicate socket: %s (%d)", G_STRLOC, g_strerror(WSAGetLastError()), WSAGetLastError());
+	}
+	event_thread->notify_fd = WSASocket(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, lpProtocolInfo, 0, 0);
+	if (INVALID_SOCKET == event_thread->notify_fd) {
+		g_error("%s: Could not create duplicated socket: %s (%d)", G_STRLOC, g_strerror(WSAGetLastError()), WSAGetLastError());
+	}
+	g_free(lpProtocolInfo);
+#else
 	event_thread->notify_fd = dup(threads->event_notify_fds[0]);
+#endif
 #if 0
 	evutil_make_socket_nonblocking(event_thread->notify_fd);
 #endif
@@ -333,8 +346,11 @@ void *chassis_event_thread_loop(chassis_event_thread_t *event_thread) {
 		r = event_base_dispatch(event_thread->event_base);
 
 		if (r == -1) {
+#ifdef WIN32
+			errno = WSAGetLastError();
+#endif
 			if (errno == EINTR) continue;
-
+			g_critical("%s: leaving chassis_event_thread_loop early, errno != EINTR was: %s (%d)", G_STRLOC, g_strerror(errno), errno);
 			break;
 		}
 	}

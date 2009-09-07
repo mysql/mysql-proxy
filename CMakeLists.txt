@@ -11,7 +11,7 @@ INCLUDE(FindPkgConfig)
 INCLUDE(CheckTypeSize)
 INCLUDE(ChassisPlugin)
 INCLUDE(CTest)
-#INCLUDE(InstallRequiredSystemLibraries)
+INCLUDE(InstallRequiredSystemLibraries)
 INCLUDE(Tar)
 
 ENABLE_TESTING()
@@ -66,7 +66,7 @@ IF(WIN32)
     ADD_DEFINITIONS(-D_BIND_TO_CURRENT_MFC_VERSION=1 -D_BIND_TO_CURRENT_CRT_VERSION=1)
     # turn off security warnings for system calls
     ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS -D_SCL_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE)
-    # turn off common warnings that completely harmless in our case.
+    # turn off common warnings that are completely harmless in our case.
     ADD_DEFINITIONS(/wd4005 /wd4113 /wd4244 /wd4273 /wd4996)
 ENDIF(WIN32)
 

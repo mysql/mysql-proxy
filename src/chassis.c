@@ -317,6 +317,7 @@ int main_cmdline(int argc, char **argv) {
 	GError *gerr = NULL;
 	guint i;
 	int exit_code = EXIT_SUCCESS;
+	const gchar *exit_location = G_STRLOC;
 	int print_version = 0;
 	int daemon_mode = 0;
 	gchar *user = NULL;
@@ -403,12 +404,14 @@ int main_cmdline(int argc, char **argv) {
 
 	log = chassis_log_new();
 	log->min_lvl = G_LOG_LEVEL_MESSAGE; /* display messages while parsing or loading plugins */
+	g_log_set_default_handler(chassis_log_func, log);
 
 #ifdef _WIN32
 	if (0 != WSAStartup(MAKEWORD( 2, 2 ), &wsaData)) {
 		g_critical("WSAStartup failed to initialize the socket library.\n");
 
-		exit_code = EXIT_FAILURE;
+		exit_code = EXIT_FAILURE; 
+		exit_location = G_STRLOC;
 		goto exit_nicely;
 	}
 	if (win32_running_as_service) {
@@ -417,12 +420,12 @@ int main_cmdline(int argc, char **argv) {
 		if (!log->event_source_handle) {
 			int err = GetLastError();
 			g_critical("unhandled error-code (%d) for RegisterEventSource(), shutting down", err);
-			exit_code = EXIT_FAILURE;
+			exit_code = EXIT_FAILURE; 
+			exit_location = G_STRLOC;
 			goto exit_nicely;
 		}
 	}
 #endif
-	g_log_set_default_handler(chassis_log_func, log);
 
 	srv = chassis_new();
 	srv->log = log; /* we need the log structure for the log-rotation */
@@ -462,7 +465,8 @@ int main_cmdline(int argc, char **argv) {
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 		g_critical("%s", gerr->message);
 		
-		exit_code = EXIT_FAILURE;
+		exit_code = EXIT_FAILURE; 
+		exit_location = G_STRLOC;
 		goto exit_nicely;
 	}
 
@@ -475,7 +479,8 @@ int main_cmdline(int argc, char **argv) {
 					default_file,
 					gerr->message);
 
-			exit_code = EXIT_FAILURE;
+			exit_code = EXIT_FAILURE; 
+			exit_location = G_STRLOC;
 			goto exit_nicely;
 		}
 	}
@@ -503,13 +508,15 @@ int main_cmdline(int argc, char **argv) {
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 		g_critical("%s", gerr->message);
 
-		exit_code = EXIT_FAILURE;
+		exit_code = EXIT_FAILURE; 
+		exit_location = G_STRLOC;
 		goto exit_nicely;
 	}
 
 	if (keyfile) {
 		if (chassis_keyfile_to_options(keyfile, "mysql-proxy", main_entries)) {
-			exit_code = EXIT_FAILURE;
+			exit_code = EXIT_FAILURE; 
+			exit_location = G_STRLOC;
 			goto exit_nicely;
 		}
 	}
@@ -520,6 +527,7 @@ int main_cmdline(int argc, char **argv) {
 	if (!base_dir) {
 		base_dir = chassis_get_basedir(argv[0]);
 		if (!base_dir) {
+			g_critical("%s: Failed to get base directory.", G_STRLOC);
 			goto exit_nicely;
 		}
 
@@ -532,7 +540,8 @@ int main_cmdline(int argc, char **argv) {
 		   What do we do on Windows when called as a service?
 		 */
 		g_critical("--basedir option must be an absolute path, but was %s", base_dir);
-		exit_code = EXIT_FAILURE;
+		exit_code = EXIT_FAILURE; 
+		exit_location = G_STRLOC;
 		goto exit_nicely;
 	}
 
@@ -641,7 +650,8 @@ int main_cmdline(int argc, char **argv) {
 		if (0 == chassis_log_open(log)) {
 			g_critical("can't open log-file '%s': %s", log->log_filename, g_strerror(errno));
 
-			exit_code = EXIT_FAILURE;
+			exit_code = EXIT_FAILURE; 
+			exit_location = G_STRLOC;
 			goto exit_nicely;
 		}
         if (turned_off_syslog)
@@ -653,7 +663,8 @@ int main_cmdline(int argc, char **argv) {
 		if (0 != chassis_log_set_level(log, log_level)) {
 			g_critical("--log-level=... failed, level '%s' is unknown ", log_level);
 
-			exit_code = EXIT_FAILURE;
+			exit_code = EXIT_FAILURE; 
+			exit_location = G_STRLOC;
 			goto exit_nicely;
 		}
 	} else {
@@ -711,13 +722,20 @@ int main_cmdline(int argc, char **argv) {
 #ifndef SHARED_LIBRARY_SUFFIX
 #define SHARED_LIBRARY_SUFFIX G_MODULE_SUFFIX
 #endif
-		char *plugin_filename = g_strdup_printf("%s%c%s%s.%s", 
+		char *plugin_filename;
+		/* skip trying to load a plugin when the parameter was --plugins= 
+		   that will never work...
+		*/
+		if (!g_strcmp0("", plugin_names[i])) {
+			continue;
+		}
+		plugin_filename = g_strdup_printf("%s%c%s%s.%s", 
 				plugin_dir, 
 				G_DIR_SEPARATOR, 
 				G_MODULE_PREFIX,
 				plugin_names[i],
 				SHARED_LIBRARY_SUFFIX);
-		
+
 		p = chassis_plugin_load(plugin_filename);
 		g_free(plugin_filename);
 
@@ -732,7 +750,8 @@ int main_cmdline(int argc, char **argv) {
 		
 		if (NULL == p) {
 			g_critical("setting --plugin-dir=<dir> might help");
-			exit_code = EXIT_FAILURE;
+			exit_code = EXIT_FAILURE; 
+			exit_location = G_STRLOC;
 			goto exit_nicely;
 		}
 
@@ -754,13 +773,15 @@ int main_cmdline(int argc, char **argv) {
 			if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 				g_critical("%s", gerr->message);
 		
-				exit_code = EXIT_FAILURE;
+				exit_code = EXIT_FAILURE; 
+				exit_location = G_STRLOC;
 				goto exit_nicely;
 			}
 	
 			if (keyfile) {
 				if (chassis_keyfile_to_options(keyfile, "mysql-proxy", config_entries)) {
-					exit_code = EXIT_FAILURE;
+					exit_code = EXIT_FAILURE; 
+					exit_location = G_STRLOC;
 					goto exit_nicely;
 				}
 			}
@@ -799,6 +820,7 @@ int main_cmdline(int argc, char **argv) {
 	/* if we only print the version numbers, exit and don't do any more work */
 	if (print_version) {
 		exit_code = EXIT_SUCCESS;
+		exit_location = G_STRLOC;
 		goto exit_nicely;
 	}
 
@@ -822,7 +844,8 @@ int main_cmdline(int argc, char **argv) {
 					);
 		}
 		
-		exit_code = EXIT_FAILURE;
+		exit_code = EXIT_FAILURE; 
+		exit_location = G_STRLOC;
 		goto exit_nicely;
 	}
 
@@ -833,7 +856,8 @@ int main_cmdline(int argc, char **argv) {
 	if (argc > 1) {
 		g_critical("unknown option: %s", argv[1]);
 
-		exit_code = EXIT_FAILURE;
+		exit_code = EXIT_FAILURE; 
+		exit_location = G_STRLOC;
 		goto exit_nicely;
 	}
 
@@ -841,7 +865,8 @@ int main_cmdline(int argc, char **argv) {
 	if (event_thread_count < 1) {
 		g_critical("--event-threads has to be >= 1, is %d", event_thread_count);
 
-		exit_code = EXIT_FAILURE;
+		exit_code = EXIT_FAILURE; 
+		exit_location = G_STRLOC;
 		goto exit_nicely;
 	}
 
@@ -864,7 +889,8 @@ int main_cmdline(int argc, char **argv) {
 			exit_code = child_exit_status;
 			goto exit_nicely;
 		} else if (ret < 0) {
-			exit_code = EXIT_FAILURE;
+			exit_code = EXIT_FAILURE; 
+			exit_location = G_STRLOC;
 			goto exit_nicely;
 		} else {
 			/* we are the child, go on */
@@ -885,7 +911,8 @@ int main_cmdline(int argc, char **argv) {
 					pid_file,
 					g_strerror(errno));
 
-			exit_code = EXIT_FAILURE;
+			exit_code = EXIT_FAILURE; 
+			exit_location = G_STRLOC;
 			goto exit_nicely;
 		}
 
@@ -948,8 +975,9 @@ int main_cmdline(int argc, char **argv) {
 #endif
 	if (chassis_mainloop(srv)) {
 		/* looks like we failed */
-
-		exit_code = EXIT_FAILURE;
+		g_critical("%s: Failure from chassis_mainloop. Shutting down.", G_STRLOC);
+		exit_code = EXIT_FAILURE; 
+		exit_location = G_STRLOC;
 		goto exit_nicely;
 	}
 
@@ -957,10 +985,13 @@ exit_nicely:
 	/* necessary to set the shutdown flag, because the monitor will continue
 	 * to schedule timers otherwise, causing an infinite loop in cleanup
 	 */
-	chassis_set_shutdown();
-	
+	if (!exit_code) {
+		exit_location = G_STRLOC;
+	}
+	chassis_set_shutdown_location(exit_location);
+
 	if (!print_version) {
-		g_message("shutting down normally"); /* add a tag to the logfile */
+		g_message("shutting down normally, exit code is: %d", exit_code); /* add a tag to the logfile */
 	}
 
 #ifdef _WIN32
