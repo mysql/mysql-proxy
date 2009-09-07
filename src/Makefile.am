@@ -91,7 +91,7 @@ libmysql_proxy_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMOD
 libmysql_proxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la libchassis-timing.la
 
 
-noinst_HEADERS=\
+include_HEADERS=\
 	network-mysqld.h \
 	network-mysqld-lua.h \
 	network-mysqld-proto.h \
@@ -113,6 +113,7 @@ noinst_HEADERS=\
 	chassis-event-thread.h \
 	glib-ext.h \
 	glib-ext-ref.h \
+	string-len.h \
 	lua-load-factory.h \
 	lua-scope.h \
 	lua-env.h \
