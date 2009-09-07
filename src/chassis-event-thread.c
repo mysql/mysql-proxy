@@ -45,7 +45,9 @@
 #include "chassis-event-thread.h"
 
 #define C(x) x, sizeof(x) - 1
-
+#ifndef WIN32
+#define closesocket(x) close(x)
+#endif
 /**
  * create a new event-op
  *
@@ -187,7 +189,7 @@ void chassis_event_thread_free(chassis_event_thread_t *event_thread) {
 
 	if (event_thread->notify_fd != -1) {
 		event_del(&(event_thread->notify_fd_event));
-		close(event_thread->notify_fd);
+		closesocket(event_thread->notify_fd);
 	}
 
 	/* we don't want to free the global event-base */
@@ -269,10 +271,10 @@ void chassis_event_threads_free(chassis_event_threads_t *threads) {
 
 	/* close the notification pipe */
 	if (threads->event_notify_fds[0] != -1) {
-		close(threads->event_notify_fds[0]);
+		closesocket(threads->event_notify_fds[0]);
 	}
 	if (threads->event_notify_fds[1] != -1) {
-		close(threads->event_notify_fds[1]);
+		closesocket(threads->event_notify_fds[1]);
 	}
 
 
