@@ -9,4 +9,3 @@ Description: MySQL Proxy
 URL: http://forge.mysql.com/wiki/MySQL_Proxy
 Requires: glib-2.0 >= 2.16, mysql-chassis >= @VERSION@
 Libs: -L${libdir} -lmysql-proxy
-lualibdir: ${lualibdir} 
