@@ -14,6 +14,11 @@ EXTRA_DIST = \
 
 ACLOCAL_AMFLAGS = -I m4
 
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = mysql-proxy.pc mysql-chassis.pc
+
+$(pkgconfig_DATA): config.status
+
 dist-hook:
 	rm -rf `find $(distdir) -type d -name .bzr -print`
 
