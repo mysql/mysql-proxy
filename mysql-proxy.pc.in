@@ -1,7 +1,9 @@
 prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
-lualibdir=@libdir@/mysql-proxy/lua/
+pkglibdir=@libdir@/mysql-proxy
+lualibdir=${pkglibdir}/lua
+plugindir=${pkglibdir}/plugins
 
 Name: MySQL Proxy
 Version: @VERSION@
