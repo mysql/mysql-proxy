@@ -345,9 +345,6 @@ int main_cmdline(int argc, char **argv) {
 	GKeyFile *keyfile = NULL;
 	chassis_log *log;
 
-	/* holds argv[0] cleansed of the potential suffix on this platform (.exe on win32) */
-	gchar *executable_name = NULL;
-	
 	/* can't appear in the configfile */
 	GOptionEntry base_main_entries[] = 
 	{
@@ -674,39 +671,11 @@ int main_cmdline(int argc, char **argv) {
 
 	/* if not plugins are specified, load admin and proxy */
 	if (!plugin_names) {
-		plugin_names = g_new0(char *, 4); /* make sure we allocate _enough_ memory */
+		plugin_names = g_new(char *, 3);
 
-#define IS_PNAME(pname) \
-		((strlen(executable_name) >= sizeof(pname) - 1) && \
-		0 == strcmp(executable_name + strlen(executable_name) - (sizeof(pname) - 1), pname) \
-		)
-#ifdef WIN32
-		/* on Windows allow for the executable and -svc suffix */
-		if (g_str_has_suffix(argv[0], "-svc.exe")) {
-			executable_name = g_strndup(argv[0], strlen(argv[0]) - (sizeof("-svc.exe") - 1));
-		} else if (g_str_has_suffix(argv[0], ".exe")) {
-			executable_name = g_strndup(argv[0], strlen(argv[0]) - (sizeof(".exe") - 1));
-		} else {
-			executable_name = g_strdup(argv[0]);
-		}
-#else
-		executable_name = argv[0];
-#endif
-		/* check what we are called as */
-		if (IS_PNAME("mysql-proxy")) {
-			plugin_names[0] = g_strdup("admin");
-			plugin_names[1] = g_strdup("proxy");
-			plugin_names[2] = NULL;
-		} else if (IS_PNAME("mysql-cli")) {
-			plugin_names[0] = g_strdup("cli");
-			plugin_names[1] = NULL;
-		}
-#ifdef WIN32
-		/* cleanup executable_name since we dup'ed it */
-		if (executable_name) {
-			g_free(executable_name);
-		}
-#endif
+		plugin_names[0] = g_strdup("admin");
+		plugin_names[1] = g_strdup("proxy");
+		plugin_names[2] = NULL;
 	}
 
 	/* load the plugins */
@@ -1012,10 +981,7 @@ exit_nicely:
 	if (plugin_dir) g_free(plugin_dir);
 
 	if (plugin_names) {
-		for (i = 0; plugin_names[i]; i++) {
-			g_free(plugin_names[i]);
-		}
-		g_free(plugin_names);
+		g_strfreev(plugin_names);
 	}
 
 	chassis_log_free(log);
