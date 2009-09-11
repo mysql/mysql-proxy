@@ -155,10 +155,21 @@ gint network_address_set_address(network_address *addr, gchar *address) {
 	} else if (NULL != (s = strchr(address, ':'))) {
 		gboolean ret;
 		char *ip_address = g_strndup(address, s - address);
+		char *port_err = NULL;
 
-		guint port = strtoul(s + 1, NULL, 10);
+		guint port = strtoul(s + 1, &port_err, 10);
 
-		ret = network_address_set_address_ip(addr, ip_address, port);
+		if (*(s + 1) == '\0') {
+			g_critical("%s: IP-address has to be in the form [<ip>][:<port>], is '%s'. No port number",
+					G_STRLOC, address);
+			ret = -1;
+		} else if (*port_err != '\0') {
+			g_critical("%s: IP-address has to be in the form [<ip>][:<port>], is '%s'. Failed to parse the port at '%s'",
+					G_STRLOC, address, port_err);
+			ret = -1;
+		} else {
+			ret = network_address_set_address_ip(addr, ip_address, port);
+		}
 
 		g_free(ip_address);
 
