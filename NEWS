@@ -3,6 +3,7 @@
   * added a threaded event handling layer
   * added support to change the auth-response on the way to the backend
   * added timing infrastruture
+  * added out-of-tree plugins builds and pkg-config support
   * fixed handling of broken length encoded data in resultsets
   * fixed version encoding in win32 (#45996)
   * fixed too small listen backlog() (#43278)
