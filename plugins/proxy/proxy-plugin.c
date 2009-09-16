@@ -1939,6 +1939,7 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 	if (0 != network_socket_bind(listen_sock)) {
 		return -1;
 	}
+	g_message("proxy listening on port %s", config->address);
 
 	for (i = 0; config->backend_addresses && config->backend_addresses[i]; i++) {
 		network_backends_add(g->backends, config->backend_addresses[i], BACKEND_TYPE_RW);
