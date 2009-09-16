@@ -114,6 +114,12 @@ void test_mysqld_proto_lenenc_int(void) {
 	g_string_free(packet.data, TRUE);
 }
 
+gboolean g_memeq(const char *a, gsize a_len, const char *b, gsize b_len) {
+	if (a_len != b_len) return FALSE;
+
+	return (0 == memcmp(a, b, b_len));
+}
+
 /**
  * @test network_mysqld_proto_append_lenenc_int() and network_mysqld_proto_get_lenenc_int()
  *
@@ -136,7 +142,7 @@ void test_mysqld_proto_int(void) {
 	g_string_truncate(packet.data, 0);
 	g_assert(0 == network_mysqld_proto_append_int8(packet.data, length));
 	g_assert(packet.data->len == 1);
-	g_assert(0 == memcmp(packet.data->str, C("\xfa")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), C("\xfa")));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_int8(&packet, &value8));
 	g_assert_cmpint(length, ==, value8);
 
@@ -144,7 +150,7 @@ void test_mysqld_proto_int(void) {
 	g_string_truncate(packet.data, 0);
 	g_assert(0 == network_mysqld_proto_append_int16(packet.data, length));
 	g_assert(packet.data->len == 2);
-	g_assert(0 == memcmp(packet.data->str, C("\xfa\xff")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), C("\xfa\xff")));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_int16(&packet, &value16));
 	g_assert_cmpint(length, ==, value16);
 
@@ -152,7 +158,7 @@ void test_mysqld_proto_int(void) {
 	g_string_truncate(packet.data, 0);
 	g_assert(0 == network_mysqld_proto_append_int24(packet.data, length));
 	g_assert(packet.data->len == 3);
-	g_assert(0 == memcmp(packet.data->str, C("\xfa\xff\xff")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), C("\xfa\xff\xff")));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_int24(&packet, &value32));
 	g_assert_cmpint(length, ==, value32);
 
@@ -160,7 +166,7 @@ void test_mysqld_proto_int(void) {
 	g_string_truncate(packet.data, 0);
 	g_assert(0 == network_mysqld_proto_append_int32(packet.data, length));
 	g_assert(packet.data->len == 4);
-	g_assert(0 == memcmp(packet.data->str, C("\xfa\xff\xff\xff")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), C("\xfa\xff\xff\xff")));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_int32(&packet, &value32));
 	g_assert_cmpint(length, ==, value32);
 
@@ -168,7 +174,7 @@ void test_mysqld_proto_int(void) {
 	g_string_truncate(packet.data, 0);
 	g_assert(0 == network_mysqld_proto_append_int48(packet.data, length));
 	g_assert(packet.data->len == 6);
-	g_assert(0 == memcmp(packet.data->str, C("\xfa\xff\xff\xff\x00\x00")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), C("\xfa\xff\xff\xff\x00\x00")));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_int48(&packet, &value64));
 	g_assert_cmpint(length, ==, value64);
 
@@ -179,7 +185,7 @@ void test_mysqld_proto_int(void) {
 	g_string_truncate(packet.data, 0);
 	g_assert(0 == network_mysqld_proto_append_int64(packet.data, length));
 	g_assert(packet.data->len == 8);
-	g_assert(0 == memcmp(packet.data->str, C("\xfa\xff\xff\xff\xff\x00\x00\x00")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), C("\xfa\xff\xff\xff\xff\x00\x00\x00")));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_int64(&packet, &value64));
 	g_assert_cmpuint(length, ==, value64);
 
@@ -390,9 +396,9 @@ void test_mysqld_password(void) {
 	network_mysqld_proto_password_hash(double_hashed, S(hashed_password));
 
 	/* should be the same as SELECT SHA1("123"); */
-	g_assert(0 == memcmp(hashed_password->str, C("\x40\xbd\x00\x15\x63\x08\x5f\xc3\x51\x65\x32\x9e\xa1\xff\x5c\x5e\xcb\xdb\xbe\xef")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(hashed_password), C("\x40\xbd\x00\x15\x63\x08\x5f\xc3\x51\x65\x32\x9e\xa1\xff\x5c\x5e\xcb\xdb\xbe\xef")));
 	/* should be the same as SELECT PASSWORD("123"); */
-	g_assert(0 == memcmp(double_hashed->str, C("\x23\xAE\x80\x9D\xDA\xCA\xF9\x6A\xF0\xFD\x78\xED\x04\xB6\xA2\x65\xE0\x5A\xA2\x57")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(double_hashed), C("\x23\xAE\x80\x9D\xDA\xCA\xF9\x6A\xF0\xFD\x78\xED\x04\xB6\xA2\x65\xE0\x5A\xA2\x57")));
 
 	g_string_assign_len(challenge, C("01234567890123456789"));
 

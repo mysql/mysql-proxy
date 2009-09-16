@@ -65,7 +65,7 @@
 #include <sys/time.h>
 #include <time.h>           /* for clock_gettime */
 #else
-#if HAVE_SYS_TIME_H
+#ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #elif defined(HAVE_TIME_H)
 #include <time.h>
