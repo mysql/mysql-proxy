@@ -11,6 +11,14 @@ TESTS_ENVIRONMENT = \
 	LUA_PATH="${top_srcdir}/lib/?.lua" \
 	LUA_CPATH="${top_builddir}/lib/.libs/?.so" \
 	DYLD_LIBRARY_PATH="${top_builddir}/src/.libs/" \
-	lua 
+	${builddir}/lua-runner
+
+
+check_PROGRAMS=lua-runner
+
+lua_runner_SOURCES=lua_runner.c
+lua_runner_LDFLAGS=${LUA_LDFLAGS}
+lua_runner_LDADD=${LUA_LIBS}
+lua_runner_CFLAGS=${LUA_CFLAGS}
 
 EXTRA_DIST=$(TESTS) CMakeLists.txt

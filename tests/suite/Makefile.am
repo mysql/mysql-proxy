@@ -8,9 +8,17 @@ TESTS_ENVIRONMENT = \
 	top_builddir=${top_builddir} \
 	builddir=${builddir} \
 	srcdir=${srcdir}/ \
-	lua ${srcdir}/run-tests.lua
+	${builddir}/lua-runner ${srcdir}/run-tests.lua
 
 TESTS=base
+
+check_PROGRAMS=lua-runner
+
+lua_runner_SOURCES=lua_runner.c
+lua_runner_LDFLAGS=${LUA_LDFLAGS}
+lua_runner_LDADD=${LUA_LIBS}
+lua_runner_CFLAGS=${LUA_CFLAGS}
+
 
 EXTRA_DIST=\
 	run-tests.lua \
