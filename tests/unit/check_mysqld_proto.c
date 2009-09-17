@@ -195,12 +195,12 @@ void test_mysqld_proto_int(void) {
 	g_assert_cmpint(0, ==, network_mysqld_proto_append_int8(packet.data, 0xa5));
 	g_assert_cmpint(packet.data->len, ==, 1);
 	g_assert_cmpint(packet.offset, ==, 0);
-	g_assert_cmpint(0, ==, memcmp(packet.data->str, C("\xa5")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), C("\xa5")));
 
 	g_assert_cmpint(0, ==, network_mysqld_proto_append_int8(packet.data, 0x5a));
 	g_assert_cmpint(packet.data->len, ==, 2);
 	g_assert_cmpint(packet.offset, ==, 0);
-	g_assert_cmpint(0, ==, memcmp(packet.data->str, C("\xa5\x5a")));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), C("\xa5\x5a")));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_int8(&packet, &value8));
 	g_assert_cmpint(packet.offset, ==, 1);
 	g_assert_cmpint(0xa5, ==, value8);
