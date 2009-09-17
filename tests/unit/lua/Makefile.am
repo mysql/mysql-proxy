@@ -9,8 +9,8 @@ TESTS=proxy-test.lua \
 
 TESTS_ENVIRONMENT = \
 	LUA_PATH="${top_srcdir}/lib/?.lua" \
-	LUA_CPATH="${top_builddir}/lib/.libs/?.so" \
-	DYLD_LIBRARY_PATH="${top_builddir}/src/.libs/" \
+	LUA_CPATH=".libs/?.@DYNLIB_LUA_SUFFIX@;${top_builddir}/lib/.libs/?.@DYNLIB_LUA_SUFFIX@" \
+	@DYNLIB_PATH_VAR@="${top_builddir}/src/.libs/:${@DYNLIB_PATH_VAR@}" \
 	${builddir}/lua-runner
 
 

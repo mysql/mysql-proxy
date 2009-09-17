@@ -54,6 +54,38 @@ dnl AC_ENABLE_SHARED
 dnl AC_LIBTOOL_DLOPEN
 AC_PROG_LIBTOOL
 
+dnl keep theses tests close to AC_PROC_LIBTOOL and hope that we are still in the directory where libtool was created
+AC_MSG_CHECKING([shared library path variable])
+DYNLIB_PATH_VAR="$shlibpath_var"
+AS_IF([test "x$DYNLIB_PATH_VAR" != x],
+      [AC_MSG_RESULT([$DYNLIB_PATH_VAR])],
+      [AC_MSG_ERROR([eval "libtool --config | grep ^shlibpath_var" failed])])
+AC_SUBST(DYNLIB_PATH_VAR)
+
+dnl "so" is the default on all platforms, even on OS X as we build lua-c stuff as loadable modules.
+dnl however HP/UX 11.31 is behaving differently, so we need to use "sl" there. This should get fixed in a more general way.
+AC_MSG_CHECKING([lua module suffix])
+module=yes
+eval "DYNLIB_LUA_SUFFIX=$shrext_cmds"
+AS_IF([test "x$DYNLIB_LUA_SUFFIX" != x],
+      [DYNLIB_LUA_SUFFIX=`echo $DYNLIB_LUA_SUFFIX | sed 's/^\.//'`
+       AC_MSG_RESULT([$DYNLIB_LUA_SUFFIX])],
+      [AC_MSG_ERROR([eval "DYNLIB_LUA_SUFFIX=$shrext_cmds" failed])])
+AC_SUBST(DYNLIB_LUA_SUFFIX)
+
+dnl we have to hack around some glib distributions that
+dnl don't set the correct G_MODULE_SUFFIX, notably MacPorts
+AC_MSG_CHECKING([plugin suffix])
+module=no
+eval "SHARED_LIBRARY_SUFFIX=$shrext_cmds"
+AS_IF([test "x$SHARED_LIBRARY_SUFFIX" != x],
+      [SHARED_LIBRARY_SUFFIX=`echo $SHARED_LIBRARY_SUFFIX | sed 's/^\.//'`
+       AC_MSG_RESULT([$SHARED_LIBRARY_SUFFIX])],
+      [AC_MSG_ERROR([eval "SHARED_LIBRARY_SUFFIX=$shrext_cmds" failed])])
+
+AC_DEFINE_UNQUOTED([SHARED_LIBRARY_SUFFIX], ["$SHARED_LIBRARY_SUFFIX"], [shared library extension on this platform])
+
+
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
@@ -270,13 +302,6 @@ PKG_CHECK_MODULES(GTHREAD, gthread-2.0 >= 2.16.0, [
   AC_DEFINE([HAVE_GTHREAD_H], [1], [gthread.h])
 ])
 
-dnl ----------------------------------------------------------------------
-dnl ARCH is the arch itself
-dnl Set default variable name for specifying where to load shared libraries
-dnl ----------------------------------------------------------------------
-
-DYNLIB_PATH_VAR="LD_LIBRARY_PATH"
-
 case $host_os in
 	*mingw* )
 		LIBS="$LIBS -lwsock32"
@@ -284,7 +309,6 @@ case $host_os in
 		;;
 	*darwin* )
 		ARCH=macosx
-		DYNLIB_PATH_VAR="DYLD_LIBRARY_PATH"
 		;;
 	*linux* )
 		ARCH=linux
@@ -294,11 +318,9 @@ case $host_os in
 		;;
 	*aix* )
 		ARCH=aix
-		DYNLIB_PATH_VAR="LIBPATH"
 		;;
 	*hpux* )
 		ARCH=hpux
-		DYNLIB_PATH_VAR="SHLIB_PATH"
 		;;
 	*solaris* )
 		ARCH=solaris
@@ -306,7 +328,6 @@ case $host_os in
 	* ) AC_MSG_ERROR([we havn't mapped $host_os to sigar-architecture yet, please report it to mysql-proxy-discuss@lists.launchpad.net]);;
 esac
 
-AC_SUBST(DYNLIB_PATH_VAR)
 AM_CONDITIONAL(OS_WIN32, test x$ARCH = xwin32)
 AM_CONDITIONAL(OS_MACOSX, test x$ARCH = xmacosx)
 AM_CONDITIONAL(OS_LINUX, test x$ARCH = xlinux)
@@ -327,12 +348,6 @@ AC_CHECK_LIB(event, event_base_new, AC_DEFINE(HAVE_EVENT_BASE_NEW,[],[event_base
 AC_CHECK_LIB(event, event_base_free, AC_DEFINE(HAVE_EVENT_BASE_FREE,[],[having event_base_free()]))
 AC_CHECK_HEADERS([event.h])
 AC_SUBST(EVENT_LIBS)
-
-dnl we have to hack around some glib distributions that
-dnl don't set the correct G_MODULE_SUFFIX, notably MacPorts
-eval SHARED_LIBRARY_SUFFIX=$shrext_cmds
-SHARED_LIBRARY_SUFFIX=`echo $SHARED_LIBRARY_SUFFIX | sed 's/^\.//'`
-AC_DEFINE_UNQUOTED([SHARED_LIBRARY_SUFFIX], ["$SHARED_LIBRARY_SUFFIX"], [shared library extension on this platform])
 
 dnl check for DTrace support on this platform and
 dnl whether it should be used if it's there
