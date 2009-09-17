@@ -50,6 +50,11 @@ t_chassis_timings_SOURCES  = \
 
 t_chassis_timings_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) 
 t_chassis_timings_LDADD    = $(GLIB_LIBS)
+if USE_SUNCC_ASSEMBLY
+t_chassis_timings_CPPFLAGS += \
+	my_timer_cycles.il
+endif
+
 
 
 
