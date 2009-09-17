@@ -33,8 +33,8 @@ function read_query_result(inj)
 	assert(inj.id == 1) -- the id we assigned above
 	assert(inj.query == my_lovely_packet) -- the id we assigned above
 
-	assert(inj.query_time > 0)
-	assert(inj.response_time > 0)
+	assert(inj.query_time >= 0)
+	assert(inj.response_time >= 0)
 
 	local res = assert(inj.resultset)
 	local status = assert(res.query_status)
