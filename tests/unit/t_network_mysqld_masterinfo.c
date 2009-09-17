@@ -83,7 +83,7 @@ void t_masterinfo_get(void) {
 	s = g_string_new(NULL);
 	g_assert_cmpint(network_mysqld_masterinfo_append(s, info), ==, 0);
 	g_assert_cmpint(s->len, ==, sizeof(PACKET) - 1);
-	g_assert_cmpint(0, ==, memcmp(s->str, C(PACKET)));
+	g_assert_cmpint(TRUE, ==, g_memeq(S(s), C(PACKET)));
 	g_string_free(s, TRUE);
 
 	g_string_free(packet->data, TRUE);
