@@ -204,3 +204,13 @@ gboolean g_string_equal_ci(const GString *a, const GString *b) {
 	return is_equal;
 }
 
+/**
+ * compare two memory records for equality
+ */
+gboolean g_memeq(const char *a, gsize a_len, const char *b, gsize b_len) {
+	if (a_len != b_len) return FALSE;
+
+	return (0 == memcmp(a, b, b_len));
+}
+
+

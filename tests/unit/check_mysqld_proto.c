@@ -114,12 +114,6 @@ void test_mysqld_proto_lenenc_int(void) {
 	g_string_free(packet.data, TRUE);
 }
 
-gboolean g_memeq(const char *a, gsize a_len, const char *b, gsize b_len) {
-	if (a_len != b_len) return FALSE;
-
-	return (0 == memcmp(a, b, b_len));
-}
-
 /**
  * @test network_mysqld_proto_append_lenenc_int() and network_mysqld_proto_get_lenenc_int()
  *
