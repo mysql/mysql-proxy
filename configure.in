@@ -188,7 +188,9 @@ fi
 AC_DEFINE([HAVE_MYSQL], [1], [mysql support])
 
 AC_MSG_CHECKING(for mysqltest binary)
-MYSQL_TEST_BIN=`dirname "$MYSQL_CONFIG"`/mysqltest
+if test x"$MYSQL_TEST_BIN" = x; then
+  MYSQL_TEST_BIN=`dirname "$MYSQL_CONFIG"`/mysqltest
+fi
 if test -x "$MYSQL_TEST_BIN"; then
   AC_MSG_RESULT([$MYSQL_TEST_BIN])
 else
