@@ -98,6 +98,7 @@ AC_CHECK_HEADERS([\
        	sys/un.h \
        	sys/uio.h \
        	sys/ioctl.h \
+	sys/resource.h \
 	pwd.h \
 	signal.h \
 	fcntl.h \
@@ -341,6 +342,9 @@ AC_CHECK_FUNCS([inet_ntoa inet_ntop strerror getcwd chdir writev gmtime_r sigact
 
 dnl make sure we off_t is 64bit
 dnl CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES"
+
+dnl has to be checked _after_ any large-file-support flags are set for solaris 8
+AC_CHECK_SIZEOF([rlim_t])
 
 EVENT_LIBS=
 AC_CHECK_LIB(event, event_init, EVENT_LIBS="-levent",AC_MSG_ERROR([libevent is required]))
