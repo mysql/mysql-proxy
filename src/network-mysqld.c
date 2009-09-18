@@ -738,10 +738,32 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	if (events == EV_READ) {
 		int b = -1;
 
+		/**
+		 * check how much data there is to read
+		 *
+		 * ioctl()
+		 * - returns 0 if connection is closed
+		 * - or -1 and ECONNRESET on solaris
+		 */
 		if (ioctl(event_fd, FIONREAD, &b)) {
-			g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, g_strerror(errno));
+			switch (errno) {
+			case ECONNRESET:
+				if (con->client && event_fd == con->client->fd) {
+					/* the client closed the connection, let's keep the server side open */
+					con->state = CON_STATE_CLOSE_CLIENT;
+				} else if (con->server && event_fd == con->server->fd && con->com_quit_seen) {
+					con->state = CON_STATE_CLOSE_SERVER;
+				} else {
+					/* server side closed on use, oops, close both sides */
+					con->state = CON_STATE_ERROR;
+				}
+				break;
+			default:
+				g_critical("ioctl(%d, FIONREAD, ...) failed: %s", event_fd, g_strerror(errno));
 
-			con->state = CON_STATE_ERROR;
+				con->state = CON_STATE_ERROR;
+				break;
+			}
 		} else if (b != 0) {
 			if (con->client && event_fd == con->client->fd) {
 				con->client->to_read = b;
