@@ -744,10 +744,12 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		 * ioctl()
 		 * - returns 0 if connection is closed
 		 * - or -1 and ECONNRESET on solaris
+		 *   or -1 and EPIPE on HP/UX
 		 */
 		if (ioctl(event_fd, FIONREAD, &b)) {
 			switch (errno) {
-			case E_NET_CONNRESET:
+			case E_NET_CONNRESET: /* solaris */
+			case EPIPE: /* hp/ux */
 				if (con->client && event_fd == con->client->fd) {
 					/* the client closed the connection, let's keep the server side open */
 					con->state = CON_STATE_CLOSE_CLIENT;
@@ -772,7 +774,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			} else {
 				g_error("%s.%d: neither nor", __FILE__, __LINE__);
 			}
-		} else {
+		} else { /* Linux */
 			if (con->client && event_fd == con->client->fd) {
 				/* the client closed the connection, let's keep the server side open */
 				con->state = CON_STATE_CLOSE_CLIENT;
