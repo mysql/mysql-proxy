@@ -15,6 +15,7 @@
 #  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 # 
 #  $%ENDLICENSE%$
+--disable_query_log
 eval assert(proxy.connection.client.dst.name == "$PROXY_HOST:$PROXY_PORT", proxy.connection.client.dst.name);
 eval assert(proxy.connection.client.dst.type == 2, proxy.connection.client.dst.type);
 eval assert(proxy.connection.client.dst.address == "$PROXY_HOST", proxy.connection.client.dst.address);

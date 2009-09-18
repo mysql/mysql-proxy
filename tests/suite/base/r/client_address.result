@@ -1,48 +1,32 @@
-assert(proxy.connection.client.dst.name == "127.0.0.1:55680", proxy.connection.client.dst.name);
 value
 NULL
-assert(proxy.connection.client.dst.type == 2, proxy.connection.client.dst.type);
 value
 NULL
-assert(proxy.connection.client.dst.address == "127.0.0.1", proxy.connection.client.dst.address);
 value
 NULL
-assert(proxy.connection.client.dst.port == 55680, proxy.connection.client.dst.port);
 value
 NULL
-assert(proxy.connection.client.src.name ~= nil);
 value
 NULL
-assert(proxy.connection.client.src.type == 2, proxy.connection.client.src.type);
 value
 NULL
-assert(proxy.connection.client.src.address == "127.0.0.1", proxy.connection.client.src.address);
 value
 NULL
-assert(proxy.connection.client.src.port ~= nil);
 value
 NULL
-assert(proxy.connection.server.dst.name == "127.0.0.1:55710", proxy.connection.server.dst.name);
 value
 NULL
-assert(proxy.connection.server.dst.type == 2);
 value
 NULL
-assert(proxy.connection.server.dst.address == "127.0.0.1", proxy.connection.server.dst.address);
 value
 NULL
-assert(proxy.connection.server.dst.port == 55710, proxy.connection.server.dst.port);
 value
 NULL
-assert(proxy.connection.server.src.name ~= nil);
 value
 NULL
-assert(proxy.connection.server.src.type == 2, proxy.connection.server.src.type);
 value
 NULL
-assert(proxy.connection.server.src.address == "127.0.0.1", proxy.connection.server.src.address);
 value
 NULL
-assert(proxy.connection.server.src.port ~= nil);
 value
 NULL
