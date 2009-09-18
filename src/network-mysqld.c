@@ -747,7 +747,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		 */
 		if (ioctl(event_fd, FIONREAD, &b)) {
 			switch (errno) {
-			case ECONNRESET:
+			case E_NET_ECONNRESET:
 				if (con->client && event_fd == con->client->fd) {
 					/* the client closed the connection, let's keep the server side open */
 					con->state = CON_STATE_CLOSE_CLIENT;
