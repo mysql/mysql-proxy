@@ -50,6 +50,7 @@
 #else
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/resource.h> /* for rusage in wait() */
 #endif
 
 #include <glib.h>
