@@ -86,15 +86,35 @@ local MYSQL_CLIENT_BIN 	= os.getenv("MYSQL_CLIENT_BIN") or "mysql"
 -- Global variables that can be referenced from .options files
 --
 -- TODO : add HOST variables for MASTER, SLAVE, CHAIN
-PROXY_HOST		  	= os.getenv("PROXY_HOST")		   or "127.0.0.1"
-PROXY_PORT		  	= os.getenv("PROXY_PORT")		   or "14040"
-PROXY_MASTER_PORT   = os.getenv("PROXY_MASTER_PORT")	or "14050"
-PROXY_SLAVE_PORT	= os.getenv("PROXY_SLAVE_PORT")	 	or "14060"
-PROXY_CHAIN_PORT	= os.getenv("PROXY_CHAIN_PORT")	 	or "14070"
-ADMIN_PORT		  	= os.getenv("ADMIN_PORT")		   	or "14045"
-ADMIN_MASTER_PORT   = os.getenv("ADMIN_MASTER_PORT")	or "14055"
-ADMIN_SLAVE_PORT	= os.getenv("ADMIN_SLAVE_PORT")	 	or "14065"
-ADMIN_CHAIN_PORT	= os.getenv("ADMIN_CHAIN_PORT")	 	or "14075"
+function get_port_base() 
+	local port_base_start = os.getenv("MYSQL_PROXY_START_PORT") or 32768
+	local port_base_end   = os.getenv("MYSQL_PROXY_END_PORT") or 65535
+	local port_interval   = 64 -- let's take the base port in steps of ...
+	local range = port_base_end - port_base_start - port_interval
+	print(os.time())
+	math.randomseed(os.time())
+	local rand = math.floor(math.random() * (math.ceil(range / port_interval)))
+	local port_base = port_base_start + (rand * port_interval)
+
+	print(("base-port.rand-end is %f"):format(range / port_interval))
+	print(("base-port.rand is %f"):format(rand))
+	print(("base-port.range is %d"):format(range + port_interval))
+	print(("base-port.offset is %d"):format(rand * port_interval))
+	print(("base-port is %d"):format(port_base))
+
+	return port_base
+end
+local port_base = get_port_base()
+
+PROXY_HOST	   = os.getenv("PROXY_HOST")		or "127.0.0.1"
+PROXY_PORT	   = os.getenv("PROXY_PORT")		or tostring(port_base + 0)
+PROXY_MASTER_PORT  = os.getenv("PROXY_MASTER_PORT")	or tostring(port_base + 10)
+PROXY_SLAVE_PORT   = os.getenv("PROXY_SLAVE_PORT")	or tostring(port_base + 20)
+PROXY_CHAIN_PORT   = os.getenv("PROXY_CHAIN_PORT")	or tostring(port_base + 30)
+ADMIN_PORT	   = os.getenv("ADMIN_PORT")		or tostring(port_base + 15)
+ADMIN_MASTER_PORT  = os.getenv("ADMIN_MASTER_PORT")	or tostring(port_base + 25)
+ADMIN_SLAVE_PORT   = os.getenv("ADMIN_SLAVE_PORT")	or tostring(port_base + 35)
+ADMIN_CHAIN_PORT   = os.getenv("ADMIN_CHAIN_PORT")	or tostring(port_base + 45)
 -- local PROXY_TMP_LUASCRIPT = os.getenv("PROXY_TMP_LUASCRIPT") or "/tmp/proxy.tmp.lua"
 
 local srcdir		 = os.getenv("srcdir")		 	or testdir .. "/"
