@@ -11,7 +11,7 @@ EXTRA_DIST=CMakeLists.txt
 check-local:
 	mkdir -p $(top_builddir)/plugins/; 
 	for plugin in $(SUBDIRS); do \
-		for i in `cat $(top_builddir)/plugins/$$plugin/.libs/lib$$plugin.la | grep '^library_names' | sed "s/.*=//;s/'//g"`; do \
+		for i in `cat $(top_builddir)/plugins/$$plugin/.libs/lib$$plugin.la | grep '^dlname' | sed "s/.*=//;s/'//g"`; do \
 			echo $$i; \
 			ln -fs $(top_builddir)/plugins/$$plugin/.libs/$$i $(top_builddir)/plugins/$$i; \
 		done; \
