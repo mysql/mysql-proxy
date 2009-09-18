@@ -49,7 +49,6 @@
 #include <io.h>      /* open() */
 #else
 #include <unistd.h>
-#include <sys/resource.h>
 #include <sys/wait.h>
 #endif
 
@@ -78,6 +77,7 @@
 #include "chassis-keyfile.h"
 #include "chassis-mainloop.h"
 #include "chassis-path.h"
+#include "chassis-limits.h"
 
 #ifdef _WIN32
 static char **shell_argv;
@@ -334,9 +334,6 @@ int main_cmdline(int argc, char **argv) {
 	guint auto_restart = 0;
 	guint max_files_number = 8192;
 	gint event_thread_count = 1; /* there is always the main-thread */
-#ifndef _WIN32
-	struct rlimit max_files_rlimit;
-#endif
 #ifdef WIN32
 	WSADATA wsaData;
 #endif
@@ -908,40 +905,10 @@ int main_cmdline(int argc, char **argv) {
 	 */
 	srv->user = g_strdup(user);
 
-#ifdef _WIN32
-	g_debug("%s: current maximum number of open stdio file descriptors: %d", G_STRLOC, _getmaxstdio());
-	if (max_files_number > 2048) {
-		g_warning("%s: Windows only allows a maximum number of 2048 open files for stdio, using that value instead of %d", G_STRLOC, max_files_number);
-		max_files_number = 2048;
+	if (chassis_set_fdlimit(max_files_number)) {
+		/* do we want to exit or just go on */
 	}
-	if (-1 == _setmaxstdio(max_files_number)) {
-		g_critical("%s: failed to increase the maximum number of open files for stdio: %s (%d)", G_STRLOC, g_strerror(errno), errno);
-	} else {
-		g_debug("%s: set new limit of open files for stdio to %d", G_STRLOC, _getmaxstdio());
-	}
-#else
-	if (-1 == getrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
-		g_warning("%s: cannot get limit of open files for this process. %s (%d)",
-				  G_STRLOC, g_strerror(errno), errno);
-	} else {
-		rlim_t soft_limit = max_files_rlimit.rlim_cur;
-		g_debug("%s: current RLIMIT_NOFILE = %llu (hard: %llu)", G_STRLOC, max_files_rlimit.rlim_cur, max_files_rlimit.rlim_max);
 
-		max_files_rlimit.rlim_cur = max_files_number;
-
-		g_debug("%s: trying to set new RLIMIT_NOFILE = %llu (hard: %llu)", G_STRLOC, max_files_rlimit.rlim_cur, max_files_rlimit.rlim_max);
-		if (-1 == setrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
-			g_critical("%s: could not raise RLIMIT_NOFILE to %u, %s (%d). Current limit still %llu.", G_STRLOC, max_files_number, g_strerror(errno), errno, soft_limit);
-		} else {
-			if (-1 == getrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
-				g_warning("%s: cannot get limit of open files for this process. %s (%d)",
-						  G_STRLOC, g_strerror(errno), errno);
-			} else {
-				g_debug("%s: set new RLIMIT_NOFILE = %llu (hard: %llu)", G_STRLOC, max_files_rlimit.rlim_cur, max_files_rlimit.rlim_max);
-			}
-		}
-	}
-#endif
 	if (chassis_mainloop(srv)) {
 		/* looks like we failed */
 		g_critical("%s: Failure from chassis_mainloop. Shutting down.", G_STRLOC);

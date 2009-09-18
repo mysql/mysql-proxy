@@ -59,6 +59,7 @@ libmysql_chassis_la_SOURCES = \
 	chassis-event-thread.c \
 	chassis-keyfile.c \
 	chassis-path.c \
+	chassis-limits.c \
 	chassis-stats.c
 
 
@@ -110,6 +111,7 @@ include_HEADERS=\
 	chassis-keyfile.h \
 	chassis-mainloop.h \
 	chassis-path.h \
+	chassis-limits.h \
 	chassis-event-thread.h \
 	glib-ext.h \
 	glib-ext-ref.h \

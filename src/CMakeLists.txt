@@ -27,6 +27,7 @@ SET(chassis_sources
 	chassis-mainloop.c
 	chassis-keyfile.c
 	chassis-path.c
+	chassis-limits.c
 	chassis-stats.c
 	chassis-timings.c
 	my_rdtsc.c
