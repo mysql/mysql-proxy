@@ -1,48 +1,48 @@
-SELECT proxy.connection.client.dst.name;
+assert(proxy.connection.client.dst.name == "127.0.0.1:55680", proxy.connection.client.dst.name);
 value
-127.0.0.1:14040
-SELECT proxy.connection.client.dst.type;
+NULL
+assert(proxy.connection.client.dst.type == 2, proxy.connection.client.dst.type);
 value
-2
-SELECT proxy.connection.client.dst.address;
+NULL
+assert(proxy.connection.client.dst.address == "127.0.0.1", proxy.connection.client.dst.address);
 value
-127.0.0.1
-SELECT proxy.connection.client.dst.port;
+NULL
+assert(proxy.connection.client.dst.port == 55680, proxy.connection.client.dst.port);
 value
-14040
-SELECT proxy.connection.client.src.name;
+NULL
+assert(proxy.connection.client.src.name ~= nil);
 value
-not-nil
-SELECT proxy.connection.client.src.type;
+NULL
+assert(proxy.connection.client.src.type == 2, proxy.connection.client.src.type);
 value
-2
-SELECT proxy.connection.client.src.address;
+NULL
+assert(proxy.connection.client.src.address == "127.0.0.1", proxy.connection.client.src.address);
 value
-127.0.0.1
-SELECT proxy.connection.client.src.port;
+NULL
+assert(proxy.connection.client.src.port ~= nil);
 value
-not-nil
-SELECT proxy.connection.server.dst.name;
+NULL
+assert(proxy.connection.server.dst.name == "127.0.0.1:55710", proxy.connection.server.dst.name);
 value
-127.0.0.1:14070
-SELECT proxy.connection.server.dst.type;
+NULL
+assert(proxy.connection.server.dst.type == 2);
 value
-2
-SELECT proxy.connection.server.dst.address;
+NULL
+assert(proxy.connection.server.dst.address == "127.0.0.1", proxy.connection.server.dst.address);
 value
-127.0.0.1
-SELECT proxy.connection.server.dst.port;
+NULL
+assert(proxy.connection.server.dst.port == 55710, proxy.connection.server.dst.port);
 value
-14070
-SELECT proxy.connection.server.src.name;
+NULL
+assert(proxy.connection.server.src.name ~= nil);
 value
-not-nil
-SELECT proxy.connection.server.src.type;
+NULL
+assert(proxy.connection.server.src.type == 2, proxy.connection.server.src.type);
 value
-2
-SELECT proxy.connection.server.src.address;
+NULL
+assert(proxy.connection.server.src.address == "127.0.0.1", proxy.connection.server.src.address);
 value
-127.0.0.1
-SELECT proxy.connection.server.src.port;
+NULL
+assert(proxy.connection.server.src.port ~= nil);
 value
-not-nil
+NULL

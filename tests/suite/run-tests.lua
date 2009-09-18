@@ -500,7 +500,9 @@ function run_test(filename, basedir)
 		env_options_tostring({
 			['MYSQL_USER']  = MYSQL_USER,
 			['MYSQL_PASSWORD']  = MYSQL_PASSWORD,
+			['PROXY_HOST']  = PROXY_HOST,
 			['PROXY_PORT']  = PROXY_PORT,
+			['PROXY_CHAIN_PORT']  = PROXY_CHAIN_PORT,
 			['MASTER_PORT'] = PROXY_MASTER_PORT,
 			['SLAVE_PORT'] = PROXY_SLAVE_PORT,
 		}) .. ' ' ..

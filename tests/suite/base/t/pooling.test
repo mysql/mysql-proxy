@@ -15,22 +15,22 @@
 #  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 # 
 #  $%ENDLICENSE%$
-connect (conn1,127.0.0.1,root,,,14040); 
+connect (conn1,127.0.0.1,root,,,$PROXY_PORT); 
 SELECT counter;
 disconnect conn1;
 
-connect (conn2,127.0.0.1,root,,,14040); 
+connect (conn2,127.0.0.1,root,,,$PROXY_PORT); 
 SELECT counter;
 disconnect conn2;
 
-connect (conn3,127.0.0.1,root,,,14040); 
+connect (conn3,127.0.0.1,root,,,$PROXY_PORT); 
 SELECT counter;
 disconnect conn3;
 
-connect (conn4,127.0.0.1,root,,,14040); 
+connect (conn4,127.0.0.1,root,,,$PROXY_PORT); 
 SELECT counter;
 disconnect conn4;
 
-connect (conn5,127.0.0.1,root,,,14040); 
+connect (conn5,127.0.0.1,root,,,$PROXY_PORT); 
 SELECT counter;
 disconnect conn5;

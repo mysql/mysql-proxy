@@ -22,8 +22,8 @@
 # * stop the first backend and verifies that queries against it fail
 # * checks that new connects end up on the second backend
 
-connect (conn1,127.0.0.1,root,,,14040);
-connect (conn2,127.0.0.1,root,,,14040);
+connect (conn1,127.0.0.1,root,,,$PROXY_PORT);
+connect (conn2,127.0.0.1,root,,,$PROXY_PORT);
 
 connection conn1;
 SET ID 1;
@@ -36,7 +36,7 @@ GET ID;
 disconnect conn1;
 
 # check if we end up on the the right backend
-connect (conn1,127.0.0.1,root,,,14040);
+connect (conn1,127.0.0.1,root,,,$PROXY_PORT);
 connection conn1;
 GET ID;
 
@@ -55,7 +55,7 @@ disconnect conn1;
 connection conn2;
 GET ID;
 
-connect (conn1,127.0.0.1,root,,,14040);
+connect (conn1,127.0.0.1,root,,,$PROXY_PORT);
 GET ID;
 disconnect conn1;
 

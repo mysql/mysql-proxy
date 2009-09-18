@@ -17,6 +17,8 @@
 #  $%ENDLICENSE%$
 SELECT thread_id();
 # 5.0 provides 00000 as SQL-state, 5.1 does HY000 ...  
+--disable_query_log
 --error 2007,SHY000
---connect (proto40,127.0.0.1,root,,,14040,/var/lib/mysql/mysql.sock)
+--connect (proto40,127.0.0.1,root,,,$PROXY_PORT,/var/lib/mysql/mysql.sock)
+--enable_query_log
 

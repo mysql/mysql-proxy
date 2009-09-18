@@ -22,9 +22,13 @@
 SELECT 1;
 
 ## fails with a syntax error in lua script if connected through another proxy
+--disable_query_log
 --error 1105 07000 "MySQL Proxy Lua script failed to load. Check the error log."
-connect (faulty,127.0.0.1,root,,,14040);
+connect (faulty,127.0.0.1,root,,,$PROXY_PORT);
+--enable_query_log
 
 ## fails with a syntax error in lua script if connected directly
+--disable_query_log
 --error 1105 07000 "MySQL Proxy Lua script failed to load. Check the error log."
-connect (faultydirect,127.0.0.1,root,,,14070);
+connect (faultydirect,127.0.0.1,root,,,$PROXY_CHAIN_PORT);
+--enable_query_log

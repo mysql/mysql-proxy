@@ -16,6 +16,7 @@
 
  $%ENDLICENSE%$ --]]
 
+local chassis = require("chassis")
 ---
 -- reply with a single field and row containing an indication if we resolved the client's address.
 -- 
@@ -29,51 +30,26 @@ function read_query( packet )
 	local query = packet:sub(2)
 	local value
 
-	if query == "SELECT proxy.connection.client.dst.address" then
-		value = proxy.connection.client.dst.address
-	elseif query == "SELECT proxy.connection.client.dst.type" then
-		value = proxy.connection.client.dst.type
-	elseif query == "SELECT proxy.connection.client.dst.name" then
-		value = proxy.connection.client.dst.name
-	elseif query == "SELECT proxy.connection.client.dst.port" then
-		value = proxy.connection.client.dst.port
-	elseif query == "SELECT proxy.connection.client.src.address" then
-		value = proxy.connection.client.src.address
-	elseif query == "SELECT proxy.connection.client.src.type" then
-		value = proxy.connection.client.src.type
-	elseif query == "SELECT proxy.connection.client.src.name" then
-		value = proxy.connection.client.src.name and "not-nil" or "nil"
-	elseif query == "SELECT proxy.connection.client.src.port" then
-		value = proxy.connection.client.src.port and "not-nil" or "nil"
-	elseif query == "SELECT proxy.connection.server.dst.address" then
-		value = proxy.connection.server.dst.address
-	elseif query == "SELECT proxy.connection.server.dst.type" then
-		value = proxy.connection.server.dst.type
-	elseif query == "SELECT proxy.connection.server.dst.name" then
-		value = proxy.connection.server.dst.name
-	elseif query == "SELECT proxy.connection.server.dst.port" then
-		value = proxy.connection.server.dst.port
-	elseif query == "SELECT proxy.connection.server.src.address" then
-		value = proxy.connection.server.src.address
-	elseif query == "SELECT proxy.connection.server.src.type" then
-		value = proxy.connection.server.src.type
-	elseif query == "SELECT proxy.connection.server.src.name" then
-		value = proxy.connection.server.src.name and "not-nil" or "nil"
-	elseif query == "SELECT proxy.connection.server.src.port" then
-		value = proxy.connection.server.src.port and "not-nil" or "nil"
-	else
-		value = query .. " ... not known"
-	end
 
-	proxy.response = {
-		type = proxy.MYSQLD_PACKET_OK,
-		resultset = {
-			fields = {
-				{ type = proxy.MYSQL_TYPE_STRING, name = "value", },
-			},
-			rows = { { value } }
+	value, errmsg = pcall(loadstring(query))
+
+	if not value then
+		chassis.log("critical", query)
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_ERR,
+			errmsg = errmsg
 		}
-	}
+	else
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = {
+				fields = {
+					{ type = proxy.MYSQL_TYPE_STRING, name = "value", },
+				},
+				rows = { { value } }
+			}
+		}
+	end
 	return proxy.PROXY_SEND_RESULT
 end
 

@@ -15,19 +15,19 @@
 #  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 # 
 #  $%ENDLICENSE%$
-SELECT proxy.connection.client.dst.name;
-SELECT proxy.connection.client.dst.type;
-SELECT proxy.connection.client.dst.address;
-SELECT proxy.connection.client.dst.port;
-SELECT proxy.connection.client.src.name;
-SELECT proxy.connection.client.src.type;
-SELECT proxy.connection.client.src.address;
-SELECT proxy.connection.client.src.port;
-SELECT proxy.connection.server.dst.name;
-SELECT proxy.connection.server.dst.type;
-SELECT proxy.connection.server.dst.address;
-SELECT proxy.connection.server.dst.port;
-SELECT proxy.connection.server.src.name;
-SELECT proxy.connection.server.src.type;
-SELECT proxy.connection.server.src.address;
-SELECT proxy.connection.server.src.port;
+eval assert(proxy.connection.client.dst.name == "$PROXY_HOST:$PROXY_PORT", proxy.connection.client.dst.name);
+eval assert(proxy.connection.client.dst.type == 2, proxy.connection.client.dst.type);
+eval assert(proxy.connection.client.dst.address == "$PROXY_HOST", proxy.connection.client.dst.address);
+eval assert(proxy.connection.client.dst.port == $PROXY_PORT, proxy.connection.client.dst.port);
+eval assert(proxy.connection.client.src.name ~= nil);
+eval assert(proxy.connection.client.src.type == 2, proxy.connection.client.src.type);
+eval assert(proxy.connection.client.src.address == "$PROXY_HOST", proxy.connection.client.src.address);
+eval assert(proxy.connection.client.src.port ~= nil);
+eval assert(proxy.connection.server.dst.name == "$PROXY_HOST:$PROXY_CHAIN_PORT", proxy.connection.server.dst.name);
+eval assert(proxy.connection.server.dst.type == 2);
+eval assert(proxy.connection.server.dst.address == "$PROXY_HOST", proxy.connection.server.dst.address);
+eval assert(proxy.connection.server.dst.port == $PROXY_CHAIN_PORT, proxy.connection.server.dst.port);
+eval assert(proxy.connection.server.src.name ~= nil);
+eval assert(proxy.connection.server.src.type == 2, proxy.connection.server.src.type);
+eval assert(proxy.connection.server.src.address == "$PROXY_HOST", proxy.connection.server.src.address);
+eval assert(proxy.connection.server.src.port ~= nil);
