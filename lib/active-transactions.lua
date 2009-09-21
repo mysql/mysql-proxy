@@ -36,7 +36,7 @@ function read_query(packet)
 		proxy.global.trxs[proxy.connection.server.thread_id] = { }
 	end
 
-	proxy.queries:append(1, packet)
+	proxy.queries:append(1, packet, { resultset_is_needed = true })
 
 	local t = proxy.global.trxs[proxy.connection.server.thread_id]
 
