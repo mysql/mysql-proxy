@@ -77,15 +77,15 @@ function connect_server()
 			else
 				--- 
 				-- connect to the backends first we don't know yet
-				if not backend_lag[backend.address] then
+				if not backend_lag[backend.dst.name] then
 					unknown_slave_ndx = b_ndx
-				elseif backend_lag[backend.address].state == "running" then
+				elseif backend_lag[backend.dst.name].state == "running" then
 					if not slave_bytes_lag then
 						slave_ndx = b_ndx
-						slave_bytes_lag = backend_lag[backend.address].slave_bytes_lag
-					elseif backend_lag[backend.address].slave_bytes_lag < slave_bytes_lag then
+						slave_bytes_lag = backend_lag[backend.dst.name].slave_bytes_lag
+					elseif backend_lag[backend.dst.name].slave_bytes_lag < slave_bytes_lag then
 						slave_ndx = b_ndx
-						slave_bytes_lag = backend_lag[backend.address].slave_bytes_lag
+						slave_bytes_lag = backend_lag[backend.dst.name].slave_bytes_lag
 					end
 				end
 			end
@@ -95,7 +95,7 @@ function connect_server()
 	proxy.connection.backend_ndx = unknown_slave_ndx or slave_ndx or fallback_ndx
 
 	if config.is_debug then
-		print("(connect-server) using backend: " .. proxy.global.backends[proxy.connection.backend_ndx].address)
+		print("(connect-server) using backend: " .. proxy.global.backends[proxy.connection.backend_ndx].dst.name)
 	end
 end
 
@@ -109,7 +109,7 @@ function read_query(packet)
 	--
 	
 	-- translate the backend_ndx into its address
-	local backend_addr = proxy.global.backends[proxy.connection.backend_ndx].address
+	local backend_addr = proxy.global.backends[proxy.connection.backend_ndx].dst.name
 	backend_lag[backend_addr] = backend_lag[backend_addr] or {
 		state = "unchecked"
 	}
@@ -182,7 +182,7 @@ function read_query_result(inj)
 		end
 	end
 
-	local backend_addr = proxy.global.backends[proxy.connection.backend_ndx].address
+	local backend_addr = proxy.global.backends[proxy.connection.backend_ndx].dst.name
 	backend_lag[backend_addr].check_ts = os.time()
 	backend_lag[backend_addr].state = nil
 
