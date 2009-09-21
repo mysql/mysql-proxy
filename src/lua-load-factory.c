@@ -114,7 +114,7 @@ int luaL_loadstring_factory(lua_State *L, const char *s) {
 	factory.type = LOAD_TYPE_BUFFER;
 	factory.data.string.str = s;
 	factory.state = LOAD_STATE_PREFIX;
-	factory.prefix = "return function()\n";
+	factory.prefix = "return function()";
 	factory.postfix = "end\n";
 
 	return lua_load(L, loadstring_factory_reader, &factory, s);
@@ -127,7 +127,7 @@ int luaL_loadfile_factory(lua_State *L, const char *filename) {
 	factory.type = LOAD_TYPE_FILE;
 	factory.data.file.filename = filename;
 	factory.state = LOAD_STATE_PREFIX;
-	factory.prefix = "return function()\n";
+	factory.prefix = "return function()";
 	factory.postfix = "end\n";
 
 	factory.data.file.f = fopen(filename, "rb");
