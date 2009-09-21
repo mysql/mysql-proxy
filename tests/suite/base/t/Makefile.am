@@ -47,6 +47,8 @@ EXTRA_DIST = \
 		failover-mock.lua \
 		failover.test \
 		failover.options \
+		lineno.test \
+		lineno.lua \
 		lm1.lua \
 		lm2.lua \
 		lm3.lua \

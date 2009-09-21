@@ -12,6 +12,7 @@ EXTRA_DIST = \
 		constants.result \
 		error_struct.result \
 		failover.result \
+		lineno.result \
 		load_multi.result \
 		mysql-40.result \
 		no_backend.result \
