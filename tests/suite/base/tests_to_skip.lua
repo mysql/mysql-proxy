@@ -34,4 +34,13 @@ tests_to_skip = {
 	['bug_45167'] = 'works, but mysqltest cant handle errors in change_user'
 }
 
+local build_os = os.getenv("BUILD_OS")
+
+if build_os and
+	(build_os == "i386-pc-solaris2.8" or
+	 build_os == "sparc-sun-solaris2.9" or
+	 build_os == "powerpc-ibm-aix5.3.0.0") then
+	tests_to_skip['overlong'] = "can't allocate more than 32M"
+end
+
 

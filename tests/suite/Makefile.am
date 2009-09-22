@@ -9,6 +9,7 @@ TESTS_ENVIRONMENT = \
 	top_builddir=${top_builddir} \
 	builddir=${builddir} \
 	srcdir=${srcdir}/ \
+	BUILD_OS=${build} \
 	${builddir}/lua-runner ${srcdir}/run-tests.lua
 
 TESTS=base
