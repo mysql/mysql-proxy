@@ -45,7 +45,6 @@ void t_network_address_set() {
 
 	/* should fail */	
 	g_assert_cmpint(network_address_set_address(addr, "500.0.0.1"), ==, -1);
-	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:0"), ==, -1);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:65536"), ==, -1);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:-1"), ==, -1);
 
