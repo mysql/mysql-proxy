@@ -235,6 +235,7 @@ network_socket *network_socket_new() {
 
 	s->default_db = g_string_new(NULL);
 	s->fd           = -1;
+	s->socket_type  = SOCK_STREAM; /* let's default to TCP */
 	s->packet_id_is_reset = TRUE;
 
 	s->src = network_address_new();
@@ -307,6 +308,7 @@ network_socket *network_socket_accept(network_socket *srv) {
 	network_socket *client;
 
 	g_return_val_if_fail(srv, NULL);
+	g_return_val_if_fail(srv->socket_type == SOCK_STREAM, NULL); /* accept() only works on stream sockets */
 
 	client = network_socket_new();
 
@@ -419,13 +421,14 @@ network_socket_retval_t network_socket_connect(network_socket *sock) {
 	g_return_val_if_fail(sock->dst, NETWORK_SOCKET_ERROR); /* our _new() allocated it already */
 	g_return_val_if_fail(sock->dst->name->len, NETWORK_SOCKET_ERROR); /* we want to use the ->name in the error-msgs */
 	g_return_val_if_fail(sock->fd < 0, NETWORK_SOCKET_ERROR); /* we already have a valid fd, we don't want to leak it */
+	g_return_val_if_fail((sock->socket_type == SOCK_DGRAM) || (sock->socket_type == SOCK_STREAM), NETWORK_SOCKET_ERROR);
 
 	/**
 	 * create a socket for the requested address
 	 *
 	 * if the dst->addr isn't set yet, socket() will fail with unsupported type
 	 */
-	if (-1 == (sock->fd = socket(sock->dst->addr.common.sa_family, SOCK_STREAM, 0))) {
+	if (-1 == (sock->fd = socket(sock->dst->addr.common.sa_family, sock->socket_type, 0))) {
 #ifdef _WIN32
 		errno = WSAGetLastError();
 #endif
@@ -441,28 +444,39 @@ network_socket_retval_t network_socket_connect(network_socket *sock) {
 	 */
 	network_socket_set_non_blocking(sock);
 
-	if (-1 == connect(sock->fd, &sock->dst->addr.common, sock->dst->len)) {
+	if (sock->socket_type == SOCK_STREAM) {
+		if (-1 == connect(sock->fd, &sock->dst->addr.common, sock->dst->len)) {
 #ifdef _WIN32
-		errno = WSAGetLastError();
+			errno = WSAGetLastError();
 #endif
-		/**
-		 * in most TCP cases we connect() will return with 
-		 * EINPROGRESS ... 3-way handshake
-		 */
-		switch (errno) {
-		case E_NET_INPROGRESS:
-		case E_NET_WOULDBLOCK: /* win32 uses WSAEWOULDBLOCK */
-			return NETWORK_SOCKET_ERROR_RETRY;
-		default:
-			g_critical("%s.%d: connect(%s) failed: %s (%d)", 
-					__FILE__, __LINE__,
-					sock->dst->name->str,
+			/**
+			 * in most TCP cases we connect() will return with 
+			 * EINPROGRESS ... 3-way handshake
+			 */
+			switch (errno) {
+			case E_NET_INPROGRESS:
+			case E_NET_WOULDBLOCK: /* win32 uses WSAEWOULDBLOCK */
+				return NETWORK_SOCKET_ERROR_RETRY;
+			default:
+				g_critical("%s.%d: connect(%s) failed: %s (%d)", 
+						__FILE__, __LINE__,
+						sock->dst->name->str,
+						g_strerror(errno), errno);
+				return NETWORK_SOCKET_ERROR;
+			}
+		}
+
+		network_socket_connect_setopts(sock);
+	} else {
+		/* UDP */
+		if (-1 == bind(sock->fd, &sock->src->addr.common, sock->src->len)) {
+			g_critical("%s: bind(%s) failed: %s (%d)", 
+					G_STRLOC,
+					sock->src->name->str,
 					g_strerror(errno), errno);
 			return NETWORK_SOCKET_ERROR;
 		}
 	}
-
-	network_socket_connect_setopts(sock);
 
 	return NETWORK_SOCKET_SUCCESS;
 }
@@ -486,8 +500,9 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 	g_return_val_if_fail(con->dst, NETWORK_SOCKET_ERROR);
 	g_return_val_if_fail(con->dst->name->len > 0, NETWORK_SOCKET_ERROR);
 	g_return_val_if_fail(con->fd < 0, NETWORK_SOCKET_ERROR); /* socket is already bound */
+	g_return_val_if_fail((con->socket_type == SOCK_DGRAM) || (con->socket_type == SOCK_STREAM), NETWORK_SOCKET_ERROR);
 
-	if (-1 == (con->fd = socket(con->dst->addr.common.sa_family, SOCK_STREAM, 0))) {
+	if (-1 == (con->fd = socket(con->dst->addr.common.sa_family, con->socket_type, 0))) {
 		g_critical("%s: socket(%s) failed: %s (%d)", 
 				G_STRLOC,
 				con->dst->name->str,
@@ -497,12 +512,14 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 
 	if (con->dst->addr.common.sa_family == AF_INET || 
 	    con->dst->addr.common.sa_family == AF_INET6) {
-		if (0 != setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val))) {
-			g_critical("%s: setsockopt(%s, IPPROTO_TCP, TCP_NODELAY) failed: %s (%d)", 
-					G_STRLOC,
-					con->dst->name->str,
-					g_strerror(errno), errno);
-			return NETWORK_SOCKET_ERROR;
+		if (con->socket_type == SOCK_STREAM) {
+			if (0 != setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val))) {
+				g_critical("%s: setsockopt(%s, IPPROTO_TCP, TCP_NODELAY) failed: %s (%d)", 
+						G_STRLOC,
+						con->dst->name->str,
+						g_strerror(errno), errno);
+				return NETWORK_SOCKET_ERROR;
+			}
 		}
 		if (0 != setsockopt(con->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val))) {
 			g_critical("%s: setsockopt(%s, SOL_SOCKET, SO_REUSEADDR) failed: %s (%d)", 
@@ -521,12 +538,14 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 		return NETWORK_SOCKET_ERROR;
 	}
 
-	if (-1 == listen(con->fd, 128)) {
-		g_critical("%s: listen(%s, 128) failed: %s (%d)",
-				G_STRLOC,
-				con->dst->name->str,
-				g_strerror(errno), errno);
-		return NETWORK_SOCKET_ERROR;
+	if (con->socket_type == SOCK_STREAM) {
+		if (-1 == listen(con->fd, 128)) {
+			g_critical("%s: listen(%s, 128) failed: %s (%d)",
+					G_STRLOC,
+					con->dst->name->str,
+					g_strerror(errno), errno);
+			return NETWORK_SOCKET_ERROR;
+		}
 	}
 
 	return NETWORK_SOCKET_SUCCESS;
@@ -689,7 +708,7 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
  *
  * use a loop over send() to be compatible with win32
  */
-static network_socket_retval_t G_GNUC_UNUSED network_socket_write_send(network_socket *con, int send_chunks) {
+static network_socket_retval_t network_socket_write_send(network_socket *con, int send_chunks) {
 	/* send the whole queue */
 	GList *chunk;
 
@@ -701,7 +720,12 @@ static network_socket_retval_t G_GNUC_UNUSED network_socket_write_send(network_s
 
 		g_assert(con->send_queue->offset < s->len);
 
-		if (-1 == (len = send(con->fd, s->str + con->send_queue->offset, s->len - con->send_queue->offset, 0))) {
+		if (con->socket_type == SOCK_STREAM) {
+			len = send(con->fd, s->str + con->send_queue->offset, s->len - con->send_queue->offset, 0);
+		} else {
+			len = sendto(con->fd, s->str + con->send_queue->offset, s->len - con->send_queue->offset, 0, &(con->dst->addr.common), con->dst->len);
+		}
+		if (-1 == len) {
 #ifdef _WIN32
 			errno = WSAGetLastError();
 #endif
@@ -754,11 +778,15 @@ static network_socket_retval_t G_GNUC_UNUSED network_socket_write_send(network_s
  * @returns NETWORK_SOCKET_SUCCESS on success, NETWORK_SOCKET_ERROR on error and NETWORK_SOCKET_WAIT_FOR_EVENT if the call would have blocked 
  */
 network_socket_retval_t network_socket_write(network_socket *con, int send_chunks) {
+	if (con->socket_type == SOCK_STREAM) {
 #ifdef HAVE_WRITEV
-	return network_socket_write_writev(con, send_chunks);
+		return network_socket_write_writev(con, send_chunks);
 #else
-	return network_socket_write_send(con, send_chunks);
+		return network_socket_write_send(con, send_chunks);
 #endif
+	} else {
+		return network_socket_write_send(con, send_chunks);
+	}
 }
 
 network_socket_retval_t network_socket_to_read(network_socket *sock) {

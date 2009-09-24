@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include <glib.h>
 
@@ -130,6 +131,7 @@ void test_network_queue_pop_string() {
 }
 
 #define TEST_ADDR_IP "127.0.0.1:57684"
+#define TEST_ADDR_CLIENT_UDP "127.0.0.1:0"
 
 void t_network_socket_bind(void) {
 	network_socket *sock;
@@ -235,6 +237,61 @@ void t_network_socket_connect(void) {
 	network_socket_free(sock);
 }
 
+/**
+ * @test  check if the network_socket_connect() works by 
+ *   - setting up a listening socket
+ *   - connection to it
+ *   - write data to it
+ *   - read it back
+ *   - closing it
+ *   
+ */
+void t_network_socket_connect_udp(void) {
+	network_socket *server;
+	network_socket *client;
+	fd_set read_fds;
+	struct timeval timeout;
+	network_socket_retval_t ret;
+	
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
+
+	server = network_socket_new();
+	server->socket_type = SOCK_DGRAM;
+
+	g_assert_cmpint(0, ==, network_address_set_address(server->dst, TEST_ADDR_IP));
+	
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(server));
+	
+	client = network_socket_new();
+	client->socket_type = SOCK_DGRAM;
+	g_assert_cmpint(0, ==, network_address_set_address(client->dst, TEST_ADDR_IP)); /* the server's port */
+	g_assert_cmpint(0, ==, network_address_set_address(client->src, TEST_ADDR_CLIENT_UDP)); /* a random port */
+
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect(client));
+
+	/* we are connected */
+
+	network_queue_append(server->send_queue, g_string_new_len(C("foo")));
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_write(server, -1)); /* send all */
+
+	FD_ZERO(&read_fds);
+	FD_SET(client->fd, &read_fds);
+	timeout.tv_sec = 1;
+	timeout.tv_usec = 500 * 000; /* wait 500ms */
+	g_assert_cmpint(1, ==, select(client->fd + 1, &read_fds, NULL, NULL, &timeout));
+	g_critical("%s", G_STRLOC);
+	
+	/* socket_read() needs ->to_read set */
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_to_read(client));
+	g_assert_cmpint(3, ==, client->to_read);
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_read(client)); /* read all */
+	g_assert_cmpint(0, ==, client->to_read);
+	
+	network_socket_free(client);
+	network_socket_free(server);
+}
+
+
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
@@ -245,6 +302,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/network_queue_append", test_network_queue_append);
 	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
 	g_test_add_func("/core/network_queue_pop_string", test_network_queue_pop_string);
+	g_test_add_func("/core/network_socket_udp", t_network_socket_connect_udp);
 
 	return g_test_run();
 }
