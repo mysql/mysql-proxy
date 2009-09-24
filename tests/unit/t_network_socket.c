@@ -258,34 +258,35 @@ void t_network_socket_connect_udp(void) {
 	server = network_socket_new();
 	server->socket_type = SOCK_DGRAM;
 
-	g_assert_cmpint(0, ==, network_address_set_address(server->dst, TEST_ADDR_IP));
+	g_assert_cmpint(0, ==, network_address_set_address(server->src, TEST_ADDR_IP)); /* our UDP port */
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(server));
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_to_read(server));
+	g_assert_cmpint(0, ==, server->to_read);
 	
 	client = network_socket_new();
 	client->socket_type = SOCK_DGRAM;
 	g_assert_cmpint(0, ==, network_address_set_address(client->dst, TEST_ADDR_IP)); /* the server's port */
 	g_assert_cmpint(0, ==, network_address_set_address(client->src, TEST_ADDR_CLIENT_UDP)); /* a random port */
 
-	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect(client));
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(client));
 
 	/* we are connected */
 
-	network_queue_append(server->send_queue, g_string_new_len(C("foo")));
-	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_write(server, -1)); /* send all */
+	network_queue_append(client->send_queue, g_string_new_len(C("foo")));
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_write(client, -1)); /* send all */
 
 	FD_ZERO(&read_fds);
-	FD_SET(client->fd, &read_fds);
+	FD_SET(server->fd, &read_fds);
 	timeout.tv_sec = 1;
 	timeout.tv_usec = 500 * 000; /* wait 500ms */
-	g_assert_cmpint(1, ==, select(client->fd + 1, &read_fds, NULL, NULL, &timeout));
-	g_critical("%s", G_STRLOC);
+	g_assert_cmpint(1, ==, select(server->fd + 1, &read_fds, NULL, NULL, &timeout));
 	
 	/* socket_read() needs ->to_read set */
-	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_to_read(client));
-	g_assert_cmpint(3, ==, client->to_read);
-	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_read(client)); /* read all */
-	g_assert_cmpint(0, ==, client->to_read);
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_to_read(server));
+	g_assert_cmpint(3, ==, server->to_read);
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_read(server)); /* read all */
+	g_assert_cmpint(0, ==, server->to_read);
 	
 	network_socket_free(client);
 	network_socket_free(server);

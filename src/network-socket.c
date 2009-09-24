@@ -421,7 +421,7 @@ network_socket_retval_t network_socket_connect(network_socket *sock) {
 	g_return_val_if_fail(sock->dst, NETWORK_SOCKET_ERROR); /* our _new() allocated it already */
 	g_return_val_if_fail(sock->dst->name->len, NETWORK_SOCKET_ERROR); /* we want to use the ->name in the error-msgs */
 	g_return_val_if_fail(sock->fd < 0, NETWORK_SOCKET_ERROR); /* we already have a valid fd, we don't want to leak it */
-	g_return_val_if_fail((sock->socket_type == SOCK_DGRAM) || (sock->socket_type == SOCK_STREAM), NETWORK_SOCKET_ERROR);
+	g_return_val_if_fail(sock->socket_type == SOCK_STREAM, NETWORK_SOCKET_ERROR);
 
 	/**
 	 * create a socket for the requested address
@@ -444,39 +444,28 @@ network_socket_retval_t network_socket_connect(network_socket *sock) {
 	 */
 	network_socket_set_non_blocking(sock);
 
-	if (sock->socket_type == SOCK_STREAM) {
-		if (-1 == connect(sock->fd, &sock->dst->addr.common, sock->dst->len)) {
+	if (-1 == connect(sock->fd, &sock->dst->addr.common, sock->dst->len)) {
 #ifdef _WIN32
-			errno = WSAGetLastError();
+		errno = WSAGetLastError();
 #endif
-			/**
-			 * in most TCP cases we connect() will return with 
-			 * EINPROGRESS ... 3-way handshake
-			 */
-			switch (errno) {
-			case E_NET_INPROGRESS:
-			case E_NET_WOULDBLOCK: /* win32 uses WSAEWOULDBLOCK */
-				return NETWORK_SOCKET_ERROR_RETRY;
-			default:
-				g_critical("%s.%d: connect(%s) failed: %s (%d)", 
-						__FILE__, __LINE__,
-						sock->dst->name->str,
-						g_strerror(errno), errno);
-				return NETWORK_SOCKET_ERROR;
-			}
-		}
-
-		network_socket_connect_setopts(sock);
-	} else {
-		/* UDP */
-		if (-1 == bind(sock->fd, &sock->src->addr.common, sock->src->len)) {
-			g_critical("%s: bind(%s) failed: %s (%d)", 
-					G_STRLOC,
-					sock->src->name->str,
+		/**
+		 * in most TCP cases we connect() will return with 
+		 * EINPROGRESS ... 3-way handshake
+		 */
+		switch (errno) {
+		case E_NET_INPROGRESS:
+		case E_NET_WOULDBLOCK: /* win32 uses WSAEWOULDBLOCK */
+			return NETWORK_SOCKET_ERROR_RETRY;
+		default:
+			g_critical("%s.%d: connect(%s) failed: %s (%d)", 
+					__FILE__, __LINE__,
+					sock->dst->name->str,
 					g_strerror(errno), errno);
 			return NETWORK_SOCKET_ERROR;
 		}
 	}
+
+	network_socket_connect_setopts(sock);
 
 	return NETWORK_SOCKET_SUCCESS;
 }
@@ -497,22 +486,23 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 #else
 	int val = 1;
 #endif
-	g_return_val_if_fail(con->dst, NETWORK_SOCKET_ERROR);
-	g_return_val_if_fail(con->dst->name->len > 0, NETWORK_SOCKET_ERROR);
 	g_return_val_if_fail(con->fd < 0, NETWORK_SOCKET_ERROR); /* socket is already bound */
 	g_return_val_if_fail((con->socket_type == SOCK_DGRAM) || (con->socket_type == SOCK_STREAM), NETWORK_SOCKET_ERROR);
 
-	if (-1 == (con->fd = socket(con->dst->addr.common.sa_family, con->socket_type, 0))) {
-		g_critical("%s: socket(%s) failed: %s (%d)", 
-				G_STRLOC,
-				con->dst->name->str,
-				g_strerror(errno), errno);
-		return NETWORK_SOCKET_ERROR;
-	}
+	if (con->socket_type == SOCK_STREAM) {
+		g_return_val_if_fail(con->dst, NETWORK_SOCKET_ERROR);
+		g_return_val_if_fail(con->dst->name->len > 0, NETWORK_SOCKET_ERROR);
 
-	if (con->dst->addr.common.sa_family == AF_INET || 
-	    con->dst->addr.common.sa_family == AF_INET6) {
-		if (con->socket_type == SOCK_STREAM) {
+		if (-1 == (con->fd = socket(con->dst->addr.common.sa_family, con->socket_type, 0))) {
+			g_critical("%s: socket(%s) failed: %s (%d)", 
+					G_STRLOC,
+					con->dst->name->str,
+					g_strerror(errno), errno);
+			return NETWORK_SOCKET_ERROR;
+		}
+
+		if (con->dst->addr.common.sa_family == AF_INET || 
+		    con->dst->addr.common.sa_family == AF_INET6) {
 			if (0 != setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val))) {
 				g_critical("%s: setsockopt(%s, IPPROTO_TCP, TCP_NODELAY) failed: %s (%d)", 
 						G_STRLOC,
@@ -520,29 +510,48 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 						g_strerror(errno), errno);
 				return NETWORK_SOCKET_ERROR;
 			}
+			
+			if (0 != setsockopt(con->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val))) {
+				g_critical("%s: setsockopt(%s, SOL_SOCKET, SO_REUSEADDR) failed: %s (%d)", 
+						G_STRLOC,
+						con->dst->name->str,
+						g_strerror(errno), errno);
+				return NETWORK_SOCKET_ERROR;
+			}
 		}
-		if (0 != setsockopt(con->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val))) {
-			g_critical("%s: setsockopt(%s, SOL_SOCKET, SO_REUSEADDR) failed: %s (%d)", 
+
+		if (-1 == bind(con->fd, &con->dst->addr.common, con->dst->len)) {
+			g_critical("%s: bind(%s) failed: %s (%d)", 
 					G_STRLOC,
 					con->dst->name->str,
 					g_strerror(errno), errno);
 			return NETWORK_SOCKET_ERROR;
 		}
-	}
 
-	if (-1 == bind(con->fd, &con->dst->addr.common, con->dst->len)) {
-		g_critical("%s: bind(%s) failed: %s (%d)", 
-				G_STRLOC,
-				con->dst->name->str,
-				g_strerror(errno), errno);
-		return NETWORK_SOCKET_ERROR;
-	}
-
-	if (con->socket_type == SOCK_STREAM) {
 		if (-1 == listen(con->fd, 128)) {
 			g_critical("%s: listen(%s, 128) failed: %s (%d)",
 					G_STRLOC,
 					con->dst->name->str,
+					g_strerror(errno), errno);
+			return NETWORK_SOCKET_ERROR;
+		}
+	} else {
+		/* UDP sockets bind the ->src address */
+		g_return_val_if_fail(con->src, NETWORK_SOCKET_ERROR);
+		g_return_val_if_fail(con->src->name->len > 0, NETWORK_SOCKET_ERROR);
+
+		if (-1 == (con->fd = socket(con->src->addr.common.sa_family, con->socket_type, 0))) {
+			g_critical("%s: socket(%s) failed: %s (%d)", 
+					G_STRLOC,
+					con->src->name->str,
+					g_strerror(errno), errno);
+			return NETWORK_SOCKET_ERROR;
+		}
+
+		if (-1 == bind(con->fd, &con->src->addr.common, con->src->len)) {
+			g_critical("%s: bind(%s) failed: %s (%d)", 
+					G_STRLOC,
+					con->src->name->str,
 					g_strerror(errno), errno);
 			return NETWORK_SOCKET_ERROR;
 		}
@@ -564,7 +573,15 @@ network_socket_retval_t network_socket_read(network_socket *sock) {
 
 		g_queue_push_tail(sock->recv_queue_raw->chunks, packet);
 
-		if (-1 == (len = recv(sock->fd, packet->str, sock->to_read, 0))) {
+		if (sock->socket_type == SOCK_STREAM) {
+			len = recv(sock->fd, packet->str, sock->to_read, 0);
+		} else {
+			/* UDP */
+			socklen_t dst_len = sizeof(sock->dst->addr.common);
+			len = recvfrom(sock->fd, packet->str, sock->to_read, 0, &(sock->dst->addr.common), &(dst_len));
+			sock->dst->len = dst_len;
+		}
+		if (-1 == len) {
 #ifdef _WIN32
 			errno = WSAGetLastError();
 #endif
@@ -791,6 +808,31 @@ network_socket_retval_t network_socket_write(network_socket *con, int send_chunk
 
 network_socket_retval_t network_socket_to_read(network_socket *sock) {
 	int b = -1;
+
+#ifdef SO_NREAD
+	/* on MacOS X ioctl(..., FIONREAD) returns _more_ than what we have in the queue */
+	if (sock->socket_type == SOCK_DGRAM) {
+		socklen_t b_len = sizeof(b);
+
+		if (0 != getsockopt(sock->fd, SOL_SOCKET, SO_NREAD, &b, &b_len)) {
+			g_critical("%s: getsockopt(%d, SO_NREAD, ...) failed: %s (%d)",
+					G_STRLOC,
+					sock->fd,
+					g_strerror(errno), errno);
+			return NETWORK_SOCKET_ERROR;
+		} else if (b < 0) {
+			g_critical("%s: getsockopt(%d, SO_NREAD, ...) succeeded, but is negative: %d",
+					G_STRLOC,
+					sock->fd,
+					b);
+
+			return NETWORK_SOCKET_ERROR;
+		} else {
+			sock->to_read = b;
+			return NETWORK_SOCKET_SUCCESS;
+		}
+	}
+#endif
 
 	if (0 != ioctl(sock->fd, FIONREAD, &b)) {
 		g_critical("%s: ioctl(%d, FIONREAD, ...) failed: %s (%d)",
