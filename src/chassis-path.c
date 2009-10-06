@@ -96,3 +96,33 @@ gchar *chassis_get_basedir(const gchar *prgname) {
 	return base_dir;
 }
 
+/**
+ * Helper function to correctly take into account the users base-dir setting for
+ * paths that might be relative.
+ * Note: Because this function potentially frees the pointer to gchar* that's passed in and cannot lock
+ *       on that, it is _not_ threadsafe. You have to ensure threadsafety yourself!
+ * @returns TRUE if it modified the filename, FALSE if it didn't
+ */
+gboolean chassis_resolve_path(chassis *chas, gchar **filename) {
+	gchar *new_path = NULL;
+
+	/* nothing to do if we don't have a base_dir setting */
+	g_assert(chas);
+	if (!chas->base_dir ||
+		!filename ||
+		!*filename)
+		return FALSE;
+	
+	/* don't even look at absolute paths */
+	if (g_path_is_absolute(*filename)) return FALSE;
+	
+	new_path = g_build_filename(chas->base_dir, G_DIR_SEPARATOR_S, *filename, NULL);
+	
+	g_debug("%s.%d: adjusting relative path (%s) to base_dir (%s). New path: %s", __FILE__, __LINE__, *filename, chas->base_dir, new_path);
+
+	g_free(*filename);
+	*filename = new_path;
+	return TRUE;
+}
+
+

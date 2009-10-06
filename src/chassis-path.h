@@ -20,8 +20,10 @@
 #define __CHASSIS_PATH_H__
 
 #include <glib.h>
+#include "chassis-mainloop.h"
 #include "chassis-exports.h"
 
+CHASSIS_API gboolean chassis_resolve_path(chassis *chas, gchar **filename);
 CHASSIS_API gchar *chassis_get_basedir(const gchar *prgname);
 
 #endif
