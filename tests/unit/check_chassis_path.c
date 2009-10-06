@@ -24,7 +24,7 @@
 
 #include <glib.h>
 
-#include "chassis-mainloop.h"
+#include "chassis-path.h"
 
 #if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
@@ -38,20 +38,13 @@
  */
 START_TEST(test_path_basedir) {
 	gchar *filename;
-	chassis *chas;
 
-	chas = chassis_new();
-	chas->base_dir = g_strdup("/tmp");
-	
 	filename = g_strdup("some/relative/path/file");
 	
 	/* resolving this path must lead to changing the filename */
-	g_assert_cmpint(chassis_resolve_path(chas, &filename), ==, 1);
+	g_assert_cmpint(chassis_resolve_path("/tmp", &filename), ==, 1);
 	
 	g_assert_cmpint(g_strcmp0("/tmp/some/relative/path/file", filename), ==, 0);
-	
-	g_free(filename);
-	chassis_free(chas);
 }
 
 /**
@@ -59,20 +52,13 @@ START_TEST(test_path_basedir) {
  */
 START_TEST(test_no_basedir) {
 	gchar *filename;
-	chassis *chas;
-	
-	chas = chassis_new();
-	chas->base_dir = NULL;
 	
 	filename = g_strdup("some/relative/path/file");
 	
 	/* resolving this path must not lead to changing the filename */
-	g_assert_cmpint(chassis_resolve_path(chas, &filename), ==, 0);
+	g_assert_cmpint(chassis_resolve_path(NULL, &filename), ==, 0);
 	
 	g_assert_cmpint(g_strcmp0("some/relative/path/file", filename), ==, 0);
-	
-	g_free(filename);
-	chassis_free(chas);
 }
 
 /**
@@ -80,20 +66,13 @@ START_TEST(test_no_basedir) {
  */
 START_TEST(test_abspath_basedir) {
 	gchar *filename;
-	chassis *chas;
-	
-	chas = chassis_new();
-	chas->base_dir = g_strdup("/tmp");
 	
 	filename = g_strdup("/some/relative/path/file");
 	
 	/* resolving this path must lead to no change in the filename */
-	g_assert_cmpint(chassis_resolve_path(chas, &filename), ==, 0);
+	g_assert_cmpint(chassis_resolve_path("/tmp", &filename), ==, 0);
 	
 	g_assert_cmpint(g_strcmp0("/some/relative/path/file", filename), ==, 0);
-	
-	g_free(filename);
-	chassis_free(chas);
 }
 /*@}*/
 

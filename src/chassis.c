@@ -632,9 +632,9 @@ int main_cmdline(int argc, char **argv) {
 	 * from the plugins, thus we need to fix them up before
 	 * dealing with all the rest.
 	 */
-	chassis_resolve_path(srv, &log->log_filename);
-	chassis_resolve_path(srv, &pid_file);
-	chassis_resolve_path(srv, &plugin_dir);
+	chassis_resolve_path(srv->base_dir, &log->log_filename);
+	chassis_resolve_path(srv->base_dir, &pid_file);
+	chassis_resolve_path(srv->base_dir, &plugin_dir);
 
 	if (log->log_filename) {
         gboolean turned_off_syslog = FALSE;
@@ -752,35 +752,9 @@ int main_cmdline(int argc, char **argv) {
 					goto exit_nicely;
 				}
 			}
-			/* check for relative paths among the newly added options
-			 * and resolve them to an absolute path if we have --basedir
-			 */
-			if (srv->base_dir) {
-				int entry_idx;
-				for (entry_idx = 0; config_entries[entry_idx].long_name; entry_idx++) {
-					GOptionEntry entry = config_entries[entry_idx];
-					
-					switch(entry.arg) {
-					case G_OPTION_ARG_FILENAME: {
-						gchar **data = entry.arg_data;
-						chassis_resolve_path(srv, data);
-						break;
-					}
-					case G_OPTION_ARG_FILENAME_ARRAY: {
-						gchar ***data = entry.arg_data;
-						gchar **files = *data;
-						if (NULL != files) {
-							gint j;
-							for (j = 0; files[j]; j++) chassis_resolve_path(srv, &files[j]);
-						}
-						break;
-					}
-					default:
-						/* ignore other option types */
-						break;
-					}
-				}
-			}
+
+			/* resolve the path names for these config entries */
+			chassis_keyfile_resolve_path(srv->base_dir, config_entries); 
 		}
 	}
 

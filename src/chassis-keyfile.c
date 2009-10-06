@@ -17,6 +17,7 @@
  $%ENDLICENSE%$ */
  
 
+#include "chassis-path.h"
 #include "chassis-keyfile.h"
 
 int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, GOptionEntry *config_entries) {
@@ -103,4 +104,35 @@ int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, G
 	return ret;
 }
 
+/* check for relative paths among the newly added options
+ * and resolve them to an absolute path if we have --basedir
+ */
+int chassis_keyfile_resolve_path(const char *base_dir, GOptionEntry *config_entries) {
+	int entry_idx;
 
+	for (entry_idx = 0; config_entries[entry_idx].long_name; entry_idx++) {
+		GOptionEntry entry = config_entries[entry_idx];
+		
+		switch(entry.arg) {
+		case G_OPTION_ARG_FILENAME: {
+			gchar **data = entry.arg_data;
+			chassis_resolve_path(base_dir, data);
+			break;
+		}
+		case G_OPTION_ARG_FILENAME_ARRAY: {
+			gchar ***data = entry.arg_data;
+			gchar **files = *data;
+			if (NULL != files) {
+				gint j;
+				for (j = 0; files[j]; j++) chassis_resolve_path(base_dir, &files[j]);
+			}
+			break;
+		}
+		default:
+			/* ignore other option types */
+			break;
+		}
+	}
+
+	return 0;
+}
