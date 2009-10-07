@@ -69,7 +69,7 @@ NETWORK_API network_address *network_address_new(void);
 NETWORK_API void network_address_free(network_address *);
 NETWORK_API void network_address_reset(network_address *addr);
 NETWORK_API network_address *network_address_copy(network_address *dst, network_address *src);
-NETWORK_API gint network_address_set_address(network_address *addr, gchar *address);
+NETWORK_API gint network_address_set_address(network_address *addr, const gchar *address);
 NETWORK_API gint network_address_refresh_name(network_address *addr);
 NETWORK_API gint network_address_is_local(network_address *dst_addr, network_address *src_addr);
 

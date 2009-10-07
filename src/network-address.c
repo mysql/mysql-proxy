@@ -109,7 +109,7 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 	return 0;
 }
 
-gboolean network_address_set_address_un(network_address *addr, gchar *address) {
+gboolean network_address_set_address_un(network_address *addr, const gchar *address) {
 #ifdef HAVE_SYS_UN_H
 	if (strlen(address) >= sizeof(addr->addr.un.sun_path) - 1) {
 		g_critical("unix-path is too long: %s", address);
@@ -140,7 +140,7 @@ gboolean network_address_set_address_un(network_address *addr, gchar *address) {
  * @param address  the address string
  * @return 0 on success, -1 otherwise
  */
-gint network_address_set_address(network_address *addr, gchar *address) {
+gint network_address_set_address(network_address *addr, const gchar *address) {
 	gchar *s;
 
 	g_return_val_if_fail(addr, -1);
