@@ -75,6 +75,8 @@ void network_address_reset(network_address *addr) {
 }
 
 static gint network_address_set_address_ip(network_address *addr, const gchar *address, guint port) {
+	g_return_val_if_fail(addr, -1);
+
 	if (port > 65535) {
 		return -1;
 	}
@@ -110,7 +112,10 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 	return 0;
 }
 
-gboolean network_address_set_address_un(network_address *addr, const gchar *address) {
+static gint network_address_set_address_un(network_address *addr, const gchar *address) {
+	g_return_val_if_fail(addr, -1);
+	g_return_val_if_fail(address, -1);
+
 #ifdef HAVE_SYS_UN_H
 	if (strlen(address) >= sizeof(addr->addr.un.sun_path) - 1) {
 		g_critical("unix-path is too long: %s", address);
