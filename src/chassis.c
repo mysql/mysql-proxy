@@ -314,7 +314,7 @@ int main_cmdline(int argc, char **argv) {
 	static struct sigaction sigsegv_sa;
 #endif
 	/* read the command-line options */
-	GOptionContext *option_ctx;
+	GOptionContext *option_ctx = NULL;
 	GError *gerr = NULL;
 	guint i;
 	int exit_code = EXIT_SUCCESS;
