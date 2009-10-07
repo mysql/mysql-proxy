@@ -81,7 +81,8 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 
 	memset(&addr->addr.ipv4, 0, sizeof(struct sockaddr_in));
 
-	if (strlen(address) == 0 || 
+	if (NULL == address ||
+	    strlen(address) == 0 || 
 	    0 == strcmp("0.0.0.0", address)) {
 		/* no ip */
 		addr->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -150,7 +151,7 @@ gint network_address_set_address(network_address *addr, const gchar *address) {
 		return network_address_set_address_un(addr, address);
 	} else if (NULL != (s = strchr(address, ':'))) {
 		gboolean ret;
-		char *ip_address = g_strndup(address, s - address);
+		char *ip_address = g_strndup(address, s - address); /* may be NULL for strdup(..., 0) */
 		char *port_err = NULL;
 
 		guint port = strtoul(s + 1, &port_err, 10);
@@ -167,7 +168,7 @@ gint network_address_set_address(network_address *addr, const gchar *address) {
 			ret = network_address_set_address_ip(addr, ip_address, port);
 		}
 
-		g_free(ip_address);
+		if (ip_address) g_free(ip_address);
 
 		return ret;
 	} else { /* perhaps it is a plain IP address, lets add the default-port */
