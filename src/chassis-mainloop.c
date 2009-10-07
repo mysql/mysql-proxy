@@ -61,10 +61,47 @@ chassis *chassis_init() {
 }
 
 /**
+ * check if the libevent headers we built against match the 
+ * library we run against
+ */
+static int event_check_version() {
+	const char *lib_version = event_get_version();
+	int lib_maj, lib_min, lib_pat;
+	const char *hdr_version = _EVENT_VERSION;
+	int hdr_maj, hdr_min, hdr_pat;
+
+	if (3 != sscanf(lib_version, "%d.%d.%d%*s", &lib_maj, &lib_min, &lib_pat)) {
+		g_critical("%s: libevent library version %s failed to parse",
+				G_STRLOC, lib_version);
+		return -1;
+	}
+	if (3 != sscanf(hdr_version, "%d.%d.%d%*s", &hdr_maj, &hdr_min, &hdr_pat)) {
+		g_critical("%s: libevent header version %s failed to parse",
+				G_STRLOC, hdr_version);
+		return -1;
+	}
+	
+	if (lib_maj == hdr_maj &&
+	    lib_min == hdr_min &&
+	    lib_pat >= hdr_pat) {
+		return 0;
+	}
+
+	g_critical("%s: chassis is build against libevent %s, but now runs against %s",
+			G_STRLOC, _EVENT_VERSION, event_get_version());
+	return -1;
+}
+
+
+/**
  * create a global context
  */
 chassis *chassis_new() {
 	chassis *chas;
+
+	if (0 != event_check_version()) {
+		return NULL;
+	}
 
 	chas = g_new0(chassis, 1);
 

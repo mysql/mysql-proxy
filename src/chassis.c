@@ -422,7 +422,13 @@ int main_cmdline(int argc, char **argv) {
 	}
 #endif
 
-	srv = chassis_new();
+	/* may fail on library mismatch */
+	if (NULL == (srv = chassis_new())) {
+		exit_code = EXIT_FAILURE; 
+		exit_location = G_STRLOC;
+		goto exit_nicely;
+	}
+
 	srv->log = log; /* we need the log structure for the log-rotation */
 
 	i = 0;
