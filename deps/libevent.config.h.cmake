@@ -27,3 +27,4 @@
 #cmakedefine HAVE_SIGTIMEDWAIT
 #cmakedefine HAVE_EPOLL
 #cmakedefine HAVE_KQUEUE
+#cmakedefine _EVENT_VERSION
