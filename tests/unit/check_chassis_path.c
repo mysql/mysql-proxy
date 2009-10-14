@@ -43,7 +43,7 @@ START_TEST(test_path_basedir) {
 	filename = g_build_filename("some", "relative", "path", "file", NULL);
 	
 	/* resolving this path must lead to changing the filename */
-	g_assert_cmpint(chassis_resolve_path("/tmp", &filename), ==, 1);
+	g_assert_cmpint(chassis_resolve_path(G_DIR_SEPARATOR_S "tmp", &filename), ==, 1);
 	
 	test_filename = g_build_filename(G_DIR_SEPARATOR_S "tmp", "some", "relative", "path", "file", NULL);
 
@@ -83,7 +83,7 @@ START_TEST(test_abspath_basedir) {
 	test_filename = g_strdup(filename);
 	
 	/* resolving this path must lead to no change in the filename */
-	g_assert_cmpint(chassis_resolve_path("/tmp", &filename), ==, 0);
+	g_assert_cmpint(chassis_resolve_path(G_DIR_SEPARATOR_S "tmp", &filename), ==, 0);
 	
 	g_assert_cmpstr(test_filename, ==, filename);
 
