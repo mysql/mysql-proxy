@@ -44,7 +44,9 @@ START_TEST(test_path_basedir) {
 	/* resolving this path must lead to changing the filename */
 	g_assert_cmpint(chassis_resolve_path("/tmp", &filename), ==, 1);
 	
-	g_assert_cmpint(g_strcmp0("/tmp/some/relative/path/file", filename), ==, 0);
+	g_assert_cmpstr("/tmp/some/relative/path/file", ==, filename);
+
+	g_free(filename);
 }
 
 /**
@@ -58,7 +60,9 @@ START_TEST(test_no_basedir) {
 	/* resolving this path must not lead to changing the filename */
 	g_assert_cmpint(chassis_resolve_path(NULL, &filename), ==, 0);
 	
-	g_assert_cmpint(g_strcmp0("some/relative/path/file", filename), ==, 0);
+	g_assert_cmpstr("some/relative/path/file", ==, filename);
+
+	g_free(filename);
 }
 
 /**
@@ -72,7 +76,9 @@ START_TEST(test_abspath_basedir) {
 	/* resolving this path must lead to no change in the filename */
 	g_assert_cmpint(chassis_resolve_path("/tmp", &filename), ==, 0);
 	
-	g_assert_cmpint(g_strcmp0("/some/relative/path/file", filename), ==, 0);
+	g_assert_cmpstr("/some/relative/path/file", ==, filename);
+
+	g_free(filename);
 }
 /*@}*/
 
