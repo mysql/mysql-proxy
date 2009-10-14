@@ -105,6 +105,7 @@ int network_backends_add(network_backends_t *bs, /* const */ gchar *address, bac
 	new_backend->type = type;
 
 	if (0 != network_address_set_address(new_backend->addr, address)) {
+		network_backend_free(new_backend);
 		return -1;
 	}
 
