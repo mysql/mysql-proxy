@@ -38,15 +38,19 @@
  */
 START_TEST(test_path_basedir) {
 	gchar *filename;
+	gchar *test_filename;
 
-	filename = g_strdup("some/relative/path/file");
+	filename = g_build_filename("some", "relative", "path", "file", NULL);
 	
 	/* resolving this path must lead to changing the filename */
 	g_assert_cmpint(chassis_resolve_path("/tmp", &filename), ==, 1);
 	
-	g_assert_cmpstr("/tmp/some/relative/path/file", ==, filename);
+	test_filename = g_build_filename(G_DIR_SEPARATOR_S "tmp", "some", "relative", "path", "file", NULL);
+
+	g_assert_cmpstr(test_filename, ==, filename);
 
 	g_free(filename);
+	g_free(test_filename);
 }
 
 /**
@@ -54,15 +58,18 @@ START_TEST(test_path_basedir) {
  */
 START_TEST(test_no_basedir) {
 	gchar *filename;
+	gchar *test_filename;
 	
-	filename = g_strdup("some/relative/path/file");
+	filename = g_build_filename("some", "relative", "path", "file", NULL);
+	test_filename = g_strdup(filename);
 	
 	/* resolving this path must not lead to changing the filename */
 	g_assert_cmpint(chassis_resolve_path(NULL, &filename), ==, 0);
 	
-	g_assert_cmpstr("some/relative/path/file", ==, filename);
+	g_assert_cmpstr(test_filename, ==, filename);
 
 	g_free(filename);
+	g_free(test_filename);
 }
 
 /**
@@ -70,15 +77,18 @@ START_TEST(test_no_basedir) {
  */
 START_TEST(test_abspath_basedir) {
 	gchar *filename;
+	gchar *test_filename;
 	
-	filename = g_strdup("/some/relative/path/file");
+	filename = g_build_filename(G_DIR_SEPARATOR_S "some", "relative", "path", "file", NULL);
+	test_filename = g_strdup(filename);
 	
 	/* resolving this path must lead to no change in the filename */
 	g_assert_cmpint(chassis_resolve_path("/tmp", &filename), ==, 0);
 	
-	g_assert_cmpstr("/some/relative/path/file", ==, filename);
+	g_assert_cmpstr(test_filename, ==, filename);
 
 	g_free(filename);
+	g_free(test_filename);
 }
 /*@}*/
 
