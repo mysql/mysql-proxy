@@ -27,4 +27,5 @@
 #cmakedefine HAVE_SIGTIMEDWAIT
 #cmakedefine HAVE_EPOLL
 #cmakedefine HAVE_KQUEUE
-#cmakedefine _EVENT_VERSION
+
+#define _EVENT_VERSION "libevent-1.4.11-stable"
