@@ -127,6 +127,13 @@ int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
 
+#ifdef _WIN32
+	if (0 != WSAStartup(MAKEWORD( 2, 2 ), &wsaData)) {
+		g_critical("WSAStartup failed to initialize the socket library.\n");
+		return -1
+	}
+#endif
+
 	g_test_add_func("/core/network_backends_new", t_network_backends_new);
 	g_test_add_func("/core/network_backend_new", t_network_backend_new);
 	g_test_add_func("/core/network_backends_add", t_network_backends_add);
