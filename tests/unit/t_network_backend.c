@@ -123,6 +123,10 @@ void t_network_backends_check() {
 }
 
 int main(int argc, char **argv) {
+#ifdef WIN32
+	WSADATA wsaData;
+#endif
+
 	g_thread_init(NULL);
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
