@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
 #ifdef _WIN32
 	if (0 != WSAStartup(MAKEWORD( 2, 2 ), &wsaData)) {
 		g_critical("WSAStartup failed to initialize the socket library.\n");
-		return -1
+		return -1;
 	}
 #endif
 
