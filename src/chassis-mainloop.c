@@ -67,15 +67,16 @@ chassis *chassis_init() {
 int chassis_check_version(const char *lib_version, const char *hdr_version) {
 	int lib_maj, lib_min, lib_pat;
 	int hdr_maj, hdr_min, hdr_pat;
+	int scanned_fields;
 
-	if (3 != sscanf(lib_version, "%d.%d.%d%*s", &lib_maj, &lib_min, &lib_pat)) {
-		g_critical("%s: library version %s failed to parse",
-				G_STRLOC, lib_version);
+	if (3 != (scanned_fields = sscanf(lib_version, "%d.%d.%d%*s", &lib_maj, &lib_min, &lib_pat))) {
+		g_critical("%s: library version %s failed to parse: %d",
+				G_STRLOC, lib_version, scanned_fields);
 		return -1;
 	}
-	if (3 != sscanf(hdr_version, "%d.%d.%d%*s", &hdr_maj, &hdr_min, &hdr_pat)) {
-		g_critical("%s: header version %s failed to parse",
-				G_STRLOC, hdr_version);
+	if (3 != (scanned_fields = sscanf(hdr_version, "%d.%d.%d%*s", &hdr_maj, &hdr_min, &hdr_pat))) {
+		g_critical("%s: header version %s failed to parse: %d",
+				G_STRLOC, hdr_version, scanned_fields);
 		return -1;
 	}
 	
