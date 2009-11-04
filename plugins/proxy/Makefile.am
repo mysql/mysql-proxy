@@ -1,4 +1,4 @@
-plugindir = ${pkglibdir}/plugins/
+plugindir = ${pkglibdir}/plugins
 
 plugin_LTLIBRARIES = libproxy.la
 libproxy_la_LDFLAGS  = -export-dynamic -no-undefined -avoid-version -dynamic

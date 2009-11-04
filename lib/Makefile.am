@@ -1,4 +1,4 @@
-luaextdir = ${pkglibdir}/lua/
+luaextdir = ${pkglibdir}/lua
 
 SUBDIRS = proxy 
 

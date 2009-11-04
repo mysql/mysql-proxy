@@ -298,3 +298,5 @@ IF(WIN32)
 	)
 ENDIF(WIN32)
 
+CONFIGURE_FILE(mysql-chassis.pc.in mysql-chassis.pc)
+CONFIGURE_FILE(mysql-proxy.pc.in mysql-proxy.pc)

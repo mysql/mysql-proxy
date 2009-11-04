@@ -1,4 +1,4 @@
-plugindir = ${pkglibdir}/plugins/
+plugindir = ${pkglibdir}/plugins
 
 plugin_LTLIBRARIES = libreplicant.la
 libreplicant_la_LDFLAGS  = -export-dynamic -no-undefined -avoid-version -dynamic

@@ -1,4 +1,4 @@
-plugindir = ${pkglibdir}/plugins/
+plugindir = ${pkglibdir}/plugins
 
 plugin_LTLIBRARIES = libcli.la
 libcli_la_LDFLAGS  = -export-dynamic -no-undefined -avoid-version -dynamic
