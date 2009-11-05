@@ -32,15 +32,15 @@ mysql_myisam_dump_LDADD		= $(BUILD_LDADD)
 
 lib_LTLIBRARIES = 
 
-lib_LTLIBRARIES += libchassis-timing.la
-libchassis_timing_la_SOURCES = \
+lib_LTLIBRARIES += libmysql-chassis-timing.la
+libmysql_chassis_timing_la_SOURCES = \
 	chassis-timings.c \
 	my_rdtsc.c
-libchassis_timing_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
-libchassis_timing_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
-libchassis_timing_la_LIBADD   = $(GLIB_LIBS)
+libmysql_chassis_timing_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
+libmysql_chassis_timing_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
+libmysql_chassis_timing_la_LIBADD   = $(GLIB_LIBS)
 if USE_SUNCC_ASSEMBLY
-libchassis_timing_la_CPPFLAGS += \
+libmysql_chassis_timing_la_CPPFLAGS += \
 	my_timer_cycles.il
 endif
 
@@ -88,7 +88,7 @@ libmysql_proxy_la_SOURCES = \
 
 libmysql_proxy_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
 libmysql_proxy_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
-libmysql_proxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la libchassis-timing.la
+libmysql_proxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la libmysql-chassis-timing.la
 
 
 include_HEADERS=\
