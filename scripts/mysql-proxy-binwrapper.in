@@ -37,6 +37,8 @@ scriptdir=`dirname $0`
 scriptname=`basename $0`
 scriptdir=`(cd "$scriptdir/"; pwd)`
 scriptdir=`dirname "$scriptdir"`
-@DYNLIB_PATH_VAR@="$scriptdir"/lib/
-export @DYNLIB_PATH_VAR@
+LUA_PATH="$scriptdir/share/@PACKAGE_NAME@/lua/?.lua;$LUA_PATH"
+LUA_CPATH="$scriptdir/lib/@PACKAGE_NAME@/lua/?.@DYNLIB_LUA_SUFFIX@;$LUA_CPATH"
+@DYNLIB_PATH_VAR@="$@DYNLIB_PATH_VAR@:$scriptdir/lib/"
+export @DYNLIB_PATH_VAR@ LUA_PATH LUA_CPATH
 exec $MYSQL_PROXY_WRAPPER "$scriptdir/libexec/$scriptname" "$@"
