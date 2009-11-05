@@ -6,7 +6,8 @@ AC_CONFIG_SRCDIR([src/chassis.c])
 
 AC_CANONICAL_TARGET
 
-AM_INIT_AUTOMAKE(1.9 gnits)
+dnl require 1.10 to get abs_top_builddir and docdir
+AM_INIT_AUTOMAKE(1.10 gnits)
 
 AC_CONFIG_HEADER([config.h])
 
