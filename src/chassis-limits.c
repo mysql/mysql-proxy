@@ -36,6 +36,11 @@
  * the size of rlim_t depends on arch and large-file-support
  */
 #if SIZEOF_RLIM_T == 8
+/* on MacOS X rlim_t is a __uint64_t which is a unsigned long long (which is a 64bit value)
+ * GUINT64 is on 64bit a unsigned long ... well ... 
+ *
+ * even if they are the same size, gcc still spits out a warning ... we ignore it
+ */
 #define G_RLIM_T_FORMAT G_GUINT64_FORMAT
 #else
 #define G_RLIM_T_FORMAT G_GUINT32_FORMAT

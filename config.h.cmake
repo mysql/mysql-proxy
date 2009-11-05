@@ -36,4 +36,4 @@
 
 #cmakedefine HAVE_GTHREAD
 #cmakedefine HAVE_GTHREAD_H
-
+#define SIZEOF_RLIM_T @SIZEOF_RLIM_T@
