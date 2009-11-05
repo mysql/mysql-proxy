@@ -147,3 +147,43 @@ INSTALL(TARGETS mysql-chassis-proxy
 	LIBRARY DESTINATION lib
 )
 
+INSTALL(FILES
+	network-mysqld.h
+	network-mysqld-lua.h
+	network-mysqld-proto.h
+	network-mysqld-binlog.h
+	network-mysqld-packet.h
+	network-mysqld-masterinfo.h
+	network-conn-pool.h
+	network-conn-pool-lua.h
+	network-socket.h
+	network-socket-lua.h
+	network-address.h
+	network-address-lua.h
+	sys-pedantic.h
+	chassis-plugin.h
+	chassis-log.h
+	chassis-keyfile.h
+	chassis-mainloop.h
+	chassis-path.h
+	chassis-limits.h
+	chassis-event-thread.h
+	glib-ext.h
+	glib-ext-ref.h
+	string-len.h
+	lua-load-factory.h
+	lua-scope.h
+	lua-env.h
+	network-injection.h
+	network-injection-lua.h
+	chassis-exports.h
+	network-exports.h
+	network-backend.h
+	network-backend-lua.h
+	disable-dtrace.h
+	lua-registry-keys.h
+	chassis-stats.h
+	chassis-timings.h
+	my_rdtsc.h
+	DESTINATION include/
+	)
