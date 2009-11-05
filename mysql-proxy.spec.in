@@ -53,5 +53,5 @@ failover; query analysis; query filtering and modification; and many more.
 %defattr(-,root,root)
 %doc AUTHORS COPYING INSTALL NEWS README README.TESTS
 %doc examples/
-%{_sbindir}/%{name}
+%{_bindir}/%{name}
 %{_datadir}/%{name}/

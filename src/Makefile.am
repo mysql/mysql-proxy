@@ -12,8 +12,7 @@ if USE_WRAPPER_SCRIPT
 ## put all the binaries into a "hidden" location, the wrapper scripts are in ./scripts/
 libexec_PROGRAMS = mysql-binlog-dump mysql-proxy mysql-myisam-dump
 else
-bin_PROGRAMS            = mysql-binlog-dump mysql-myisam-dump
-sbin_PROGRAMS			= mysql-proxy
+bin_PROGRAMS            = mysql-binlog-dump mysql-myisam-dump mysql-proxy
 endif
 
 mysql_proxy_SOURCES		= chassis.c 
