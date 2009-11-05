@@ -10,6 +10,8 @@ EXTRA_DIST = \
 		winbuild.bat \
 		doxygen-scripts \
 		CMakeLists.txt \
+		mysql-chassis.pc.cmake \
+		mysql-proxy.pc.cmake \
 		deps
 
 ACLOCAL_AMFLAGS = -I m4
