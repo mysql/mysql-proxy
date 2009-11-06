@@ -52,7 +52,7 @@ function read_query(packet)
 			local b = proxy.global.backends[i]
 
 			rows[#rows + 1] = {
-				i, b.address, b.state, b.type 
+				i, b.dst.name, b.state, b.type 
 			}
 		end
 	else
