@@ -32,6 +32,7 @@
 
 #include "chassis-limits.h"
 
+#ifndef _WIN32
 /**
  * the size of rlim_t depends on arch and large-file-support
  */
@@ -48,6 +49,7 @@
 #endif
 #else
 #define G_RLIM_T_FORMAT G_GUINT32_FORMAT
+#endif
 #endif
 
 int chassis_set_fdlimit(int max_files_number) {
