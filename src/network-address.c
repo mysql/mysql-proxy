@@ -152,9 +152,10 @@ gint network_address_set_address(network_address *addr, const gchar *address) {
 	g_return_val_if_fail(addr, -1);
 
 	/* split the address:port */
-	if (address[0] == '/') {
+	if (address[0] == '/')
 		return network_address_set_address_un(addr, address);
-	} else if (NULL != (s = strchr(address, ':'))) {
+	
+	if (NULL != (s = strchr(address, ':'))) {
 		gboolean ret;
 		char *ip_address = g_strndup(address, s - address); /* may be NULL for strdup(..., 0) */
 		char *port_err = NULL;
@@ -176,11 +177,9 @@ gint network_address_set_address(network_address *addr, const gchar *address) {
 		if (ip_address) g_free(ip_address);
 
 		return ret;
-	} else { /* perhaps it is a plain IP address, lets add the default-port */
-		return network_address_set_address_ip(addr, address, 3306);
 	}
-
-	g_assert_not_reached();
+	/* perhaps it is a plain IP address, lets add the default-port */
+	return network_address_set_address_ip(addr, address, 3306);
 }
 
 

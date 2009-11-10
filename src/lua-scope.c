@@ -464,47 +464,40 @@ static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t o
 			CHASSIS_STATS_FREE_INC_NAME(lua_mem);
 			CHASSIS_STATS_ADD_NAME(lua_mem_bytes, -osize);
 			g_free(ptr);
-			return NULL;
-		} else /* osize == 0 */ {
-			return NULL;
 		}
-	} else /* nsize != 0 */ {
-		/* track the maximum of the mem-usage inside lua
-		 *
-		 * g_atomic_... works against signed integers, but we actually would need something bigger to be safe
-		 *
-		 * stats may be wrong if the lua-mem-* counters actually go about MAX_INT 
-		 */
-		if (osize == 0) { 		/* the plain malloc case */
-			gint cur_size;
-			CHASSIS_STATS_ALLOC_INC_NAME(lua_mem);
-			CHASSIS_STATS_ADD_NAME(lua_mem_bytes, nsize);
-			
-			cur_size = CHASSIS_STATS_GET_NAME(lua_mem_bytes);
-			if (cur_size > CHASSIS_STATS_GET_NAME(lua_mem_bytes_max)) {
-				CHASSIS_STATS_SET_NAME(lua_mem_bytes_max, cur_size);
-			}
-			return g_malloc(nsize);
-		} else /* osize != 0 */ {	/* the realloc case */
-			gpointer p = g_realloc(ptr, nsize);
-			gint cur_size;
-
-			if (!p) return p;
-			
-			CHASSIS_STATS_ADD_NAME(lua_mem_bytes, nsize - osize); /* might be negative if Lua tries to shrink something */
-
-			cur_size = CHASSIS_STATS_GET_NAME(lua_mem_bytes);
-			if (cur_size > CHASSIS_STATS_GET_NAME(lua_mem_bytes_max)) {
-				CHASSIS_STATS_SET_NAME(lua_mem_bytes_max, cur_size);
-			}
-			
-			return p;
+		return NULL;
+	} 
+	/* track the maximum of the mem-usage inside lua
+	 *
+	 * g_atomic_... works against signed integers, but we actually would need something bigger to be safe
+	 *
+	 * stats may be wrong if the lua-mem-* counters actually go about MAX_INT 
+	 */
+	if (osize == 0) { 		/* the plain malloc case */
+		gint cur_size;
+		CHASSIS_STATS_ALLOC_INC_NAME(lua_mem);
+		CHASSIS_STATS_ADD_NAME(lua_mem_bytes, nsize);
+		
+		cur_size = CHASSIS_STATS_GET_NAME(lua_mem_bytes);
+		if (cur_size > CHASSIS_STATS_GET_NAME(lua_mem_bytes_max)) {
+			CHASSIS_STATS_SET_NAME(lua_mem_bytes_max, cur_size);
 		}
+		return g_malloc(nsize);
+	} 
+
+	gpointer p = g_realloc(ptr, nsize);
+	gint cur_size;
+
+	if (!p) return p;
+	
+	CHASSIS_STATS_ADD_NAME(lua_mem_bytes, nsize - osize); /* might be negative if Lua tries to shrink something */
+
+	cur_size = CHASSIS_STATS_GET_NAME(lua_mem_bytes);
+	if (cur_size > CHASSIS_STATS_GET_NAME(lua_mem_bytes_max)) {
+		CHASSIS_STATS_SET_NAME(lua_mem_bytes_max, cur_size);
 	}
-	/* the ifs should cover all cases demanded of the lua allocator function, if not, crash hard */
-	g_critical("%s: userdata = %p, ptr = %p, osize = %"G_GSIZE_FORMAT", nsize = %"G_GSIZE_FORMAT, G_STRLOC, userdata, ptr, osize, nsize);
-	g_assert_not_reached();
-	return NULL;
+	
+	return p;
 }
 
 

@@ -392,6 +392,11 @@ GPtrArray * sql_tokens_new(void);
  */
 void sql_tokens_free(GPtrArray *tokens);
 
+/**
+ * hash function for case-insensitive strings 
+ */
+guint g_istr_hash(gconstpointer v);
+
 /*@}*/
 
 #endif

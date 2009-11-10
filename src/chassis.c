@@ -238,9 +238,8 @@ static int proc_keepalive(int *child_exit_status) {
 					g_assert_not_reached();
 				}
 			} else if (-1 == exit_pid) {
-				if (EINTR == errno) {
-					/* EINTR is ok, all others bad */
-				} else {
+				/* EINTR is ok, all others bad */
+				if (EINTR != errno) {
 					/* how can this happen ? */
 					g_critical("%s: wait4(%d, ...) failed: %s (%d)",
 						G_STRLOC,
@@ -256,7 +255,7 @@ static int proc_keepalive(int *child_exit_status) {
 		}
 	}
 
-	return 1;
+	/* return 1; */ /* never reached, compiler complains */
 }
 #endif
 
