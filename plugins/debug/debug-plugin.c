@@ -25,16 +25,16 @@
 
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
+#include "network-mysqld-packet.h"
 
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
 
 #include "sys-pedantic.h"
+#include "string-len.h"
 
 #include <gmodule.h>
-
-#define C(x) x, sizeof(x) - 1
 
 /**
  * debug plugin
@@ -264,23 +264,23 @@ int plugin_debug_con_handle_stmt(chassis *chas, network_mysqld_con *con, GString
 }
 
 NETWORK_MYSQLD_PLUGIN_PROTO(server_con_init) {
-	const unsigned char handshake[] = 
-		"\x0a"  /* protocol version */
-		"5.1.20-proxy-debug\0" /* version*/
-		"\x01\x00\x00\x00" /* 4-byte thread-id */
-		"\x3a\x23\x3d\x4b"
-		"\x43\x4a\x2e\x43" /* 8-byte scramble buffer */
-		"\x00"             /* 1-byte filler */
-		"\x00\x02"         /* 2-byte server-cap, we only speak the 4.1 protocol */
-		"\x08"             /* 1-byte language */
-		"\x02\x00"         /* 2-byte status */
-		"\x00\x00\x00\x00" 
-		"\x00\x00\x00\x00"
-		"\x00\x00\x00\x00"
-		"\x00"             /* 13-byte filler */
-		;
+	network_mysqld_auth_challenge *auth;
+	GString *packet;
 
-	network_mysqld_queue_append(con->client, con->client->send_queue, C(handshake));
+	auth = network_mysqld_auth_challenge_new();
+	auth->server_version_str = g_strdup("5.1.99-proxy-debug");
+	auth->thread_id     = 1;
+	auth->charset       = 0x08;
+	auth->server_status = SERVER_STATUS_AUTOCOMMIT | 0;
+	network_mysqld_auth_challenge_set_challenge(auth);
+
+	packet = g_string_new(NULL);
+	network_mysqld_proto_append_auth_challenge(packet, auth);
+
+	network_mysqld_queue_append(con->client, con->client->send_queue, S(packet));
+
+	g_string_free(packet, TRUE);
+	network_mysqld_auth_challenge_free(auth);
 	
 	con->state = CON_STATE_SEND_HANDSHAKE;
 
