@@ -107,6 +107,7 @@ IF(WIN32)
 	SET(libevent_sources 
 		${libevent_sources} 
 		WIN32-Code/win32.c
+		libevent.def
 	)
 	INCLUDE_DIRECTORIES(WIN32-Code/)
 ENDIF(WIN32)
