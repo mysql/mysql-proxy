@@ -4,7 +4,7 @@
 #cmakedefine _EVENT_HAVE_FCNTL_H
 #cmakedefine _EVENT_HAVE_STDARG_H
 #cmakedefine _EVENT_HAVE_INTTYPES_H
-#cmakedefine _EVENT_HAVE_STDINT_H
+#cmakedefine _EVENT_HAVE_STDLIB_H
 #cmakedefine _EVENT_HAVE_POLL_H
 #cmakedefine _EVENT_HAVE_SIGNAL_H
 #cmakedefine _EVENT_HAVE_UNISTD_H
