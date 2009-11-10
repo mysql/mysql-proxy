@@ -66,3 +66,5 @@ EXPORTS
 	evtag_unmarshal_fixed
 	evtag_unmarshal_string
 	evtag_unmarshal_timeval
+	evutil_socketpair
+	evutil_make_socket_nonblocking

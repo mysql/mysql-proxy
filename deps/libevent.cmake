@@ -6,6 +6,7 @@ IF(WIN32)
 		CONFIGURE_FILE(deps/libevent.config.h.cmake ${LIBEVENT_SOURCE_DIR}/config.h.cmake COPYONLY)
 		CONFIGURE_FILE(deps/libevent.event-config.h.cmake ${LIBEVENT_SOURCE_DIR}/event-config.h.cmake COPYONLY)
 		CONFIGURE_FILE(deps/libevent.CMakeLists.txt ${LIBEVENT_SOURCE_DIR}/CMakeLists.txt COPYONLY)
+		CONFIGURE_FILE(deps/libevent.def ${LIBEVENT_SOURCE_DIR}/libevent.def COPYONLY)
 		## CONFIGURE_FILE(deps/libevent.event.h.cmake ${LIBEVENT_SOURCE_DIR}/event.h COPYONLY)
 		## CONFIGURE_FILE(deps/libevent.evutil.h.cmake ${LIBEVENT_SOURCE_DIR}/evutil.h COPYONLY)
 	
