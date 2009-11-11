@@ -20,7 +20,7 @@ check_sql_tokenizer_SOURCES  = check_sql_tokenizer.c \
 	$(top_srcdir)/lib/sql-tokenizer.l \
 	$(top_srcdir)/src/glib-ext.c
 
-check_sql_tokenizer_CPPFLAGS = -I$(top_srcdir)/lib/ $(GLIB_CFLAGS)
+check_sql_tokenizer_CPPFLAGS = -I$(top_srcdir)/lib/ $(GLIB_CFLAGS) -I$(top_srcdir)/src/
 check_sql_tokenizer_LDADD    = $(GLIB_LIBS)
 
 DISTCLEANFILES = \
