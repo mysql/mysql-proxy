@@ -467,6 +467,97 @@ void t_mysqld_get_auth_response(void) {
 	g_string_free(packet.data, TRUE);
 }
 
+/**
+ * @test
+ *   network_mysqld_proto_get_auth_response() can decode a pre-4.0 packet
+ *   network_mysqld_proto_append_auth_response() can encode the result
+ *     of the network_mysqld_proto_get_auth_response() 
+ */
+void t_mysqld_get_auth_response_pre_41(void) {
+	const char raw_packet[] = 
+		"\205$"
+		"\0\0\0"
+		"root\0"
+		;
+
+	network_mysqld_auth_response *auth;
+	network_packet packet;
+	int err = 0;
+
+	auth = network_mysqld_auth_response_new();
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+
+	err = err || network_mysqld_proto_get_auth_response(&packet, auth);
+
+	g_assert_cmpint(err, ==, 0);
+
+	g_assert(auth->username);
+	g_assert_cmpint(auth->username->len, ==, 4);
+	g_assert_cmpstr(auth->username->str, ==, "root");
+
+	g_assert_cmpuint(auth->capabilities, ==,
+		CLIENT_LONG_PASSWORD |
+	       	CLIENT_LONG_FLAG |
+		CLIENT_LOCAL_FILES | 
+		CLIENT_INTERACTIVE |
+		CLIENT_TRANSACTIONS 
+		); 
+	g_assert_cmpuint(auth->max_packet_size, ==, 0);
+
+	g_string_truncate(packet.data, 0);
+	packet.offset = 0;
+
+	err = err || network_mysqld_proto_append_auth_response(packet.data, auth);
+	g_assert_cmpint(err, ==, 0);
+
+	g_assert_cmpint(packet.data->len, ==, sizeof(raw_packet) - 1);
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), raw_packet, packet.data->len));
+
+	network_mysqld_auth_response_free(auth);
+
+	/* empty auth struct */
+	g_string_truncate(packet.data, 0);
+	packet.offset = 0;
+
+	auth = network_mysqld_auth_response_new();
+	err = err || network_mysqld_proto_append_auth_response(packet.data, auth);
+	g_assert_cmpint(err, ==, 0);
+	network_mysqld_auth_response_free(auth);
+
+	g_string_free(packet.data, TRUE);
+}
+
+/**
+ * @test
+ *   network_mysqld_proto_get_auth_response() can decode a broken pre-4.0 packet
+ */
+void t_mysqld_get_auth_response_no_term(void) {
+	const char raw_packet[] = 
+		"\205$"
+		"\0\0\0"
+		"root\0" /* missing trailing \0 */
+		"foo"
+		;
+
+	network_mysqld_auth_response *auth;
+	network_packet packet;
+	int err = 0;
+
+	auth = network_mysqld_auth_response_new();
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+
+	err = err || network_mysqld_proto_get_auth_response(&packet, auth);
+
+	g_assert_cmpint(err, !=, 0);
+
+	network_mysqld_auth_response_free(auth);
+
+	g_string_free(packet.data, TRUE);
+}
+
+
 typedef struct {
 	const char *s;
 	size_t s_len;
@@ -625,6 +716,8 @@ int main(int argc, char **argv) {
 	
 	g_test_add_func("/core/mysqld-proto-auth-response-new", t_auth_response_new);
 	g_test_add_func("/core/mysqld-proto-get-auth-response", t_mysqld_get_auth_response);
+	g_test_add_func("/core/mysqld-proto-get-auth-response-pre-4.1", t_mysqld_get_auth_response_pre_41);
+	g_test_add_func("/core/mysqld-proto-get-auth-response-no-term", t_mysqld_get_auth_response_no_term);
 	
 	g_test_add_func("/core/resultset-fields", t_resultset_fields_works);
 	g_test_add_func("/core/resultset-fields-broken-proto-err", t_resultset_fields_parse_err);

@@ -1233,9 +1233,14 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 		err = err || network_mysqld_proto_get_int16(packet, &l_cap);
 		err = err || network_mysqld_proto_get_int24(packet, &auth->max_packet_size);
 		err = err || network_mysqld_proto_get_gstring(packet, auth->username);
-		err = err || network_mysqld_proto_get_gstring(packet, auth->response);
+		/* there may be no password sent */
+		if (packet->data->len != packet->offset) {
+			err = err || network_mysqld_proto_get_gstring(packet, auth->response);
+		}
 
-		auth->capabilities = l_cap;
+		if (!err) {
+			auth->capabilities = l_cap;
+		}
 	}
 
 	return err ? -1 : 0;
@@ -1248,27 +1253,35 @@ int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_au
 	int i;
 
 	if (!(auth->capabilities & CLIENT_PROTOCOL_41)) {
-		g_critical("%s: auth-capatilities = 0x%08x (require CLIENT_PROTOCOL_41)", G_STRLOC, auth->capabilities);
-		return -1;
-	}
+		network_mysqld_proto_append_int16(packet, auth->capabilities);
+		network_mysqld_proto_append_int24(packet, auth->max_packet_size); /* max-allowed-packet */
 
-	network_mysqld_proto_append_int32(packet, auth->capabilities);
-	network_mysqld_proto_append_int32(packet, auth->max_packet_size); /* max-allowed-packet */
-	
-	network_mysqld_proto_append_int8(packet, auth->charset); /* charset */
-
-	for (i = 0; i < 23; i++) { /* filler */
-		network_mysqld_proto_append_int8(packet, 0x00);
-	}
-
-	if (auth->username->len) g_string_append_len(packet, S(auth->username));
-	network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
-
-	/* scrambled password */
-	network_mysqld_proto_append_lenenc_string_len(packet, S(auth->response));
-	if (auth->database->len) {
-		g_string_append_len(packet, S(auth->database));
+		if (auth->username->len) g_string_append_len(packet, S(auth->username));
 		network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
+
+		if (auth->response->len) {
+			g_string_append_len(packet, S(auth->response));
+			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
+		}
+	} else {
+		network_mysqld_proto_append_int32(packet, auth->capabilities);
+		network_mysqld_proto_append_int32(packet, auth->max_packet_size); /* max-allowed-packet */
+		
+		network_mysqld_proto_append_int8(packet, auth->charset); /* charset */
+
+		for (i = 0; i < 23; i++) { /* filler */
+			network_mysqld_proto_append_int8(packet, 0x00);
+		}
+
+		if (auth->username->len) g_string_append_len(packet, S(auth->username));
+		network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
+
+		/* scrambled password */
+		network_mysqld_proto_append_lenenc_string_len(packet, S(auth->response));
+		if (auth->database->len) {
+			g_string_append_len(packet, S(auth->database));
+			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
+		}
 	}
 
 	return 0;
