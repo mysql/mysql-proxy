@@ -567,9 +567,11 @@ int network_mysqld_proto_get_gstring(network_packet *packet, GString *out) {
 	guint64 len;
 	int err = 0;
 
-	for (len = 0; packet->offset + len < packet->data->len && *(packet->data->str + packet->offset + len); len++);
+	for (len = 0; packet->offset + len < packet->data->len && *(packet->data->str + packet->offset + len) != '\0'; len++);
 
-	g_assert(*(packet->data->str + packet->offset + len) == '\0'); /* this has to be a \0 */
+	if (packet->offset + len == packet->data->len) { /* havn't found a trailing \0 */
+		return -1;
+	}
 
 	if (len > 0) {
 		g_assert(packet->offset < packet->data->len);

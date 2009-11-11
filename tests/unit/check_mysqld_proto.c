@@ -379,6 +379,32 @@ void test_mysqld_proto_gstring_len(void) {
 	g_string_free(packet.data, TRUE);
 }
 
+void test_mysqld_proto_gstring(void) {
+	network_packet packet;
+	GString *value = g_string_new(NULL);
+
+	packet.data = g_string_new(NULL);
+
+	packet.offset = 0;
+	g_string_truncate(packet.data, 0);
+	g_assert_cmpint(0, !=, network_mysqld_proto_get_gstring(&packet, value));
+	g_assert_cmpint(0, ==, value->len);
+
+	packet.offset = 0;
+	g_string_assign_len(packet.data, C("012345")); /* no trailing \0 */
+	g_assert_cmpint(0, !=, network_mysqld_proto_get_gstring(&packet, value));
+
+	packet.offset = 0;
+	g_string_assign_len(packet.data, C("012345\0"));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_gstring(&packet, value));
+	g_assert_cmpint(6, ==, value->len);
+	g_assert_cmpstr("012345", ==, value->str);
+
+	g_string_free(value, TRUE);
+	g_string_free(packet.data, TRUE);
+}
+
+
 void test_mysqld_password(void) {
 	GString *cleartext = g_string_new("123");
 	GString *hashed_password = g_string_new(NULL);
@@ -420,6 +446,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/mysqld-proto-lenenc-int", test_mysqld_proto_lenenc_int);
 	g_test_add_func("/core/mysqld-proto-int", test_mysqld_proto_int);
 	g_test_add_func("/core/mysqld-proto-gstring-len", test_mysqld_proto_gstring_len);
+	g_test_add_func("/core/mysqld-proto-gstring", test_mysqld_proto_gstring);
 
 	g_test_add_func("/core/mysqld-proto-binlog-event", test_mysqld_binlog_events);
 	g_test_add_func("/core/mysqld-proto-password", test_mysqld_password);
