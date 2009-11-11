@@ -458,6 +458,9 @@ static int proxy_lua_panic (lua_State *L) {
  * @param nsize the requested size of the block
  */
 static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t osize, size_t nsize) {
+	gpointer p;
+	gint cur_size;
+
 	/* the free case */
 	if (nsize == 0) {
 		if (osize != 0) {
@@ -474,7 +477,6 @@ static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t o
 	 * stats may be wrong if the lua-mem-* counters actually go about MAX_INT 
 	 */
 	if (osize == 0) { 		/* the plain malloc case */
-		gint cur_size;
 		CHASSIS_STATS_ALLOC_INC_NAME(lua_mem);
 		CHASSIS_STATS_ADD_NAME(lua_mem_bytes, nsize);
 		
@@ -485,8 +487,7 @@ static void* chassis_lua_alloc(void G_GNUC_UNUSED *userdata, void *ptr, size_t o
 		return g_malloc(nsize);
 	} 
 
-	gpointer p = g_realloc(ptr, nsize);
-	gint cur_size;
+	p = g_realloc(ptr, nsize);
 
 	if (!p) return p;
 	
