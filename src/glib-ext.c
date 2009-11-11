@@ -76,6 +76,21 @@ gpointer g_hash_table_lookup_const(GHashTable *h, const gchar *name, gsize name_
 	return g_hash_table_lookup(h, &key);
 }
 
+/**
+ * hash function for case-insensitive strings 
+ */
+guint g_istr_hash(gconstpointer v) {
+	/* djb2 */
+	const unsigned char *p = v;
+	unsigned char c;
+	guint32 h = 5381;
+	
+	while ((c = *p++)) {
+		h = ((h << 5) + h) + g_ascii_toupper(c);
+	}
+	
+	return h;
+}
 
 /**
  * duplicate a GString

@@ -30,6 +30,8 @@
 #include <unistd.h>
 #endif
 
+#include <glib-ext.h>
+
 #ifdef WIN32
 #include <io.h>  /* for read */
 #include <stdlib.h>  /* for exit */
@@ -468,21 +470,6 @@ const gchar *sql_token_get_name(sql_token_id token_id) {
 	return token_names[token_id];
 }
 
-/**
- * hash function for case-insensitive strings 
- */
-guint g_istr_hash(gconstpointer v) {
-	/* djb2 */
-	const unsigned char *p = v;
-	unsigned char c;
-	guint32 h = 5381;
-	
-	while ((c = *p++)) {
-		h = ((h << 5) + h) + g_ascii_toupper(c);
-	}
-	
-	return h;
-}
 
 /**
  * compare function for case-insensitive strings 

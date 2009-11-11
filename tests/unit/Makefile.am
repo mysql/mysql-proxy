@@ -16,7 +16,10 @@ TESTS=\
 	check_chassis_path
 
 check_PROGRAMS=$(TESTS)
-check_sql_tokenizer_SOURCES  = check_sql_tokenizer.c $(top_srcdir)/lib/sql-tokenizer.l
+check_sql_tokenizer_SOURCES  = check_sql_tokenizer.c \
+	$(top_srcdir)/lib/sql-tokenizer.l \
+	$(top_srcdir)/src/glib-ext.c
+
 check_sql_tokenizer_CPPFLAGS = -I$(top_srcdir)/lib/ $(GLIB_CFLAGS)
 check_sql_tokenizer_LDADD    = $(GLIB_LIBS)
 
