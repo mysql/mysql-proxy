@@ -170,3 +170,12 @@ INSTALL(TARGETS event
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION lib
 )
+
+INSTALL(FILES
+		event-config.h
+		event.h
+		evutil.h
+		evhttp.h
+	DESTINATION
+		include/
+	)
