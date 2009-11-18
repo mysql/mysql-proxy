@@ -1,1 +1,1 @@
-INCLUDE(deps/libevent.cmake)
+# INCLUDE(deps/libevent.cmake)
