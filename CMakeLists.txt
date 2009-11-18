@@ -278,11 +278,20 @@ IF(WIN32)
 	)
 	FIND_FILE(LUA_DLL
 		lua51.dll
-		PATHS "${LUA_LIBRARY_DIRS}"
+		PATHS "${LUA_LIBRARY_DIRS}/../bin/"
 		NO_DEFAULT_PATH
 	)
 	INSTALL(PROGRAMS
 		${LUA_DLL}
+		DESTINATION bin
+	)
+	FIND_FILE(EVENT_DLL
+		event.dll
+		PATHS "${EVENT_LIBRARY_DIRS}/../bin/"
+		NO_DEFAULT_PATH
+	)
+	INSTALL(PROGRAMS
+		${EVENT_DLL}
 		DESTINATION bin
 	)
 	# copy the VS2008 runtime libaries as part of the install
