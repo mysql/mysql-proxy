@@ -57,12 +57,18 @@ ADD_LIBRARY(mysql-chassis SHARED ${chassis_sources})
 ADD_LIBRARY(mysql-chassis-proxy SHARED ${proxy_sources})
 ADD_EXECUTABLE(mysql-proxy chassis.c)
 
+## for windows we need the winsock lib
+SET(WINSOCK_LIBRARIES)
+IF(WIN32)
+	SET(WINSOCK_LIBRARIES ws2_32)
+ENDIF()
 TARGET_LINK_LIBRARIES(mysql-chassis 
 	${GLIB_LIBRARIES} 
 	${GMODULE_LIBRARIES} 
 	${GTHREAD_LIBRARIES} 
 	${LUA_LIBRARIES}
 	${EVENT_LIBRARIES}
+	${WINSOCK_LIBRARIES}
 )
 
 TARGET_LINK_LIBRARIES(mysql-chassis-proxy
