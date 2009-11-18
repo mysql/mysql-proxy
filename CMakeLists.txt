@@ -50,18 +50,6 @@ IF(WIN32)
 		MESSAGE(STATUS "glib libraries ${GLIB_LIBRARIES} ${GTHREAD_LIBRARIES} ${GMODULE_LIBRARIES}")
 	ENDIF(GLIB_DEV_BASE_DIR)
 
-	INCLUDE(deps/CMakeLists.txt)
-	# on Windows, we need a compiled version of libevent in _Release_ mode!
-	# since it's way too much hassle to set up all the paths, set everything up by using the base directory
-	# MESSAGE(STATUS "using libevent base directory ${EVENT_BASE_DIR}")
-	# IF(EVENT_BASE_DIR)
-		# SET(EVENT_INCLUDE_DIRS "${EVENT_BASE_DIR}" "${EVENT_BASE_DIR}/WIN32-Code" CACHE PATH "")
-		# SET(EVENT_LIBRARY_DIRS "${EVENT_BASE_DIR}/WIN32-Prj/Release" CACHE PATH "")
-		# SET(EVENT_LIBRARIES "libevent" CACHE PATH "")
-	# ENDIF(EVENT_BASE_DIR)
-	# need to set the lua library's name directly on win32
-	SET(LUA_LIBRARIES "lua51")
-    
     # force the correct version for the redist manifest
     ADD_DEFINITIONS(-D_BIND_TO_CURRENT_MFC_VERSION=1 -D_BIND_TO_CURRENT_CRT_VERSION=1)
     # turn off security warnings for system calls
