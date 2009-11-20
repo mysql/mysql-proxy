@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2007-2008 MySQL AB, 2008 Sun Microsystems, Inc
+ Copyright (C) 2007-2009 MySQL AB, 2009 Sun Microsystems, Inc
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -78,6 +78,8 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 	g_return_val_if_fail(addr, -1);
 
 	if (port > 65535) {
+		g_critical("%s: illegal value %u for port, only 1 ... 65535 allowed",
+				G_STRLOC, port);
 		return -1;
 	}
 
