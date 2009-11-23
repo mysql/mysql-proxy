@@ -43,8 +43,11 @@ void t_network_address_set() {
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:3306"), ==, 0);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1"), ==, 0);
 
+	g_log_set_always_fatal(G_LOG_FATAL_MASK);
+
 	/* should fail */	
 	g_assert_cmpint(network_address_set_address(addr, "500.0.0.1"), ==, -1);
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:"), ==, -1);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:65536"), ==, -1);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:-1"), ==, -1);
 
