@@ -1,3 +1,4 @@
 EXTRA_DIST=\
 	   Tar.cmake \
-	   ChassisPlugin.cmake
+	   ChassisPlugin.cmake \
+	   ChassisInstall.cmake

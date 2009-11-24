@@ -103,11 +103,8 @@ IF(WIN32)
 ENDIF(WIN32)
 
 IF(WIN32)
-	# Windows finds the dlls in bin/
-	INSTALL(TARGETS mysql-proxy mysql-proxy-svc
-		RUNTIME DESTINATION bin
-		LIBRARY DESTINATION lib/mysql-proxy
-	)
+	CHASSIS_INSTALL_TARGET(mysql-proxy)
+	CHASSIS_INSTALL_TARGET(mysql-proxy-svc)
 ELSE(WIN32)
 	# Unix platforms provide a wrapper script to avoid relinking at install time
 	
@@ -143,17 +140,8 @@ ELSE(WIN32)
 	)
 ENDIF(WIN32)
 
-INSTALL(TARGETS mysql-chassis 
-	RUNTIME DESTINATION bin
-	ARCHIVE DESTINATION lib
-	LIBRARY DESTINATION lib
-)
-
-INSTALL(TARGETS mysql-chassis-proxy 
-	RUNTIME DESTINATION bin
-	ARCHIVE DESTINATION lib
-	LIBRARY DESTINATION lib
-)
+CHASSIS_INSTALL_TARGET(mysql-chassis)
+CHASSIS_INSTALL_TARGET(mysql-chassis-proxy)
 
 INSTALL(FILES
 	network-mysqld.h
