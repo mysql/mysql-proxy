@@ -302,6 +302,21 @@ static void sigsegv_handler(int G_GNUC_UNUSED signum) {
 	abort(); /* trigger a SIGABRT instead of just exiting */
 }
 
+static chassis_setenv_lua(const char *key, const char *value) {
+#if _WIN32
+	/** on Win32 glib uses _wputenv to set the env variable,
+	 *  but Lua uses getenv. Those two don't see each other,
+	 *  so we use _putenv. Since we only set ASCII chars, this
+	 *  is safe.
+	 */
+	gchar *env_path = g_strdup_printf("%s=%s", key, value);
+	_putenv(env_path);
+	g_free(env_path);
+#else
+	g_setenv(key, value, 1);
+#endif
+}
+
 /**
  * This is the "real" main which is called both on Windows and UNIX platforms.
  * For the Windows service case, this will also handle the notifications and set
@@ -341,6 +356,8 @@ int main_cmdline(int argc, char **argv) {
 
 	GKeyFile *keyfile = NULL;
 	chassis_log *log;
+	char *lua_path = NULL;
+	char *lua_cpath = NULL;
 
 	/* can't appear in the configfile */
 	GOptionEntry base_main_entries[] = 
@@ -368,6 +385,8 @@ int main_cmdline(int argc, char **argv) {
 		{ "keepalive",                0, 0, G_OPTION_ARG_NONE, NULL, "try to restart the proxy if it crashed", NULL },
 		{ "max-open-files",           0, 0, G_OPTION_ARG_INT, NULL, "maximum number of open files (ulimit -n)", NULL},
 		{ "event-threads",            0, 0, G_OPTION_ARG_INT, NULL, "number of event-handling threads (default: 1)", NULL},
+		{ "lua-path",                 0, 0, G_OPTION_ARG_STRING, NULL, "set the LUA_PATH", "<...>" },
+		{ "lua-cpath",                0, 0, G_OPTION_ARG_STRING, NULL, "set the LUA_CPATH", "<...>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -451,6 +470,8 @@ int main_cmdline(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(auto_restart);
 	main_entries[i++].arg_data  = &(max_files_number);
 	main_entries[i++].arg_data  = &(event_thread_count);
+	main_entries[i++].arg_data  = &(lua_path);
+	main_entries[i++].arg_data  = &(lua_cpath);
 
 	option_ctx = g_option_context_new("- MySQL App Shell");
 	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
@@ -554,28 +575,24 @@ int main_cmdline(int argc, char **argv) {
 	 *
 	 * we want to derive it from the basedir ...
 	 */
-	if (!g_getenv(LUA_PATH)) {
+	if (lua_path) {
+		chassis_setenv_lua(LUA_PATH, lua_path);
+		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, lua_path);
+	} else if (!g_getenv(LUA_PATH)) {
 		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?.lua", NULL);
-#if _WIN32
-		/** on Win32 glib uses _wputenv to set the env variable,
-		 *  but Lua uses getenv. Those two don't see each other,
-		 *  so we use _putenv. Since we only set ASCII chars, this
-		 *  is safe.
-		 */
-		gchar *env_path = g_strdup_printf("%s=%s", LUA_PATH, path);
-		_putenv(env_path);
-		g_free(env_path);
-#else
-		g_setenv(LUA_PATH, path, 1);
-#endif
 		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, path);
+
+		chassis_setenv_lua(LUA_PATH, path);
 
 		g_free(path);
 	} else {
 		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, g_getenv(LUA_PATH));
 	}
 
-	if (!g_getenv(LUA_CPATH)) {
+	if (lua_cpath) {
+		chassis_setenv_lua(LUA_CPATH, lua_cpath);
+		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, lua_cpath);
+	} else if (!g_getenv(LUA_CPATH)) {
 		/* each OS has its own way of declaring a shared-lib extension
 		 *
 		 * win32 has .dll
@@ -584,14 +601,12 @@ int main_cmdline(int argc, char **argv) {
 		 */ 
 #  if _WIN32
 		gchar *path = g_build_filename(base_dir, "bin", "lua-?." G_MODULE_SUFFIX, NULL);
-		gchar *env_path = g_strdup_printf("%s=%s", LUA_CPATH, path);
-		_putenv(env_path);
-		g_free(env_path);
 #  else
 		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?." G_MODULE_SUFFIX, NULL);
-		g_setenv(LUA_CPATH, path, 1);
 #  endif
 		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, path);
+
+		chassis_setenv_lua(LUA_CPATH, path);
 
 		g_free(path);
 	} else {
@@ -930,6 +945,9 @@ exit_nicely:
 	if (plugin_names) {
 		g_strfreev(plugin_names);
 	}
+
+	if (lua_path) g_free(lua_path);
+	if (lua_cpath) g_free(lua_cpath);
 
 	chassis_log_free(log);
 	
