@@ -17,9 +17,14 @@ MACRO(CHASSIS_INSTALL_TARGET target)
 		GET_TARGET_PROPERTY(type ${target} TYPE)
 		STRING(REPLACE "$(OutDir)" "${CMAKE_BUILD_TYPE}" built_location ${built_location})
 		IF(type MATCHES "SHARED_LIBRARY")
+			STRING(REPLACE ".dll" ".lib" lib_location ${built_location})
 			INSTALL(FILES
 				${built_location}
 				DESTINATION bin
+			)
+			INSTALL(FILES
+				${lib_location}
+				DESTINATION lib
 			)
 			IF(CMAKE_BUILD_TYPE MATCHES "RelWithDebInfo")
 				STRING(REPLACE ".dll" ".pdb" pdb_location ${built_location})
