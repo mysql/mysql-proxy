@@ -13,7 +13,7 @@ INSTALL(FILES
 	rw-splitting.lua
 	xtab.lua
 
-	DESTINATION share/mysql-proxy/
+	DESTINATION share/doc/mysql-proxy/
 )
 
 INCLUDE_DIRECTORIES(${GLIB_INCLUDE_DIRS})
