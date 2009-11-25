@@ -74,6 +74,19 @@ void chassis_timestamps_add(chassis_timestamps_t *ts,
 	ts->timestamps = g_list_append(ts->timestamps, t);
 }
 
+guint64 chassis_get_rel_milliseconds() {
+	return my_timer_milliseconds();
+}
+
+guint64 chassis_get_rel_microseconds() {
+	return my_timer_microseconds();
+}
+
+CHASSIS_API guint64 chassis_get_rel_nanoseconds() {
+	return my_timer_nanoseconds();
+}
+
+
 void chassis_timestamps_global_init(chassis_timestamps_global_t *gl) {
 	chassis_timestamps_global_t *timestamps = gl;
 

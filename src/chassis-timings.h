@@ -58,7 +58,7 @@ CHASSIS_API void chassis_timestamps_add(chassis_timestamps_t *ts,
  * @note The return value must not be assumed to be based on any specific epoch, it is only to be used as a relative measure.
  * @return the current timestamp
  */
-#define chassis_get_rel_milliseconds() my_timer_milliseconds()
+CHASSIS_API guint64 chassis_get_rel_milliseconds();
 
 /**
  * Retrieve a timestamp with a microsecond resolution.
@@ -66,7 +66,7 @@ CHASSIS_API void chassis_timestamps_add(chassis_timestamps_t *ts,
  * @note The return value must not be assumed to be based on any specific epoch, it is only to be used as a relative measure.
  * @return the current timestamp
  */
-#define chassis_get_rel_microseconds() my_timer_microseconds()
+CHASSIS_API guint64 chassis_get_rel_microseconds();
 
 /**
  * Retrieve a timestamp with a nanosecond resolution.
@@ -74,7 +74,7 @@ CHASSIS_API void chassis_timestamps_add(chassis_timestamps_t *ts,
  * @note The return value must not be assumed to be based on any specific epoch, it is only to be used as a relative measure.
  * @return the current timestamp
  */
-#define chassis_get_rel_nanoseconds() my_timer_nanoseconds()
+CHASSIS_API guint64 chassis_get_rel_nanoseconds();
 
 typedef struct my_timer_info chassis_timestamps_global_t;
 
