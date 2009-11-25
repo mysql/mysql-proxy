@@ -36,8 +36,12 @@ tests_to_skip = {
 
 local build_os = os.getenv("BUILD_OS")
 
+--
+-- some older OSes run out of memory in the 32M byte test on our build
+-- platforms. We disable just that test on those platforms
 if build_os and
 	(build_os == "i386-pc-solaris2.8" or
+	 build_os == "x86_64-pc-solaris2.8" or
 	 build_os == "sparc-sun-solaris2.9" or
 	 build_os == "powerpc-ibm-aix5.3.0.0") then
 	tests_to_skip['overlong'] = "can't allocate more than 32M"
