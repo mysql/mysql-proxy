@@ -189,7 +189,7 @@ else
 fi
 
 if test "$MYSQL_CONFIG" = ""; then
-  AC_MSG_ERROR([mysql_config is not found])
+  AC_MSG_ERROR([mysql_config is not found, use $ ./configure --with-mysql=/path/to/mysql_config])
 fi
 
 if test -d $MYSQL_CONFIG; then
