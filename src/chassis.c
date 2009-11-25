@@ -302,7 +302,8 @@ static void sigsegv_handler(int G_GNUC_UNUSED signum) {
 	abort(); /* trigger a SIGABRT instead of just exiting */
 }
 
-static chassis_setenv_lua(const char *key, const char *value) {
+static int chassis_setenv_lua(const char *key, const char *value) {
+	int r;
 #if _WIN32
 	/** on Win32 glib uses _wputenv to set the env variable,
 	 *  but Lua uses getenv. Those two don't see each other,
@@ -310,11 +311,12 @@ static chassis_setenv_lua(const char *key, const char *value) {
 	 *  is safe.
 	 */
 	gchar *env_path = g_strdup_printf("%s=%s", key, value);
-	_putenv(env_path);
+	r = _putenv(env_path);
 	g_free(env_path);
 #else
-	g_setenv(key, value, 1);
+	r = g_setenv(key, value, 1);
 #endif
+	return r;
 }
 
 /**
@@ -576,21 +578,33 @@ int main_cmdline(int argc, char **argv) {
 	 * we want to derive it from the basedir ...
 	 */
 	if (lua_path) {
-		chassis_setenv_lua(LUA_PATH, lua_path);
+		if (chassis_setenv_lua(LUA_PATH, lua_path)) {
+			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
+					LUA_PATH, lua_path,
+					g_strerror(errno));
+		}
 		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, lua_path);
 	} else if (!g_getenv(LUA_PATH)) {
 		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?.lua", NULL);
 		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, path);
-
-		chassis_setenv_lua(LUA_PATH, path);
-
+		
+		if (chassis_setenv_lua(LUA_PATH, path)) {
+			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
+					LUA_PATH, path,
+					g_strerror(errno));
+		}
+		
 		g_free(path);
 	} else {
 		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, g_getenv(LUA_PATH));
 	}
 
 	if (lua_cpath) {
-		chassis_setenv_lua(LUA_CPATH, lua_cpath);
+		if (chassis_setenv_lua(LUA_CPATH, lua_cpath)) {
+			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
+					LUA_CPATH, lua_cpath,
+					g_strerror(errno));
+		}
 		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, lua_cpath);
 	} else if (!g_getenv(LUA_CPATH)) {
 		/* each OS has its own way of declaring a shared-lib extension
@@ -606,7 +620,11 @@ int main_cmdline(int argc, char **argv) {
 #  endif
 		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, path);
 
-		chassis_setenv_lua(LUA_CPATH, path);
+		if (chassis_setenv_lua(LUA_CPATH, path)) {
+			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
+					LUA_CPATH, path,
+					g_strerror(errno));
+		}
 
 		g_free(path);
 	} else {
