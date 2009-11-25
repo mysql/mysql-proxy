@@ -45,6 +45,7 @@
 #include "chassis-event-thread.h"
 #include "chassis-log.h"
 #include "chassis-stats.h"
+#include "chassis-timings.h"
 
 #ifdef _WIN32
 static volatile int signal_shutdown;
@@ -108,6 +109,9 @@ chassis *chassis_new() {
 	
 	chas->stats = chassis_stats_new();
 
+	/* create a new global timer info */
+	chassis_timestamps_global_init(NULL);
+
 	chas->threads = chassis_event_threads_new();
 
 	chas->event_hdr_version = g_strdup(_EVENT_VERSION);
@@ -153,6 +157,8 @@ void chassis_free(chassis *chas) {
 	if (chas->user) g_free(chas->user);
 	
 	if (chas->stats) chassis_stats_free(chas->stats);
+
+	chassis_timestamps_global_free(NULL);
 
 	if (chas->threads) chassis_event_threads_free(chas->threads);
 

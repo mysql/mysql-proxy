@@ -144,6 +144,8 @@ typedef int socklen_t;
 
 #include "lua-load-factory.h"
 
+#include "chassis-timings.h"
+
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
 
@@ -1278,11 +1280,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 		inj = g_queue_peek_head(st->injected.queries);
 	}
 
-	if (inj && inj->ts_read_query_result_first.tv_sec == 0) {
+	if (inj && inj->ts_read_query_result_first == 0) {
 		/**
 		 * log the time of the first received packet
 		 */
-		g_get_current_time(&(inj->ts_read_query_result_first));
+		inj->ts_read_query_result_first = chassis_get_rel_microseconds();
+		/* g_get_current_time(&(inj->ts_read_query_result_first)); */
 	}
 
 	is_finished = network_mysqld_proto_get_query_result(&packet, con);
@@ -1319,7 +1322,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 				inj->qstat.warning_count = com_query->warning_count;
 				inj->qstat.query_status  = com_query->query_status;
 			}
-			g_get_current_time(&(inj->ts_read_query_result_last));
+			inj->ts_read_query_result_last = chassis_get_rel_microseconds();
+			/* g_get_current_time(&(inj->ts_read_query_result_last)); */
 		}
 		
 		network_mysqld_queue_reset(recv_sock);

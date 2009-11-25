@@ -1,3 +1,21 @@
+/* $%BEGINLICENSE%$
+ Copyright (C) 2009 Sun Microsystems, Inc
+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; version 2 of the License.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software
+ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+ $%ENDLICENSE%$ */
+
 #ifndef __CHASSIS_TIMINGS_H__
 #define __CHASSIS_TIMINGS_H__
 
@@ -34,7 +52,50 @@ CHASSIS_API void chassis_timestamps_add(chassis_timestamps_t *ts,
 		const char *filename,
 		gint line);
 
+/**
+ * Retrieve a timestamp with a millisecond resolution.
+ *
+ * @note The return value must not be assumed to be based on any specific epoch, it is only to be used as a relative measure.
+ * @return the current timestamp
+ */
+#define chassis_get_rel_milliseconds() my_timer_milliseconds()
+
+/**
+ * Retrieve a timestamp with a microsecond resolution.
+ *
+ * @note The return value must not be assumed to be based on any specific epoch, it is only to be used as a relative measure.
+ * @return the current timestamp
+ */
+#define chassis_get_rel_microseconds() my_timer_microseconds()
+
+/**
+ * Retrieve a timestamp with a nanosecond resolution.
+ *
+ * @note The return value must not be assumed to be based on any specific epoch, it is only to be used as a relative measure.
+ * @return the current timestamp
+ */
+#define chassis_get_rel_nanoseconds() my_timer_nanoseconds()
+
 typedef struct my_timer_info chassis_timestamps_global_t;
+
+/**
+ * The default, global timer information.
+ *
+ * It is initialized by chassis_timings_global_init(NULL), otherwise it will
+ * stay NULL (in case client code needs a separate timer base for whatever reason).
+ * The timer information contains metadata about the support timers, like
+ * resolution, overhead and frequency.
+ * This is necessary to convert a cycle measurement to a time value, for example.
+ */
+CHASSIS_API chassis_timestamps_global_t *chassis_timestamps_global;
+
+/**
+ * Creates a new timer base, which will calibrate itself during creation.
+ * @note This function is not threadsafe.
+ * @param gl the new timer or NULL to initialize the global timer base
+ */
 CHASSIS_API void chassis_timestamps_global_init(chassis_timestamps_global_t *gl);
+
+CHASSIS_API void chassis_timestamps_global_free(chassis_timestamps_t *gl);
 
 #endif

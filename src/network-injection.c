@@ -25,6 +25,7 @@
 #include "network-mysqld-packet.h"
 #include "glib-ext.h"
 #include "lua-env.h"
+#include "chassis-timings.h"
 
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
@@ -48,7 +49,8 @@ injection *injection_new(int id, GString *query) {
 	 * we have to assume that injection_new() is only used by the read_query call
 	 * which should be fine
 	 */
-	g_get_current_time(&(i->ts_read_query));
+	i->ts_read_query = chassis_get_rel_microseconds();
+	/* g_get_current_time(&(i->ts_read_query)); */
     
 	return i;
 }

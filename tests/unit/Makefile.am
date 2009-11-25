@@ -100,7 +100,9 @@ check_chassis_path_SOURCES = \
 	$(top_srcdir)/src/chassis-event-thread.c \
 	$(top_srcdir)/src/chassis-plugin.c \
 	$(top_srcdir)/src/chassis-path.c \
-	$(top_srcdir)/src/chassis-stats.c
+	$(top_srcdir)/src/chassis-stats.c \
+	$(top_srcdir)/src/my_rdtsc.c \
+	$(top_srcdir)/src/chassis-timings.c
 check_chassis_path_CPPFLAGS = -I$(top_srcdir)/src $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS)
 check_chassis_path_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(EVENT_LIBS) $(GTHREAD_LIBS)
 
@@ -131,7 +133,9 @@ t_network_injection_SOURCES  = \
 	$(top_srcdir)/src/glib-ext.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
-	$(top_srcdir)/src/network-injection.c 
+	$(top_srcdir)/src/network-injection.c \
+	$(top_srcdir)/src/my_rdtsc.c \
+	$(top_srcdir)/src/chassis-timings.c
 
 t_network_injection_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
 t_network_injection_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)
