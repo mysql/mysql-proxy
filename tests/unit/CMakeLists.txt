@@ -81,6 +81,8 @@ ADD_EXECUTABLE(check_chassis_path
 	../../src/chassis-plugin.c
 	../../src/chassis-stats.c 
 	../../src/chassis-path.c
+	../../src/chassis-timings.c
+	../../src/my_rdtsc.c
 )
 
 TARGET_LINK_LIBRARIES(check_chassis_path
@@ -97,6 +99,8 @@ ADD_EXECUTABLE(t_network_injection
 	../../src/glib-ext.c 
 	../../src/network-mysqld-proto.c 
 	../../src/network-mysqld-packet.c 
+	../../src/chassis-timings.c
+	../../src/my_rdtsc.c
 )
 
 TARGET_LINK_LIBRARIES(t_network_injection
