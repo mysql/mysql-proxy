@@ -310,12 +310,24 @@ static int chassis_setenv_lua(const char *key, const char *value) {
 	 *  so we use _putenv. Since we only set ASCII chars, this
 	 *  is safe.
 	 */
-	gchar *env_path = g_strdup_printf("%s=%s", key, value);
-	r = _putenv(env_path);
-	g_free(env_path);
+	r = _putenv_s(key, value);
 #else
-	r = g_setenv(key, value, 1);
+	r = g_setenv(key, value, 1) ? 0 : -1; /* g_setenv() returns TRUE/FALSE */
 #endif
+
+	if (0 == r) {
+		/* the setenv() succeeded, double-check it */
+		if (!getenv(key)) {
+			/* check that getenv() returns what we did set */
+			g_critical("%s: setting %s = %s failed: (getenv() == NULL)", G_STRLOC,
+					key, value);
+		} else if (0 != strcmp(getenv(key), value)) {
+			g_critical("%s: setting %s = %s failed: (getenv() == %s)", G_STRLOC,
+					key, value,
+					getenv(key));
+		}
+	}
+
 	return r;
 }
 
@@ -578,7 +590,7 @@ int main_cmdline(int argc, char **argv) {
 	 * we want to derive it from the basedir ...
 	 */
 	if (lua_path) {
-		if (chassis_setenv_lua(LUA_PATH, lua_path)) {
+		if (0 != chassis_setenv_lua(LUA_PATH, lua_path)) {
 			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
 					LUA_PATH, lua_path,
 					g_strerror(errno));
