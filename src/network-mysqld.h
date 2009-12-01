@@ -251,14 +251,6 @@ struct network_mysqld_con {
 	network_socket *client;
 
 	/**
-	 * A boolean flag indicating that the data sent was larger that the max_packet_size.
-	 * 
-	 * This is used for commands that need to send large amounts of data, e.g. blobs, to correctly
-	 * parse the following packet received (which will not appear to have a valid packet header otherwise).
-	 */
-	int is_overlong_packet;
-
-	/**
 	 * Function pointers to the plugin's callbacks.
 	 * 
 	 * Plugins don't need set any of these, but if unset, the plugin will not have the opportunity to
