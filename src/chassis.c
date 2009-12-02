@@ -506,6 +506,11 @@ int main_cmdline(int argc, char **argv) {
 	}
 
 	if (default_file) {
+		if (chassis_filemode_check(default_file) != 0) {
+			exit_code = EXIT_FAILURE; 
+			exit_location = G_STRLOC;
+			goto exit_nicely;
+		}
 		keyfile = g_key_file_new();
 		g_key_file_set_list_separator(keyfile, ',');
 

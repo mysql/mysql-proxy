@@ -15,7 +15,7 @@ else
 bin_PROGRAMS            = mysql-binlog-dump mysql-myisam-dump mysql-proxy
 endif
 
-mysql_proxy_SOURCES		= chassis.c 
+mysql_proxy_SOURCES		= chassis.c
 mysql_proxy_CPPFLAGS	= $(BUILD_CPPFLAGS)
 mysql_proxy_CFLAGS		= $(BUILD_CFLAGS)
 mysql_proxy_LDADD		= $(BUILD_LDADD)
@@ -58,6 +58,7 @@ libmysql_chassis_la_SOURCES = \
 	chassis-event-thread.c \
 	chassis-keyfile.c \
 	chassis-path.c \
+	chassis-perm.c \
 	chassis-limits.c \
 	chassis-stats.c
 
@@ -110,6 +111,7 @@ include_HEADERS=\
 	chassis-keyfile.h \
 	chassis-mainloop.h \
 	chassis-path.h \
+	chassis-perm.h \
 	chassis-limits.h \
 	chassis-event-thread.h \
 	glib-ext.h \

@@ -13,9 +13,20 @@ TESTS=\
 	t_network_mysqld_packet \
 	t_network_mysqld_masterinfo \
 	t_chassis_timings \
+	check_chassis_filepermissions \
 	check_chassis_path
 
 check_PROGRAMS=$(TESTS)
+
+check_chassis_filepermissions_SOURCES = check_chassis_filepermissions.c \
+	$(top_srcdir)/src/chassis-perm.c
+
+check_chassis_filepermissions_CPPFLAGS = \
+	-I$(top_srcdir)/src/ $(GLIB_CFLAGS) -I$(top_srcdir) \
+	$(MYSQL_CFLAGS)
+
+check_chassis_filepermissions_LDADD = $(GLIB_LIBS) $(GTHREAD_LIBS)
+
 check_sql_tokenizer_SOURCES  = check_sql_tokenizer.c \
 	$(top_srcdir)/lib/sql-tokenizer.l \
 	$(top_srcdir)/src/glib-ext.c
