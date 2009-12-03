@@ -25,6 +25,4 @@
 
 CHASSIS_API int chassis_filemode_check(gchar *filename);
 
-/*@}*/
-
 #endif

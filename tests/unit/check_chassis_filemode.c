@@ -28,7 +28,7 @@
 
 #include <glib.h>
 
-#include "chassis-perm.h"
+#include "chassis-filemode.h"
 
 #if GLIB_CHECK_VERSION(2, 16, 0)
 
@@ -44,25 +44,23 @@ void test_file_permissions(void)
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK);
 
-	g_assert(mktemp(filename) == filename);
-
 	/* 1st test: non-existent file */
-	g_assert(chassis_filemode_check(filename) == -1);
+	g_assert_cmpint(chassis_filemode_check("/tmp/a_non_existent_file"), ==, -1);
+
+	fd = mkstemp(filename);
 
 	/* 2nd test: too permissive */
-	fd = open(filename, O_CREAT | O_TRUNC, TOO_OPEN);
-	g_assert(fd >= 0);
-	g_assert(chassis_filemode_check(filename) == 1);
+	g_assert_cmpint(chassis_filemode_check(filename), ==, 1);
 
 	/* 3rd test: OK */
 	chmod(filename, GOOD_PERMS);
-	g_assert(chassis_filemode_check(filename) == 0);
+	g_assert_cmpint(chassis_filemode_check(filename), ==, 0);
 
 	/* 4th test: non-regular file */
 	close (fd);
 	remove(filename);
 	mkdir(filename, GOOD_PERMS);
-	g_assert(chassis_filemode_check(filename) == -1);
+	g_assert_cmpint(chassis_filemode_check(filename), ==, -1);
 
 	/* clean up */
 	rmdir(filename);

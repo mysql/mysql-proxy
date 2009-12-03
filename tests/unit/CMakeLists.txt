@@ -93,6 +93,16 @@ TARGET_LINK_LIBRARIES(check_chassis_path
 	${WINSOCK_LIBRARIES}
 )
 
+ADD_EXECUTABLE(check_chassis_filemode
+	check_chassis_filemode.c 
+	../../src/chassis-filemode.c 
+)
+
+TARGET_LINK_LIBRARIES(check_chassis_filemode
+	${GLIB_LIBRARIES}
+	${GTHREAD_LIBRARIES}
+)
+
 ADD_EXECUTABLE(t_network_injection
 	t_network_injection.c 
 	../../src/network-injection.c 
@@ -129,8 +139,11 @@ TARGET_LINK_LIBRARIES(t_network_backend
 
 IF(WIN32)
 # turn off _declspec(dllimport) in tests, since we link statically
-set_property(TARGET check_chassis_log check_plugin check_mysqld_proto check_loadscript check_chassis_path t_network_injection t_network_backend
-             APPEND PROPERTY COMPILE_DEFINITIONS "mysql_chassis_proxy_STATIC" COMPILE_DEFINITIONS "mysql_chassis_STATIC")
+set_property(TARGET check_chassis_log check_plugin check_mysqld_proto
+	check_loadscript check_chassis_path check_chassis_filemode
+	t_network_injection t_network_backend
+		APPEND PROPERTY COMPILE_DEFINITIONS "mysql_chassis_proxy_STATIC"
+		COMPILE_DEFINITIONS "mysql_chassis_STATIC")
 ENDIF(WIN32)
 
 ## adding all tests
@@ -141,6 +154,7 @@ ADD_TEST(check_mysqld_proto check_mysqld_proto)
 #ADD_TEST(check_sql_tokenizer check_sql_tokenizer)
 ADD_TEST(check_loadscript check_loadscript)
 ADD_TEST(check_chassis_path check_chassis_path)
+ADD_TEST(check_chassis_filemode check_chassis_filemode)
 ADD_TEST(t_network_injection t_network_injection)
 ADD_TEST(t_network_backend t_network_backend)
 

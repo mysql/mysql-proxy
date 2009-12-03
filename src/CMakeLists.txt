@@ -27,7 +27,7 @@ SET(chassis_sources
 	chassis-mainloop.c
 	chassis-keyfile.c
 	chassis-path.c
-	chassis-perm.c
+	chassis-filemode.c
 	chassis-limits.c
 	chassis-stats.c
 	chassis-timings.c
@@ -163,7 +163,7 @@ INSTALL(FILES
 	chassis-keyfile.h
 	chassis-mainloop.h
 	chassis-path.h
-	chassis-perm.h
+	chassis-filemode.h
 	chassis-limits.h
 	chassis-event-thread.h
 	glib-ext.h
