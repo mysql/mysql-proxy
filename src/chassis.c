@@ -79,6 +79,7 @@
 #include "chassis-mainloop.h"
 #include "chassis-path.h"
 #include "chassis-limits.h"
+#include "chassis-filemode.h"
 
 #ifdef _WIN32
 static char **shell_argv;

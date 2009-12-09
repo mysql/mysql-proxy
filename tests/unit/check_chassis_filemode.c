@@ -50,6 +50,7 @@ void test_file_permissions(void)
 	fd = mkstemp(filename);
 
 	/* 2nd test: too permissive */
+	chmod(filename, TOO_OPEN);
 	g_assert_cmpint(chassis_filemode_check(filename), ==, 1);
 
 	/* 3rd test: OK */
