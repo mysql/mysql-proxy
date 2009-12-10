@@ -14,6 +14,7 @@
 #cmakedefine HAVE_SYSLOG_H
 #cmakedefine HAVE_SYS_IOCTL_H
 #cmakedefine HAVE_SYS_FILIO_H
+#cmakedefine HAVE_SYS_PARAM_H
 #cmakedefine HAVE_SYS_RESOURCE_H
 #cmakedefine HAVE_SYS_SOCKET_H
 #cmakedefine HAVE_SYS_SOCKIO_H

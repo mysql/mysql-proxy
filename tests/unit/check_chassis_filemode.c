@@ -17,20 +17,30 @@
  $%ENDLICENSE%$ */
 
 /** @addtogroup unittests Unit tests */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+#ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
+#endif
+#ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
+#endif
 #include <fcntl.h>
 
 #include <glib.h>
 
 #include "chassis-filemode.h"
 
-#if GLIB_CHECK_VERSION(2, 16, 0)
+#ifndef _WIN32
+/* only run theses tests on non windows platforms */
 
 #define TOO_OPEN	0666
 #define GOOD_PERMS	0660

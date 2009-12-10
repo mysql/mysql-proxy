@@ -95,6 +95,7 @@ AC_CHECK_HEADERS([\
 	netinet/in.h \
 	sys/filio.h  \
 	sys/socket.h \
+	sys/param.h \
 	sys/time.h \
        	sys/un.h \
        	sys/uio.h \
