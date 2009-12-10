@@ -34,6 +34,7 @@
 #include <sys/param.h>
 #endif
 #include <fcntl.h>
+#include <errno.h>
 
 #include <glib.h>
 
@@ -51,6 +52,7 @@ void test_file_permissions(void)
 {
 	char filename[MAXPATHLEN] = "/tmp/permsXXXXX";
 	int	 fd;
+	int ret;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK);
 
@@ -58,23 +60,59 @@ void test_file_permissions(void)
 	g_assert_cmpint(chassis_filemode_check("/tmp/a_non_existent_file"), ==, -1);
 
 	fd = mkstemp(filename);
+	if (fd < 0) {
+		g_critical("%s: mkstemp(%s) failed: %s (%d)",
+				G_STRLOC,
+				filename,
+				g_strerror(errno), errno);
+	}
+	g_assert_cmpint(fd, >=, 0);
 
 	/* 2nd test: too permissive */
-	chmod(filename, TOO_OPEN);
+	ret = chmod(filename, TOO_OPEN);
+	if (ret < 0) {
+		g_critical("%s: chmod(%s) failed: %s (%d)",
+				G_STRLOC,
+				filename,
+				g_strerror(errno), errno);
+	}
+	g_assert_cmpint(ret, ==, 0);
 	g_assert_cmpint(chassis_filemode_check(filename), ==, 1);
 
 	/* 3rd test: OK */
-	chmod(filename, GOOD_PERMS);
+	ret = chmod(filename, GOOD_PERMS);
+	if (ret < 0) {
+		g_critical("%s: chmod(%s) failed: %s (%d)",
+				G_STRLOC,
+				filename,
+				g_strerror(errno), errno);
+	}
+	g_assert_cmpint(ret, ==, 0);
 	g_assert_cmpint(chassis_filemode_check(filename), ==, 0);
 
 	/* 4th test: non-regular file */
-	close (fd);
+	close(fd);
 	remove(filename);
-	mkdir(filename, GOOD_PERMS);
+	ret = mkdir(filename, GOOD_PERMS);
+	if (ret < 0) {
+		g_critical("%s: mkdir(%s) failed: %s (%d)",
+				G_STRLOC,
+				filename,
+				g_strerror(errno), errno);
+	}
+	g_assert_cmpint(ret, ==, 0);
 	g_assert_cmpint(chassis_filemode_check(filename), ==, -1);
 
 	/* clean up */
-	rmdir(filename);
+	ret = rmdir(filename);
+	if (ret < 0) {
+		g_critical("%s: rmdir(%s) failed: %s (%d)",
+				G_STRLOC,
+				filename,
+				g_strerror(errno), errno);
+	}
+	g_assert_cmpint(ret, ==, 0);
+
 }
 /*@}*/
 
