@@ -50,7 +50,7 @@
  */
 void test_file_permissions(void)
 {
-	char filename[MAXPATHLEN] = "/tmp/permsXXXXX";
+	char filename[MAXPATHLEN] = "/tmp/permsXXXXXX";
 	int	 fd;
 	int ret;
 	
