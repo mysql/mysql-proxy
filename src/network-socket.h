@@ -25,6 +25,7 @@
 #endif
 
 #include "network-exports.h"
+#include "network-queue.h"
 
 #ifdef HAVE_SYS_TIME_H
 /**
@@ -64,14 +65,6 @@ typedef enum {
 	NETWORK_SOCKET_ERROR,
 	NETWORK_SOCKET_ERROR_RETRY
 } network_socket_retval_t;
-
-/* a input or output stream */
-typedef struct {
-	GQueue *chunks;
-
-	size_t len;    /* len in all chunks (w/o the offset) */
-	size_t offset; /* offset in the first chunk */
-} network_queue;
 
 typedef struct network_mysqld_auth_challenge network_mysqld_auth_challenge;
 typedef struct network_mysqld_auth_response network_mysqld_auth_response;
@@ -113,13 +106,6 @@ typedef struct {
 	 */	
 	GString *default_db;     /** default-db of this side of the connection */
 } network_socket;
-
-NETWORK_API network_queue *network_queue_init(void) G_GNUC_DEPRECATED;
-NETWORK_API network_queue *network_queue_new(void);
-NETWORK_API void network_queue_free(network_queue *queue);
-NETWORK_API int network_queue_append(network_queue *queue, GString *chunk);
-NETWORK_API GString *network_queue_pop_string(network_queue *queue, gsize steal_len, GString *dest);
-NETWORK_API GString *network_queue_peek_string(network_queue *queue, gsize peek_len, GString *dest);
 
 NETWORK_API network_socket *network_socket_init(void) G_GNUC_DEPRECATED;
 NETWORK_API network_socket *network_socket_new(void);

@@ -7,6 +7,7 @@ TESTS=\
 	check_loadscript \
 	check_chassis_log \
 	t_network_socket \
+	t_network_queue \
 	t_network_address \
 	t_network_backend \
 	t_network_injection \
@@ -50,6 +51,7 @@ t_network_mysqld_packet_SOURCES  = \
 	t_network_mysqld_packet.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
+	$(top_srcdir)/src/network-queue.c \
 	$(top_srcdir)/src/network-socket.c \
 	$(top_srcdir)/src/network-address.c \
 	$(top_srcdir)/src/glib-ext.c
@@ -90,10 +92,19 @@ t_network_socket_SOURCES  = \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network-address.c \
+	$(top_srcdir)/src/network-queue.c \
 	$(top_srcdir)/src/network-socket.c
 
 t_network_socket_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
 t_network_socket_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)
+
+t_network_queue_SOURCES  = \
+	t_network_queue.c \
+	$(top_srcdir)/src/glib-ext.c \
+	$(top_srcdir)/src/network-queue.c
+
+t_network_queue_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
+t_network_queue_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)
 
 t_network_address_SOURCES  = \
 	t_network_address.c \
@@ -130,6 +141,7 @@ t_network_backend_SOURCES  = \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network-conn-pool.c \
 	$(top_srcdir)/src/network-address.c \
+	$(top_srcdir)/src/network-queue.c \
 	$(top_srcdir)/src/network-socket.c
 
 t_network_backend_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)

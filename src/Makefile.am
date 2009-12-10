@@ -77,6 +77,7 @@ libmysql_proxy_la_SOURCES = \
 	network-mysqld-masterinfo.c \
 	network-conn-pool.c  \
 	network-conn-pool-lua.c  \
+	network-queue.c \
 	network-socket.c \
 	network-socket-lua.c \
 	network-address.c \
@@ -101,6 +102,7 @@ include_HEADERS=\
 	network-mysqld-masterinfo.h \
 	network-conn-pool.h \
 	network-conn-pool-lua.h \
+	network-queue.h \
 	network-socket.h \
 	network-socket-lua.h \
 	network-address.h \
