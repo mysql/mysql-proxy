@@ -23,6 +23,8 @@
 
 #include <gmodule.h>
 
+#include "chassis-filemode.h"
+
 /*
  * check whether the given filename points to a file the permissions
  * of which are 0 for group and other (ie read/writable only by owner).
