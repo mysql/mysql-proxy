@@ -144,7 +144,7 @@ ADD_EXECUTABLE(t_network_queue
 	../../src/glib-ext.c
 )
 
-TARGET_LINK_LIBRARIES(t_network_backend
+TARGET_LINK_LIBRARIES(t_network_queue
 	${GLIB_LIBRARIES}
 	${GTHREAD_LIBRARIES}
 	${EVENT_LIBRARIES}
