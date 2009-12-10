@@ -124,6 +124,7 @@ ADD_EXECUTABLE(t_network_backend
 	../../src/network-backend.c
 	../../src/network-conn-pool.c
 	../../src/network-socket.c
+	../../src/network-queue.c
 	../../src/glib-ext.c
 	../../src/network-mysqld-proto.c
 	../../src/network-mysqld-packet.c
@@ -137,11 +138,25 @@ TARGET_LINK_LIBRARIES(t_network_backend
 	${WINSOCK_LIBRARIES}
 )
 
+ADD_EXECUTABLE(t_network_queue
+	t_network_queue.c
+	../../src/network-queue.c
+	../../src/glib-ext.c
+)
+
+TARGET_LINK_LIBRARIES(t_network_backend
+	${GLIB_LIBRARIES}
+	${GTHREAD_LIBRARIES}
+	${EVENT_LIBRARIES}
+	${WINSOCK_LIBRARIES}
+)
+
+
 IF(WIN32)
 # turn off _declspec(dllimport) in tests, since we link statically
 set_property(TARGET check_chassis_log check_plugin check_mysqld_proto
 	check_loadscript check_chassis_path check_chassis_filemode
-	t_network_injection t_network_backend
+	t_network_injection t_network_backend t_network_queue
 		APPEND PROPERTY COMPILE_DEFINITIONS "mysql_chassis_proxy_STATIC"
 		COMPILE_DEFINITIONS "mysql_chassis_STATIC")
 ENDIF(WIN32)
