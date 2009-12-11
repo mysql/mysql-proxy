@@ -129,6 +129,6 @@ int main(int argc, char **argv) {
 }
 #else
 int main() {
-	return 77;
+	return 0; /* for autoconf we would use 77 here to skip, but cmake (as this is windows) don't count skipped tests so we just pretend it worked */
 }
 #endif
