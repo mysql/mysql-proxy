@@ -58,7 +58,8 @@ chassis_filemode_check(gchar *filename)
 #define MASK (S_IROTH|S_IWOTH|S_IXOTH)
 
 	if ((fmode & MASK) != 0) {
-		g_critical("%s: %s permissions not secure", G_STRLOC, filename);
+		g_critical("%s: %s permissions not secure (0660 or stricter required)",
+		    G_STRLOC, filename);
 		return 1;
 	}
 	
