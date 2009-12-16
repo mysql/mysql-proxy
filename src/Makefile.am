@@ -41,7 +41,7 @@ libmysql_chassis_timing_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAG
 libmysql_chassis_timing_la_LIBADD   = $(GLIB_LIBS)
 if USE_SUNCC_ASSEMBLY
 libmysql_chassis_timing_la_CPPFLAGS += \
-	my_timer_cycles.il
+	$(top_srcdir)/src/my_timer_cycles.il
 endif
 
 
