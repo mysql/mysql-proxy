@@ -37,6 +37,12 @@ scriptdir=`dirname $0`
 scriptname=`basename $0`
 scriptdir=`(cd "$scriptdir/"; pwd)`
 scriptdir=`dirname "$scriptdir"`
+# having LD_LIBRARY_PATH_64 set will override LD_LIBRARY_PATH 
+# for 64bit libraries on Solaris. since we don't anticipate needing
+# anything from "outside", we just unset it
+if [ `uname -s` = SunOS ]; then
+	unset LD_LIBRARY_PATH_64
+fi
 LUA_PATH="$scriptdir/lib/@PACKAGE_NAME@/lua/?.lua;$LUA_PATH"
 LUA_CPATH="$scriptdir/lib/@PACKAGE_NAME@/lua/?.@DYNLIB_LUA_SUFFIX@;$LUA_CPATH"
 @DYNLIB_PATH_VAR@="$@DYNLIB_PATH_VAR@:$scriptdir/lib/"
