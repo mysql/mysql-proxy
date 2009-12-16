@@ -22,7 +22,7 @@
 #include <string.h>
 
 #include <glib.h>
-
+#include "glib-ext.h"
 #include "sql-tokenizer.h"
 
 #if GLIB_CHECK_VERSION(2, 16, 0)
