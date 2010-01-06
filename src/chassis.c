@@ -531,7 +531,11 @@ int main_cmdline(int argc, char **argv) {
 	 * and print their version numbers, too. then we exit cleanly.
 	 */
 	if (print_version) {
-		printf("%s" CHASSIS_NEWLINE, PACKAGE_STRING); 
+		/* allow to pass down a build-tag at build-time which gets hard-coded into the binary */
+#ifndef CHASSIS_BUILD_TAG
+#define CHASSIS_BUILD_TAG PACKAGE_STRING
+#endif
+		printf("%s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG); 
 		printf("  glib2: %d.%d.%d" CHASSIS_NEWLINE, GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
 #ifdef HAVE_EVENT_H
 		printf("  libevent: %s" CHASSIS_NEWLINE, event_get_version());
