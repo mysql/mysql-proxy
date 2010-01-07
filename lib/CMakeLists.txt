@@ -51,6 +51,8 @@ SET(LUA_LFS_SOURCES
 SET(LUA_MYSQL_SOURCES
 	mysql-proto.c
 	sql-tokenizer.c 
+	sql-tokenizer-keywords.c 
+	sql-tokenizer-tokens.c 
 	sql-tokenizer-lua.c 
 )
 

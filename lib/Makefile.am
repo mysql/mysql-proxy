@@ -55,6 +55,8 @@ mysql_la_SOURCES  = \
 	mysql-proto.c \
 	mysql-password.c \
 	sql-tokenizer.l \
+	sql-tokenizer-tokens.c \
+	sql-tokenizer-keywords.c \
 	sql-tokenizer-lua.c 
 ## get libtool to build a shared-lib
 mysql_la_CPPFLAGS = ${LUA_CFLAGS} ${GLIB_CFLAGS} -I${top_srcdir}/src/ ${MYSQL_CFLAGS} -I${top_builddir}/lib/
@@ -67,7 +69,8 @@ lpeg_la_LDFLAGS  = $(AM_LDFLAGS) -module -avoid-version
 
 
 noinst_HEADERS = \
-	sql-tokenizer.h 
+	sql-tokenizer.h  \
+	sql-tokenizer-keywords.h 
 
 EXTRA_DIST += \
 	glib2.def \
@@ -80,3 +83,19 @@ EXTRA_DIST += \
 
 DISTCLEANFILES = \
 	sql-tokenizer.c
+
+noinst_PROGRAMS=sql-tokenizer-gen
+
+sql_tokenizer_gen_SOURCES=\
+	sql-tokenizer-gen.c \
+	sql-tokenizer-tokens.c
+
+sql_tokenizer_gen_CPPFLAGS=${GLIB_CFLAGS} -I${srcdir}
+sql_tokenizer_gen_LDADD=${GLIB_LIBS}
+
+sql-tokenizer.c: sql-tokenizer-keywords.c
+
+sql-tokenizer-keywords.c: sql-tokenizer-gen
+	${builddir}/sql-tokenizer-gen > ${builddir}/sql-tokenizer-keywords.c
+
+

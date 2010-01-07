@@ -53,6 +53,8 @@ TARGET_LINK_LIBRARIES(check_mysqld_proto
 #ADD_EXECUTABLE(check_sql_tokenizer
 #	check_sql_tokenizer.c 
 #	../../build-src/sql-tokenizer.c
+#	../../build-src/sql-tokenizer-keywords.c 
+#	../../build-src/sql-tokenizer-tokens.c 
 #	)
 
 #TARGET_LINK_LIBRARIES(check_sql_tokenizer

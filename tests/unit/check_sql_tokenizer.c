@@ -138,33 +138,6 @@ START_TEST(test_token2name) {
 } END_TEST
 
 /**
- * @test check if we can map all tokens to a name and back again
- *   
- */
-START_TEST(test_keyword2token) {
-	gsize i;
-
-	const struct {
-		const char *token;
-		sql_token_id id;
-	} keywords[] = {
-		{ "SELECT", TK_SQL_SELECT },
-		{ "INSERT", TK_SQL_INSERT },
-
-		{ NULL, TK_UNKNOWN }
-	};
-
-	/* convert tokens to id and back to name */
-	for (i = 0; keywords[i].token; i++) {
-		g_assert_cmpint(keywords[i].id, ==, sql_token_get_id(keywords[i].token));
-	}
-
-	/* yeah, COMMIT should be a normal literal */
-	g_assert_cmpint(TK_LITERAL, ==, sql_token_get_id("COMMIT"));
-} END_TEST
-
-
-/**
  * @test check if single line comments are recognized properly
  */
 START_TEST(test_simple_dashdashcomment) {
@@ -365,20 +338,34 @@ g_assert_cmpstr(token->text->str, ==, t_text);
 } END_TEST
 /* @} */
 
-void test_g_istr_hash() {
-	g_assert_cmpint(g_istr_hash("foo"), ==, g_istr_hash("foo"));
-	g_assert_cmpint(g_istr_hash("foo"), !=, g_istr_hash("boo"));
+/**
+ * get all keywords and try if we get all the ids
+ */
+void test_tokenizer_keywords() {
+	gsize i;
+
+	for (i = 0; sql_token_get_name(i); i++) {
+		const char *keyword;
+
+		/** only tokens with TK_SQL_* are keyworks */
+		if (0 != strncmp(sql_token_get_name(i), "TK_SQL_", sizeof("TK_SQL_") - 1)) continue;
+		
+		keyword = sql_token_get_name(i) + sizeof("TK_SQL_") - 1;
+
+		g_assert_cmpint(sql_token_get_id(keyword), ==, i);
+	}
+		
+	g_assert_cmpint(sql_token_get_id("COMMIT"), ==, TK_LITERAL);
 }
 
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
 
-	g_test_add_func("/core/hash_str_i", test_g_istr_hash);
+	g_test_add_func("/core/tokenizer_keywords", test_tokenizer_keywords);
 
 	g_test_add_func("/core/tokenizer", test_tokenizer);
 	g_test_add_func("/core/tokenizer_token2name", test_token2name);
-	g_test_add_func("/core/tokenizer_keywork2token", test_keyword2token);
 	g_test_add_func("/core/tokenizer_table_name_underscore", test_table_name_underscore);
 	g_test_add_func("/core/tokenizer_simple_dashdashcomment", test_simple_dashdashcomment);
 	g_test_add_func("/core/tokenizer_dashdashcomment", test_dashdashcomment);

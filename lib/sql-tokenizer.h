@@ -392,6 +392,8 @@ GPtrArray * sql_tokens_new(void);
  */
 void sql_tokens_free(GPtrArray *tokens);
 
+int sql_token_get_last_id();
+
 /*@}*/
 
 #endif
