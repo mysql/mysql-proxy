@@ -380,6 +380,7 @@ static int lua_proto_append_response_packet (lua_State *L) {
 
 	if (network_mysqld_proto_append_auth_response(packet, auth_response)) {
 		network_mysqld_auth_response_free(auth_response);
+		g_string_free(packet, TRUE);
 
 		luaL_error(L, "to_response_packet() failed");
         g_string_free(packet, TRUE);
