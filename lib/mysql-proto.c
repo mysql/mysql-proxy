@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2008 MySQL AB, 2008 Sun Microsystems, Inc
+ Copyright (C) 2008 MySQL AB, 2008-2010 Sun Microsystems, Inc
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -382,12 +382,14 @@ static int lua_proto_append_response_packet (lua_State *L) {
 		network_mysqld_auth_response_free(auth_response);
 
 		luaL_error(L, "to_response_packet() failed");
+        g_string_free(packet, TRUE);
 		return 0;
 	}
 
 	lua_pushlstring(L, S(packet));
 	
 	network_mysqld_auth_response_free(auth_response);
+	g_string_free(packet, TRUE);
 
 	return 1;
 }
