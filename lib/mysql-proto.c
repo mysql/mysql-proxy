@@ -111,10 +111,10 @@ static int lua_proto_append_err_packet (lua_State *L) {
 	packet = g_string_new(NULL);	
 	network_mysqld_proto_append_err_packet(packet, err_packet);
 
-	lua_pushlstring(L, S(packet));
-	
 	network_mysqld_err_packet_free(err_packet);
 
+	lua_pushlstring(L, S(packet));
+	
 	g_string_free(packet, TRUE);
 
 	return 1;
@@ -232,9 +232,9 @@ static int lua_proto_append_masterinfo_string (lua_State *L) {
         packet = g_string_new(NULL);
         network_mysqld_masterinfo_append(packet, info);
 
-        lua_pushlstring(L, S(packet));
-
         network_mysqld_masterinfo_free(info);
+
+        lua_pushlstring(L, S(packet));
 
         g_string_free(packet, TRUE);
 
@@ -258,9 +258,9 @@ static int lua_proto_append_ok_packet (lua_State *L) {
 	packet = g_string_new(NULL);	
 	network_mysqld_proto_append_ok_packet(packet, ok_packet);
 
-	lua_pushlstring(L, S(packet));
-	
 	network_mysqld_ok_packet_free(ok_packet);
+	
+	lua_pushlstring(L, S(packet));
 	
 	g_string_free(packet, TRUE);
 
@@ -314,9 +314,9 @@ static int lua_proto_append_eof_packet (lua_State *L) {
 	packet = g_string_new(NULL);	
 	network_mysqld_proto_append_eof_packet(packet, eof_packet);
 
-	lua_pushlstring(L, S(packet));
-	
 	network_mysqld_eof_packet_free(eof_packet);
+	
+	lua_pushlstring(L, S(packet));
 	
 	g_string_free(packet, TRUE);
 
@@ -386,10 +386,11 @@ static int lua_proto_append_response_packet (lua_State *L) {
         g_string_free(packet, TRUE);
 		return 0;
 	}
+	
+	network_mysqld_auth_response_free(auth_response);
 
 	lua_pushlstring(L, S(packet));
 	
-	network_mysqld_auth_response_free(auth_response);
 	g_string_free(packet, TRUE);
 
 	return 1;
@@ -453,10 +454,11 @@ static int lua_proto_append_challenge_packet (lua_State *L) {
 
 	packet = g_string_new(NULL);	
 	network_mysqld_proto_append_auth_challenge(packet, auth_challenge);
+	
+	network_mysqld_auth_challenge_free(auth_challenge);
 
 	lua_pushlstring(L, S(packet));
 	
-	network_mysqld_auth_challenge_free(auth_challenge);
 	g_string_free(packet, TRUE);
 
 	return 1;
