@@ -37,8 +37,6 @@
 #include <stdlib.h>  /* for exit */
 #endif
 
-#define YY_DECL int sql_tokenizer_internal(GPtrArray *tokens)
-
 static void sql_token_append(GPtrArray *tokens, sql_token_id token_id, gchar *text);
 static void sql_token_append_last_token(GPtrArray *tokens, sql_token_id token_id, gchar *text);
 sql_token_id sql_token_get_id(const gchar *name);
@@ -48,6 +46,7 @@ sql_token_id sql_token_get_id(const gchar *name);
 char quote_char = 0;
 sql_token_id quote_token_id = TK_UNKNOWN;
 sql_token_id comment_token_id = TK_UNKNOWN;
+
 %}
 
 %option case-insensitive
@@ -55,82 +54,84 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 %option never-interactive
 %option 8bit
 %option fast
+%option reentrant
+%option extra-type="GPtrArray *"
 %x COMMENT LINECOMMENT QUOTED
 %%
 
 	/** comments */
-"--"\r?\n       comment_token_id = TK_COMMENT;       sql_token_append(tokens, comment_token_id, "");
-"/*"		comment_token_id = TK_COMMENT;       sql_token_append(tokens, comment_token_id, ""); BEGIN(COMMENT);
-"/*!"		comment_token_id = TK_COMMENT_MYSQL; sql_token_append(tokens, comment_token_id, ""); BEGIN(COMMENT);
-"--"[[:blank:]]		comment_token_id = TK_COMMENT; sql_token_append(tokens, comment_token_id, ""); BEGIN(LINECOMMENT);
-<COMMENT>[^*]*	sql_token_append_last_token(tokens, comment_token_id, yytext);
-<COMMENT>"*"+[^*/]*	sql_token_append_last_token(tokens, comment_token_id, yytext);
+"--"\r?\n       comment_token_id = TK_COMMENT;       sql_token_append(yyget_extra(yyscanner), comment_token_id, "");
+"/*"		comment_token_id = TK_COMMENT;       sql_token_append(yyget_extra(yyscanner), comment_token_id, ""); BEGIN(COMMENT);
+"/*!"		comment_token_id = TK_COMMENT_MYSQL; sql_token_append(yyget_extra(yyscanner), comment_token_id, ""); BEGIN(COMMENT);
+"--"[[:blank:]]		comment_token_id = TK_COMMENT; sql_token_append(yyget_extra(yyscanner), comment_token_id, ""); BEGIN(LINECOMMENT);
+<COMMENT>[^*]*	sql_token_append_last_token(yyget_extra(yyscanner), comment_token_id, yyget_text(yyscanner));
+<COMMENT>"*"+[^*/]*	sql_token_append_last_token(yyget_extra(yyscanner), comment_token_id, yyget_text(yyscanner));
 <COMMENT>"*"+"/"	BEGIN(INITIAL);
 <COMMENT><<EOF>>	BEGIN(INITIAL);
-<LINECOMMENT>[^\n]* sql_token_append_last_token(tokens, comment_token_id, yytext);
+<LINECOMMENT>[^\n]* sql_token_append_last_token(yyget_extra(yyscanner), comment_token_id, yyget_text(yyscanner));
 <LINECOMMENT>\r?\n	BEGIN(INITIAL);
 <LINECOMMENT><<EOF>>	BEGIN(INITIAL);
 
 	/** start of a quote string */
 ["'`]		{ BEGIN(QUOTED);  
-		quote_char = *yytext; 
+		quote_char = *yyget_text(yyscanner); 
 		switch (quote_char) { 
 		case '\'': quote_token_id = TK_STRING; break; 
 		case '"': quote_token_id = TK_STRING; break; 
 		case '`': quote_token_id = TK_LITERAL; break; 
 		} 
-		sql_token_append(tokens, quote_token_id, ""); }
-<QUOTED>[^"'`\\]*	sql_token_append_last_token(tokens, quote_token_id, yytext); /** all non quote or esc chars are passed through */
-<QUOTED>"\\".		sql_token_append_last_token(tokens, quote_token_id, yytext); /** add escaping */
-<QUOTED>["'`]{2}	{ if (yytext[0] == yytext[1] && yytext[1] == quote_char) { 
-				sql_token_append_last_token(tokens, quote_token_id, yytext + 1);  /** doubling quotes */
+		sql_token_append(yyget_extra(yyscanner), quote_token_id, ""); }
+<QUOTED>[^"'`\\]*	sql_token_append_last_token(yyget_extra(yyscanner), quote_token_id, yyget_text(yyscanner)); /** all non quote or esc chars are passed through */
+<QUOTED>"\\".		sql_token_append_last_token(yyget_extra(yyscanner), quote_token_id, yyget_text(yyscanner)); /** add escaping */
+<QUOTED>["'`]{2}	{ if (yyget_text(yyscanner)[0] == yyget_text(yyscanner)[1] && yyget_text(yyscanner)[1] == quote_char) { 
+				sql_token_append_last_token(yyget_extra(yyscanner), quote_token_id, yyget_text(yyscanner) + 1);  /** doubling quotes */
 			} else {
 				/** the pick the first char and put the second back to parsing */
 				yyless(1);
-				sql_token_append_last_token(tokens, quote_token_id, yytext);
+				sql_token_append_last_token(yyget_extra(yyscanner), quote_token_id, yyget_text(yyscanner));
 			}
 			}
-<QUOTED>["'`]	if (*yytext == quote_char) { BEGIN(INITIAL); } else { sql_token_append_last_token(tokens, quote_token_id, yytext); }
+<QUOTED>["'`]	if (*yyget_text(yyscanner) == quote_char) { BEGIN(INITIAL); } else { sql_token_append_last_token(yyget_extra(yyscanner), quote_token_id, yyget_text(yyscanner)); }
 <QUOTED><<EOF>>	BEGIN(INITIAL);
 
 	/** strings, quoting, literals */
 [[:space:]]+	/** ignore WS */
 	/** should be a literal */
-[[:alpha:]_@][[:alnum:]_@]*	sql_token_append(tokens, sql_token_get_id(yytext), yytext);
-[[:alpha:]_@][[:alnum:]_@]*\(	{ yyless(yyleng - 1); sql_token_append(tokens, TK_FUNCTION, yytext); }
+[[:alpha:]_@][[:alnum:]_@]*	sql_token_append(yyget_extra(yyscanner), sql_token_get_id(yyget_text(yyscanner)), yyget_text(yyscanner));
+[[:alpha:]_@][[:alnum:]_@]*\(	{ yyless(yyleng - 1); sql_token_append(yyget_extra(yyscanner), TK_FUNCTION, yyget_text(yyscanner)); }
 
-[[:digit:]]+	sql_token_append(tokens, TK_INTEGER, yytext);
-[[:digit:]]*"."[[:digit:]]+	sql_token_append(tokens, TK_FLOAT, yytext);
-","		sql_token_append(tokens, TK_COMMA, yytext);
-"."		sql_token_append(tokens, TK_DOT, yytext);
+[[:digit:]]+	sql_token_append(yyget_extra(yyscanner), TK_INTEGER, yyget_text(yyscanner));
+[[:digit:]]*"."[[:digit:]]+	sql_token_append(yyget_extra(yyscanner), TK_FLOAT, yyget_text(yyscanner));
+","		sql_token_append(yyget_extra(yyscanner), TK_COMMA, yyget_text(yyscanner));
+"."		sql_token_append(yyget_extra(yyscanner), TK_DOT, yyget_text(yyscanner));
 
-"<"		sql_token_append(tokens, TK_LT, yytext);
-">"		sql_token_append(tokens, TK_GT, yytext);
-"<="		sql_token_append(tokens, TK_LE, yytext);
-">="		sql_token_append(tokens, TK_GE, yytext);
-"="		sql_token_append(tokens, TK_EQ, yytext);
-"<>"		sql_token_append(tokens, TK_NE, yytext);
-"!="		sql_token_append(tokens, TK_NE, yytext);
+"<"		sql_token_append(yyget_extra(yyscanner), TK_LT, yyget_text(yyscanner));
+">"		sql_token_append(yyget_extra(yyscanner), TK_GT, yyget_text(yyscanner));
+"<="		sql_token_append(yyget_extra(yyscanner), TK_LE, yyget_text(yyscanner));
+">="		sql_token_append(yyget_extra(yyscanner), TK_GE, yyget_text(yyscanner));
+"="		sql_token_append(yyget_extra(yyscanner), TK_EQ, yyget_text(yyscanner));
+"<>"		sql_token_append(yyget_extra(yyscanner), TK_NE, yyget_text(yyscanner));
+"!="		sql_token_append(yyget_extra(yyscanner), TK_NE, yyget_text(yyscanner));
 
-"("		sql_token_append(tokens, TK_OBRACE, yytext);
-")"		sql_token_append(tokens, TK_CBRACE, yytext);
-";"		sql_token_append(tokens, TK_SEMICOLON, yytext);
-":="		sql_token_append(tokens, TK_ASSIGN, yytext);
+"("		sql_token_append(yyget_extra(yyscanner), TK_OBRACE, yyget_text(yyscanner));
+")"		sql_token_append(yyget_extra(yyscanner), TK_CBRACE, yyget_text(yyscanner));
+";"		sql_token_append(yyget_extra(yyscanner), TK_SEMICOLON, yyget_text(yyscanner));
+":="		sql_token_append(yyget_extra(yyscanner), TK_ASSIGN, yyget_text(yyscanner));
 
-"*"		sql_token_append(tokens, TK_STAR, yytext);
-"+"		sql_token_append(tokens, TK_PLUS, yytext);
-"/"		sql_token_append(tokens, TK_DIV, yytext);
-"-"		sql_token_append(tokens, TK_MINUS, yytext);
+"*"		sql_token_append(yyget_extra(yyscanner), TK_STAR, yyget_text(yyscanner));
+"+"		sql_token_append(yyget_extra(yyscanner), TK_PLUS, yyget_text(yyscanner));
+"/"		sql_token_append(yyget_extra(yyscanner), TK_DIV, yyget_text(yyscanner));
+"-"		sql_token_append(yyget_extra(yyscanner), TK_MINUS, yyget_text(yyscanner));
 
-"&"		sql_token_append(tokens, TK_BITWISE_AND, yytext);
-"&&"		sql_token_append(tokens, TK_LOGICAL_AND, yytext);
-"|"		sql_token_append(tokens, TK_BITWISE_OR, yytext);
-"||"		sql_token_append(tokens, TK_LOGICAL_OR, yytext);
+"&"		sql_token_append(yyget_extra(yyscanner), TK_BITWISE_AND, yyget_text(yyscanner));
+"&&"		sql_token_append(yyget_extra(yyscanner), TK_LOGICAL_AND, yyget_text(yyscanner));
+"|"		sql_token_append(yyget_extra(yyscanner), TK_BITWISE_OR, yyget_text(yyscanner));
+"||"		sql_token_append(yyget_extra(yyscanner), TK_LOGICAL_OR, yyget_text(yyscanner));
 
-"^"		sql_token_append(tokens, TK_BITWISE_XOR, yytext);
+"^"		sql_token_append(yyget_extra(yyscanner), TK_BITWISE_XOR, yyget_text(yyscanner));
 
 	/** the default rule */
-.		sql_token_append(tokens, TK_UNKNOWN, yytext);
+.		sql_token_append(yyget_extra(yyscanner), TK_UNKNOWN, yyget_text(yyscanner));
 
 %%
 sql_token *sql_token_new(void) {
@@ -213,11 +214,14 @@ sql_token_id sql_token_get_id(const gchar *name) {
  */
 int sql_tokenizer(GPtrArray *tokens, const gchar *str, gsize len) {
 	YY_BUFFER_STATE state;
+	yyscan_t scanner;
 	int ret;
 
-	state = yy_scan_bytes(str, len);
-	ret = sql_tokenizer_internal(tokens);
-	yy_delete_buffer(state);
+	yylex_init_extra(tokens, &scanner);
+	state = yy_scan_bytes(str, len, scanner);
+	ret = yylex(scanner);
+	yy_delete_buffer(state, scanner);
+	yylex_destroy(scanner);
 
 	return ret;
 }
