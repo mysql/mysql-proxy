@@ -358,6 +358,47 @@ void test_tokenizer_keywords() {
 	g_assert_cmpint(sql_token_get_id("COMMIT"), ==, TK_LITERAL);
 }
 
+/**
+ * @test table names can start with a digit, bug#49716
+ *
+ */
+START_TEST(test_table_name_digit) {
+	GPtrArray *tokens = NULL;
+	gsize i;
+
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("SELECT * FROM d.1t"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+#define T(t_id, t_text) \
+		g_assert_cmpint(token->token_id, ==, t_id); \
+		g_assert_cmpstr(token->text->str, ==, t_text);
+
+		switch (i) {
+		case 0: T(TK_SQL_SELECT, "SELECT"); break;
+		case 1: T(TK_STAR, "*"); break;
+		case 2: T(TK_SQL_FROM, "FROM"); break;
+		case 3: T(TK_LITERAL, "d"); break;
+		case 4: T(TK_DOT, "."); break;
+		case 5: T(TK_LITERAL, "1t"); break;
+#undef T
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			break;
+		}
+	}
+
+	/* cleanup */
+	sql_tokens_free(tokens);
+} END_TEST
+
+
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
@@ -373,6 +414,10 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/tokenizer_startstate_reset_quoted", test_startstate_reset_quoted);
 	g_test_add_func("/core/tokenizer_startstate_reset_comment", test_startstate_reset_comment);
 
+#if 0
+	/* for bug#49716, currently tricky to fix. can't skip individual tests with gtester, it seems :( */
+	g_test_add_func("/core/tokenizer_table_name_digit", test_table_name_digit);
+#endif
 	return g_test_run();
 }
 #else
