@@ -20,6 +20,8 @@
 
 #include "chassis-timings.h"
 
+#define MICROS_IN_SEC 1000000
+
 chassis_timestamps_global_t *chassis_timestamps_global = NULL;
 
 chassis_timestamp_t *chassis_timestamp_new(void) {
@@ -82,7 +84,20 @@ guint64 chassis_get_rel_microseconds() {
 	return my_timer_microseconds();
 }
 
-CHASSIS_API guint64 chassis_get_rel_nanoseconds() {
+guint64 chassis_calc_rel_microseconds(guint64 start, guint64 stop) {
+#ifdef WIN32
+	guint64 frequency;
+	g_assert(chassis_timestamps_global != NULL);
+	frequency = chassis_timestamps_global->microseconds_frequency;
+	if (0 == frequency)
+		return stop - start;
+	return ((stop - start) / frequency) * MICROS_IN_SEC;
+#else
+	return stop - start;
+#endif
+}
+
+guint64 chassis_get_rel_nanoseconds() {
 	return my_timer_nanoseconds();
 }
 

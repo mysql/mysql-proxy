@@ -69,6 +69,16 @@ CHASSIS_API guint64 chassis_get_rel_milliseconds();
 CHASSIS_API guint64 chassis_get_rel_microseconds();
 
 /**
+ * Calculate the difference between two relative microsecond readings, taking into account a potential timer frequency.
+ *
+ * @note This is especially necessary for Windows, do _not_ simply subtract the relative readings, those are _not_ in microseconds!
+ * @param start the start time
+ * @param stop the end time
+ * @return the difference of stop and start, adjusted to microseconds
+ */
+CHASSIS_API guint64 chassis_calc_rel_microseconds(guint64 start, guint64 stop);
+
+/**
  * Retrieve a timestamp with a nanosecond resolution.
  *
  * @note The return value must not be assumed to be based on any specific epoch, it is only to be used as a relative measure.

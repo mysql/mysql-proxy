@@ -523,9 +523,9 @@ static int proxy_injection_get(lua_State *L) {
 	} else if (strleq(key, keysize, C("query"))) {
 		lua_pushlstring(L, inj->query->str, inj->query->len);
 	} else if (strleq(key, keysize, C("query_time"))) {
-		lua_pushinteger(L, inj->ts_read_query_result_first - inj->ts_read_query);
+		lua_pushinteger(L, chassis_calc_rel_microseconds(inj->ts_read_query, inj->ts_read_query_result_first));
 	} else if (strleq(key, keysize, C("response_time"))) {
-		lua_pushinteger(L, inj->ts_read_query_result_last - inj->ts_read_query);
+		lua_pushinteger(L, chassis_calc_rel_microseconds(inj->ts_read_query, inj->ts_read_query_result_last));
 	} else if (strleq(key, keysize, C("resultset"))) {
 		/* fields, rows */
 		proxy_resultset_t *res;
