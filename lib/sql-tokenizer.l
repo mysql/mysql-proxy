@@ -34,8 +34,8 @@
 
 #ifdef WIN32
 #include <io.h>  /* for read */
-#include <stdlib.h>  /* for exit */
 #endif
+#include <stdlib.h>
 
 #define YY_DECL int sql_tokenizer_internal(GPtrArray *tokens)
 
