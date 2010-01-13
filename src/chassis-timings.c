@@ -89,9 +89,11 @@ guint64 chassis_calc_rel_microseconds(guint64 start, guint64 stop) {
 	guint64 frequency;
 	g_assert(chassis_timestamps_global != NULL);
 	frequency = chassis_timestamps_global->microseconds_frequency;
-	if (0 == frequency)
+	if (0 == frequency) {
+		g_critical("High resolution counter QueryPerformanceCounter not available on this system. All timer values will be meaningless.");
 		return stop - start;
-	return ((stop - start) / frequency) * MICROS_IN_SEC;
+	}
+	return (guint64) ((stop - start) * (1.0 / frequency) * MICROS_IN_SEC);
 #else
 	return stop - start;
 #endif
