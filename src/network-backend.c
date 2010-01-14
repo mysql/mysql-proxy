@@ -126,6 +126,8 @@ int network_backends_add(network_backends_t *bs, /* const */ gchar *address, bac
 	if (!is_known) g_ptr_array_add(bs->backends, new_backend);
 	g_mutex_unlock(bs->backends_mutex);
 
+	if (!is_known) g_message("added %s backend: %s", (type == BACKEND_TYPE_RW) ? "read/write" : "read-only", address);
+
 	return is_known ? -1 : 0;
 }
 
