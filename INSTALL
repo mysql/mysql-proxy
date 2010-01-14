@@ -38,9 +38,12 @@ pkg-config installs its pkg.m4 into the fink locations while automake looks in
 /usr/local/share/aclocal. Setting ACLOCAL_FLAGS to get a include directory makes aclocal
 aware of the new location.
 
-  $ ACLOCAL_FLAGS="-I /sw/share/aclocal/"
+  $ ACLOCAL_FLAGS="-I /opt/local/share/aclocal"
   $ export ACLOCAL_FLAGS
   $ sh ./autogen.sh
+
+if using fink probably: ACLOCAL_FLAGS="-I /sw/share/aclocal"
+
 
 Installing from Source 
 ======================
@@ -129,8 +132,9 @@ MacOSX
 If you are using darwin-ports pkg-config might not be able to see the glib-2.0.pc in 
 /opt/local/lib/pkgconfig.
 
-  $ PKG_CONFIG_PATH="/opt/local/lib/pkgconfig" \
-      ./configure
+  $ ./configure PKG_CONFIG_PATH=/opt/local/lib/pkgconfig \
+                LDFLAGS=-L/opt/local/lib \
+                CPPFLAGS=-I/opt/local/include
 
 openSUSE
 --------
@@ -280,6 +284,15 @@ In case libevent is not detected correctly, you should set LDFLAGS and CPPFLAGS:
   $ ./configure \
     LDFLAGS="-L/directory/of/libevent.so -levent" \
     CPPFLAGS="-I/directory/of/event.h"
+
+In case the detected MySQL is not the correct one:
+
+export DEFAULT_MYSQL=/path/to/mysql-5.1
+export MYSQL_LIBS="-L${DEFAULT_MYSQL} -lmysqlclient -lz -lm"
+export MYSQL_CFLAGS="-I${DEFAULT_MYSQL}/include"
+export MYSQL_CONFIG="${DEFAULT_MYSQL}/bin/mysql_config"
+export MYSQL_TEST_BIN="${DEFAULT_MYSQL}/bin/mysqltest"
+
 
 Building
 ========
