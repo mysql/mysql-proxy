@@ -661,8 +661,6 @@ int main_cmdline(int argc, char **argv) {
 #ifdef HAVE_SIGACTION
 	/* register the sigsegv interceptor */
 
-	g_set_prgname(argv[0]); /* for g_on_error_stack_frame() */
-
 	memset(&sigsegv_sa, 0, sizeof(sigsegv_sa));
 	sigsegv_sa.sa_handler = sigsegv_handler;
 	sigemptyset(&sigsegv_sa.sa_mask);
