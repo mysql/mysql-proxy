@@ -837,7 +837,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				guint64 wait_event_usec = 0;
 				guint64 lua_usec = 0;
 
-				for (node = con->timestamps->timestamps; node; node = node->next) {
+				for (node = con->timestamps->timestamps->head; node; node = node->next) {
 					chassis_timestamp_t *prev = node->prev ? node->prev->data : NULL;
 					chassis_timestamp_t *cur = node->data;
 					guint64 rel_usec = prev ? cur->usec - prev->usec: 0;

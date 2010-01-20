@@ -53,14 +53,16 @@ chassis_timestamps_t *chassis_timestamps_new(void) {
 	chassis_timestamps_t *ts;
 
 	ts = g_new0(chassis_timestamps_t, 1);
-	ts->timestamps = NULL;
+	ts->timestamps = g_queue_new();
 
 	return ts;
-
 }
 
 void chassis_timestamps_free(chassis_timestamps_t *ts) {
-	g_list_free(ts->timestamps);
+	chassis_timestamp_t *t;
+
+	while ((t = g_queue_pop_head(ts->timestamps))) chassis_timestamp_free(t);
+	g_queue_free(ts->timestamps);
 	g_free(ts);
 }
 
@@ -73,7 +75,7 @@ void chassis_timestamps_add(chassis_timestamps_t *ts,
 	t = chassis_timestamp_new();
 	chassis_timestamp_init_now(t, name, filename, line);
 
-	ts->timestamps = g_list_append(ts->timestamps, t);
+	g_queue_push_tail(ts->timestamps, t);
 }
 
 guint64 chassis_get_rel_milliseconds() {

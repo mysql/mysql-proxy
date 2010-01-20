@@ -42,7 +42,7 @@ void t_chassis_timings() {
 	chassis_timestamps_add(ts, "really", __FILE__, __LINE__);
 
 	/* print the timestamps */
-	for (node = ts->timestamps; node; node = node->next) {
+	for (node = ts->timestamps->head; node; node = node->next) {
 		chassis_timestamp_t *prev = node->prev ? node->prev->data : NULL;
 		chassis_timestamp_t *cur = node->data;
 

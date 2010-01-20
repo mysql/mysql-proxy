@@ -41,7 +41,7 @@ void chassis_timestamp_init_now(chassis_timestamp_t *ts,
 CHASSIS_API void chassis_timestamp_free(chassis_timestamp_t *ts);
 
 typedef struct {
-	GList *timestamps; /* list of chassis_timestamp_t */
+	GQueue *timestamps; /* list of chassis_timestamp_t */
 } chassis_timestamps_t;
 
 CHASSIS_API chassis_timestamps_t *chassis_timestamps_new(void);
