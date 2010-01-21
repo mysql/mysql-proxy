@@ -17,7 +17,7 @@ INCLUDE(Tar)
 
 ENABLE_TESTING()
 
-EXECUTE_PROCESS(COMMAND bzr version-info --custom --template="{branch_nick} revision {revno}"
+EXECUTE_PROCESS(COMMAND bzr version-info --custom --template="{branch_nick} revision {revno} ${CMAKE_SOURCE_DIR}"
 								TIMEOUT 5
 								OUTPUT_VARIABLE	BZR_INFO
 								OUTPUT_STRIP_TRAILING_WHITESPACE
