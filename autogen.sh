@@ -34,54 +34,46 @@ if test x$LIBTOOLIZE = x; then
   fi
 fi
 
-## suse has aclocal and aclocal-1.9
+## suse has aclocal and aclocal-1.10
 if test x$ACLOCAL = x; then
-  if test \! "x`which aclocal-1.9 2> /dev/null | grep -v '^no'`" = x; then
-    ACLOCAL=aclocal-1.9
-  elif test \! "x`which aclocal19 2> /dev/null | grep -v '^no'`" = x; then
-    ACLOCAL=aclocal19
+  if test \! "x`which aclocal-1.10 2> /dev/null | grep -v '^no'`" = x; then
+    ACLOCAL=aclocal-1.10
   elif test \! "x`which aclocal 2> /dev/null | grep -v '^no'`" = x; then
     ACLOCAL=aclocal
   else 
-    echo "automake 1.9.x (aclocal) wasn't found, exiting"; exit 0
+    echo "automake 1.10.x (aclocal) wasn't found, exiting"; exit 0
   fi
 fi
 
 if test x$AUTOMAKE = x; then
-  if test \! "x`which automake-1.9 2> /dev/null | grep -v '^no'`" = x; then
-    AUTOMAKE=automake-1.9
-  elif test \! "x`which automake19 2> /dev/null | grep -v '^no'`" = x; then
-    AUTOMAKE=automake19
+  if test \! "x`which automake-1.10 2> /dev/null | grep -v '^no'`" = x; then
+    AUTOMAKE=automake-1.10
   elif test \! "x`which automake 2> /dev/null | grep -v '^no'`" = x; then
     AUTOMAKE=automake
   else 
-    echo "automake 1.9.x wasn't found, exiting"; exit 0
+    echo "automake 1.10.x wasn't found, exiting"; exit 0
   fi
 fi
 
 
 ## macosx has autoconf-2.59 and autoconf-2.60
 if test x$AUTOCONF = x; then
-  if test \! "x`which autoconf-2.59 2> /dev/null | grep -v '^no'`" = x; then
-    AUTOCONF=autoconf-2.59
-  elif test \! "x`which autoconf259 2> /dev/null | grep -v '^no'`" = x; then
-    AUTOCONF=autoconf259
+  if test \! "x`which autoconf-2.60 2> /dev/null | grep -v '^no'`" = x; then
+    AUTOCONF=autoconf-2.60
   elif test \! "x`which autoconf 2> /dev/null | grep -v '^no'`" = x; then
     AUTOCONF=autoconf
   else 
-    echo "autoconf 2.59+ wasn't found, exiting"; exit 0
+    echo "autoconf 2.60+ wasn't found, exiting"; exit 0
   fi
 fi
 
 if test x$AUTOHEADER = x; then
-  if test \! "x`which autoheader-2.59 2> /dev/null | grep -v '^no'`" = x; then
-    AUTOHEADER=autoheader-2.59
-  elif test \! "x`which autoheader259 2> /dev/null | grep -v '^no'`" = x; then
-    AUTOHEADER=autoheader259
+  if test \! "x`which autoheader-2.60 2> /dev/null | grep -v '^no'`" = x; then
+    AUTOHEADER=autoheader-2.60
   elif test \! "x`which autoheader 2> /dev/null | grep -v '^no'`" = x; then
     AUTOHEADER=autoheader
   else 
-    echo "autoconf 2.59+ (autoheader) wasn't found, exiting"; exit 0
+    echo "autoconf 2.60+ (autoheader) wasn't found, exiting"; exit 0
   fi
 fi
 
