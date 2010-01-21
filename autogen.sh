@@ -25,55 +25,43 @@ set -e
 if test x$LIBTOOLIZE = x; then
   if test \! "x`which glibtoolize 2> /dev/null | grep -v '^no'`" = x; then
     LIBTOOLIZE=glibtoolize
-  elif test \! "x`which libtoolize-1.5 2> /dev/null | grep -v '^no'`" = x; then
-    LIBTOOLIZE=libtoolize-1.5
   elif test \! "x`which libtoolize 2> /dev/null | grep -v '^no'`" = x; then
     LIBTOOLIZE=libtoolize
   else 
-    echo "libtoolize 1.5.x wasn't found, exiting"; exit 0
+    echo "libtoolize wasn't found, try setting LIBTOOLIZE={path-to-libtool}."; exit 0
   fi
 fi
 
-## suse has aclocal and aclocal-1.10
 if test x$ACLOCAL = x; then
-  if test \! "x`which aclocal-1.10 2> /dev/null | grep -v '^no'`" = x; then
-    ACLOCAL=aclocal-1.10
-  elif test \! "x`which aclocal 2> /dev/null | grep -v '^no'`" = x; then
+  if test \! "x`which aclocal 2> /dev/null | grep -v '^no'`" = x; then
     ACLOCAL=aclocal
   else 
-    echo "automake 1.10.x (aclocal) wasn't found, exiting"; exit 0
+    echo "aclocal 1.10+ wasn't found, try setting ACLOCAL={path-to-aclocal}."; exit 0
   fi
 fi
 
 if test x$AUTOMAKE = x; then
-  if test \! "x`which automake-1.10 2> /dev/null | grep -v '^no'`" = x; then
-    AUTOMAKE=automake-1.10
-  elif test \! "x`which automake 2> /dev/null | grep -v '^no'`" = x; then
+  if test \! "x`which automake 2> /dev/null | grep -v '^no'`" = x; then
     AUTOMAKE=automake
   else 
-    echo "automake 1.10.x wasn't found, exiting"; exit 0
+    echo "automake 1.10+ wasn't found, try setting AUTOMAKE={path-to-automake}."; exit 0
   fi
 fi
 
 
-## macosx has autoconf-2.59 and autoconf-2.60
 if test x$AUTOCONF = x; then
-  if test \! "x`which autoconf-2.60 2> /dev/null | grep -v '^no'`" = x; then
-    AUTOCONF=autoconf-2.60
-  elif test \! "x`which autoconf 2> /dev/null | grep -v '^no'`" = x; then
+  if test \! "x`which autoconf 2> /dev/null | grep -v '^no'`" = x; then
     AUTOCONF=autoconf
   else 
-    echo "autoconf 2.60+ wasn't found, exiting"; exit 0
+    echo "autoconf 2.62+ wasn't found, try setting AUTOCONF={path-to-autoconf}."; exit 0
   fi
 fi
 
 if test x$AUTOHEADER = x; then
-  if test \! "x`which autoheader-2.60 2> /dev/null | grep -v '^no'`" = x; then
-    AUTOHEADER=autoheader-2.60
-  elif test \! "x`which autoheader 2> /dev/null | grep -v '^no'`" = x; then
+  if test \! "x`which autoheader 2> /dev/null | grep -v '^no'`" = x; then
     AUTOHEADER=autoheader
   else 
-    echo "autoconf 2.60+ (autoheader) wasn't found, exiting"; exit 0
+    echo "autoheader 2.62+ (autoheader) wasn't found, try setting AUTOHEADER={path-to-autoheader}."; exit 0
   fi
 fi
 
