@@ -447,7 +447,7 @@ network_socket_retval_t network_socket_read(network_socket *sock) {
 			len = recv(sock->fd, packet->str, sock->to_read, 0);
 		} else {
 			/* UDP */
-			socklen_t dst_len = sizeof(sock->dst->addr.common);
+			network_socklen_t dst_len = sizeof(sock->dst->addr.common);
 			len = recvfrom(sock->fd, packet->str, sock->to_read, 0, &(sock->dst->addr.common), &(dst_len));
 			sock->dst->len = dst_len;
 		}
@@ -682,7 +682,7 @@ network_socket_retval_t network_socket_to_read(network_socket *sock) {
 #ifdef SO_NREAD
 	/* on MacOS X ioctl(..., FIONREAD) returns _more_ than what we have in the queue */
 	if (sock->socket_type == SOCK_DGRAM) {
-		socklen_t b_len = sizeof(b);
+		network_socklen_t b_len = sizeof(b);
 
 		if (0 != getsockopt(sock->fd, SOL_SOCKET, SO_NREAD, &b, &b_len)) {
 			g_critical("%s: getsockopt(%d, SO_NREAD, ...) failed: %s (%d)",
