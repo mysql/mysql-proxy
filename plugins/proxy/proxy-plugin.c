@@ -640,6 +640,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	if (!(auth->capabilities & CLIENT_PROTOCOL_41)) {
 		/* should use packet-id 0 */
 		network_mysqld_queue_append(con->client, con->client->send_queue, C("\xff\xd7\x07" "4.0 protocol is not supported"));
+		network_mysqld_auth_response_free(auth);
 		return NETWORK_SOCKET_ERROR;
 	}
 
