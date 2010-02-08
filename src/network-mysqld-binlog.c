@@ -278,7 +278,7 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 				event->event.table_map_event.null_bits_len);
 
 		if (packet->data->len != packet->offset) { /* this should be the full packet */
-			g_critical("%s: TABLE_MAP_EVENT at pos %u we still have %lu left", 
+			g_critical("%s: TABLE_MAP_EVENT at pos %u we still have %"G_GSIZE_FORMAT" left", 
 					G_STRLOC,
 					packet->offset,
 					packet->data->len - packet->offset);
