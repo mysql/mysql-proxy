@@ -216,7 +216,7 @@ static int proc_keepalive(int *child_exit_status) {
 					 *
 					 * log it and restart */
 
-					g_message("%s: [angel] PID=%d died on signal=%d (it used %ld kBytes max) ... waiting 3min before restart",
+					g_critical("%s: [angel] PID=%d died on signal=%d (it used %ld kBytes max) ... waiting 3min before restart",
 							G_STRLOC,
 							child_pid,
 							WTERMSIG(exit_status),
@@ -349,6 +349,7 @@ int main_cmdline(int argc, char **argv) {
 	int exit_code = EXIT_SUCCESS;
 	const gchar *exit_location = G_STRLOC;
 	int print_version = 0;
+	int verbose_shutdown = 0;
 	int daemon_mode = 0;
 	gchar *user = NULL;
 	gchar *base_dir = NULL;
@@ -385,6 +386,7 @@ int main_cmdline(int argc, char **argv) {
 
 	GOptionEntry main_entries[] = 
 	{
+		{ "verbose-shutdown",         0, 0, G_OPTION_ARG_NONE, NULL, "Always log the exit code when shutting down", NULL },
 		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
 #ifndef _WIN32
 		{ "user",                     0, 0, G_OPTION_ARG_STRING, NULL, "Run mysql-proxy as user", "<user>" },
@@ -469,6 +471,7 @@ int main_cmdline(int argc, char **argv) {
 	base_main_entries[i++].arg_data  = &(default_file);
 
 	i = 0;
+	main_entries[i++].arg_data  = &(verbose_shutdown);
 	main_entries[i++].arg_data  = &(daemon_mode);
 #ifndef _WIN32
 	main_entries[i++].arg_data  = &(user);
@@ -960,7 +963,8 @@ exit_nicely:
 	chassis_set_shutdown_location(exit_location);
 
 	if (!print_version) {
-		g_message("shutting down normally, exit code is: %d", exit_code); /* add a tag to the logfile */
+		g_log(G_LOG_DOMAIN, (verbose_shutdown ? G_LOG_LEVEL_CRITICAL : G_LOG_LEVEL_MESSAGE),
+				"shutting down normally, exit code is: %d", exit_code); /* add a tag to the logfile */
 	}
 
 #ifdef _WIN32
