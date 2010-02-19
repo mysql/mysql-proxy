@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "chassis-shutdown-hooks.h"
+#include "glib-ext.h"
 
 static void g_string_free_true(gpointer data) {
 	g_string_free(data, TRUE);
@@ -52,14 +53,24 @@ void chassis_shutdown_hooks_unlock(chassis_shutdown_hooks_t *hooks) {
 	g_mutex_unlock(hooks->mutex);
 }
 
+/**
+ * register a shutdown hook
+ *
+ * @return TRUE if registered, FALSE if already known
+ */
 gboolean chassis_shutdown_hooks_register(chassis_shutdown_hooks_t *hooks,
 		const char *key, gsize key_len,
 		chassis_shutdown_hook_t *hook) {
+	gboolean is_known = FALSE;
 	chassis_shutdown_hooks_lock(hooks);
-	g_hash_table_insert(hooks->hooks, g_string_new_len(key, key_len), hook);
+	if (NULL == g_hash_table_lookup_const(hooks->hooks, key, key_len)) {
+		g_hash_table_insert(hooks->hooks, g_string_new_len(key, key_len), hook);
+	} else {
+		is_known = TRUE;
+	}
 	chassis_shutdown_hooks_unlock(hooks);
 
-	return FALSE;
+	return is_known;
 }
 
 void chassis_shutdown_hooks_call(chassis_shutdown_hooks_t *hooks) {
