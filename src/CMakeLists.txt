@@ -25,6 +25,7 @@ SET(chassis_sources
   chassis-event-thread.c
 	chassis-log.c
 	chassis-mainloop.c
+	chassis-shutdown-hooks.c
 	chassis-keyfile.c
 	chassis-path.c
 	chassis-filemode.c
@@ -164,6 +165,7 @@ INSTALL(FILES
 	chassis-log.h
 	chassis-keyfile.h
 	chassis-mainloop.h
+	chassis-shutdown-hooks.h
 	chassis-path.h
 	chassis-filemode.h
 	chassis-limits.h
