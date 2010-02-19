@@ -40,6 +40,7 @@
 #include "chassis-exports.h"
 #include "chassis-log.h"
 #include "chassis-stats.h"
+#include "chassis-shutdown-hooks.h"
 
 /** @defgroup chassis Chassis
  * 
@@ -72,6 +73,8 @@ struct chassis {
 	gint event_thread_count;
 
 	chassis_event_threads_t *threads;
+
+	chassis_shutdown_hooks_t *shutdown_hooks;
 };
 
 CHASSIS_API chassis *chassis_init(void) G_GNUC_DEPRECATED;

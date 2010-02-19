@@ -121,6 +121,7 @@ check_chassis_path_SOURCES = \
 	check_chassis_path.c \
 	$(top_srcdir)/src/chassis-log.c \
 	$(top_srcdir)/src/chassis-mainloop.c \
+	$(top_srcdir)/src/chassis-shutdown-hooks.c \
 	$(top_srcdir)/src/chassis-event-thread.c \
 	$(top_srcdir)/src/chassis-plugin.c \
 	$(top_srcdir)/src/chassis-path.c \

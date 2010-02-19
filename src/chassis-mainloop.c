@@ -116,6 +116,8 @@ chassis *chassis_new() {
 
 	chas->event_hdr_version = g_strdup(_EVENT_VERSION);
 
+	chas->shutdown_hooks = chassis_shutdown_hooks_new();
+
 	return chas;
 }
 
@@ -175,6 +177,9 @@ void chassis_free(chassis *chas) {
 	}
 #endif
 	g_free(chas->event_hdr_version);
+
+	chassis_shutdown_hooks_call(chas->shutdown_hooks);
+	chassis_shutdown_hooks_free(chas->shutdown_hooks);
 	
 	g_free(chas);
 }

@@ -60,6 +60,7 @@ libmysql_chassis_la_SOURCES = \
 	chassis-path.c \
 	chassis-filemode.c \
 	chassis-limits.c \
+	chassis-shutdown-hooks.c \
 	chassis-stats.c
 
 
@@ -124,6 +125,7 @@ include_HEADERS=\
 	lua-env.h \
 	network-injection.h \
 	network-injection-lua.h \
+	chassis-shutdown-hooks.h \
 	chassis-exports.h \
 	network-exports.h \
 	network-backend.h \
