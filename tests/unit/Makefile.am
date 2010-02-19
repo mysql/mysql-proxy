@@ -126,6 +126,7 @@ check_chassis_path_SOURCES = \
 	$(top_srcdir)/src/chassis-plugin.c \
 	$(top_srcdir)/src/chassis-path.c \
 	$(top_srcdir)/src/chassis-stats.c \
+	$(top_srcdir)/src/glib-ext.c \
 	$(top_srcdir)/src/my_rdtsc.c \
 	$(top_srcdir)/src/chassis-timings.c
 check_chassis_path_CPPFLAGS = -I$(top_srcdir)/src $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS)
