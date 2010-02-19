@@ -139,6 +139,7 @@ void chassis_free(chassis *chas) {
 
 	/* init the shutdown, without freeing share structures */	
 	if (chas->priv_shutdown) chas->priv_shutdown(chas, chas->priv);
+	
 
 	/* call the destructor for all plugins */
 	for (i = 0; i < chas->modules->len; i++) {
@@ -146,6 +147,13 @@ void chassis_free(chassis *chas) {
 
 		g_assert(p->destroy);
 		p->destroy(p->config);
+	}
+	
+	chassis_shutdown_hooks_call(chas->shutdown_hooks); /* cleanup the global 3rd party stuff before we unload the modules */
+
+	for (i = 0; i < chas->modules->len; i++) {
+		chassis_plugin *p = chas->modules->pdata[i];
+
 		chassis_plugin_free(p);
 	}
 	
@@ -178,7 +186,6 @@ void chassis_free(chassis *chas) {
 #endif
 	g_free(chas->event_hdr_version);
 
-	chassis_shutdown_hooks_call(chas->shutdown_hooks);
 	chassis_shutdown_hooks_free(chas->shutdown_hooks);
 	
 	g_free(chas);
