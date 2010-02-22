@@ -56,21 +56,21 @@ void chassis_shutdown_hooks_unlock(chassis_shutdown_hooks_t *hooks) {
 /**
  * register a shutdown hook
  *
- * @return TRUE if registered, FALSE if already known
+ * @return TRUE if registering succeeded, FALSE if already known
  */
 gboolean chassis_shutdown_hooks_register(chassis_shutdown_hooks_t *hooks,
 		const char *key, gsize key_len,
 		chassis_shutdown_hook_t *hook) {
-	gboolean is_known = FALSE;
+	gboolean is_inserted = FALSE;
+
 	chassis_shutdown_hooks_lock(hooks);
 	if (NULL == g_hash_table_lookup_const(hooks->hooks, key, key_len)) {
 		g_hash_table_insert(hooks->hooks, g_string_new_len(key, key_len), hook);
-	} else {
-		is_known = TRUE;
+		is_inserted = TRUE;
 	}
 	chassis_shutdown_hooks_unlock(hooks);
 
-	return is_known;
+	return is_inserted;
 }
 
 void chassis_shutdown_hooks_call(chassis_shutdown_hooks_t *hooks) {

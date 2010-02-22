@@ -14,10 +14,22 @@ TESTS=\
 	t_network_mysqld_packet \
 	t_network_mysqld_masterinfo \
 	t_chassis_timings \
+	t_chassis_shutdown_hooks \
 	check_chassis_filemode \
 	check_chassis_path
 
 check_PROGRAMS=$(TESTS)
+
+t_chassis_shutdown_hooks_SOURCES = t_chassis_shutdown_hooks.c \
+	$(top_srcdir)/src/chassis-shutdown-hooks.c \
+	$(top_srcdir)/src/glib-ext.c
+
+t_chassis_shutdown_hooks_CPPFLAGS = \
+	-I$(top_srcdir)/src/ $(GLIB_CFLAGS) -I$(top_srcdir) \
+	$(MYSQL_CFLAGS)
+
+t_chassis_shutdown_hooks_LDADD = $(GLIB_LIBS) $(GTHREAD_LIBS)
+
 
 check_chassis_filemode_SOURCES = check_chassis_filemode.c \
 	$(top_srcdir)/src/chassis-filemode.c
