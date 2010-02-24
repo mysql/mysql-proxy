@@ -80,11 +80,13 @@ ADD_EXECUTABLE(check_chassis_path
 	../../src/chassis-log.c 
 	../../src/chassis-event-thread.c
 	../../src/chassis-mainloop.c 
+	../../src/chassis-shutdown-hooks.c 
 	../../src/chassis-plugin.c
 	../../src/chassis-stats.c 
 	../../src/chassis-path.c
 	../../src/chassis-timings.c
 	../../src/my_rdtsc.c
+	../../src/glib-ext.c
 )
 
 TARGET_LINK_LIBRARIES(check_chassis_path
