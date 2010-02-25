@@ -41,6 +41,19 @@ IF(FLEX_EXECUTABLE)
 	)
 ENDIF(FLEX_EXECUTABLE)
 
+ADD_EXECUTABLE(sql-tokenizer-gen
+	sql-tokenizer-tokens.c
+	sql-tokenizer-gen.c)
+TARGET_LINK_LIBRARIES(sql-tokenizer-gen
+	${GLIB_LIBRARIES}
+)
+
+ADD_CUSTOM_COMMAND(
+	OUTPUT  "${CMAKE_CURRENT_BINARY_DIR}/sql-tokenizer-keywords.c"
+	DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sql-tokenizer-gen.c"
+	COMMAND sql-tokenizer-gen 
+		> "${CMAKE_CURRENT_BINARY_DIR}/sql-tokenizer-keywords.c"
+)
 
 SET(LUA_GLIB2_SOURCES
 	glib2.c
