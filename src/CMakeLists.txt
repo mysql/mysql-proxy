@@ -48,7 +48,7 @@ SET(chassis_sources
 	chassis-stats.c
 )
 
-SET(chassis_timing_sources
+SET(timing_sources
 	chassis-timings.c
 	chassis-gtimeval.c
 	my_rdtsc.c
@@ -81,9 +81,9 @@ SET(proxy_sources
 )
 
 ADD_LIBRARY(mysql-chassis SHARED ${chassis_sources})
-ADD_LIBRARY(mysql-chassis-timing SHARED ${chassis_timing_sources})
 ADD_LIBRARY(mysql-chassis-proxy SHARED ${proxy_sources})
 ADD_LIBRARY(mysql-chassis-glibext SHARED ${glibext_sources})
+ADD_LIBRARY(mysql-chassis-timing SHARED ${timing_sources})
 ADD_EXECUTABLE(mysql-proxy chassis.c)
 
 ## for windows we need the winsock lib
@@ -193,8 +193,8 @@ ENDIF(WIN32)
 
 CHASSIS_INSTALL_TARGET(mysql-chassis)
 CHASSIS_INSTALL_TARGET(mysql-chassis-proxy)
-CHASSIS_INSTALL_TARGET(mysql-chassis-timing)
 CHASSIS_INSTALL_TARGET(mysql-chassis-glibext)
+CHASSIS_INSTALL_TARGET(mysql-chassis-timing)
 
 INSTALL(FILES
 	network-mysqld.h
