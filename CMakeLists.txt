@@ -308,9 +308,9 @@ ENDIF(WIN32)
 
 CONFIGURE_FILE(mysql-chassis.pc.cmake mysql-chassis.pc @ONLY)
 CONFIGURE_FILE(mysql-proxy.pc.cmake mysql-proxy.pc @ONLY)
-INSTALL(FILES mysql-chassis.pc 
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/mysql-chassis.pc 
 	DESTINATION lib/pkgconfig/
 	)
-INSTALL(FILES mysql-proxy.pc 
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/mysql-proxy.pc 
 	DESTINATION lib/pkgconfig/
 	)
