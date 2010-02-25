@@ -31,6 +31,9 @@ SET(chassis_sources
 	chassis-filemode.c
 	chassis-limits.c
 	chassis-stats.c
+)
+
+SET(chassis_timing_sources
 	chassis-timings.c
 	my_rdtsc.c
 )
@@ -57,6 +60,7 @@ SET(proxy_sources
 )
 
 ADD_LIBRARY(mysql-chassis SHARED ${chassis_sources})
+ADD_LIBRARY(mysql-chassis-timing SHARED ${chassis_timing_sources})
 ADD_LIBRARY(mysql-chassis-proxy SHARED ${proxy_sources})
 ADD_EXECUTABLE(mysql-proxy chassis.c)
 
@@ -65,6 +69,14 @@ SET(WINSOCK_LIBRARIES)
 IF(WIN32)
 	SET(WINSOCK_LIBRARIES ws2_32)
 ENDIF()
+
+TARGET_LINK_LIBRARIES(mysql-chassis-timing
+	${WINSOCK_LIBRARIES}
+	${GLIB_LIBRARIES} 
+	${GMODULE_LIBRARIES} 
+	${GTHREAD_LIBRARIES} 
+)
+
 TARGET_LINK_LIBRARIES(mysql-chassis 
 	${GLIB_LIBRARIES} 
 	${GMODULE_LIBRARIES} 
@@ -72,6 +84,7 @@ TARGET_LINK_LIBRARIES(mysql-chassis
 	${LUA_LIBRARIES}
 	${EVENT_LIBRARIES}
 	${WINSOCK_LIBRARIES}
+	mysql-chassis-timing
 )
 
 TARGET_LINK_LIBRARIES(mysql-chassis-proxy
@@ -145,6 +158,7 @@ ENDIF(WIN32)
 
 CHASSIS_INSTALL_TARGET(mysql-chassis)
 CHASSIS_INSTALL_TARGET(mysql-chassis-proxy)
+CHASSIS_INSTALL_TARGET(mysql-chassis-timing)
 
 INSTALL(FILES
 	network-mysqld.h
