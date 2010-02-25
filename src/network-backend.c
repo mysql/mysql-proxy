@@ -143,14 +143,23 @@ int network_backends_check(network_backends_t *bs) {
 	GTimeVal now;
 	guint i;
 	int backends_woken_up = 0;
+	gint64	t_diff;
 
 	g_get_current_time(&now);
+	t_diff = ge_gtimeval_diff(&bs->backend_last_check, &now);
 
 	/* check max(once a second) */
-	if (bs->backend_last_check.tv_sec > 0 &&
-	    now.tv_sec - bs->backend_last_check.tv_sec < 1) return 0;
-
-
+	/* this also covers the "time went backards" case */
+	if (t_diff < G_USEC_PER_SEC) {
+		if (t_diff < 0) {
+			g_critical("%s: time went backwards (%"G_GINT64_FORMAT" usec)!",
+				G_STRLOC, t_diff);
+			bs->backend_last_check.tv_usec = 0;
+			bs->backend_last_check.tv_sec = 0;
+		}
+		return 0;
+	}
+	
 	/* check once a second if we have to wakeup a connection */
 	g_mutex_lock(bs->backends_mutex);
 

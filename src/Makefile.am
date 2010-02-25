@@ -1,3 +1,20 @@
+# $%BEGINLICENSE%$
+# Copyright (C) 2010 Sun Microsystems, Inc
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+# $%ENDLICENSE%$
 luaextdir = ${pkglibdir}/lua
 plugindir = ${pkglibdir}/plugins
 
@@ -32,13 +49,26 @@ mysql_myisam_dump_LDADD		= $(BUILD_LDADD)
 
 lib_LTLIBRARIES = 
 
+# functionality extending what's currently in glib
+lib_LTLIBRARIES += libmysql-chassis-glibext.la
+libmysql_chassis_glibext_la_SOURCES = \
+	glib-ext.c \
+	glib-ext-ref.c
+
+libmysql_chassis_glibext_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
+libmysql_chassis_glibext_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(GMODULE_CFLAGS)
+libmysql_chassis_glibext_la_LIBADD   = $(GLIB_LIBS)
+
+# library implementing timing functionality
 lib_LTLIBRARIES += libmysql-chassis-timing.la
 libmysql_chassis_timing_la_SOURCES = \
 	chassis-timings.c \
+	chassis-gtimeval.c \
 	my_rdtsc.c
+
 libmysql_chassis_timing_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
 libmysql_chassis_timing_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
-libmysql_chassis_timing_la_LIBADD   = $(GLIB_LIBS)
+libmysql_chassis_timing_la_LIBADD   = $(GLIB_LIBS) libmysql-chassis-glibext.la
 if USE_SUNCC_ASSEMBLY
 libmysql_chassis_timing_la_CPPFLAGS += \
 	$(top_srcdir)/src/my_timer_cycles.il
@@ -48,8 +78,6 @@ endif
 ## the core library
 lib_LTLIBRARIES += libmysql-chassis.la
 libmysql_chassis_la_SOURCES = \
-	glib-ext.c \
-	glib-ext-ref.c \
 	lua-load-factory.c \
 	lua-scope.c \
 	chassis-plugin.c \
@@ -66,7 +94,7 @@ libmysql_chassis_la_SOURCES = \
 
 libmysql_chassis_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
 libmysql_chassis_la_CPPFLAGS = $(MYSQL_CFLAGS) $(EVENT_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS)
-libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) libmysql-chassis-timing.la
+libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) libmysql-chassis-timing.la libmysql-chassis-glibext.la
 
 lib_LTLIBRARIES += libmysql-proxy.la
 libmysql_proxy_la_SOURCES = \
@@ -91,7 +119,7 @@ libmysql_proxy_la_SOURCES = \
 
 libmysql_proxy_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
 libmysql_proxy_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
-libmysql_proxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la libmysql-chassis-timing.la
+libmysql_proxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la libmysql-chassis-timing.la libmysql-chassis-glibext.la
 
 
 include_HEADERS=\

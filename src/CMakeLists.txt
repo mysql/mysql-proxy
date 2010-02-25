@@ -1,3 +1,20 @@
+# $%BEGINLICENSE%$
+# Copyright (C) 2010 Sun Microsystems, Inc
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+# $%ENDLICENSE%$
 INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}) # for config.h
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -17,12 +34,10 @@ STRING(REPLACE "." "" SHARED_LIBRARY_SUFFIX ${CMAKE_SHARED_LIBRARY_SUFFIX})
 ADD_DEFINITIONS(-DSHARED_LIBRARY_SUFFIX="${SHARED_LIBRARY_SUFFIX}")
 
 SET(chassis_sources 
-	glib-ext.c
-	glib-ext-ref.c
 	lua-load-factory.c
 	lua-scope.c
 	chassis-plugin.c
-  chassis-event-thread.c
+	chassis-event-thread.c
 	chassis-log.c
 	chassis-mainloop.c
 	chassis-shutdown-hooks.c
@@ -35,7 +50,13 @@ SET(chassis_sources
 
 SET(chassis_timing_sources
 	chassis-timings.c
+	chassis-gtimeval.c
 	my_rdtsc.c
+)
+
+SET(glibext_sources
+	glib-ext.c
+	glib-ext-ref.c
 )
 
 SET(proxy_sources 
@@ -62,6 +83,7 @@ SET(proxy_sources
 ADD_LIBRARY(mysql-chassis SHARED ${chassis_sources})
 ADD_LIBRARY(mysql-chassis-timing SHARED ${chassis_timing_sources})
 ADD_LIBRARY(mysql-chassis-proxy SHARED ${proxy_sources})
+ADD_LIBRARY(mysql-chassis-glibext SHARED ${glibext_sources})
 ADD_EXECUTABLE(mysql-proxy chassis.c)
 
 ## for windows we need the winsock lib
@@ -85,10 +107,13 @@ TARGET_LINK_LIBRARIES(mysql-chassis
 	${EVENT_LIBRARIES}
 	${WINSOCK_LIBRARIES}
 	mysql-chassis-timing
+	mysql-chassis-glibext
 )
 
 TARGET_LINK_LIBRARIES(mysql-chassis-proxy
-	mysql-chassis
+	mysql-chassis 
+	mysql-chassis-glibext
+	mysql-chassis-timing
 )
 
 TARGET_LINK_LIBRARIES(mysql-proxy 
@@ -99,6 +124,8 @@ TARGET_LINK_LIBRARIES(mysql-proxy
 	${EVENT_LIBRARIES}
 	mysql-chassis
 	mysql-chassis-proxy
+	mysql-chassis-glibext
+	mysql-chassis-timing
 )
 
 IF(WIN32)
@@ -111,6 +138,8 @@ IF(WIN32)
 		${EVENT_LIBRARIES}
 		mysql-chassis
 		mysql-chassis-proxy
+		mysql-chassis-glibext
+		mysql-chassis-timing
 	)
 	SET_TARGET_PROPERTIES(mysql-proxy-svc
 		PROPERTIES
@@ -158,7 +187,12 @@ ENDIF(WIN32)
 
 CHASSIS_INSTALL_TARGET(mysql-chassis)
 CHASSIS_INSTALL_TARGET(mysql-chassis-proxy)
+<<<<<<< TREE
 CHASSIS_INSTALL_TARGET(mysql-chassis-timing)
+=======
+CHASSIS_INSTALL_TARGET(mysql-chassis-glibext)
+CHASSIS_INSTALL_TARGET(mysql-chassis-timing)
+>>>>>>> MERGE-SOURCE
 
 INSTALL(FILES
 	network-mysqld.h
@@ -200,6 +234,7 @@ INSTALL(FILES
 	lua-registry-keys.h
 	chassis-stats.h
 	chassis-timings.h
+	chassis-gtimeval.h
 	my_rdtsc.h
 	DESTINATION include/
 	)

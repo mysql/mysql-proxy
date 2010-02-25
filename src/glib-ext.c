@@ -142,6 +142,20 @@ int g_string_get_current_time(GString *s) {
 	return g_string_get_time(s, &gt);
 }
 
+/**
+ * calculate the difference between two GTimeVal values, in usec
+ * positive return means *told is indeed "earlier" than *tnew, negative
+ * return means the reverse
+ * Caller is responsible for passing valid pointers
+ */
+gint64 ge_gtimeval_diff(GTimeVal *told, GTimeVal *tnew) {
+	gint64	diff;
+
+	diff = (gint64) tnew->tv_sec - told->tv_sec;
+	diff *= G_USEC_PER_SEC;
+	diff += (gint64) tnew->tv_usec - told->tv_usec;
+	return diff;
+}
 
 GString * g_string_assign_len(GString *s, const char *str, gsize str_len) {
 	g_string_truncate(s, 0);

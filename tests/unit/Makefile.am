@@ -1,3 +1,21 @@
+# $%BEGINLICENSE%$
+# Copyright (C) 2010 Sun Microsystems, Inc
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; version 2 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+# $%ENDLICENSE%$ 
+
 SUBDIRS=lua
 
 TESTS=\
@@ -76,6 +94,7 @@ t_network_mysqld_packet_LDADD    = $(GLIB_LIBS) $(LUA_LIBS) $(EVENT_LIBS)
 t_chassis_timings_SOURCES  = \
 	t_chassis_timings.c \
 	$(top_srcdir)/src/chassis-timings.c \
+	$(top_srcdir)/src/glib-ext.c \
 	$(top_srcdir)/src/my_rdtsc.c 
 
 t_chassis_timings_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) 
@@ -151,6 +170,7 @@ endif
 
 t_network_backend_SOURCES  = \
 	t_network_backend.c \
+	$(top_srcdir)/src/chassis-timings.c \
 	$(top_srcdir)/src/glib-ext.c \
 	$(top_srcdir)/src/network-backend.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
@@ -158,7 +178,8 @@ t_network_backend_SOURCES  = \
 	$(top_srcdir)/src/network-conn-pool.c \
 	$(top_srcdir)/src/network-address.c \
 	$(top_srcdir)/src/network-queue.c \
-	$(top_srcdir)/src/network-socket.c
+	$(top_srcdir)/src/network-socket.c \
+	$(top_srcdir)/src/my_rdtsc.c
 
 t_network_backend_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
 t_network_backend_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)

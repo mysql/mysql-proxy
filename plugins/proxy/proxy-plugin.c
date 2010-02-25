@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2007-2008 MySQL AB, 2008 Sun Microsystems, Inc
+ Copyright (C) 2007-2010 MySQL AB, 2010 Sun Microsystems, Inc
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -145,6 +145,7 @@ typedef int socklen_t;
 #include "lua-load-factory.h"
 
 #include "chassis-timings.h"
+#include "chassis-gtimeval.h"
 
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
@@ -1469,7 +1470,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 			/* mark the backend as being DOWN and retry with a different one */
 			st->backend->state = BACKEND_STATE_DOWN;
-			g_get_current_time(&(st->backend->state_since));
+			(void) chassis_gtime_testset_now(&st->backend->state_since);
 			network_socket_free(con->server);
 			con->server = NULL;
 
@@ -1481,7 +1482,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 		if (st->backend->state != BACKEND_STATE_UP) {
 			st->backend->state = BACKEND_STATE_UP;
-			g_get_current_time(&(st->backend->state_since));
+			(void) chassis_gtime_testset_now(&st->backend->state_since);
 		}
 
 		con->state = CON_STATE_READ_HANDSHAKE;
@@ -1599,7 +1600,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 					__FILE__, __LINE__, con->server->dst->name->str);
 
 			st->backend->state = BACKEND_STATE_DOWN;
-			g_get_current_time(&(st->backend->state_since));
+			(void) chassis_gtime_testset_now(&st->backend->state_since);
 
 			network_socket_free(con->server);
 			con->server = NULL;
@@ -1609,7 +1610,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 		if (st->backend->state != BACKEND_STATE_UP) {
 			st->backend->state = BACKEND_STATE_UP;
-			g_get_current_time(&(st->backend->state_since));
+			(void) chassis_gtime_testset_now(&st->backend->state_since);
 		}
 
 		con->state = CON_STATE_READ_HANDSHAKE;

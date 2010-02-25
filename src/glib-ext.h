@@ -41,6 +41,7 @@ CHASSIS_API gboolean g_memeq(const char *a, gsize a_len, const char *b, gsize b_
 
 CHASSIS_API int g_string_get_time(GString *s, GTimeVal *gt);
 CHASSIS_API int g_string_get_current_time(GString *s);
+CHASSIS_API gint64 ge_gtimeval_diff(GTimeVal *old, GTimeVal *new);
 CHASSIS_API GString *g_string_assign_len(GString *s, const char *, gsize );
 CHASSIS_API void g_debug_hexdump(const char *msg, const void *s, size_t len);
 
