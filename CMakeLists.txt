@@ -242,11 +242,11 @@ ELSE(WIN32)
 ENDIF(WIN32)
 
 
-ADD_SUBDIRECTORY(src build-src)
-ADD_SUBDIRECTORY(plugins build-plugins)
-ADD_SUBDIRECTORY(tests build-tests)
+ADD_SUBDIRECTORY(src)
+ADD_SUBDIRECTORY(plugins)
+ADD_SUBDIRECTORY(tests)
 ADD_SUBDIRECTORY(examples)
-ADD_SUBDIRECTORY(lib build-lib)
+ADD_SUBDIRECTORY(lib)
 
 
 ## make sure glib-2.0 is part of the install
