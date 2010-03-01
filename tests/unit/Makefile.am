@@ -184,7 +184,7 @@ t_network_backend_SOURCES  = \
 t_network_backend_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
 t_network_backend_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)
 if USE_SUNCC_ASSEMBLY
-t_chassis_backend_CPPFLAGS += \
+t_network_backend_CPPFLAGS += \
 	${top_srcdir}/src/my_timer_cycles.il
 endif
 
