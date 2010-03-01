@@ -145,6 +145,7 @@ include_HEADERS=\
 	chassis-filemode.h \
 	chassis-limits.h \
 	chassis-event-thread.h \
+	chassis-gtimeval.h \
 	glib-ext.h \
 	glib-ext-ref.h \
 	string-len.h \
