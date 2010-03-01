@@ -187,12 +187,8 @@ ENDIF(WIN32)
 
 CHASSIS_INSTALL_TARGET(mysql-chassis)
 CHASSIS_INSTALL_TARGET(mysql-chassis-proxy)
-<<<<<<< TREE
 CHASSIS_INSTALL_TARGET(mysql-chassis-timing)
-=======
 CHASSIS_INSTALL_TARGET(mysql-chassis-glibext)
-CHASSIS_INSTALL_TARGET(mysql-chassis-timing)
->>>>>>> MERGE-SOURCE
 
 INSTALL(FILES
 	network-mysqld.h
