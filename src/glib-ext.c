@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2007-2008 MySQL AB, 2008-2010 Sun Microsystems, Inc
+ Copyright (C) 2007, 2010, Oracle and/or its affiliates. All rights reserved
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -144,17 +144,14 @@ int g_string_get_current_time(GString *s) {
 
 /**
  * calculate the difference between two GTimeVal values, in usec
- * positive return means *told is indeed "earlier" than *tnew, negative
- * return means the reverse
+ * positive return value in *tdiff means *told is indeed "earlier" than *tnew,
+ * negative return value means the reverse
  * Caller is responsible for passing valid pointers
  */
-gint64 ge_gtimeval_diff(GTimeVal *told, GTimeVal *tnew) {
-	gint64	diff;
-
-	diff = (gint64) tnew->tv_sec - told->tv_sec;
-	diff *= G_USEC_PER_SEC;
-	diff += (gint64) tnew->tv_usec - told->tv_usec;
-	return diff;
+void ge_gtimeval_diff(GTimeVal *told, GTimeVal *tnew, gint64 *tdiff) {
+	*tdiff = (gint64) tnew->tv_sec - told->tv_sec;
+	*tdiff *= G_USEC_PER_SEC;
+	*tdiff += (gint64) tnew->tv_usec - told->tv_usec;
 }
 
 GString * g_string_assign_len(GString *s, const char *str, gsize str_len) {

@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2007-2008 MySQL AB, 2008-2010 Sun Microsystems, Inc
+ Copyright (C) 2007, 2010, Oracle and/or its affiliates. All rights reserved
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ CHASSIS_API gboolean g_memeq(const char *a, gsize a_len, const char *b, gsize b_
 
 CHASSIS_API int g_string_get_time(GString *s, GTimeVal *gt);
 CHASSIS_API int g_string_get_current_time(GString *s);
-CHASSIS_API gint64 ge_gtimeval_diff(GTimeVal *old, GTimeVal *new);
+CHASSIS_API void ge_gtimeval_diff(GTimeVal *old, GTimeVal *new, gint64 *delay);
 CHASSIS_API GString *g_string_assign_len(GString *s, const char *, gsize );
 CHASSIS_API void g_debug_hexdump(const char *msg, const void *s, size_t len);
 

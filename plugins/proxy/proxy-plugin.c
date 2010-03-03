@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2007-2008 MySQL AB, 2008-2010 Sun Microsystems, Inc
+ Copyright (C) 2007, 2010, Oracle and/or its affiliates. All rights reserved
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -1470,7 +1470,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 			/* mark the backend as being DOWN and retry with a different one */
 			st->backend->state = BACKEND_STATE_DOWN;
-			(void) chassis_gtime_testset_now(&st->backend->state_since);
+			chassis_gtime_testset_now(&st->backend->state_since, NULL);
 			network_socket_free(con->server);
 			con->server = NULL;
 
@@ -1482,7 +1482,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 		if (st->backend->state != BACKEND_STATE_UP) {
 			st->backend->state = BACKEND_STATE_UP;
-			(void) chassis_gtime_testset_now(&st->backend->state_since);
+			chassis_gtime_testset_now(&st->backend->state_since, NULL);
 		}
 
 		con->state = CON_STATE_READ_HANDSHAKE;
@@ -1600,7 +1600,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 					__FILE__, __LINE__, con->server->dst->name->str);
 
 			st->backend->state = BACKEND_STATE_DOWN;
-			(void) chassis_gtime_testset_now(&st->backend->state_since);
+			chassis_gtime_testset_now(&st->backend->state_since, NULL);
 
 			network_socket_free(con->server);
 			con->server = NULL;
@@ -1610,7 +1610,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 		if (st->backend->state != BACKEND_STATE_UP) {
 			st->backend->state = BACKEND_STATE_UP;
-			(void) chassis_gtime_testset_now(&st->backend->state_since);
+			chassis_gtime_testset_now(&st->backend->state_since, NULL);
 		}
 
 		con->state = CON_STATE_READ_HANDSHAKE;

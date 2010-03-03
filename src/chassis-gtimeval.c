@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2010 Sun Microsystems, Inc
+ Copyright (C) 2010, Oracle and/or its affiliates. All rights reserved
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -20,24 +20,27 @@
 
 #include "chassis-gtimeval.h"
 
-gint64 chassis_gtime_testset_now(GTimeVal *gt)
+void chassis_gtime_testset_now(GTimeVal *gt, gint64 *delay)
 {
 	GTimeVal	now;
 	gint64		tdiff;
 
 	if (gt == NULL)
-		return (0);
+		return;
 
 	g_get_current_time(&now);
-	tdiff = ge_gtimeval_diff(gt, &now);
+	ge_gtimeval_diff(gt, &now, &tdiff);
 
 	if (tdiff < 0) {
 		g_critical("%s: time went backwards (%"G_GINT64_FORMAT" usec)!",
 				G_STRLOC, tdiff);
 		gt->tv_usec = gt->tv_sec = 0;
-		return tdiff;
+		goto out;
 	}
 
 	*gt = now;
-	return tdiff;
+out:
+	if (delay != NULL)
+		*delay = tdiff;
+	return;
 }

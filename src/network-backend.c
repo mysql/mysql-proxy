@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2008 MySQL AB, 2008-2010 Sun Microsystems, Inc
+ Copyright (C) 2008, 2010, Oracle and/or its affiliates. All rights reserved
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -146,7 +146,7 @@ int network_backends_check(network_backends_t *bs) {
 	gint64	t_diff;
 
 	g_get_current_time(&now);
-	t_diff = ge_gtimeval_diff(&bs->backend_last_check, &now);
+	ge_gtimeval_diff(&bs->backend_last_check, &now, &t_diff);
 
 	/* check max(once a second) */
 	/* this also covers the "time went backards" case */

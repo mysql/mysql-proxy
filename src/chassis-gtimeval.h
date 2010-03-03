@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2010 Sun Microsystems, Inc
+ Copyright (C) 2010, Oracle and/or its affiliates. All rights reserved
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -27,8 +27,9 @@
  * if time is seen to move backwards, output an error message and
  * set the time to "0".
  * @param pointer to a GTimeVal struct
- * @return difference in usec between provided timestamp and "now"
+ * @param pointer to a return value, containing difference in usec
+ *     between provided timestamp and "now"
  */
 
-CHASSIS_API gint64 chassis_gtime_testset_now(GTimeVal *gt);
+CHASSIS_API void chassis_gtime_testset_now(GTimeVal *gt, gint64 *delay);
 #endif
