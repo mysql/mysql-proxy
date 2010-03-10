@@ -62,7 +62,7 @@ check_chassis_filemode_LDADD = $(GLIB_LIBS) $(GTHREAD_LIBS)
 check_sql_tokenizer_SOURCES  = check_sql_tokenizer.c \
 	$(top_srcdir)/lib/sql-tokenizer.l \
 	$(top_srcdir)/lib/sql-tokenizer-tokens.c \
-	$(top_srcdir)/lib/sql-tokenizer-keywords.c \
+	$(top_builddir)/lib/sql-tokenizer-keywords.c \
 	$(top_srcdir)/src/glib-ext.c
 
 check_sql_tokenizer_CPPFLAGS = -I$(top_srcdir)/lib/ $(GLIB_CFLAGS) -I$(top_srcdir)/src/
