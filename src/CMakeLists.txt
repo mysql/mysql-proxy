@@ -84,7 +84,7 @@ ADD_LIBRARY(mysql-chassis SHARED ${chassis_sources})
 ADD_LIBRARY(mysql-chassis-proxy SHARED ${proxy_sources})
 ADD_LIBRARY(mysql-chassis-glibext SHARED ${glibext_sources})
 ADD_LIBRARY(mysql-chassis-timing SHARED ${timing_sources})
-ADD_EXECUTABLE(mysql-proxy chassis.c)
+ADD_EXECUTABLE(mysql-proxy mysql-proxy-cli.c)
 
 ## for windows we need the winsock lib
 SET(WINSOCK_LIBRARIES)

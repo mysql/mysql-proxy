@@ -32,7 +32,7 @@ else
 bin_PROGRAMS            = mysql-binlog-dump mysql-myisam-dump mysql-proxy
 endif
 
-mysql_proxy_SOURCES		= chassis.c
+mysql_proxy_SOURCES		= mysql-proxy-cli.c
 mysql_proxy_CPPFLAGS	= $(BUILD_CPPFLAGS)
 mysql_proxy_CFLAGS		= $(BUILD_CFLAGS)
 mysql_proxy_LDADD		= $(BUILD_LDADD)
