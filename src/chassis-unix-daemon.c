@@ -3,6 +3,7 @@
 #endif
 
 #include <sys/stat.h>
+#include <sys/resource.h> /* getrusage */
 
 #include <stdlib.h>
 #include <string.h>
