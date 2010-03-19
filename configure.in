@@ -125,7 +125,8 @@ AC_CHECK_FUNCS([\
 	get_hrtime \
 	read_real_time \
 	gettimeofday \
-	time
+	time \
+	wait4
 	])
 
 

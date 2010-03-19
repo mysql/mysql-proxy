@@ -2,6 +2,7 @@
 #error this file should only be build on Unix
 #endif
 
+#include <sys/wait.h> /* wait4 */
 #include <sys/stat.h>
 #include <sys/resource.h> /* getrusage */
 
@@ -113,7 +114,12 @@ int chassis_unix_proc_keepalive(int *child_exit_status) {
 			g_debug("%s: waiting for %d",
 					G_STRLOC,
 					child_pid);
+#ifdef HAVE_WAIT4
 			exit_pid = wait4(child_pid, &exit_status, 0, &rusage);
+#else
+			memset(&rusage, 0, sizeof(rusage)); /* make sure everything is zero'ed out */
+			exit_pid = waitpid(child_pid, &exit_status, 0);
+#endif
 			g_debug("%s: %d returned: %d",
 					G_STRLOC,
 					child_pid,
