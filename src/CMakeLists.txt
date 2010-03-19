@@ -139,7 +139,7 @@ TARGET_LINK_LIBRARIES(mysql-proxy
 )
 
 IF(WIN32)
-	ADD_EXECUTABLE(mysql-proxy-svc chassis.c)
+	ADD_EXECUTABLE(mysql-proxy-svc mysql-proxy-cli.c)
 	TARGET_LINK_LIBRARIES(mysql-proxy-svc
 		${GLIB_LIBRARIES} 
 		${GMODULE_LIBRARIES} 
