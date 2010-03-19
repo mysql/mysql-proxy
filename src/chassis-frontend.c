@@ -2,7 +2,7 @@
 #include "config.h"
 #endif
 
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_UNISTD_H
