@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
 AC_INIT(mysql-proxy, 0.8.0, mysql-proxy-discuss@lists.launchpad.net)
-AC_CONFIG_SRCDIR([src/chassis.c])
+AC_CONFIG_SRCDIR([src/mysql-proxy-cli.c])
 
 AC_CANONICAL_TARGET
 
