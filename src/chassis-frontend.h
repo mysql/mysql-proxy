@@ -53,7 +53,7 @@ CHASSIS_API int chassis_frontend_init_glib(void);
  *
  * @return 0 on success, -1 on error
  */
-CHASSIS_API int chassis_frontent_init_win32(void);
+CHASSIS_API int chassis_frontend_init_win32(void);
 
 /**
  * detect the basedir

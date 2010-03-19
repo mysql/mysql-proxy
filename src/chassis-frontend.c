@@ -82,9 +82,9 @@ int chassis_frontend_init_glib() {
 /**
  * init the win32 specific components
  *
- * - setup winsock3
+ * - setup winsock32
  */
-int chassis_frontent_init_win32() {
+int chassis_frontend_init_win32() {
 #ifdef _WIN32
 	if (0 != WSAStartup(MAKEWORD( 2, 2 ), &wsaData)) {
 		g_critical("%s: WSAStartup(2, 2) failed to initialize the socket library",
