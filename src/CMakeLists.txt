@@ -46,6 +46,10 @@ SET(chassis_sources
 	chassis-filemode.c
 	chassis-limits.c
 	chassis-stats.c
+	chassis-frontend.c
+	chassis-options.c
+	chassis-unix-daemon.c
+	chassis-win32-service.c
 )
 
 SET(timing_sources
@@ -237,6 +241,10 @@ INSTALL(FILES
 	chassis-stats.h
 	chassis-timings.h
 	chassis-gtimeval.h
+	chassis-frontend.h
+	chassis-options.h
+	chassis-unix-daemon.h
+	chassis-win32-service.h
 	my_rdtsc.h
 	DESTINATION include/
 	)

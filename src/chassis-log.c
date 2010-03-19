@@ -114,6 +114,8 @@ int chassis_log_set_level(chassis_log *log, const gchar *level) {
 }
 
 int chassis_log_open(chassis_log *log) {
+	if (!log->log_filename) return -1;
+
 	log->log_file_fd = open(log->log_filename, O_RDWR | O_CREAT | O_APPEND, 0660);
 
 	return (log->log_file_fd != -1);
@@ -276,5 +278,29 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 
 void chassis_log_set_logrotate(chassis_log *log) {
 	log->rotate_logs = TRUE;
+}
+
+int chassis_log_set_event_log(chassis_log *log, const char *app_name) {
+	g_return_val_if_fail(log != NULL, -1);
+
+#if _WIN32
+	log->use_windows_applog = TRUE;
+	log->event_source_handle = RegisterEventSource(NULL, app_name);
+
+	if (!log->event_source_handle) {
+		int err = GetLastError();
+
+		g_critical("%s: RegisterEventSource(NULL, %s) failed: %s (%d)",
+				G_STRLOC,
+				g_strerror(err),
+				err);
+
+		return -1;
+	}
+
+	return 0;
+#else
+	return -1;
+#endif
 }
 

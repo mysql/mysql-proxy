@@ -1,0 +1,131 @@
+#ifndef __CHASSIS_FRONTEND_H__
+#define __CHASSIS_FRONTEND_H__
+
+#ifdef WIN32
+#define CHASSIS_NEWLINE "\r\n"
+#else
+#define CHASSIS_NEWLINE "\n"
+#endif
+
+#include <glib.h>
+
+#include "chassis-exports.h"
+#include "chassis-options.h"
+
+/**
+ * @file
+ * a collections of common functions used by chassis frontends 
+ *
+ * take a look at mysql-proxy-cli.c on what sequence to call these functions
+ */
+
+/**
+ * setup glib, gthread and gmodule
+ *
+ * may abort of glib headers and glib libs don't match
+ *
+ * @return 0 on success, -1 on error
+ */
+CHASSIS_API int chassis_frontend_init_glib(void);
+
+/**
+ * setup win32 libs
+ *
+ * init winsock32 
+ *
+ * @return 0 on success, -1 on error
+ */
+CHASSIS_API int chassis_frontent_init_win32(void);
+
+/**
+ * detect the basedir
+ *
+ * if *_basedir is not NULL, don't change it
+ * otherwise extract the basedir from the prg_name
+ *
+ * @param prg_name program-name (usually argv[0])
+ * @param _basedir user-supplied basedir 
+ * @return 0 on success, -1 on error
+ */
+CHASSIS_API int chassis_frontend_init_basedir(const char *prg_name, char **_base_dir);
+
+/**
+ * open the configfile 
+ *
+ * @see g_key_file_free
+ */
+CHASSIS_API GKeyFile *chassis_frontend_open_config_file(const char *filename);
+
+CHASSIS_API int chassis_frontend_init_plugin_dir(char **_plugin_dir, const char *base_dir);
+CHASSIS_API int chassis_frontend_init_lua_path(const char *set_path, const char *base_dir, const char *prg_name);
+CHASSIS_API int chassis_frontend_init_lua_cpath(const char *set_path, const char *base_dir, const char *prg_name);
+
+/**
+ * extract --version and --defaults-file from comandline options
+ *
+ * @param option_ctx     a fresh GOptionContext
+ * @param argc_p         pointer to the number of args in argv_p
+ * @param argv_p         pointer to arguments to parse
+ * @param print_version  pointer to int to set if --version is specified
+ * @param config_file    pointer to char * to store if --defaults-file is specified
+ */
+CHASSIS_API int chassis_frontend_init_base_options(GOptionContext *option_ctx,
+		int *argc_p, char ***argv_p,
+		int *print_version,
+		char **config_file);
+
+/**
+ * load the plugins
+ *
+ * loads the plugins from 'plugin_names' from the 'plugin_dir' and store their chassis_plugin structs
+ * in 'plugins'
+ *
+ * the filename of the plugin is constructed based depending on the platform
+ *
+ * @param plugins      empty array
+ * @param plugin_dir   directory to load the plugins from
+ * @param plugin_names NULL terminated list of plugin names
+ *
+ * @see chassis_frontend_init_plugins
+ */
+CHASSIS_API int chassis_frontend_load_plugins(GPtrArray *plugins,
+		const gchar *plugin_dir,
+		gchar **plugin_names);
+
+/**
+ * init the loaded plugins and setup their config
+ *
+ * @param plugins        array of chassis_plugin structs
+ * @param option_ctx     a fresh GOptionContext
+ * @param argc_p         pointer to the number of args in argv_p
+ * @param argv_p         pointer to arguments to parse
+ * @param keyfile        the configfile 
+ * @param base_dir       base directory
+ *
+ * @see chassis_frontend_init_basedir, chassis_frontend_init_plugins
+ */
+CHASSIS_API int chassis_frontend_init_plugins(GPtrArray *plugins,
+		GOptionContext *option_ctx,
+		int *argc_p, char ***argv_p,
+		GKeyFile *keyfile,
+		const char *base_dir);
+
+/**
+ * print the version of the program 
+ */
+CHASSIS_API int chassis_frontend_print_version(void);
+
+/**
+ * write the PID to a file
+ *
+ * @param  pid_file name of the PID file
+ * @param  gerr     GError
+ * @return 0 on success, -1 on error
+ */
+CHASSIS_API int chassis_frontend_write_pidfile(const char *pid_file, GError **gerr);
+
+CHASSIS_API int chassis_options_set_cmdline_only_options(chassis_options_t *opts,
+		int *print_version,
+		char **config_file);
+
+#endif

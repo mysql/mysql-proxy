@@ -58,6 +58,7 @@ CHASSIS_API void chassis_log_free(chassis_log *log);
 CHASSIS_API int chassis_log_open(chassis_log *log);
 CHASSIS_API void chassis_log_func(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data);
 CHASSIS_API void chassis_log_set_logrotate(chassis_log *log);
+CHASSIS_API int chassis_log_set_event_log(chassis_log *log, const char *app_name);
 /*@}*/
 
 #endif

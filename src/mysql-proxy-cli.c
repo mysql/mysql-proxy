@@ -80,14 +80,10 @@
 #include "chassis-path.h"
 #include "chassis-limits.h"
 #include "chassis-filemode.h"
-
-#ifdef _WIN32
-static char **shell_argv;
-static int shell_argc;
-static int win32_running_as_service = 0;
-static SERVICE_STATUS agent_service_status;
-static SERVICE_STATUS_HANDLE agent_service_status_handle = 0;
-#endif
+#include "chassis-win32-service.h"
+#include "chassis-unix-daemon.h"
+#include "chassis-frontend.h"
+#include "chassis-options.h"
 
 #ifdef WIN32
 #define CHASSIS_NEWLINE "\r\n"
@@ -95,241 +91,148 @@ static SERVICE_STATUS_HANDLE agent_service_status_handle = 0;
 #define CHASSIS_NEWLINE "\n"
 #endif
 
-#ifndef _WIN32
-/**
- * start the app in the background 
- * 
- * UNIX-version
- */
-static void daemonize(void) {
-#ifdef SIGTTOU
-	signal(SIGTTOU, SIG_IGN);
-#endif
-#ifdef SIGTTIN
-	signal(SIGTTIN, SIG_IGN);
-#endif
-#ifdef SIGTSTP
-	signal(SIGTSTP, SIG_IGN);
-#endif
-	if (fork() != 0) exit(0);
-	
-	if (setsid() == -1) exit(0);
-
-	signal(SIGHUP, SIG_IGN);
-
-	if (fork() != 0) exit(0);
-	
-	chdir("/");
-	
-	umask(0);
-}
-
-
-/**
- * forward the signal to the process group, but not us
- */
-static void signal_forward(int sig) {
-	signal(sig, SIG_IGN); /* we don't want to create a loop here */
-
-	kill(0, sig);
-}
-
-/**
- * keep the ourself alive 
- *
- * if we or the child gets a SIGTERM, we quit too
- * on everything else we restart it
- */
-static int proc_keepalive(int *child_exit_status) {
-	int nprocs = 0;
-	pid_t child_pid = -1;
-
-	/* we ignore SIGINT and SIGTERM and just let it be forwarded to the child instead
-	 * as we want to collect its PID before we shutdown too 
-	 *
-	 * the child will have to set its own signal handlers for this
-	 */
-
-	for (;;) {
-		/* try to start the children */
-		while (nprocs < 1) {
-			pid_t pid = fork();
-
-			if (pid == 0) {
-				/* child */
-				
-				g_debug("%s: we are the child: %d",
-						G_STRLOC,
-						getpid());
-				return 0;
-			} else if (pid < 0) {
-				/* fork() failed */
-
-				g_critical("%s: fork() failed: %s (%d)",
-					G_STRLOC,
-					g_strerror(errno),
-					errno);
-
-				return -1;
-			} else {
-				/* we are the angel, let's see what the child did */
-				g_message("%s: [angel] we try to keep PID=%d alive",
-						G_STRLOC,
-						pid);
-
-				signal(SIGINT, signal_forward);
-				signal(SIGTERM, signal_forward);
-				signal(SIGHUP, signal_forward);
-
-				child_pid = pid;
-				nprocs++;
-			}
-		}
-
-		if (child_pid != -1) {
-			struct rusage rusage;
-			int exit_status;
-			pid_t exit_pid;
-
-			g_debug("%s: waiting for %d",
-					G_STRLOC,
-					child_pid);
-			exit_pid = wait4(child_pid, &exit_status, 0, &rusage);
-			g_debug("%s: %d returned: %d",
-					G_STRLOC,
-					child_pid,
-					exit_pid);
-
-			if (exit_pid == child_pid) {
-				/* our child returned, let's see how it went */
-				if (WIFEXITED(exit_status)) {
-					g_message("%s: [angel] PID=%d exited normally with exit-code = %d (it used %ld kBytes max)",
-							G_STRLOC,
-							child_pid,
-							WEXITSTATUS(exit_status),
-							rusage.ru_maxrss / 1024);
-					if (child_exit_status) *child_exit_status = WEXITSTATUS(exit_status);
-					return 1;
-				} else if (WIFSIGNALED(exit_status)) {
-					int time_towait = 2;
-					/* our child died on a signal
-					 *
-					 * log it and restart */
-
-					g_critical("%s: [angel] PID=%d died on signal=%d (it used %ld kBytes max) ... waiting 3min before restart",
-							G_STRLOC,
-							child_pid,
-							WTERMSIG(exit_status),
-							rusage.ru_maxrss / 1024);
-
-					/**
-					 * to make sure we don't loop as fast as we can, sleep a bit between 
-					 * restarts
-					 */
-	
-					signal(SIGINT, SIG_DFL);
-					signal(SIGTERM, SIG_DFL);
-					signal(SIGHUP, SIG_DFL);
-					while (time_towait > 0) time_towait = sleep(time_towait);
-
-					nprocs--;
-					child_pid = -1;
-				} else if (WIFSTOPPED(exit_status)) {
-				} else {
-					g_assert_not_reached();
-				}
-			} else if (-1 == exit_pid) {
-				/* EINTR is ok, all others bad */
-				if (EINTR != errno) {
-					/* how can this happen ? */
-					g_critical("%s: wait4(%d, ...) failed: %s (%d)",
-						G_STRLOC,
-						child_pid,
-						g_strerror(errno),
-						errno);
-
-					return -1;
-				}
-			} else {
-				g_assert_not_reached();
-			}
-		}
-	}
-
-	/* return 1; */ /* never reached, compiler complains */
-}
-#endif
-
 #define GETTEXT_PACKAGE "mysql-proxy"
 
-#ifdef _WIN32
-/* win32 service */
+/**
+ * options of the MySQL Proxy frontend
+ */
+typedef struct {
+	int print_version;
+	int verbose_shutdown;
 
-void agent_service_set_state(DWORD new_state, int wait_msec) {
-	DWORD status;
-	
-	/* safeguard against a missing if(win32_running_as_service) in other code */
-	if (!win32_running_as_service) return;
-	g_assert(agent_service_status_handle);
-	
-	switch(new_state) {
-		case SERVICE_START_PENDING:
-		case SERVICE_STOP_PENDING:
-			agent_service_status.dwWaitHint = wait_msec;
-			
-			if (agent_service_status.dwCurrentState == new_state) {
-				agent_service_status.dwCheckPoint++;
-			} else {
-				agent_service_status.dwCheckPoint = 0;
-			}
-			
-			break;
-		default:
-			agent_service_status.dwWaitHint = 0;
-			break;
-	}
-	
-	agent_service_status.dwCurrentState = new_state;
-	
-	if (!SetServiceStatus (agent_service_status_handle, &agent_service_status)) {
-		status = GetLastError();
-	}
+	int daemon_mode;
+	gchar *user;
+
+	gchar *base_dir;
+	int auto_base_dir;
+
+	gchar *default_file;
+	GKeyFile *keyfile;
+
+	chassis_plugin *p;
+	GOptionEntry *config_entries;
+
+	gchar *pid_file;
+
+	gchar *plugin_dir;
+	gchar **plugin_names;
+
+	guint invoke_dbg_on_crash;
+	guint auto_restart;
+
+	guint max_files_number;
+
+	gint event_thread_count;
+
+	gchar *log_level;
+	gchar *log_filename;
+	int    use_syslog;
+
+	char *lua_path;
+	char *lua_cpath;
+} chassis_frontend_t;
+
+/**
+ * create a new the frontend for the chassis
+ */
+chassis_frontend_t *chassis_frontend_new(void) {
+	chassis_frontend_t *frontend;
+
+	frontend = g_slice_new0(chassis_frontend_t);
+	frontend->event_thread_count = 1;
+	frontend->max_files_number = 8192;
+
+	return frontend;
 }
+
+/**
+ * free the frontend of the chassis
+ */
+void chassis_frontend_free(chassis_frontend_t *frontend) {
+	if (frontend) return;
+
+	if (frontend->keyfile) g_key_file_free(frontend->keyfile);
+	if (frontend->default_file) g_free(frontend->default_file);
+
+
+	if (frontend->base_dir) g_free(frontend->base_dir);
+	if (frontend->user) g_free(frontend->user);
+	if (frontend->pid_file) g_free(frontend->pid_file);
+	if (frontend->log_level) g_free(frontend->log_level);
+	if (frontend->plugin_dir) g_free(frontend->plugin_dir);
+
+	if (frontend->plugin_names) {
+		g_strfreev(frontend->plugin_names);
+	}
+
+	if (frontend->lua_path) g_free(frontend->lua_path);
+	if (frontend->lua_cpath) g_free(frontend->lua_cpath);
+
+	g_slice_free(chassis_frontend_t, frontend);
+}
+
+/**
+ * setup the options of the chassis
+ */
+int chassis_frontend_set_chassis_options(chassis_frontend_t *frontend, chassis_options_t *opts) {
+	chassis_options_add(opts,
+		"verbose-shutdown",         0, 0, G_OPTION_ARG_NONE, &(frontend->verbose_shutdown), "Always log the exit code when shutting down", NULL);
+
+	chassis_options_add(opts,
+		"daemon",                   0, 0, G_OPTION_ARG_NONE, &(frontend->daemon_mode), "Start in daemon-mode", NULL);
+
+#ifndef _WIN32
+	chassis_options_add(opts,
+		"user",                     0, 0, G_OPTION_ARG_STRING, &(frontend->user), "Run mysql-proxy as user", "<user>");
 #endif
+
+	chassis_options_add(opts,
+		"basedir",                  0, 0, G_OPTION_ARG_STRING, &(frontend->base_dir), "Base directory to prepend to relative paths in the config", "<absolute path>");
+
+	chassis_options_add(opts,
+		"pid-file",                 0, 0, G_OPTION_ARG_STRING, &(frontend->pid_file), "PID file in case we are started as daemon", "<file>");
+
+	chassis_options_add(opts,
+		"plugin-dir",               0, 0, G_OPTION_ARG_STRING, &(frontend->plugin_dir), "path to the plugins", "<path>");
+
+	chassis_options_add(opts,
+		"plugins",                  0, 0, G_OPTION_ARG_STRING_ARRAY, &(frontend->plugin_names), "plugins to load", "<name>");
+
+	chassis_options_add(opts,
+		"log-level",                0, 0, G_OPTION_ARG_STRING, &(frontend->log_level), "log all messages of level ... or higer", "(error|warning|info|message|debug)");
+
+	chassis_options_add(opts,
+		"log-file",                 0, 0, G_OPTION_ARG_STRING, &(frontend->log_filename), "log all messages in a file", "<file>");
+
+	chassis_options_add(opts,
+		"log-use-syslog",           0, 0, G_OPTION_ARG_NONE, &(frontend->use_syslog), "log all messages to syslog", NULL);
+
+	chassis_options_add(opts,
+		"log-backtrace-on-crash",   0, 0, G_OPTION_ARG_NONE, &(frontend->invoke_dbg_on_crash), "try to invoke debugger on crash", NULL);
+
+	chassis_options_add(opts,
+		"keepalive",                0, 0, G_OPTION_ARG_NONE, &(frontend->auto_restart), "try to restart the proxy if it crashed", NULL);
+
+	chassis_options_add(opts,
+		"max-open-files",           0, 0, G_OPTION_ARG_INT, &(frontend->max_files_number), "maximum number of open files (ulimit -n)", NULL);
+
+	chassis_options_add(opts,
+		"event-threads",            0, 0, G_OPTION_ARG_INT, &(frontend->event_thread_count), "number of event-handling threads (default: 1)", NULL);
+
+	chassis_options_add(opts,
+		"lua-path",                 0, 0, G_OPTION_ARG_STRING, &(frontend->lua_path), "set the LUA_PATH", "<...>");
+
+	chassis_options_add(opts,
+		"lua-cpath",                0, 0, G_OPTION_ARG_STRING, &(frontend->lua_cpath), "set the LUA_CPATH", "<...>");
+
+	return 0;	
+}
+
 
 static void sigsegv_handler(int G_GNUC_UNUSED signum) {
 	g_on_error_stack_trace(g_get_prgname());
 
 	abort(); /* trigger a SIGABRT instead of just exiting */
-}
-
-static int chassis_setenv_lua(const char *key, const char *value) {
-	int r;
-#if _WIN32
-	/** on Win32 glib uses _wputenv to set the env variable,
-	 *  but Lua uses getenv. Those two don't see each other,
-	 *  so we use _putenv. Since we only set ASCII chars, this
-	 *  is safe.
-	 */
-	r = _putenv_s(key, value);
-#else
-	r = g_setenv(key, value, 1) ? 0 : -1; /* g_setenv() returns TRUE/FALSE */
-#endif
-
-	if (0 == r) {
-		/* the setenv() succeeded, double-check it */
-		if (!getenv(key)) {
-			/* check that getenv() returns what we did set */
-			g_critical("%s: setting %s = %s failed: (getenv() == NULL)", G_STRLOC,
-					key, value);
-		} else if (0 != strcmp(getenv(key), value)) {
-			g_critical("%s: setting %s = %s failed: (getenv() == %s)", G_STRLOC,
-					key, value,
-					getenv(key));
-		}
-	}
-
-	return r;
 }
 
 /**
@@ -344,188 +247,65 @@ int main_cmdline(int argc, char **argv) {
 #endif
 	/* read the command-line options */
 	GOptionContext *option_ctx = NULL;
+	GOptionEntry *main_entries;
+	chassis_frontend_t *frontend;
+	chassis_options_t *opts;
+
 	GError *gerr = NULL;
-	guint i;
+	chassis_log *log;
+
+	/* a little helper macro to set the src-location that we stepped out at to exit */
+#define GOTO_EXIT(status) \
+	exit_code = status; \
+	exit_location = G_STRLOC; \
+	goto exit_nicely;
+
 	int exit_code = EXIT_SUCCESS;
 	const gchar *exit_location = G_STRLOC;
-	int print_version = 0;
-	int verbose_shutdown = 0;
-	int daemon_mode = 0;
-	gchar *user = NULL;
-	gchar *base_dir = NULL;
-	int auto_base_dir = 0;	/**< distinguish between user supplied basedir and automatically discovered one */
-	const gchar *check_str = NULL;
-	chassis_plugin *p;
-	gchar *pid_file = NULL;
-	gchar *plugin_dir = NULL;
-	gchar *default_file = NULL;
-	GOptionEntry *config_entries;
-	gchar **plugin_names = NULL;
-	guint invoke_dbg_on_crash = 0;
-	guint auto_restart = 0;
-	guint max_files_number = 8192;
-	gint event_thread_count = 1; /* there is always the main-thread */
-#ifdef WIN32
-	WSADATA wsaData;
-#endif
-	gchar *log_level = NULL;
 
-	GKeyFile *keyfile = NULL;
-	chassis_log *log;
-	char *lua_path = NULL;
-	char *lua_cpath = NULL;
-
-	/* can't appear in the configfile */
-	GOptionEntry base_main_entries[] = 
-	{
-		{ "version",                 'V', 0, G_OPTION_ARG_NONE, NULL, "Show version", NULL },
-		{ "defaults-file",            0, 0, G_OPTION_ARG_STRING, NULL, "configuration file", "<file>" },
-		
-		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
-	};
-
-	GOptionEntry main_entries[] = 
-	{
-		{ "verbose-shutdown",         0, 0, G_OPTION_ARG_NONE, NULL, "Always log the exit code when shutting down", NULL },
-		{ "daemon",                   0, 0, G_OPTION_ARG_NONE, NULL, "Start in daemon-mode", NULL },
-#ifndef _WIN32
-		{ "user",                     0, 0, G_OPTION_ARG_STRING, NULL, "Run mysql-proxy as user", "<user>" },
-#endif
-		{ "basedir",                  0, 0, G_OPTION_ARG_STRING, NULL, "Base directory to prepend to relative paths in the config", "<absolute path>" },
-		{ "pid-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "PID file in case we are started as daemon", "<file>" },
-		{ "plugin-dir",               0, 0, G_OPTION_ARG_STRING, NULL, "path to the plugins", "<path>" },
-		{ "plugins",                  0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "plugins to load", "<name>" },
-		{ "log-level",                0, 0, G_OPTION_ARG_STRING, NULL, "log all messages of level ... or higer", "(error|warning|info|message|debug)" },
-		{ "log-file",                 0, 0, G_OPTION_ARG_STRING, NULL, "log all messages in a file", "<file>" },
-		{ "log-use-syslog",           0, 0, G_OPTION_ARG_NONE, NULL, "log all messages to syslog", NULL },
-		{ "log-backtrace-on-crash",   0, 0, G_OPTION_ARG_NONE, NULL, "try to invoke debugger on crash", NULL },
-		{ "keepalive",                0, 0, G_OPTION_ARG_NONE, NULL, "try to restart the proxy if it crashed", NULL },
-		{ "max-open-files",           0, 0, G_OPTION_ARG_INT, NULL, "maximum number of open files (ulimit -n)", NULL},
-		{ "event-threads",            0, 0, G_OPTION_ARG_INT, NULL, "number of event-handling threads (default: 1)", NULL},
-		{ "lua-path",                 0, 0, G_OPTION_ARG_STRING, NULL, "set the LUA_PATH", "<...>" },
-		{ "lua-cpath",                0, 0, G_OPTION_ARG_STRING, NULL, "set the LUA_CPATH", "<...>" },
-		
-		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
-	};
-
-#if 0
-	g_mem_set_vtable(glib_mem_profiler_table);
-#endif
-
-	if (!GLIB_CHECK_VERSION(2, 6, 0)) {
-		g_error("the glib header are too old, need at least 2.6.0, got: %d.%d.%d", 
-				GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
+	if (chassis_frontend_init_glib()) { /* init the thread, module, ... system */
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
-	check_str = glib_check_version(GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
-
-	if (check_str) {
-		g_error("%s, got: lib=%d.%d.%d, headers=%d.%d.%d", 
-			check_str,
-			glib_major_version, glib_minor_version, glib_micro_version,
-			GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
-	}
-
-	if (!g_module_supported()) {
-		g_error("loading modules is not supported on this platform");
-	}
-
-	g_thread_init(NULL);
-
+	/* start the logging ... to stderr */
 	log = chassis_log_new();
 	log->min_lvl = G_LOG_LEVEL_MESSAGE; /* display messages while parsing or loading plugins */
 	g_log_set_default_handler(chassis_log_func, log);
 
 #ifdef _WIN32
-	if (0 != WSAStartup(MAKEWORD( 2, 2 ), &wsaData)) {
-		g_critical("WSAStartup failed to initialize the socket library.\n");
-
-		exit_code = EXIT_FAILURE; 
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+	if (chassis_win32_service_is_running() && chassis_log_set_event_log(log, g_get_prgname())) {
+		GOTO_EXIT(EXIT_FAILURE);
 	}
-	if (win32_running_as_service) {
-		log->use_windows_applog = TRUE;
-		log->event_source_handle = RegisterEventSource(NULL, "mysql-monitor-agent");	/* TODO: get the actual executable name here */
-		if (!log->event_source_handle) {
-			int err = GetLastError();
-			g_critical("unhandled error-code (%d) for RegisterEventSource(), shutting down", err);
-			exit_code = EXIT_FAILURE; 
-			exit_location = G_STRLOC;
-			goto exit_nicely;
-		}
+
+	if (chassis_frontend_init_win32()) { /* setup winsock */
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 #endif
 
 	/* may fail on library mismatch */
 	if (NULL == (srv = chassis_new())) {
-		exit_code = EXIT_FAILURE; 
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
 	srv->log = log; /* we need the log structure for the log-rotation */
 
-	i = 0;
-	base_main_entries[i++].arg_data  = &(print_version);
-	base_main_entries[i++].arg_data  = &(default_file);
-
-	i = 0;
-	main_entries[i++].arg_data  = &(verbose_shutdown);
-	main_entries[i++].arg_data  = &(daemon_mode);
-#ifndef _WIN32
-	main_entries[i++].arg_data  = &(user);
-#endif
-	main_entries[i++].arg_data  = &(base_dir);
-	main_entries[i++].arg_data  = &(pid_file);
-	main_entries[i++].arg_data  = &(plugin_dir);
-	main_entries[i++].arg_data  = &(plugin_names);
-
-	main_entries[i++].arg_data  = &(log_level);
-	main_entries[i++].arg_data  = &(log->log_filename);
-	main_entries[i++].arg_data  = &(log->use_syslog);
-	main_entries[i++].arg_data  = &(invoke_dbg_on_crash);
-	main_entries[i++].arg_data  = &(auto_restart);
-	main_entries[i++].arg_data  = &(max_files_number);
-	main_entries[i++].arg_data  = &(event_thread_count);
-	main_entries[i++].arg_data  = &(lua_path);
-	main_entries[i++].arg_data  = &(lua_cpath);
-
-	option_ctx = g_option_context_new("- MySQL App Shell");
-	g_option_context_add_main_entries(option_ctx, base_main_entries, GETTEXT_PACKAGE);
-	g_option_context_set_help_enabled(option_ctx, FALSE);
-	g_option_context_set_ignore_unknown_options(option_ctx, TRUE);
-
+	frontend = chassis_frontend_new();
+	option_ctx = g_option_context_new("- MySQL Proxy");
 	/**
 	 * parse once to get the basic options like --defaults-file and --version
 	 *
 	 * leave the unknown options in the list
 	 */
-	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
-		g_critical("%s", gerr->message);
-		
-		exit_code = EXIT_FAILURE; 
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+	if (chassis_frontend_init_base_options(option_ctx,
+				&argc, &argv,
+				&(frontend->print_version),
+				&(frontend->default_file))) {
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
-	if (default_file) {
-		if (chassis_filemode_check(default_file) != 0) {
-			exit_code = EXIT_FAILURE; 
-			exit_location = G_STRLOC;
-			goto exit_nicely;
-		}
-		keyfile = g_key_file_new();
-		g_key_file_set_list_separator(keyfile, ',');
-
-		if (FALSE == g_key_file_load_from_file(keyfile, default_file, G_KEY_FILE_NONE, &gerr)) {
-			g_critical("loading configuration from %s failed: %s", 
-					default_file,
-					gerr->message);
-
-			exit_code = EXIT_FAILURE; 
-			exit_location = G_STRLOC;
-			goto exit_nicely;
+	if (frontend->default_file) {
+		if (!(frontend->keyfile = chassis_frontend_open_config_file(frontend->default_file))) {
+			GOTO_EXIT(EXIT_FAILURE);
 		}
 	}
 
@@ -533,20 +313,17 @@ int main_cmdline(int argc, char **argv) {
 	 * we check for print_version again, after loading the plugins (if any)
 	 * and print their version numbers, too. then we exit cleanly.
 	 */
-	if (print_version) {
-		/* allow to pass down a build-tag at build-time which gets hard-coded into the binary */
-#ifndef CHASSIS_BUILD_TAG
-#define CHASSIS_BUILD_TAG PACKAGE_STRING
-#endif
-		printf("%s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG); 
-		printf("  glib2: %d.%d.%d" CHASSIS_NEWLINE, GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
-#ifdef HAVE_EVENT_H
-		printf("  libevent: %s" CHASSIS_NEWLINE, event_get_version());
-#endif
+	if (frontend->print_version) {
+		chassis_frontend_print_version();
 	}
 	
 	/* add the other options which can also appear in the configfile */
-	g_option_context_add_main_entries(option_ctx, main_entries, GETTEXT_PACKAGE);
+	opts = chassis_options_new();
+	chassis_frontend_set_chassis_options(frontend, opts);
+	main_entries = chassis_options_to_g_option_entries(opts);
+	g_option_context_add_main_entries(option_ctx, main_entries, NULL);
+	chassis_options_free(opts);
+	g_free(main_entries);
 
 	/**
 	 * parse once to get the basic options 
@@ -556,106 +333,29 @@ int main_cmdline(int argc, char **argv) {
 	if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
 		g_critical("%s", gerr->message);
 
-		exit_code = EXIT_FAILURE; 
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
-	if (keyfile) {
-		if (chassis_keyfile_to_options(keyfile, "mysql-proxy", main_entries)) {
-			exit_code = EXIT_FAILURE; 
-			exit_location = G_STRLOC;
-			goto exit_nicely;
+	if (frontend->keyfile) {
+		if (chassis_keyfile_to_options(frontend->keyfile, "mysql-proxy", main_entries)) {
+			GOTO_EXIT(EXIT_FAILURE);
 		}
 	}
 
-	/* find our installation directory if no basedir was given
-	 * this is necessary for finding files when we daemonize
-	 */
-	if (!base_dir) {
-		base_dir = chassis_get_basedir(argv[0]);
-		if (!base_dir) {
-			g_critical("%s: Failed to get base directory.", G_STRLOC);
-			goto exit_nicely;
-		}
 
-		auto_base_dir = 1;
-	}
-	
-	/* --basedir must be an absolute path, doesn't make sense otherwise */
-	if (!auto_base_dir && !g_path_is_absolute(base_dir)) {
-		/* TODO: here we have a problem, because our logging support is not yet set up.
-		   What do we do on Windows when called as a service?
-		 */
-		g_critical("--basedir option must be an absolute path, but was %s", base_dir);
-		exit_code = EXIT_FAILURE; 
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+	if (chassis_frontend_init_basedir(argv[0], &(frontend->base_dir))) {
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
 	/* basic setup is done, base-dir is known, ... */
 
-#if defined(HAVE_LUA_H)
-	if (print_version) printf("  lua: %s" CHASSIS_NEWLINE, LUA_RELEASE);
-	/**
-	 * if the LUA_PATH or LUA_CPATH are not set, set a good default 
-	 *
-	 * we want to derive it from the basedir ...
-	 */
-	if (lua_path) {
-		if (0 != chassis_setenv_lua(LUA_PATH, lua_path)) {
-			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
-					LUA_PATH, lua_path,
-					g_strerror(errno));
-		}
-		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, lua_path);
-	} else if (!g_getenv(LUA_PATH)) {
-		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?.lua", NULL);
-		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, path);
-		
-		if (chassis_setenv_lua(LUA_PATH, path)) {
-			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
-					LUA_PATH, path,
-					g_strerror(errno));
-		}
-		
-		g_free(path);
-	} else {
-		if (print_version) printf("    LUA_PATH: %s" CHASSIS_NEWLINE, g_getenv(LUA_PATH));
+	if (chassis_frontend_init_lua_path(frontend->lua_path, frontend->base_dir, "mysql-proxy")) {
+		GOTO_EXIT(EXIT_FAILURE);
 	}
-
-	if (lua_cpath) {
-		if (chassis_setenv_lua(LUA_CPATH, lua_cpath)) {
-			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
-					LUA_CPATH, lua_cpath,
-					g_strerror(errno));
-		}
-		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, lua_cpath);
-	} else if (!g_getenv(LUA_CPATH)) {
-		/* each OS has its own way of declaring a shared-lib extension
-		 *
-		 * win32 has .dll
-		 * macosx has .so or .dylib
-		 * hpux has .sl
-		 */ 
-#  if _WIN32
-		gchar *path = g_build_filename(base_dir, "bin", "lua-?." G_MODULE_SUFFIX, NULL);
-#  else
-		gchar *path = g_build_filename(base_dir, "lib", "mysql-proxy", "lua", "?." G_MODULE_SUFFIX, NULL);
-#  endif
-		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, path);
-
-		if (chassis_setenv_lua(LUA_CPATH, path)) {
-			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
-					LUA_CPATH, path,
-					g_strerror(errno));
-		}
-
-		g_free(path);
-	} else {
-		if (print_version) printf("    LUA_CPATH: %s" CHASSIS_NEWLINE, g_getenv(LUA_CPATH));
+	
+	if (chassis_frontend_init_lua_cpath(frontend->lua_cpath, frontend->base_dir, "mysql-proxy")) {
+		GOTO_EXIT(EXIT_FAILURE);
 	}
-# endif
 
 	/* assign the mysqld part to the */
 	network_mysqld_init(srv); /* starts the also the lua-scope, LUA_PATH and LUA_CPATH have to be set before this being called */
@@ -668,162 +368,91 @@ int main_cmdline(int argc, char **argv) {
 	sigsegv_sa.sa_handler = sigsegv_handler;
 	sigemptyset(&sigsegv_sa.sa_mask);
 
-	if (invoke_dbg_on_crash && !(RUNNING_ON_VALGRIND)) {
+	if (frontend->invoke_dbg_on_crash && !(RUNNING_ON_VALGRIND)) {
 		sigaction(SIGSEGV, &sigsegv_sa, NULL);
 	}
 #endif
-
 
 	/*
 	 * some plugins cannot see the chassis struct from the point
 	 * where they open files, hence we must make it available
 	 */
-	srv->base_dir = g_strdup(base_dir);
+	srv->base_dir = g_strdup(frontend->base_dir);
+
+	chassis_frontend_init_plugin_dir(&frontend->plugin_dir, srv->base_dir);
 	
-	/* Lets find the plugin directory relative the executable path */
-	if (!plugin_dir) {
-#ifdef WIN32
-		plugin_dir = g_build_filename(srv->base_dir, "bin", NULL);
-#else
-		plugin_dir = g_build_filename(srv->base_dir, "lib", PACKAGE, "plugins", NULL);
-#endif
-	}
 	/* 
 	 * these are used before we gathered all the options
 	 * from the plugins, thus we need to fix them up before
 	 * dealing with all the rest.
 	 */
-	chassis_resolve_path(srv->base_dir, &log->log_filename);
-	chassis_resolve_path(srv->base_dir, &pid_file);
-	chassis_resolve_path(srv->base_dir, &plugin_dir);
+	chassis_resolve_path(srv->base_dir, &frontend->log_filename);
+	chassis_resolve_path(srv->base_dir, &frontend->pid_file);
+	chassis_resolve_path(srv->base_dir, &frontend->plugin_dir);
 
-	if (log->log_filename) {
-        gboolean turned_off_syslog = FALSE;
-        if (log->use_syslog) {
-            log->use_syslog = FALSE;
-            turned_off_syslog = TRUE;
-        }
-		if (0 == chassis_log_open(log)) {
-			g_critical("can't open log-file '%s': %s", log->log_filename, g_strerror(errno));
+	/*
+	 * start the logging
+	 */
+	if (frontend->log_filename) {
+		log->log_filename = g_strdup(frontend->log_filename);
+	}
 
-			exit_code = EXIT_FAILURE; 
-			exit_location = G_STRLOC;
-			goto exit_nicely;
-		}
-        if (turned_off_syslog)
-            g_warning("both log-file and log-use-syslog were given. turning off log-use-syslog, logging to %s", log->log_filename);
+	log->use_syslog = frontend->use_syslog;
+
+	if (log->log_filename && log->use_syslog) {
+		g_critical("%s: log-file and log-use-syslog were given, but only one is allowed",
+				G_STRLOC);
+		GOTO_EXIT(EXIT_FAILURE);
+	}
+
+	if (0 == chassis_log_open(log)) {
+		g_critical("can't open log-file '%s': %s", log->log_filename, g_strerror(errno));
+
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
 	/* handle log-level after the config-file is read, just in case it is specified in the file */
-	if (log_level) {
-		if (0 != chassis_log_set_level(log, log_level)) {
-			g_critical("--log-level=... failed, level '%s' is unknown ", log_level);
+	if (frontend->log_level) {
+		if (0 != chassis_log_set_level(log, frontend->log_level)) {
+			g_critical("--log-level=... failed, level '%s' is unknown ",
+					frontend->log_level);
 
-			exit_code = EXIT_FAILURE; 
-			exit_location = G_STRLOC;
-			goto exit_nicely;
+			GOTO_EXIT(EXIT_FAILURE);
 		}
 	} else {
 		/* if it is not set, use "critical" as default */
 		log->min_lvl = G_LOG_LEVEL_CRITICAL;
 	}
 
-	/* if not plugins are specified, load admin and proxy */
-	if (!plugin_names) {
-		plugin_names = g_new(char *, 3);
+	/*
+	 * the MySQL Proxy should load 'admin' and 'proxy' plugins
+	 */
+	if (!frontend->plugin_names) {
+		frontend->plugin_names = g_new(char *, 3);
 
-		plugin_names[0] = g_strdup("admin");
-		plugin_names[1] = g_strdup("proxy");
-		plugin_names[2] = NULL;
+		frontend->plugin_names[0] = g_strdup("admin");
+		frontend->plugin_names[1] = g_strdup("proxy");
+		frontend->plugin_names[2] = NULL;
 	}
 
-	/* load the plugins */
-	for (i = 0; plugin_names && plugin_names[i]; i++) {
-#ifdef WIN32
-#define G_MODULE_PREFIX "plugin-" /* we build the plugins with a prefix on win32 to avoid name-clashing in bin/ */
-#else
-#define G_MODULE_PREFIX "lib"
-#endif
-/* we have to hack around some glib distributions that
- * don't set the correct G_MODULE_SUFFIX, notably MacPorts
- */
-#ifndef SHARED_LIBRARY_SUFFIX
-#define SHARED_LIBRARY_SUFFIX G_MODULE_SUFFIX
-#endif
-		char *plugin_filename;
-		/* skip trying to load a plugin when the parameter was --plugins= 
-		   that will never work...
-		*/
-		if (!g_strcmp0("", plugin_names[i])) {
-			continue;
-		}
-		plugin_filename = g_strdup_printf("%s%c%s%s.%s", 
-				plugin_dir, 
-				G_DIR_SEPARATOR, 
-				G_MODULE_PREFIX,
-				plugin_names[i],
-				SHARED_LIBRARY_SUFFIX);
-
-		p = chassis_plugin_load(plugin_filename);
-		g_free(plugin_filename);
-
-		if (print_version && p) {
-			if (0 == i) printf("  == plugins ==" CHASSIS_NEWLINE); /* print the == plugins line only once */
-			if (0 == strcmp(plugin_names[i], p->name)) {
-                printf("  %s: %s" CHASSIS_NEWLINE, p->name, p->version);
-			} else {
-                printf("  %s(%s): %s" CHASSIS_NEWLINE, p->name, plugin_names[i], p->version);
-			}
-		}
-		
-		if (NULL == p) {
-			g_critical("setting --plugin-dir=<dir> might help");
-			exit_code = EXIT_FAILURE; 
-			exit_location = G_STRLOC;
-			goto exit_nicely;
-		}
-
-		g_ptr_array_add(srv->modules, p);
-
-		if (NULL != (config_entries = chassis_plugin_get_options(p))) {
-			gchar *group_desc = g_strdup_printf("%s-module", plugin_names[i]);
-			gchar *help_msg = g_strdup_printf("Show options for the %s-module", plugin_names[i]);
-			const gchar *group_name = plugin_names[i];
-
-			GOptionGroup *option_grp = g_option_group_new(group_name, group_desc, help_msg, NULL, NULL);
-			g_option_group_add_entries(option_grp, config_entries);
-			g_option_context_add_group(option_ctx, option_grp);
-
-			g_free(help_msg);
-			g_free(group_desc);
-
-			/* parse the new options */
-			if (FALSE == g_option_context_parse(option_ctx, &argc, &argv, &gerr)) {
-				g_critical("%s", gerr->message);
-		
-				exit_code = EXIT_FAILURE; 
-				exit_location = G_STRLOC;
-				goto exit_nicely;
-			}
-	
-			if (keyfile) {
-				if (chassis_keyfile_to_options(keyfile, "mysql-proxy", config_entries)) {
-					exit_code = EXIT_FAILURE; 
-					exit_location = G_STRLOC;
-					goto exit_nicely;
-				}
-			}
-
-			/* resolve the path names for these config entries */
-			chassis_keyfile_resolve_path(srv->base_dir, config_entries); 
-		}
+	if (chassis_frontend_load_plugins(srv->modules,
+				frontend->plugin_dir,
+				frontend->plugin_names)) {
+		GOTO_EXIT(EXIT_FAILURE);
 	}
+
+	if (chassis_frontend_init_plugins(srv->modules,
+				option_ctx,
+				&argc, &argv,
+				frontend->keyfile,
+				srv->base_dir)) {
+		GOTO_EXIT(EXIT_FAILURE);
+	}
+
 
 	/* if we only print the version numbers, exit and don't do any more work */
-	if (print_version) {
-		exit_code = EXIT_SUCCESS;
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+	if (frontend->print_version) {
+		GOTO_EXIT(EXIT_SUCCESS);
 	}
 
 	/* we know about the options now, lets parse them */
@@ -846,9 +475,7 @@ int main_cmdline(int argc, char **argv) {
 					);
 		}
 		
-		exit_code = EXIT_FAILURE; 
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
 	g_option_context_free(option_ctx);
@@ -858,32 +485,28 @@ int main_cmdline(int argc, char **argv) {
 	if (argc > 1) {
 		g_critical("unknown option: %s", argv[1]);
 
-		exit_code = EXIT_FAILURE; 
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
 	/* make sure that he max-thread-count isn't negative */
-	if (event_thread_count < 1) {
-		g_critical("--event-threads has to be >= 1, is %d", event_thread_count);
+	if (frontend->event_thread_count < 1) {
+		g_critical("--event-threads has to be >= 1, is %d", frontend->event_thread_count);
 
-		exit_code = EXIT_FAILURE; 
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
-	srv->event_thread_count = event_thread_count;
+	srv->event_thread_count = frontend->event_thread_count;
 	
 #ifndef _WIN32	
 	signal(SIGPIPE, SIG_IGN);
 
-	if (daemon_mode) {
-		daemonize();
+	if (frontend->daemon_mode) {
+		chassis_unix_daemonize();
 	}
 
-	if (auto_restart) {
+	if (frontend->auto_restart) {
 		int child_exit_status = EXIT_SUCCESS; /* forward the exit-status of the child */
-		int ret = proc_keepalive(&child_exit_status);
+		int ret = chassis_unix_proc_keepalive(&child_exit_status);
 
 		if (ret > 0) {
 			/* the agent stopped */
@@ -891,39 +514,19 @@ int main_cmdline(int argc, char **argv) {
 			exit_code = child_exit_status;
 			goto exit_nicely;
 		} else if (ret < 0) {
-			exit_code = EXIT_FAILURE; 
-			exit_location = G_STRLOC;
-			goto exit_nicely;
+			GOTO_EXIT(EXIT_FAILURE);
 		} else {
 			/* we are the child, go on */
 		}
 	}
 #endif
-	if (pid_file) {
-		int fd;
-		gchar *pid_str;
+	if (frontend->pid_file) {
+		if (0 != chassis_frontend_write_pidfile(frontend->pid_file, &gerr)) {
+			g_critical("%s", gerr->message);
+			g_clear_error(&gerr);
 
-		/**
-		 * write the PID file
-		 */
-
-		if (-1 == (fd = open(pid_file, O_WRONLY|O_TRUNC|O_CREAT, 0600))) {
-			g_critical("%s.%d: open(%s) failed: %s", 
-					__FILE__, __LINE__,
-					pid_file,
-					g_strerror(errno));
-
-			exit_code = EXIT_FAILURE; 
-			exit_location = G_STRLOC;
-			goto exit_nicely;
+			GOTO_EXIT(EXIT_FAILURE);
 		}
-
-		pid_str = g_strdup_printf("%d", getpid());
-
-		write(fd, pid_str, strlen(pid_str));
-		g_free(pid_str);
-
-		close(fd);
 	}
 
 	/* the message has to be _after_ the g_option_content_parse() to 
@@ -932,25 +535,23 @@ int main_cmdline(int argc, char **argv) {
 	g_message("%s started", PACKAGE_STRING); /* add tag to the logfile (after we opened the logfile) */
 
 #ifdef _WIN32
-	if (win32_running_as_service) agent_service_set_state(SERVICE_RUNNING, 0);
+	if (chassis_win32_service_is_running()) chassis_win32_service_set_state(SERVICE_RUNNING, 0);
 #endif
 
 	/*
 	 * we have to drop root privileges in chassis_mainloop() after
 	 * the plugins opened the ports, so we need the user there
 	 */
-	srv->user = g_strdup(user);
+	srv->user = g_strdup(frontend->user);
 
-	if (chassis_set_fdlimit(max_files_number)) {
+	if (chassis_set_fdlimit(frontend->max_files_number)) {
 		/* do we want to exit or just go on */
 	}
 
 	if (chassis_mainloop(srv)) {
 		/* looks like we failed */
 		g_critical("%s: Failure from chassis_mainloop. Shutting down.", G_STRLOC);
-		exit_code = EXIT_FAILURE; 
-		exit_location = G_STRLOC;
-		goto exit_nicely;
+		GOTO_EXIT(EXIT_FAILURE);
 	}
 
 exit_nicely:
@@ -962,148 +563,37 @@ exit_nicely:
 	}
 	chassis_set_shutdown_location(exit_location);
 
-	if (!print_version) {
-		g_log(G_LOG_DOMAIN, (verbose_shutdown ? G_LOG_LEVEL_CRITICAL : G_LOG_LEVEL_MESSAGE),
+	if (!frontend->print_version) {
+		g_log(G_LOG_DOMAIN, (frontend->verbose_shutdown ? G_LOG_LEVEL_CRITICAL : G_LOG_LEVEL_MESSAGE),
 				"shutting down normally, exit code is: %d", exit_code); /* add a tag to the logfile */
 	}
 
 #ifdef _WIN32
-	if (win32_running_as_service) agent_service_set_state(SERVICE_STOP_PENDING, 0);
+	if (chassis_win32_service_is_running()) chassis_win32_service_set_state(SERVICE_STOP_PENDING, 0);
 #endif
-	
-	if (keyfile) g_key_file_free(keyfile);
-	if (default_file) g_free(default_file);
 
+	chassis_frontend_free(frontend);	
+	
 	if (gerr) g_error_free(gerr);
 	if (option_ctx) g_option_context_free(option_ctx);
 	if (srv) chassis_free(srv);
 
-	if (base_dir) g_free(base_dir);
-	if (user) g_free(user);
-	if (pid_file) g_free(pid_file);
-	if (log_level) g_free(log_level);
-	if (plugin_dir) g_free(plugin_dir);
-
-	if (plugin_names) {
-		g_strfreev(plugin_names);
-	}
-
-	if (lua_path) g_free(lua_path);
-	if (lua_cpath) g_free(lua_cpath);
-
 	chassis_log_free(log);
 	
 #ifdef _WIN32
-	if (win32_running_as_service) agent_service_set_state(SERVICE_STOPPED, 0);
+	if (chassis_win32_service_is_running()) chassis_win32_service_set_state(SERVICE_STOPPED, 0);
 #endif
 
 #ifdef HAVE_SIGACTION
 	/* reset the handler */
 	sigsegv_sa.sa_handler = SIG_DFL;
-	if (invoke_dbg_on_crash && !(RUNNING_ON_VALGRIND)) {
+	if (frontend->invoke_dbg_on_crash && !(RUNNING_ON_VALGRIND)) {
 		sigaction(SIGSEGV, &sigsegv_sa, NULL);
 	}
 #endif
 
 	return exit_code;
 }
-
-#ifdef _WIN32
-/* win32 service */
-/**
- the event-handler for the service
- 
- the SCM will send us events from time to time which we acknoledge
- */
-
-void WINAPI agent_service_ctrl(DWORD Opcode) {
-	
-	switch(Opcode) {
-		case SERVICE_CONTROL_SHUTDOWN:
-		case SERVICE_CONTROL_STOP:
-			agent_service_set_state(SERVICE_STOP_PENDING, 0);
-			
-			chassis_set_shutdown(); /* exit the main-loop */
-			
-			break;
-		default:
-			agent_service_set_state(Opcode, 0);
-			break;
-	}
-	
-	return;
-}
-
-/**
- * trampoline us into the real main_cmdline
- */
-void WINAPI agent_service_start(DWORD argc, LPTSTR *argv) {
-	
-	/* tell the service controller that we are alive */
-	agent_service_status.dwCurrentState       = SERVICE_START_PENDING;
-	agent_service_status.dwCheckPoint         = 0;
-	agent_service_status.dwServiceType        = SERVICE_WIN32_OWN_PROCESS;
-	agent_service_status.dwControlsAccepted   = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
-	agent_service_status.dwWin32ExitCode      = NO_ERROR;
-	agent_service_status.dwServiceSpecificExitCode = 0;
-	
-	agent_service_status_handle = RegisterServiceCtrlHandler("MerlinAgent", agent_service_ctrl); 
-	
-	if (agent_service_status_handle == (SERVICE_STATUS_HANDLE)0) {
-		g_critical("RegisterServiceCtrlHandler failed");
-		return; 
-	}
-	
-	agent_service_set_state(SERVICE_START_PENDING, 1000);
-	
-	/* jump into the actual main */
-	main_cmdline(shell_argc, shell_argv);
-}
-
-/**
- * Determine whether we are called as a service and set that up.
- * Then call main_cmdline to do the real work.
- */
-int main_win32(int argc, char **argv) {
-	WSADATA wsaData;
-
-	SERVICE_TABLE_ENTRY dispatch_tab[] = {
-		{ "MerlinAgent", agent_service_start },
-		{ NULL, NULL } 
-	};
-
-	if (0 != WSAStartup(MAKEWORD( 2, 2 ), &wsaData)) {
-		g_critical("WSAStartup failed to initialize the socket library.\n");
-
-		return -1;
-	}
-
-	/* save the arguments because the service controller will clobber them */
-	shell_argc = argc;
-	shell_argv = argv;
-	/* speculate that we are running as a service, reset to 0 on error */
-	win32_running_as_service = 1;
-	
-	if (!StartServiceCtrlDispatcher(dispatch_tab)) {
-		int err = GetLastError();
-		
-		switch(err) {
-			case ERROR_FAILED_SERVICE_CONTROLLER_CONNECT:
-				/* we weren't called as a service, carry on with the cmdline handling */
-				win32_running_as_service = 0;
-				return main_cmdline(shell_argc, shell_argv);
-			case ERROR_SERVICE_ALREADY_RUNNING:
-				g_critical("service is already running, shutting down");
-				return 0;
-			default:
-				g_critical("unhandled error-code (%d) for StartServiceCtrlDispatcher(), shutting down", err);
-				return -1;
-		}
-	}
-	return 0;
-}
-#endif
-
 
 /**
  * On Windows we first look if we are started as a service and 
@@ -1117,3 +607,4 @@ int main(int argc, char **argv) {
 	return main_cmdline(argc, argv);
 #endif
 }
+

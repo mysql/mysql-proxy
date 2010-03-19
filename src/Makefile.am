@@ -89,7 +89,11 @@ libmysql_chassis_la_SOURCES = \
 	chassis-filemode.c \
 	chassis-limits.c \
 	chassis-shutdown-hooks.c \
-	chassis-stats.c
+	chassis-stats.c \
+	chassis-frontend.c \
+	chassis-options.c \
+	chassis-unix-daemon.c \
+	chassis-win32-service.c
 
 
 libmysql_chassis_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
@@ -163,6 +167,10 @@ include_HEADERS=\
 	lua-registry-keys.h \
 	chassis-stats.h \
 	chassis-timings.h \
+	chassis-frontend.h \
+	chassis-options.h \
+	chassis-win32-service.h \
+	chassis-unix-daemon.h \
 	my_rdtsc.h
 
 if ENABLE_DTRACE
