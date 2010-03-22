@@ -17,6 +17,7 @@
  $%ENDLICENSE%$ */
 
 #include "chassis-win32-service.h"
+#include "chassis-mainloop.h" /* for chassis_set_shutdown */
 
 #ifdef _WIN32
 /**
@@ -75,7 +76,7 @@ void chassis_win32_service_set_state(DWORD new_state, int wait_msec) {
  * the SCM will send us events from time to time which we acknoledge
  */
 
-static void WINAPI chassis_win32_service_ctrl(DWORD Opcode, DWORD EventType, LPVOID EventData, LPVOID _udata) {
+static DWORD WINAPI chassis_win32_service_ctrl(DWORD Opcode, DWORD EventType, LPVOID EventData, LPVOID _udata) {
 	switch(Opcode) {
 	case SERVICE_CONTROL_SHUTDOWN:
 	case SERVICE_CONTROL_STOP:
@@ -83,13 +84,14 @@ static void WINAPI chassis_win32_service_ctrl(DWORD Opcode, DWORD EventType, LPV
 		
 		chassis_set_shutdown(); /* exit the main-loop */
 		
-		break;
+		return NO_ERROR;
+	case SERVICE_CONTROL_INTERROGATE:
+		/* even if we don't implement it, we should return NO_ERROR here */
+		return NO_ERROR;
 	default:
 		chassis_win32_service_set_state(Opcode, 0); /* forward the state changes */
-		break;
+		return ERROR_CALL_NOT_IMPLEMENTED;
 	}
-	
-	return;
 }
 
 /**
