@@ -19,6 +19,10 @@
 #ifndef __CHASSIS_WIN32_SERVICE_H__
 #define __CHASSIS_WIN32_SERVICE_H__
 
+#ifdef _WIN32
+#include <windows.h> /* for the DWORD */
+#endif
+
 #include <glib.h>
 
 #include "chassis-exports.h"
