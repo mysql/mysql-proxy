@@ -47,6 +47,8 @@
 #include "chassis-filemode.h"
 #include "chassis-options.h"
 
+#include "string-len.h"
+
 /**
  * initialize the basic components of the chassis
  */
@@ -196,58 +198,96 @@ char *chassis_frontend_get_default_lua_cpath(const char *base_dir, const char *p
 }
 
 /**
- * set the LUA_PATH
+ * set the lua specific path env-variables
+ *
+ * if 'set_path' is not-NULL, we setenv() that path
+ * otherwise we construct a value based on the sub_names and the basedir if the env-var is
+ * not set yet
+ *
+ * @param set_path      if not NULL, set that path
+ * @param base_dir      base directory to prepend to the sub_names
+ * @param subdir_names  list of sub directories to add to the path
+ * @param is_lua_path   TRUE if LUA_PATH should be set, FALSE if LUA_CPATH
  */
-int chassis_frontend_init_lua_path(const char *set_path, const char *base_dir, const char *prg_name) {
-	/**
-	 * if the LUA_PATH or LUA_CPATH are not set, set a good default 
-	 *
-	 * we want to derive it from the basedir ...
-	 */
-	if (set_path) {
-		if (0 != chassis_frontend_lua_setenv(LUA_PATH, set_path)) {
-			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
-					LUA_PATH, set_path,
-					g_strerror(errno));
-		}
-	} else if (!g_getenv(LUA_PATH)) {
-		gchar *path = chassis_frontend_get_default_lua_path(base_dir, prg_name);
+static int chassis_frontend_init_lua_paths(const char *set_path,
+		const char *base_dir, char **lua_subdirs,
+		gboolean is_lua_path) {
+	const char *env_var = is_lua_path ? LUA_PATH : LUA_CPATH;
+	int ret = 0;
 
-		if (chassis_frontend_lua_setenv(LUA_PATH, path)) {
+	if (set_path) {
+		if (0 != chassis_frontend_lua_setenv(env_var, set_path)) {
 			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
-					LUA_PATH, path,
+					env_var, set_path,
 					g_strerror(errno));
+			ret = -1;
 		}
-		
-		g_free(path);
+	} else if (!g_getenv(env_var)) {
+		GString *lua_path = g_string_new(NULL);
+		guint i;
+
+		/* build a path for each sub_name */
+		for (i = 0; lua_subdirs[i]; i++) {
+			gchar *path;
+			const char *sub_name = lua_subdirs[i];
+
+			if (is_lua_path) {
+				path = chassis_frontend_get_default_lua_path(base_dir, sub_name);
+			} else {
+				path = chassis_frontend_get_default_lua_cpath(base_dir, sub_name);
+			}
+
+			if (lua_path->len > 0) {
+				g_string_append_len(lua_path, C(LUA_PATHSEP));
+			}
+
+			g_string_append(lua_path, path);
+
+			g_free(path);
+		}
+
+		if (lua_path->len) {
+			if (chassis_frontend_lua_setenv(env_var, lua_path->str)) {
+				g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
+						env_var, lua_path->str,
+						g_strerror(errno));
+				ret = -1;
+			}
+		}
+		g_string_free(lua_path, TRUE);
 	}
 
 	return 0;
 }
 
 /**
+ * set the LUA_PATH 
+ *
+ * if 'set_path' is not-NULL, we setenv() that path
+ * otherwise we construct a value based on the sub_names and the basedir if the env-var is
+ * not set yet
+ *
+ * @param set_path      if not NULL, set that path
+ * @param base_dir      base directory to prepend to the sub_names
+ * @param subdir_names  list of sub directories to add to the path
+  */
+int chassis_frontend_init_lua_path(const char *set_path, const char *base_dir, char **lua_subdirs) {
+	return chassis_frontend_init_lua_paths(set_path, base_dir, lua_subdirs, TRUE);
+}
+
+/**
  * set the LUA_CPATH 
+ *
+ * if 'set_path' is not-NULL, we setenv() that path
+ * otherwise we construct a value based on the sub_names and the basedir if the env-var is
+ * not set yet
+ *
+ * @param set_path      if not NULL, set that path
+ * @param base_dir      base directory to prepend to the sub_names
+ * @param subdir_names  list of sub directories to add to the path
  */
-int chassis_frontend_init_lua_cpath(const char *set_path, const char *base_dir, const char *prg_name) {
-	if (set_path) {
-		if (chassis_frontend_lua_setenv(LUA_CPATH, set_path)) {
-			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
-					LUA_CPATH, set_path,
-					g_strerror(errno));
-		}
-	} else if (!g_getenv(LUA_CPATH)) {
-		gchar *path = chassis_frontend_get_default_lua_cpath(base_dir, prg_name);
-
-		if (chassis_frontend_lua_setenv(LUA_CPATH, path)) {
-			g_critical("%s: setting %s = %s failed: %s", G_STRLOC,
-					LUA_CPATH, path,
-					g_strerror(errno));
-		}
-
-		g_free(path);
-	}
-
-	return 0;
+int chassis_frontend_init_lua_cpath(const char *set_path, const char *base_dir, char **lua_subdirs) {
+	return chassis_frontend_init_lua_paths(set_path, base_dir, lua_subdirs, FALSE);
 }
 
 int chassis_frontend_init_plugin_dir(char **_plugin_dir, const char *base_dir) {
@@ -315,6 +355,7 @@ int chassis_frontend_init_plugins(GPtrArray *plugins,
 		GOptionContext *option_ctx,
 		int *argc_p, char ***argv_p,
 		GKeyFile *keyfile,
+		const char *keyfile_section_name,
 		const char *base_dir) {
 	guint i;
 
@@ -344,7 +385,7 @@ int chassis_frontend_init_plugins(GPtrArray *plugins,
 			}
 	
 			if (keyfile) {
-				if (chassis_keyfile_to_options(keyfile, "mysql-proxy", config_entries)) {
+				if (chassis_keyfile_to_options(keyfile, keyfile_section_name, config_entries)) {
 					return -1;
 				}
 			}

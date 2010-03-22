@@ -75,8 +75,8 @@ CHASSIS_API int chassis_frontend_init_basedir(const char *prg_name, char **_base
 CHASSIS_API GKeyFile *chassis_frontend_open_config_file(const char *filename);
 
 CHASSIS_API int chassis_frontend_init_plugin_dir(char **_plugin_dir, const char *base_dir);
-CHASSIS_API int chassis_frontend_init_lua_path(const char *set_path, const char *base_dir, const char *prg_name);
-CHASSIS_API int chassis_frontend_init_lua_cpath(const char *set_path, const char *base_dir, const char *prg_name);
+CHASSIS_API int chassis_frontend_init_lua_path(const char *set_path, const char *base_dir, char **lua_subdirs);
+CHASSIS_API int chassis_frontend_init_lua_cpath(const char *set_path, const char *base_dir, char **lua_subdirs);
 
 /**
  * extract --version and --defaults-file from comandline options
@@ -126,6 +126,7 @@ CHASSIS_API int chassis_frontend_init_plugins(GPtrArray *plugins,
 		GOptionContext *option_ctx,
 		int *argc_p, char ***argv_p,
 		GKeyFile *keyfile,
+		const char *keyfile_section_name,
 		const char *base_dir);
 
 /**

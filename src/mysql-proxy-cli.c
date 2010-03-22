@@ -130,6 +130,7 @@ typedef struct {
 
 	char *lua_path;
 	char *lua_cpath;
+	char **lua_subdirs;
 } chassis_frontend_t;
 
 /**
@@ -167,6 +168,7 @@ void chassis_frontend_free(chassis_frontend_t *frontend) {
 
 	if (frontend->lua_path) g_free(frontend->lua_path);
 	if (frontend->lua_cpath) g_free(frontend->lua_cpath);
+	if (frontend->lua_subdirs) g_strfreev(frontend->lua_subdirs);
 
 	g_slice_free(chassis_frontend_t, frontend);
 }
@@ -352,12 +354,15 @@ int main_cmdline(int argc, char **argv) {
 	}
 
 	/* basic setup is done, base-dir is known, ... */
+	frontend->lua_subdirs = g_new(char *, 2);
+	frontend->lua_subdirs[0] = g_strdup("mysql-proxy");
+	frontend->lua_subdirs[1] = NULL;
 
-	if (chassis_frontend_init_lua_path(frontend->lua_path, frontend->base_dir, "mysql-proxy")) {
+	if (chassis_frontend_init_lua_path(frontend->lua_path, frontend->base_dir, frontend->lua_subdirs)) {
 		GOTO_EXIT(EXIT_FAILURE);
 	}
 	
-	if (chassis_frontend_init_lua_cpath(frontend->lua_cpath, frontend->base_dir, "mysql-proxy")) {
+	if (chassis_frontend_init_lua_cpath(frontend->lua_cpath, frontend->base_dir, frontend->lua_subdirs)) {
 		GOTO_EXIT(EXIT_FAILURE);
 	}
 
@@ -449,6 +454,7 @@ int main_cmdline(int argc, char **argv) {
 				option_ctx,
 				&argc, &argv,
 				frontend->keyfile,
+				"mysql-proxy",
 				srv->base_dir)) {
 		GOTO_EXIT(EXIT_FAILURE);
 	}
