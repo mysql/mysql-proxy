@@ -16,13 +16,23 @@
 
  $%ENDLICENSE%$ */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h> /* wait4 */
+#endif
 #include <sys/stat.h>
+#ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h> /* getrusage */
+#endif
 
 #include <stdlib.h>
 #include <string.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <errno.h>
 #include <signal.h>
 
