@@ -30,6 +30,7 @@
 
 static char **shell_argv;
 static int shell_argc;
+static int (*shell_main)(int, char *);
 static int chassis_win32_running_as_service = 0;
 static SERVICE_STATUS chassis_win32_service_status;
 static SERVICE_STATUS_HANDLE chassis_win32_service_status_handle = 0;
@@ -135,7 +136,7 @@ static void WINAPI chassis_win32_service_start(DWORD argc, LPTSTR *argv) {
  * Determine whether we are called as a service and set that up.
  * Then call main_cmdline to do the real work.
  */
-int main_win32(int argc, char **argv) {
+int main_win32(int argc, char **argv, int (*_main_cmdline)(int, char *)) {
 	WSADATA wsaData;
 
 	SERVICE_TABLE_ENTRY dispatch_tab[] = {
@@ -150,6 +151,7 @@ int main_win32(int argc, char **argv) {
 	}
 
 	/* save the arguments because the service controller will clobber them */
+	shell_main = _main_cmdline;
 	shell_argc = argc;
 	shell_argv = argv;
 

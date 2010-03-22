@@ -28,7 +28,7 @@
 #include "chassis-exports.h"
 
 CHASSIS_API gboolean chassis_win32_is_service(void);
-CHASSIS_API int main_win32(int argc, char **argv);
+CHASSIS_API int main_win32(int argc, char **argv, int (*main_cmdline)(int argc, char **argv));
 #ifdef _WIN32
 CHASSIS_API void chassis_win32_service_set_state(DWORD new_state, int wait_msec);
 #endif

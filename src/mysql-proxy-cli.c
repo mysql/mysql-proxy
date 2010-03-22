@@ -602,7 +602,7 @@ exit_nicely:
  */
 int main(int argc, char **argv) {
 #ifdef WIN32_AS_SERVICE
-	return main_win32(argc, argv);
+	return main_win32(argc, argv, main_cmdline);
 #else
 	return main_cmdline(argc, argv);
 #endif
