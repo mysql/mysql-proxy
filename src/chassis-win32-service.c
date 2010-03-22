@@ -25,6 +25,7 @@
  */
 
 #include <windows.h>
+#include <winsock2.h>
 
 static char **shell_argv;
 static int shell_argc;

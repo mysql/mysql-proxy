@@ -29,6 +29,7 @@
 #endif
 #ifdef _WIN32
 #include <windows.h>
+#include <winsock2.h>
 #endif
 #include <errno.h>
 
