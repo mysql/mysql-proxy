@@ -136,7 +136,7 @@ static void WINAPI chassis_win32_service_start(DWORD argc, LPTSTR *argv) {
  * Determine whether we are called as a service and set that up.
  * Then call main_cmdline to do the real work.
  */
-int main_win32(int argc, char **argv, int (*_main_cmdline)(int, char *)) {
+int main_win32(int argc, char **argv, int (*_main_cmdline)(int, char **)) {
 	WSADATA wsaData;
 
 	SERVICE_TABLE_ENTRY dispatch_tab[] = {
@@ -182,7 +182,7 @@ int main_win32(int argc, char **argv, int (*_main_cmdline)(int, char *)) {
 /**
  * just a stub in case we aren't on win32
  */
-int main_win32(int G_GNUC_UNUSED argc, char G_GNUC_UNUSED **argv) {
+int main_win32(int G_GNUC_UNUSED argc, char G_GNUC_UNUSED **argv, int G_GNUC_UNUSED (*_main_cmdline)(int, char **)) {
 	return -1;
 }
 #endif
