@@ -30,6 +30,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <winsock2.h>
+#include <io.h> /* open, close, ...*/
 #endif
 #include <errno.h>
 
@@ -90,6 +91,8 @@ int chassis_frontend_init_glib() {
  */
 int chassis_frontend_init_win32() {
 #ifdef _WIN32
+	WSADATA wsaData;
+
 	if (0 != WSAStartup(MAKEWORD( 2, 2 ), &wsaData)) {
 		g_critical("%s: WSAStartup(2, 2) failed to initialize the socket library",
 				G_STRLOC);
