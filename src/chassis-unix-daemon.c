@@ -95,6 +95,7 @@ static void chassis_unix_signal_forward(int sig) {
 int chassis_unix_proc_keepalive(int *child_exit_status) {
 #ifdef _WIN32
 	g_assert_not_reached(); /* shouldn't be tried to be called on win32 */
+	return 0; /* for VC++, to silence a warning */
 #else
 	int nprocs = 0;
 	pid_t child_pid = -1;
@@ -215,8 +216,6 @@ int chassis_unix_proc_keepalive(int *child_exit_status) {
 			}
 		}
 	}
-
-	/* return 1; */ /* never reached, compiler complains */
 #endif
 }
 
