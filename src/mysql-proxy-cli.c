@@ -319,7 +319,7 @@ int main_cmdline(int argc, char **argv) {
 #ifndef CHASSIS_BUILD_TAG
 #define CHASSIS_BUILD_TAG PACKAGE_STRING
 #endif
-		g_print("MySQL Proxy: %s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG); 
+		g_print("%s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG); 
 		chassis_frontend_print_version();
 	}
 	
