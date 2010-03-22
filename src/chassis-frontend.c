@@ -431,14 +431,27 @@ int chassis_frontend_print_version() {
 #ifndef CHASSIS_BUILD_TAG
 #define CHASSIS_BUILD_TAG PACKAGE_STRING
 #endif
-	g_print("%s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG); 
+	g_print("  chassis: %s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG); 
 	g_print("  glib2: %d.%d.%d" CHASSIS_NEWLINE, GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
-#ifdef HAVE_EVENT_H
 	g_print("  libevent: %s" CHASSIS_NEWLINE, event_get_version());
-#endif
 
 	return 0;
 }
+
+int chassis_frontend_print_plugin_versions(GPtrArray *plugins) {
+	guint i;
+
+	g_print("-- modules" CHASSIS_NEWLINE);
+
+	for (i = 0; i < plugins->len; i++) {
+		chassis_plugin *p = plugins->pdata[i];
+
+		g_print("  %s: %s" CHASSIS_NEWLINE, p->name, p->version); 
+	}
+
+	return 0;
+}
+
 
 int chassis_frontend_write_pidfile(const char *pid_file, GError **gerr) {
 	int fd;

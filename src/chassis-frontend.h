@@ -134,6 +134,11 @@ CHASSIS_API int chassis_frontend_init_plugins(GPtrArray *plugins,
 CHASSIS_API int chassis_frontend_print_version(void);
 
 /**
+ * print the versions of the initialized plugins
+ */
+CHASSIS_API int chassis_frontend_print_plugin_versions(GPtrArray *plugins);
+
+/**
  * write the PID to a file
  *
  * @param  pid_file name of the PID file

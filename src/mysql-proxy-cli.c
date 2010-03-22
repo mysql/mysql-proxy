@@ -314,6 +314,10 @@ int main_cmdline(int argc, char **argv) {
 	 * and print their version numbers, too. then we exit cleanly.
 	 */
 	if (frontend->print_version) {
+#ifndef CHASSIS_BUILD_TAG
+#define CHASSIS_BUILD_TAG PACKAGE_STRING
+#endif
+		g_print("MySQL Proxy: %s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG); 
 		chassis_frontend_print_version();
 	}
 	
@@ -452,6 +456,7 @@ int main_cmdline(int argc, char **argv) {
 
 	/* if we only print the version numbers, exit and don't do any more work */
 	if (frontend->print_version) {
+		chassis_frontend_print_plugin_versions(srv->modules);
 		GOTO_EXIT(EXIT_SUCCESS);
 	}
 
