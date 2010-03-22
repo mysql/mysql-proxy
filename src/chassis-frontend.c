@@ -461,8 +461,11 @@ int chassis_frontend_write_pidfile(const char *pid_file, GError **gerr) {
 
 		return -1;
 	}
-
+#ifdef _WIN32
+	pid_str = g_strdup_printf("%d", _getpid());
+#else
 	pid_str = g_strdup_printf("%d", getpid());
+#endif
 	if (write(fd, pid_str, strlen(pid_str)) < 0) {
 		g_set_error(gerr,
 				G_FILE_ERROR,
