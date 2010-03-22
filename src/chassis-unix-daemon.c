@@ -16,10 +16,6 @@
 
  $%ENDLICENSE%$ */
 
-#ifdef _WIN32
-#error this file should only be build on Unix
-#endif
-
 #include <sys/wait.h> /* wait4 */
 #include <sys/stat.h>
 #include <sys/resource.h> /* getrusage */
@@ -40,6 +36,9 @@
  * UNIX-version
  */
 void chassis_unix_daemonize(void) {
+#ifdef _WIN32
+	g_assert_not_reached(); /* shouldn't be tried to be called on win32 */
+#else
 #ifdef SIGTTOU
 	signal(SIGTTOU, SIG_IGN);
 #endif
@@ -60,6 +59,7 @@ void chassis_unix_daemonize(void) {
 	chdir("/");
 	
 	umask(0);
+#endif
 }
 
 
@@ -67,9 +67,13 @@ void chassis_unix_daemonize(void) {
  * forward the signal to the process group, but not us
  */
 static void chassis_unix_signal_forward(int sig) {
+#ifdef _WIN32
+	g_assert_not_reached(); /* shouldn't be tried to be called on win32 */
+#else
 	signal(sig, SIG_IGN); /* we don't want to create a loop here */
 
 	kill(0, sig);
+#endif
 }
 
 /**
@@ -79,6 +83,9 @@ static void chassis_unix_signal_forward(int sig) {
  * on everything else we restart it
  */
 int chassis_unix_proc_keepalive(int *child_exit_status) {
+#ifdef _WIN32
+	g_assert_not_reached(); /* shouldn't be tried to be called on win32 */
+#else
 	int nprocs = 0;
 	pid_t child_pid = -1;
 
@@ -200,5 +207,6 @@ int chassis_unix_proc_keepalive(int *child_exit_status) {
 	}
 
 	/* return 1; */ /* never reached, compiler complains */
+#endif
 }
 
