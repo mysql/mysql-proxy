@@ -37,7 +37,7 @@
  * FIXME? this function currently ignores ACLs
  */
 int
-chassis_filemode_check(gchar *filename)
+chassis_filemode_check(const gchar *filename)
 {
 #ifndef _WIN32
 	struct stat stbuf;

@@ -23,6 +23,6 @@
 #include <glib.h>
 #include "chassis-exports.h"
 
-CHASSIS_API int chassis_filemode_check(gchar *filename);
+CHASSIS_API int chassis_filemode_check(const gchar *filename);
 
 #endif
