@@ -31,6 +31,7 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <io.h> /* open, close, ...*/
+#include <process.h> /* getpid() */
 #endif
 #include <errno.h>
 
@@ -234,9 +235,9 @@ static int chassis_frontend_init_lua_paths(const char *set_path,
 		 */
 
 		if (is_lua_path) {
-			path = chassis_frontend_get_default_lua_path(base_dir, sub_name);
+			path = chassis_frontend_get_default_lua_path(base_dir, NULL);
 		} else {
-			path = chassis_frontend_get_default_lua_cpath(base_dir, sub_name);
+			path = chassis_frontend_get_default_lua_cpath(base_dir, NULL);
 		}
 
 		g_string_append(lua_path, path);
@@ -556,11 +557,9 @@ int chassis_frontend_write_pidfile(const char *pid_file, GError **gerr) {
 
 		return -1;
 	}
-#ifdef _WIN32
-	pid_str = g_strdup_printf("%d", _getpid());
-#else
+
 	pid_str = g_strdup_printf("%d", getpid());
-#endif
+
 	if (write(fd, pid_str, strlen(pid_str)) < 0) {
 		g_set_error(gerr,
 				G_FILE_ERROR,

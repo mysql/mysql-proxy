@@ -125,9 +125,11 @@ static void WINAPI chassis_win32_service_start(DWORD argc, LPTSTR *argv) {
 	}
 	
 	chassis_win32_service_set_state(SERVICE_START_PENDING, 1000); /* wait max 1sec before we get the to the next step */
+
+	g_assert(shell_main);
 	
 	/* jump into the actual main */
-	ret = main_cmdline(shell_argc, shell_argv);
+	ret = shell_main(shell_argc, shell_argv);
 	
 	/* FIXME: should we log if we fail to start ? */
 }
