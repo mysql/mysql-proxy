@@ -275,7 +275,7 @@ int main_cmdline(int argc, char **argv) {
 	g_log_set_default_handler(chassis_log_func, log);
 
 #ifdef _WIN32
-	if (chassis_win32_service_is_running() && chassis_log_set_event_log(log, g_get_prgname())) {
+	if (chassis_win32_is_service() && chassis_log_set_event_log(log, g_get_prgname())) {
 		GOTO_EXIT(EXIT_FAILURE);
 	}
 
@@ -546,7 +546,7 @@ int main_cmdline(int argc, char **argv) {
 	g_message("%s started", PACKAGE_STRING); /* add tag to the logfile (after we opened the logfile) */
 
 #ifdef _WIN32
-	if (chassis_win32_service_is_running()) chassis_win32_service_set_state(SERVICE_RUNNING, 0);
+	if (chassis_win32_is_service()) chassis_win32_service_set_state(SERVICE_RUNNING, 0);
 #endif
 
 	/*
@@ -580,7 +580,7 @@ exit_nicely:
 	}
 
 #ifdef _WIN32
-	if (chassis_win32_service_is_running()) chassis_win32_service_set_state(SERVICE_STOP_PENDING, 0);
+	if (chassis_win32_is_service()) chassis_win32_service_set_state(SERVICE_STOP_PENDING, 0);
 #endif
 
 	chassis_frontend_free(frontend);	
@@ -592,7 +592,7 @@ exit_nicely:
 	chassis_log_free(log);
 	
 #ifdef _WIN32
-	if (chassis_win32_service_is_running()) chassis_win32_service_set_state(SERVICE_STOPPED, 0);
+	if (chassis_win32_is_service()) chassis_win32_service_set_state(SERVICE_STOPPED, 0);
 #endif
 
 #ifdef HAVE_SIGACTION
