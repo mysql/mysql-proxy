@@ -224,6 +224,22 @@ static int chassis_frontend_init_lua_paths(const char *set_path,
 		}
 	} else if (!g_getenv(env_var)) {
 		GString *lua_path = g_string_new(NULL);
+#ifdef _WIN32
+		gchar *path;
+		/**
+		 * call the get_default_lua_*path() only once on win32 as it has
+		 * all the lua-module-DLLs in one folder
+		 */
+
+		if (is_lua_path) {
+			path = chassis_frontend_get_default_lua_path(base_dir, sub_name);
+		} else {
+			path = chassis_frontend_get_default_lua_cpath(base_dir, sub_name);
+		}
+
+		g_string_append(lua_path, path);
+		g_free(path);
+#else
 		guint i;
 
 		/* build a path for each sub_name */
@@ -245,6 +261,7 @@ static int chassis_frontend_init_lua_paths(const char *set_path,
 
 			g_free(path);
 		}
+#endif
 
 		if (lua_path->len) {
 			if (chassis_frontend_lua_setenv(env_var, lua_path->str)) {
