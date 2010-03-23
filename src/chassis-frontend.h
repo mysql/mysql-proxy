@@ -139,6 +139,8 @@ CHASSIS_API int chassis_frontend_print_version(void);
  */
 CHASSIS_API int chassis_frontend_print_plugin_versions(GPtrArray *plugins);
 
+CHASSIS_API void chassis_frontend_print_lua_version();
+
 /**
  * write the PID to a file
  *

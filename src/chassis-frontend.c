@@ -37,6 +37,8 @@
 #include <glib.h>
 #include <gmodule.h>
 #include <lua.h> /* for LUA_PATH */
+#include <lualib.h>
+#include <lauxlib.h>
 
 #include <event.h>
 
@@ -508,6 +510,28 @@ int chassis_frontend_print_plugin_versions(GPtrArray *plugins) {
 	}
 
 	return 0;
+}
+
+void chassis_frontend_print_lua_version() {
+	lua_State *L;
+
+	g_print("  LUA: %s" CHASSIS_NEWLINE, LUA_RELEASE);
+	L = luaL_newstate();
+	luaL_openlibs(L);
+	lua_getglobal(L, "package");
+	g_assert_cmpint(lua_type(L, -1), ==, LUA_TTABLE);
+
+	lua_getfield(L, -1, "path");
+	g_assert_cmpint(lua_type(L, -1), ==, LUA_TSTRING);
+	g_print("    package.path: %s" CHASSIS_NEWLINE, lua_tostring(L, -1));
+	lua_pop(L, 1);
+
+	lua_getfield(L, -1, "cpath");
+	g_assert_cmpint(lua_type(L, -1), ==, LUA_TSTRING);
+	g_print("    package.cpath: %s" CHASSIS_NEWLINE, lua_tostring(L, -1));
+	lua_pop(L, 2);
+
+	lua_close(L);
 }
 
 

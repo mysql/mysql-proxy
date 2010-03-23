@@ -462,6 +462,7 @@ int main_cmdline(int argc, char **argv) {
 
 	/* if we only print the version numbers, exit and don't do any more work */
 	if (frontend->print_version) {
+		chassis_frontend_print_lua_version();
 		chassis_frontend_print_plugin_versions(srv->modules);
 		GOTO_EXIT(EXIT_SUCCESS);
 	}
