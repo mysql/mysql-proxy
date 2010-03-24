@@ -1574,7 +1574,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	}
 
 	if (NULL == st->backend) {
-		network_mysqld_con_send_error(con->client, C("(proxy) all backends are down"));
+		network_mysqld_con_send_error_pre41(con->client, C("(proxy) all backends are down"));
 		g_critical("%s.%d: Cannot connect, all backends are down.", __FILE__, __LINE__);
 		return NETWORK_SOCKET_ERROR;
 	}
