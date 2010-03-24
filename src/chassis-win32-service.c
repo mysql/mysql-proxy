@@ -30,7 +30,7 @@
 
 static char **shell_argv;
 static int shell_argc;
-static int (*shell_main)(int, char *);
+static int (*shell_main)(int, char **);
 static int chassis_win32_running_as_service = 0;
 static SERVICE_STATUS chassis_win32_service_status;
 static SERVICE_STATUS_HANDLE chassis_win32_service_status_handle = 0;
@@ -167,7 +167,7 @@ int main_win32(int argc, char **argv, int (*_main_cmdline)(int, char **)) {
 		case ERROR_FAILED_SERVICE_CONTROLLER_CONNECT:
 			/* we weren't called as a service, carry on with the cmdline handling */
 			chassis_win32_running_as_service = FALSE;
-			return main_cmdline(shell_argc, shell_argv);
+			return shell_main(shell_argc, shell_argv);
 		case ERROR_SERVICE_ALREADY_RUNNING:
 			g_critical("service is already running, shutting down");
 			return 0;
