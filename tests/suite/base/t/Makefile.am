@@ -56,6 +56,10 @@ EXTRA_DIST = \
 		load_multi-mock.lua \
 		load_multi.options \
 		load_multi.test \
+		load-data-infile-test.lua \
+		load-data-infile-mock.lua \
+		load-data-infile.options \
+		load-data-infile.test \
 		mysql-40.test \
 		mysql-40.lua \
 		no_backend.lua \
