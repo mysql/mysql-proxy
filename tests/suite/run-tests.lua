@@ -81,6 +81,7 @@ local MYSQL_PORT	 	= os.getenv("MYSQL_PORT")	 	or "3306"
 local MYSQL_DB	   		= os.getenv("MYSQL_DB")	   		or "test"
 local MYSQL_TEST_BIN 	= os.getenv("MYSQL_TEST_BIN") 	or "mysqltest"
 local MYSQL_CLIENT_BIN 	= os.getenv("MYSQL_CLIENT_BIN") or "mysql"
+local TESTS_REGEX 	= os.getenv("TESTS_REGEX")
 
 --
 -- Global variables that can be referenced from .options files
@@ -776,30 +777,32 @@ if #arg then
 		-- if it is a directory, execute all of them
 		if stat.mode == "directory" then
 			for file in lfs.dir(a .. "/t/") do
-				local testname = file:match("(.+\.test)$")
-		
-				if testname then
-					print_verbose("# >> " .. testname .. " started")
-		
-					num_tests = num_tests + 1
-					local r, skipped  = run_test("t/" .. testname, a)
-					if (r == 0) then
-						num_passes = num_passes + 1 - skipped
-					else
-						num_fails = num_fails + 1
-						all_ok = false
-						table.insert(failed_test, testname)
-					end
-					num_skipped = num_skipped + skipped
+				if not TESTS_REGEX or file:match(TESTS_REGEX) then
+					local testname = file:match("(.+\.test)$")
+			
+					if testname then
+						print_verbose("# >> " .. testname .. " started")
+			
+						num_tests = num_tests + 1
+						local r, skipped  = run_test("t/" .. testname, a)
+						if (r == 0) then
+							num_passes = num_passes + 1 - skipped
+						else
+							num_fails = num_fails + 1
+							all_ok = false
+							table.insert(failed_test, testname)
+						end
+						num_skipped = num_skipped + skipped
 
-					print_verbose("# << (exitcode = " .. r .. ")" )
-		
-					if r ~= 0 and exitcode == 0 then
-						exitcode = r
+						print_verbose("# << (exitcode = " .. r .. ")" )
+			
+						if r ~= 0 and exitcode == 0 then
+							exitcode = r
+						end
 					end
-				end
-				if all_ok == false and (not FORCE_ON_ERROR) then
-					break
+					if all_ok == false and (not FORCE_ON_ERROR) then
+						break
+					end
 				end
 			end
 		else 
