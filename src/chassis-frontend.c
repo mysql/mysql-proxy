@@ -360,6 +360,7 @@ int chassis_frontend_load_plugins(GPtrArray *plugins, const gchar *plugin_dir, g
 
 		p = chassis_plugin_load(plugin_filename);
 		g_free(plugin_filename);
+		p->option_grp_name = g_strdup(plugin_names[i]);
 
 		if (NULL == p) {
 			g_critical("setting --plugin-dir=<dir> might help");
@@ -385,9 +386,9 @@ int chassis_frontend_init_plugins(GPtrArray *plugins,
 
 		if (NULL != (config_entries = chassis_plugin_get_options(p))) {
 			GError *gerr = NULL;
-			gchar *group_desc = g_strdup_printf("%s-module", p->name);
-			gchar *help_msg = g_strdup_printf("Show options for the %s-module", p->name);
-			const gchar *group_name = p->name;
+			gchar *group_desc = g_strdup_printf("%s-module", p->option_grp_name);
+			gchar *help_msg = g_strdup_printf("Show options for the %s-module", p->option_grp_name);
+			const gchar *group_name = p->option_grp_name;
 
 			GOptionGroup *option_grp = g_option_group_new(group_name, group_desc, help_msg, NULL, NULL);
 			g_option_group_add_entries(option_grp, config_entries);

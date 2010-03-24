@@ -26,8 +26,8 @@
 #include "chassis-mainloop.h"
 #include "chassis-exports.h"
 
-/* current magic is 0.7.0-4 */
-#define CHASSIS_PLUGIN_MAGIC 0x00070004L
+/* current magic is 0.8.0-1 */
+#define CHASSIS_PLUGIN_MAGIC 0x00080001L
 
 /**
  * The private stats structure of a plugin. This is opaque to the rest of the code,
@@ -40,7 +40,8 @@ typedef struct chassis_plugin_config chassis_plugin_config;
 typedef struct chassis_plugin {
 	long      magic;    /**< a magic token to verify that the plugin API matches */
 
-	gchar    *name;     /**< the name of the plugin as defined */
+	gchar    *option_grp_name;     /**< name of the option group (used in --help-<option-grp> */
+	gchar    *name;     /**< user visible name of this plugin */
 	gchar    *version;  /**< the plugin's version number */
 	GModule  *module;   /**< the plugin handle when loaded */
 	
