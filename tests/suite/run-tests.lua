@@ -91,16 +91,9 @@ function get_port_base()
 	local port_base_end   = os.getenv("MYSQL_PROXY_END_PORT") or 65535
 	local port_interval   = 64 -- let's take the base port in steps of ...
 	local range = port_base_end - port_base_start - port_interval
-	print(os.time())
 	math.randomseed(os.time())
 	local rand = math.floor(math.random() * (math.ceil(range / port_interval)))
 	local port_base = port_base_start + (rand * port_interval)
-
-	print(("base-port.rand-end is %f"):format(range / port_interval))
-	print(("base-port.rand is %f"):format(rand))
-	print(("base-port.range is %d"):format(range + port_interval))
-	print(("base-port.offset is %d"):format(rand * port_interval))
-	print(("base-port is %d"):format(port_base))
 
 	return port_base
 end
