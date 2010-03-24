@@ -354,6 +354,8 @@ NETWORK_API int network_mysqld_con_send_ok(network_socket *con);
 NETWORK_API int network_mysqld_con_send_ok_full(network_socket *con, guint64 affected_rows, guint64 insert_id, guint16 server_status, guint16 warnings);
 NETWORK_API int network_mysqld_con_send_error(network_socket *con, const gchar *errmsg, gsize errmsg_len);
 NETWORK_API int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate);
+NETWORK_API int network_mysqld_con_send_error_pre41(network_socket *con, const gchar *errmsg, gsize errmsg_len);
+NETWORK_API int network_mysqld_con_send_error_full_pre41(network_socket *con, const char *errmsg, gsize errmsg_len, guint errorcode);
 NETWORK_API int network_mysqld_con_send_resultset(network_socket *con, GPtrArray *fields, GPtrArray *rows);
 NETWORK_API void network_mysqld_con_reset_command_response_state(network_mysqld_con *con);
 

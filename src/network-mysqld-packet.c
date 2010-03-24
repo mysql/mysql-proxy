@@ -816,14 +816,23 @@ int network_mysqld_proto_append_ok_packet(GString *packet, network_mysqld_ok_pac
 	return 0;
 }
 
-network_mysqld_err_packet_t *network_mysqld_err_packet_new() {
+static network_mysqld_err_packet_t *network_mysqld_err_packet_new_full(network_mysqld_protocol_t version) {
 	network_mysqld_err_packet_t *err_packet;
 
 	err_packet = g_new0(network_mysqld_err_packet_t, 1);
 	err_packet->sqlstate = g_string_new(NULL);
 	err_packet->errmsg = g_string_new(NULL);
+	err_packet->version = version;
 
 	return err_packet;
+}
+
+network_mysqld_err_packet_t *network_mysqld_err_packet_new() {
+	return network_mysqld_err_packet_new_full(NETWORK_MYSQLD_PROTOCOL_VERSION_41);
+}
+
+network_mysqld_err_packet_t *network_mysqld_err_packet_new_pre41() {
+	return network_mysqld_err_packet_new_full(NETWORK_MYSQLD_PROTOCOL_VERSION_PRE41);
 }
 
 void network_mysqld_err_packet_free(network_mysqld_err_packet_t *err_packet) {
@@ -892,11 +901,10 @@ int network_mysqld_proto_get_err_packet(network_packet *packet, network_mysqld_e
  */
 int network_mysqld_proto_append_err_packet(GString *packet, network_mysqld_err_packet_t *err_packet) {
 	int errmsg_len;
-	guint32 capabilities = CLIENT_PROTOCOL_41;
 
 	network_mysqld_proto_append_int8(packet, 0xff); /* ERR */
 	network_mysqld_proto_append_int16(packet, err_packet->errcode); /* errorcode */
-	if (capabilities & CLIENT_PROTOCOL_41) {
+	if (err_packet->version == NETWORK_MYSQLD_PROTOCOL_VERSION_41) {
 		g_string_append_c(packet, '#');
 		if (err_packet->sqlstate && (err_packet->sqlstate->len > 0)) {
 			g_string_append_len(packet, err_packet->sqlstate->str, 5);

@@ -35,6 +35,11 @@
  * - high-level (grouping packets into a sequence)
  */
 
+typedef enum {
+	NETWORK_MYSQLD_PROTOCOL_VERSION_PRE41,
+	NETWORK_MYSQLD_PROTOCOL_VERSION_41
+} network_mysqld_protocol_t;
+
 /**
  * tracking the state of the response of a COM_QUERY packet
  */
@@ -122,9 +127,11 @@ typedef struct {
 	GString *sqlstate;
 
 	guint16 errcode;
+	network_mysqld_protocol_t version;
 } network_mysqld_err_packet_t;
 
 NETWORK_API network_mysqld_err_packet_t *network_mysqld_err_packet_new(void);
+NETWORK_API network_mysqld_err_packet_t *network_mysqld_err_packet_new_pre41(void);
 NETWORK_API void network_mysqld_err_packet_free(network_mysqld_err_packet_t *udata);
 
 NETWORK_API int network_mysqld_proto_get_err_packet(network_packet *packet, network_mysqld_err_packet_t *err_packet);

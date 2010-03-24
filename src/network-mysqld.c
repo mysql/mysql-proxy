@@ -421,26 +421,17 @@ int network_mysqld_con_send_ok(network_socket *con) {
 	return network_mysqld_con_send_ok_full(con, 0, 0, SERVER_STATUS_AUTOCOMMIT, 0);
 }
 
-/**
- * send a error packet to the client connection
- *
- * @note the sqlstate has to match the SQL standard. If no matching SQL state is known, leave it at NULL
- *
- * @param con         the client connection
- * @param errmsg      the error message
- * @param errmsg_len  byte-len of the error-message
- * @param errorcode   mysql error-code we want to send
- * @param sqlstate    if none-NULL, 5-char SQL state to send, if NULL, default SQL state is used
- *
- * @return 0 on success
- */
-int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate) {
+static int network_mysqld_con_send_error_full_all(network_socket *con,
+		const char *errmsg, gsize errmsg_len,
+		guint errorcode,
+		const gchar *sqlstate,
+		gboolean is_41_protocol) {
 	GString *packet;
 	network_mysqld_err_packet_t *err_packet;
 
 	packet = g_string_sized_new(10 + errmsg_len);
 	
-	err_packet = network_mysqld_err_packet_new();
+	err_packet = is_41_protocol ? network_mysqld_err_packet_new() : network_mysqld_err_packet_new_pre41();
 	err_packet->errcode = errorcode;
 	if (errmsg) g_string_assign_len(err_packet->errmsg, errmsg, errmsg_len);
 	if (sqlstate) g_string_assign_len(err_packet->sqlstate, sqlstate, strlen(sqlstate));
@@ -457,6 +448,24 @@ int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, 
 }
 
 /**
+ * send a error packet to the client connection
+ *
+ * @note the sqlstate has to match the SQL standard. If no matching SQL state is known, leave it at NULL
+ *
+ * @param con         the client connection
+ * @param errmsg      the error message
+ * @param errmsg_len  byte-len of the error-message
+ * @param errorcode   mysql error-code we want to send
+ * @param sqlstate    if none-NULL, 5-char SQL state to send, if NULL, default SQL state is used
+ *
+ * @return 0 on success
+ */
+int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, gsize errmsg_len, guint errorcode, const gchar *sqlstate) {
+	return network_mysqld_con_send_error_full_all(con, errmsg, errmsg_len, errorcode, sqlstate, TRUE);
+}
+
+
+/**
  * send a error-packet to the client connection
  *
  * errorcode is 1000, sqlstate is NULL
@@ -470,6 +479,34 @@ int network_mysqld_con_send_error_full(network_socket *con, const char *errmsg, 
 int network_mysqld_con_send_error(network_socket *con, const char *errmsg, gsize errmsg_len) {
 	return network_mysqld_con_send_error_full(con, errmsg, errmsg_len, ER_UNKNOWN_ERROR, NULL);
 }
+
+/**
+ * send a error packet to the client connection (pre-4.1 protocol)
+ *
+ * @param con         the client connection
+ * @param errmsg      the error message
+ * @param errmsg_len  byte-len of the error-message
+ * @param errorcode   mysql error-code we want to send
+ *
+ * @return 0 on success
+ */
+int network_mysqld_con_send_error_pre41_full(network_socket *con, const char *errmsg, gsize errmsg_len, guint errorcode) {
+	return network_mysqld_con_send_error_full_all(con, errmsg, errmsg_len, errorcode, NULL, FALSE);
+}
+
+/**
+ * send a error-packet to the client connection (pre-4.1 protocol)
+ *
+ * @param con         the client connection
+ * @param errmsg      the error message
+ * @param errmsg_len  byte-len of the error-message
+ *
+ * @see network_mysqld_con_send_error_pre41_full
+ */
+int network_mysqld_con_send_error_pre41(network_socket *con, const char *errmsg, gsize errmsg_len) {
+	return network_mysqld_con_send_error_pre41_full(con, errmsg, errmsg_len, ER_UNKNOWN_ERROR);
+}
+
 
 /**
  * get a full packet from the raw queue and move it to the packet queue 
