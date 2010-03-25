@@ -28,6 +28,9 @@
 
 #include "chassis-exports.h"
 
-CHASSIS_API int chassis_set_fdlimit(int max_files_number);
+CHASSIS_API int chassis_set_fdlimit(int max_files_number) G_GNUC_DEPRECATED; /* use chassis_fdlimit_set() instead */
+
+CHASSIS_API int chassis_fdlimit_set(gint64 max_files_number);
+CHASSIS_API gint64 chassis_fdlimit_get(void);
 
 #endif

@@ -120,7 +120,7 @@ typedef struct {
 	guint invoke_dbg_on_crash;
 	guint auto_restart;
 
-	guint max_files_number;
+	gint max_files_number;
 
 	gint event_thread_count;
 
@@ -141,7 +141,7 @@ chassis_frontend_t *chassis_frontend_new(void) {
 
 	frontend = g_slice_new0(chassis_frontend_t);
 	frontend->event_thread_count = 1;
-	frontend->max_files_number = 8192;
+	frontend->max_files_number = 0;
 
 	return frontend;
 }
@@ -556,9 +556,18 @@ int main_cmdline(int argc, char **argv) {
 	 */
 	srv->user = g_strdup(frontend->user);
 
-	if (chassis_set_fdlimit(frontend->max_files_number)) {
-		/* do we want to exit or just go on */
+	if (frontend->max_files_number) {
+		if (0 != chassis_fdlimit_set(frontend->max_files_number)) {
+			g_critical("%s: setting fdlimit = %d failed: %s (%d)",
+					G_STRLOC,
+					frontend->max_files_number,
+					g_strerror(errno),
+					errno);
+			GOTO_EXIT(EXIT_FAILURE);
+		}
 	}
+	g_debug("max open file-descriptors = %"G_GINT64_FORMAT,
+			chassis_fdlimit_get());
 
 	if (chassis_mainloop(srv)) {
 		/* looks like we failed */

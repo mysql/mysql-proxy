@@ -36,101 +36,69 @@
 
 #include "chassis-limits.h"
 
-#ifndef _WIN32
-/**
- * the size of rlim_t depends on arch and large-file-support
- */
-#if SIZEOF_RLIM_T == 8
-#ifdef __APPLE__
-/* on MacOS X rlim_t is a __uint64_t which is a unsigned long long (which is a 64bit value)
- * GUINT64 is on 64bit a unsigned long ... well ... 
- *
- * even if they are the same size, gcc still spits out a warning
- */
-#define G_RLIM_T_FORMAT "llu"
-#else
-#define G_RLIM_T_FORMAT G_GUINT64_FORMAT
-#endif
-#else
-#define G_RLIM_T_FORMAT G_GUINT32_FORMAT
-#endif
-#endif
-
-#ifndef _WIN32
-/**
- * log the limit at debug level
- */
-static void chassis_fdlimit_log(struct rlimit *limit, const char *msg) {
-	if (RLIM_INFINITY == limit->rlim_max && RLIM_INFINITY == limit->rlim_cur) {
-		g_debug("%s: %s = unlimited (hard: unlimited)",
-				G_STRLOC,
-				msg);
-	} else if (RLIM_INFINITY == limit->rlim_max) {
-		g_debug("%s: %s = %"G_RLIM_T_FORMAT" (hard: unlimited)",
-				G_STRLOC,
-				msg,
-				limit->rlim_cur);
-	} else if (RLIM_INFINITY == limit->rlim_cur) {
-		g_debug("%s: %s = unlimited (hard: %"G_RLIM_T_FORMAT")",
-				G_STRLOC,
-				msg,
-				limit->rlim_max);
-	} else {
-		g_debug("%s: %s = %"G_RLIM_T_FORMAT" (hard: %"G_RLIM_T_FORMAT")",
-				G_STRLOC,
-				msg,
-				limit->rlim_cur,
-				limit->rlim_max);
-	}
-}
-#endif
-
-int chassis_set_fdlimit(int max_files_number) {
+gint64 chassis_fdlimit_get() {
 #ifdef _WIN32
-	g_debug("%s: current maximum number of open stdio file descriptors: %d", G_STRLOC, _getmaxstdio());
-	if (max_files_number > 2048) {
-		g_warning("%s: Windows only allows a maximum number of 2048 open files for stdio, using that value instead of %d", G_STRLOC, max_files_number);
-		max_files_number = 2048;
-	}
-	if (-1 == _setmaxstdio(max_files_number)) {
-		g_critical("%s: failed to increase the maximum number of open files for stdio: %s (%d)", G_STRLOC, g_strerror(errno), errno);
-	} else {
-		g_debug("%s: set new limit of open files for stdio to %d", G_STRLOC, _getmaxstdio());
-	}
+	return _getmaxstdio();
 #else
 	struct rlimit max_files_rlimit;
 
 	if (-1 == getrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
-		g_warning("%s: cannot get limit of open files for this process. %s (%d)",
-				  G_STRLOC, g_strerror(errno), errno);
+		return -1;
 	} else {
-		rlim_t soft_limit = max_files_rlimit.rlim_cur;
-		rlim_t hard_limit = max_files_rlimit.rlim_max;
-
-		chassis_fdlimit_log(&max_files_rlimit, "current RLIMIT_NOFILE");
-
-		max_files_rlimit.rlim_cur = max_files_number;
-		if (hard_limit < max_files_number) { /* raise the hard-limit too in case it is smaller than the soft-limit, otherwise we get a EINVAL */
-			max_files_rlimit.rlim_max = max_files_number;
-		}
-
-		chassis_fdlimit_log(&max_files_rlimit, "setting RLIMIT_NOFILE");
-		if (-1 == setrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
-			g_critical("%s: could not raise RLIMIT_NOFILE to %u, %s (%d). Current limit still %"G_RLIM_T_FORMAT".",
-					G_STRLOC,
-					max_files_number,
-				       	g_strerror(errno), errno,
-					soft_limit);
-		} else {
-			if (-1 == getrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
-				g_warning("%s: cannot get limit of open files for this process. %s (%d)",
-						  G_STRLOC, g_strerror(errno), errno);
-			} else {
-				chassis_fdlimit_log(&max_files_rlimit, "successfully set RLIMIT_NOFILE");
-			}
-		}
+		return max_files_rlimit.rlim_cur;
 	}
 #endif
+
+}
+
+/**
+ * redirect the old call 
+ */
+int chassis_set_fdlimit(int max_files_number) {
+	return chassis_fdlimit_set(max_files_number);
+}
+
+/**
+ * set the upper limit of open files
+ *
+ * @return -1 on error, 0 on success
+ */
+int chassis_fdlimit_set(gint64 max_files_number) {
+#ifdef _WIN32
+	int max_files_number_set;
+
+	max_files_number_set = _setmaxstdio(max_files_number);
+
+	if (-1 == max_files_number_set) {
+		return -1;
+	} else if (max_files_number_set != max_files_number) {
+		g_critical("%s: failed to increase the maximum number of open files for stdio: %s (%d)", G_STRLOC, g_strerror(errno), errno);
+		return -1;
+	}
+
 	return 0;
+#else
+	struct rlimit max_files_rlimit;
+	rlim_t soft_limit;
+	rlim_t hard_limit;
+
+	if (-1 == getrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
+		return -1;
+	}
+
+	soft_limit = max_files_rlimit.rlim_cur;
+	hard_limit = max_files_rlimit.rlim_max;
+
+	max_files_rlimit.rlim_cur = max_files_number;
+	if (hard_limit < max_files_number) { /* raise the hard-limit too in case it is smaller than the soft-limit, otherwise we get a EINVAL */
+		max_files_rlimit.rlim_max = max_files_number;
+	}
+
+	if (-1 == setrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
+		return -1;
+	}
+
+	return 0;
+#endif
 }
 
