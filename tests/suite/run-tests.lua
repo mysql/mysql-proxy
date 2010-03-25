@@ -27,6 +27,7 @@
 -- we require LFS (LuaFileSystem)
 require("lfs")
 require("glib2")
+require("posix")
 
 ---
 -- get the directory-name of a path
@@ -92,9 +93,11 @@ function get_port_base()
 	local port_base_end   = os.getenv("MYSQL_PROXY_END_PORT") or 65535
 	local port_interval   = 64 -- let's take the base port in steps of ...
 	local range = port_base_end - port_base_start - port_interval
-	math.randomseed(os.time())
+	math.randomseed(posix.getpid())
 	local rand = math.floor(math.random() * (math.ceil(range / port_interval)))
 	local port_base = port_base_start + (rand * port_interval)
+
+	print(("... using tcp-port = %d as start port"):format(port_base))
 
 	return port_base
 end
