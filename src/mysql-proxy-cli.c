@@ -414,7 +414,7 @@ int main_cmdline(int argc, char **argv) {
 		GOTO_EXIT(EXIT_FAILURE);
 	}
 
-	if (0 == chassis_log_open(log)) {
+	if (log->log_filename && FALSE == chassis_log_open(log)) {
 		g_critical("can't open log-file '%s': %s", log->log_filename, g_strerror(errno));
 
 		GOTO_EXIT(EXIT_FAILURE);

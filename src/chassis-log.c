@@ -113,14 +113,32 @@ int chassis_log_set_level(chassis_log *log, const gchar *level) {
 	return -1;
 }
 
+/**
+ * open the log-file
+ *
+ * open the log-file set in log->log_filename
+ * if no log-filename is set, returns TRUE
+ *
+ * FIXME: the return value is not following 'unix'-style (0 on success, -1 on error),
+ *        nor does it say it is a gboolean. Has to be fixed in 0.9.0
+ *
+ * @return TRUE on success, FALSE on error
+ */
 int chassis_log_open(chassis_log *log) {
-	if (!log->log_filename) return -1;
+	if (!log->log_filename) return TRUE;
 
 	log->log_file_fd = open(log->log_filename, O_RDWR | O_CREAT | O_APPEND, 0660);
 
 	return (log->log_file_fd != -1);
 }
 
+/**
+ * close the log-file
+ *
+ * @return 0 on success
+ *
+ * @see chassis_log_open
+ */
 int chassis_log_close(chassis_log *log) {
 	if (log->log_file_fd == -1) return 0;
 
