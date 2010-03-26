@@ -243,18 +243,18 @@ static void sigsegv_handler(int G_GNUC_UNUSED signum) {
  * up the logging support appropriately.
  */
 int main_cmdline(int argc, char **argv) {
-	chassis *srv;
+	chassis *srv = NULL;
 #ifdef HAVE_SIGACTION
 	static struct sigaction sigsegv_sa;
 #endif
 	/* read the command-line options */
 	GOptionContext *option_ctx = NULL;
-	GOptionEntry *main_entries;
-	chassis_frontend_t *frontend;
-	chassis_options_t *opts;
+	GOptionEntry *main_entries = NULL;
+	chassis_frontend_t *frontend = NULL;
+	chassis_options_t *opts = NULL;
 
 	GError *gerr = NULL;
-	chassis_log *log;
+	chassis_log *log = NULL;
 
 	/* a little helper macro to set the src-location that we stepped out at to exit */
 #define GOTO_EXIT(status) \
@@ -328,8 +328,6 @@ int main_cmdline(int argc, char **argv) {
 	chassis_frontend_set_chassis_options(frontend, opts);
 	main_entries = chassis_options_to_g_option_entries(opts);
 	g_option_context_add_main_entries(option_ctx, main_entries, NULL);
-	chassis_options_free(opts);
-	g_free(main_entries);
 
 	/**
 	 * parse once to get the basic options 
@@ -598,6 +596,8 @@ exit_nicely:
 	if (gerr) g_error_free(gerr);
 	if (option_ctx) g_option_context_free(option_ctx);
 	if (srv) chassis_free(srv);
+	if (opts) chassis_options_free(opts);
+	if (main_entries) g_free(main_entries);
 
 	chassis_log_free(log);
 	
