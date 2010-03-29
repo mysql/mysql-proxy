@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (C) 2007-2009 MySQL AB, 2009 Sun Microsystems, Inc
+ Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -12,11 +12,8 @@
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
- Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
  $%ENDLICENSE%$ */
- 
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -90,12 +87,62 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 	    0 == strcmp("0.0.0.0", address)) {
 		/* no ip */
 		addr->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
+		addr->addr.ipv4.sin_family = AF_INET; /* "default" family */
 	} else {
-		struct hostent *he;
+#ifdef HAVE_GETADDRINFO
+		struct addrinfo *ai = NULL, hint;
+		int				rc, family;
+		
+		memset(&hint, 0, sizeof (hint));
+		/*
+		 * FIXME: when we add support for IPv6, we'll have to do one
+		 * PF_INET* after the other
+		 */
+		hint.ai_family = PF_INET;
+		if ((rc = getaddrinfo(address, NULL, &hint, &ai)) != 0) {
+			g_critical("getaddrinfo(%s) failed with %s", address, 
+					   gai_strerror(rc));
+			return -1;
+		}
+
+		do {
+			family = ai->ai_family;
+#if 0 /* keep this for when we do IPv6 */
+			if (family == PF_INET6) {
+				memcpy(&addr->addr.ipv6,
+						(struct sockaddr_in6 *) ai->ai_addr,
+						sizeof (addr->addr.ipv6));
+				break;
+			} 
+#endif /* 0 */
+			if (family == PF_INET) {
+				memcpy(&addr->addr.ipv4,
+						(struct sockaddr_in *) ai->ai_addr, 
+						sizeof (addr->addr.ipv4));
+				break;
+			}
+			ai = ai->ai_next;
+		} while (NULL != ai);
+
+		if (ai == NULL) {
+			/* the family we print here is the *last* ai's */
+			g_critical("address %s doesn't resolve to a valid/supported "
+					   "address family: %d expected, last found %d", address,
+					   PF_INET, family);
+			freeaddrinfo(ai);
+			return -1;
+		}
+
+		freeaddrinfo(ai);
+#else 
+		struct hostent	*he;
+		static GStaticMutex gh_mutex = G_STATIC_MUTEX_INIT;
+
+		g_static_mutex_lock(&gh_mutex);
 
 		he = gethostbyname(address);
-
-		if (NULL == he)  {
+		if (NULL == he) {
+			g_static_mutex_unlock(&gh_mutex);
 			return -1;
 		}
 
@@ -103,13 +150,15 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 		g_assert(he->h_length == sizeof(struct in_addr));
 
 		memcpy(&(addr->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
+		g_static_mutex_unlock(&gh_mutex);
+		addr->addr.ipv4.sin_family = AF_INET;
+#endif /* HAVE_GETADDRINFO */
 	}
 
-	addr->addr.ipv4.sin_family = AF_INET;
 	addr->addr.ipv4.sin_port = htons(port);
 	addr->len = sizeof(struct sockaddr_in);
 
-	network_address_refresh_name(addr);
+	(void) network_address_refresh_name(addr);
 
 	return 0;
 }

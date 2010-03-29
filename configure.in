@@ -97,9 +97,9 @@ AC_CHECK_HEADERS([\
 	sys/socket.h \
 	sys/param.h \
 	sys/time.h \
-       	sys/un.h \
-       	sys/uio.h \
-       	sys/ioctl.h \
+	sys/un.h \
+	sys/uio.h \
+	sys/ioctl.h \
 	sys/resource.h \
 	pwd.h \
 	signal.h \
@@ -341,7 +341,7 @@ AM_CONDITIONAL(OS_AIX, test x$ARCH = xaix)
 AM_CONDITIONAL(OS_SOLARIS, test x$ARCH = xsolaris)
 
 dnl on windows we need wsock32 to get socket support
-AC_CHECK_FUNCS([inet_ntoa inet_ntop strerror getcwd chdir writev gmtime_r sigaction])
+AC_CHECK_FUNCS([inet_ntoa inet_ntop strerror getcwd chdir writev gmtime_r sigaction getaddrinfo])
 
 dnl make sure we off_t is 64bit
 dnl CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGE_FILES"
