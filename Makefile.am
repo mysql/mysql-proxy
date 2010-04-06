@@ -12,7 +12,8 @@ EXTRA_DIST = \
 		CMakeLists.txt \
 		mysql-chassis.pc.cmake \
 		mysql-proxy.pc.cmake \
-		deps
+		deps \
+		internal
 
 ACLOCAL_AMFLAGS = -I m4
 
