@@ -40,7 +40,7 @@ shell: doxygen-scripts/doxygen_version.sh
 skip: doxygen-scripts/footer.html
 shell: doxygen-scripts/project_number_bzr.sh
 
-examples/CMakeLists.txt
+shell: examples/CMakeLists.txt
 examples/Makefile.am
 examples/tutorial-basic.lua
 examples/tutorial-constants.lua
@@ -69,7 +69,7 @@ lib/analyze-query.lua
 lib/auditing.lua
 lib/chassis.c
 lib/chassis.def
-lib/CMakeLists.txt
+shell: lib/CMakeLists.txt
 lib/commit-obfuscator.lua
 lib/commit-obfuscator.msc
 lib/glib2.c
@@ -88,7 +88,7 @@ lib/posix.c
 lib/posix.def
 lib/proxy/auto-config.lua
 lib/proxy/balance.lua
-lib/proxy/CMakeLists.txt
+shell: lib/proxy/CMakeLists.txt
 lib/proxy/commands.lua
 lib/proxy/Makefile.am
 lib/proxy/parser.lua
@@ -114,25 +114,25 @@ skip: NEWS
 
 
 plugins/admin/admin-plugin.c
-plugins/admin/CMakeLists.txt
+shell: plugins/admin/CMakeLists.txt
 plugins/admin/Makefile.am
 
 plugins/cli/cli-plugin.c
-plugins/cli/CMakeLists.txt
+shell: plugins/cli/CMakeLists.txt
 plugins/cli/Makefile.am
-plugins/CMakeLists.txt
+shell: plugins/CMakeLists.txt
 
-plugins/debug/CMakeLists.txt
+shell: plugins/debug/CMakeLists.txt
 plugins/debug/debug-plugin.c
 plugins/debug/Makefile.am
 plugins/Makefile.am
 
-plugins/proxy/CMakeLists.txt
+shell: plugins/proxy/CMakeLists.txt
 plugins/proxy/Makefile.am
 plugins/proxy/proxy-plugin.c
 plugins/proxy/proxy-plugin.h
 
-plugins/replicant/CMakeLists.txt
+shell: plugins/replicant/CMakeLists.txt
 plugins/replicant/Makefile.am
 plugins/replicant/replicant-plugin.c
 skip: README
@@ -174,7 +174,7 @@ src/chassis-unix-daemon.c
 src/chassis-unix-daemon.h
 src/chassis-win32-service.c
 src/chassis-win32-service.h
-src/CMakeLists.txt
+shell: src/CMakeLists.txt
 src/disable-dtrace.h
 src/glib-ext-ref.c
 src/glib-ext-ref.h
@@ -236,7 +236,7 @@ src/string-len.h
 src/sys-pedantic.h
 src/test-latency.c
 
-tests/CMakeLists.txt
+shell: tests/CMakeLists.txt
 tests/gtester-to-junit.xslt
 tests/Makefile.am
 
@@ -382,7 +382,7 @@ tests/suite/bugs/t/bug_29494.test
 tests/suite/bugs/t/bug_select_local.lua
 tests/suite/bugs/t/bug_select_local.test
 tests/suite/bugs/t/Makefile.am
-tests/suite/CMakeLists.txt
+shell: tests/suite/CMakeLists.txt
 tests/suite/lua-tests-wrapper.sh.in
 tests/suite/lua_runner.c
 tests/suite/Makefile.am
@@ -395,11 +395,11 @@ tests/unit/check_loadscript.c
 tests/unit/check_mysqld_proto.c
 tests/unit/check_plugin.c
 tests/unit/check_sql_tokenizer.c
-tests/unit/CMakeLists.txt
+shell: tests/unit/CMakeLists.txt
 
 tests/unit/lua/active-queries.lua
 tests/unit/lua/chassis.lua
-tests/unit/lua/CMakeLists.txt
+shell: tests/unit/lua/CMakeLists.txt
 tests/unit/lua/lua-tests-wrapper.sh.in
 tests/unit/lua/lua_runner.c
 tests/unit/lua/Makefile.am
