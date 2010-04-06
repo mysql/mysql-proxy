@@ -1,19 +1,21 @@
 @rem  $%BEGINLICENSE%$
-@rem  Copyright 2008 MySQL AB, 2008 Sun Microsystems, Inc. All rights reserved.
-@rem  U.S. Government Rights - Commercial software. Government users are subject
-@rem  to the Sun Microsystems, Inc. standard license agreement and applicable
-@rem  provisions of the FAR and its supplements. Use is subject to license terms.
-@rem  This distribution may include materials developed by third parties.Sun,
-@rem  Sun Microsystems, the Sun logo and MySQL Enterprise Monitor are
-@rem  trademarks or registered trademarks of Sun Microsystems, Inc. in the U.S.
-@rem  and other countries.
+@rem  Copyright (c) 2008, Oracle and/or its affiliates. All rights reserved.
 @rem 
-@rem  Copyright 2008 MySQL AB, 2008 Sun Microsystems, Inc. Tous droits réservés.
-@rem  L'utilisation est soumise aux termes du contrat de licence.Cette
-@rem  distribution peut comprendre des composants développés par des tierces
-@rem  parties.Sun, Sun Microsystems, le logo Sun et MySQL Enterprise Monitor sont
-@rem  des marques de fabrique ou des marques déposées de Sun Microsystems, Inc.
-@rem  aux Etats-Unis et dans du'autres pays.
+@rem  This program is free software; you can redistribute it and/or
+@rem  modify it under the terms of the GNU General Public License as
+@rem  published by the Free Software Foundation; version 2 of the
+@rem  License.
+@rem 
+@rem  This program is distributed in the hope that it will be useful,
+@rem  but WITHOUT ANY WARRANTY; without even the implied warranty of
+@rem  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+@rem  GNU General Public License for more details.
+@rem 
+@rem  You should have received a copy of the GNU General Public License
+@rem  along with this program; if not, write to the Free Software
+@rem  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+@rem  02110-1301  USA
+@rem 
 @rem  $%ENDLICENSE%$
 @echo "Run this from a shell started with the Visual Studio Build environment set!"
 @echo "You can set DEPS_PATH (for the dependencies package) and MYSQL_DIR for a MySQL server installation"
