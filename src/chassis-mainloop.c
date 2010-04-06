@@ -263,6 +263,8 @@ int chassis_mainloop(void *_chas) {
 
 		g_assert(p->apply_config);
 		if (0 != p->apply_config(chas, p->config)) {
+			g_critical("%s: applying config of plugin %s failed",
+					G_STRLOC, p->name);
 			return -1;
 		}
 	}
