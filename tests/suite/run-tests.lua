@@ -291,11 +291,32 @@ function os_execute(cmdline)
 	return os.execute(cmdline)
 end
 
+---
+-- get the PID from the pid file
+--
 function get_pid(pid_file_name)
-	local fh = assert(io.open(pid_file_name, 'r'))
-	local pid = assert(fh:read() ,
-		"PID not found in " .. pid_file_name)
-	fh:close()
+	-- the file may exist, but the PID may not be written yet
+	local pid
+	local rounds = 0
+
+	repeat 
+		local fh = assert(io.open(pid_file_name, 'r'))
+		pid = fh:read("*n")
+		fh:close()
+		if not pid then
+			glib2.usleep(200 * 1000) -- wait a bit until we get some content
+			rounds = rounds + 1
+
+			if rounds > 10 then
+				error(("reading PID from existing pid-file '%s' failed after waiting 2 sec"):format(
+					pid_file_name))
+			end
+		end
+	until pid
+
+	-- the PID we get here should be a number
+	assert(type(pid) == "number")
+
 	return pid
 end
 
