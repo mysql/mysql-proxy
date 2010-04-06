@@ -1,3 +1,6 @@
+# $%BEGINLICENSE%$
+# $%ENDLICENSE%$
+
 ## print a few properties of a target
 MACRO(PRINT_TARGET_PROPERTIES target)
 	MESSAGE(STATUS "properties of target ${target}")

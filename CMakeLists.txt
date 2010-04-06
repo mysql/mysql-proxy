@@ -1,3 +1,6 @@
+# $%BEGINLICENSE%$
+# $%ENDLICENSE%$
+
 PROJECT(mysql-proxy C)
 
 SET(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)

@@ -1,3 +1,6 @@
+# $%BEGINLICENSE%$
+# $%ENDLICENSE%$
+
 MACRO(CHASSIS_PLUGIN_INSTALL _plugin_name)
 	IF(NOT WIN32)
 		INSTALL(TARGETS ${_plugin_name}
