@@ -89,11 +89,16 @@ function ProxyBaseTest:setDefaultScope()
 			config = {}
 		},
 		queries = {
-			append = function (id, query) 
-				queries[#queries + 1] = { 
+			data = {},
+			append = function (self, id, query, attr) 
+				self.data[#self.data + 1] = { 
 					id = id, 
-					query = query
+					query = query,
+					attr = attr
 				}
+			end,
+			reset = function (self)
+				self.data = { }
 			end
 		},
 		connection = {
@@ -104,6 +109,7 @@ function ProxyBaseTest:setDefaultScope()
 		},
 		PROXY_SEND_RESULT = 1,
 		PROXY_SEND_QUERY = 2,
+		PROXY_IGNORE_RESULT = 4,
 	
 		COM_SLEEP = 0,
 		COM_QUIT = 1,
