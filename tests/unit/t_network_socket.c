@@ -24,6 +24,7 @@
 #include <errno.h>
 
 #include <glib.h>
+#include <glib/gstdio.h> /* for g_unlink */
 
 #include "network-socket.h"
 
@@ -294,6 +295,42 @@ void t_network_socket_connect_udp(void) {
 	network_socket_free(server);
 }
 
+/**
+ * test if _is_local() works on unix-domain sockets
+ *
+ * MacOS X 10.4 doesn't report a .sa_family for one of the sides of the connection if it is a unix-socket 
+ */
+void t_network_socket_is_local_unix() {
+	network_socket *s_sock; /* the server side socket, listening for requests */
+	network_socket *c_sock; /* the client side socket, that connects */
+	network_socket *a_sock; /* the server side, accepted socket */
+
+	g_test_bug("42220");
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
+
+	s_sock = network_socket_new();
+	network_address_set_address(s_sock->dst, "/tmp/mysql-proxy-test.socket");
+
+	c_sock = network_socket_new();
+	network_address_set_address(c_sock->dst, "/tmp/mysql-proxy-test.socket");
+
+	/* hack together a network_socket_accept() which we don't have in this tree yet */
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
+
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect(c_sock));
+
+	a_sock = network_socket_accept(s_sock);
+	g_assert(a_sock);
+
+	g_assert_cmpint(TRUE, ==, network_address_is_local(s_sock->dst, a_sock->dst));
+
+	network_socket_free(a_sock);
+	network_socket_free(c_sock);
+	network_socket_free(s_sock);
+
+	g_unlink("/tmp/mysql-proxy-test.socket");
+}
+
 
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
@@ -305,6 +342,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/network_queue_append", test_network_queue_append);
 	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
 	g_test_add_func("/core/network_queue_pop_string", test_network_queue_pop_string);
+	g_test_add_func("/core/network_socket_is_local_unix", t_network_socket_is_local_unix);
 #if 0
 	/**
 	 * disabled for now until we fixed the _to_read() on HP/UX and AIX (and MacOS X)

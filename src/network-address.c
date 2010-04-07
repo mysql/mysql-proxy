@@ -270,6 +270,17 @@ gint network_address_refresh_name(network_address *addr) {
  */
 gboolean network_address_is_local(network_address *dst_addr, network_address *src_addr) {
 	if (src_addr->addr.common.sa_family != dst_addr->addr.common.sa_family) {
+#ifdef HAVE_SYS_UN_H
+		if (src_addr->addr.common.sa_family == AF_UNIX ||
+		    dst_addr->addr.common.sa_family == AF_UNIX) {
+			/* AF_UNIX is always local,
+			 * even if one of the two sides doesn't return a reasonable protocol 
+			 *
+			 * see #42220
+			 */
+			return TRUE;
+		}
+#endif
 		g_message("%s: is-local family %d != %d",
 				G_STRLOC,
 				src_addr->addr.common.sa_family,
