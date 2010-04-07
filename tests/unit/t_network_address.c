@@ -56,6 +56,30 @@ void t_network_address_set() {
 	network_address_free(addr);
 }
 
+/**
+ * test if we decode the port number correctly
+ */
+void t_network_address_resolve() {
+	network_address *addr;
+
+	g_test_bug("43313");
+
+	addr = network_address_new();
+	network_address_set_address(addr, "127.0.0.1:3306");
+
+	/* _set_address() should set the port number */
+	g_assert_cmpint(ntohs(addr->addr.ipv4.sin_port), ==, 3306);
+
+	/* reset the name to see that _refresh_name() updates to the right value */
+	g_string_truncate(addr->name, 0);
+
+	network_address_refresh_name(addr);
+
+	g_assert_cmpstr(addr->name->str, ==, "127.0.0.1:3306");
+
+	network_address_free(addr);
+}
+
 
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
@@ -63,6 +87,7 @@ int main(int argc, char **argv) {
 
 	g_test_add_func("/core/network_address_new", t_network_address_new);
 	g_test_add_func("/core/network_address_set", t_network_address_set);
+	g_test_add_func("/core/network_address_resolve", t_network_address_resolve);
 
 	return g_test_run();
 }
