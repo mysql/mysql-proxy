@@ -99,6 +99,9 @@ function ProxyBaseTest:setDefaultScope()
 			end,
 			reset = function (self)
 				self.data = { }
+			end,
+			len = function (self)
+				return #self.data
 			end
 		},
 		connection = {

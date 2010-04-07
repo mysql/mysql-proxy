@@ -58,7 +58,7 @@ TestScript = tests.ProxyBaseTest:new({
 
 function TestScript:setUp()
 	-- reset the query queue
-	queries = { }
+	proxy.queries:reset()
 
 	self:setDefaultScope()
 
@@ -91,7 +91,7 @@ function TestScript:testQueryQueuing()
 	assertEquals(stats.active_conns, 1)
 	
 	-- and here is the result
-	assertEquals(#queries, 1)
+	assertEquals(proxy.queries:len(), 1)
 end	
 
 function TestScript:testQueryTracking()
