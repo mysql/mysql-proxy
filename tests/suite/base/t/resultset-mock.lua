@@ -87,6 +87,21 @@ function read_query(packet)
 				}
 			}
 		}
+	elseif query == 'SELECT "1", NULL, "1"' then
+		-- test if we handle NULL fields in the res.rows iterator correctly
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = { 
+				fields = { 
+					{ name = "f1" },
+					{ name = "f2" },
+					{ name = "f3" },
+				},
+				rows = {
+					{ "1", nil, "1" },
+				}
+			}
+		}
 	elseif query == 'INSERT INTO test.t1 VALUES ( 1 )' then
 		-- we need a long string, more than 255 chars
 		proxy.response = {

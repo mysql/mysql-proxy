@@ -65,6 +65,32 @@ function read_query_result(inj)
 				}
 			}
 			return proxy.PROXY_SEND_RESULT
+		elseif inj.query == string.char(proxy.COM_QUERY) .. "SELECT \"1\", NULL, \"1\"" then
+			-- traverse the resultset using res.rows and check if the fields after the NULL field are accessible
+			assert(res.affected_rows == nil)
+
+			-- convert the MySQL row into a string
+			local test_res = ""
+			for row in res.rows do
+				test_res = ("%s,%s,%s"):format(
+					tostring(row[1]),
+					tostring(row[2]),
+					tostring(row[3]))
+			end
+
+			-- return the string to mysqltest (should be 1,nil,1)
+			proxy.response = {
+				type = proxy.MYSQLD_PACKET_OK,
+				resultset = {
+					fields = { 
+						{ name = "test_result" }
+					},
+					rows = {
+						{ test_res }
+					}
+				}
+			}
+			return proxy.PROXY_SEND_RESULT
 		elseif inj.query == string.char(proxy.COM_QUERY) .. "SELECT row_count(1), bytes()" then
 			-- convert a OK packet with affected rows into a resultset
 			assert(res.affected_rows == nil)

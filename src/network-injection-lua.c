@@ -295,6 +295,7 @@ static int proxy_resultset_rows_iter(lua_State *L) {
 
 		switch (lenenc_type) {
 		case NETWORK_MYSQLD_LENENC_TYPE_NULL:
+			network_mysqld_proto_skip(&packet, 1);
 			lua_pushnil(L);
 			break;
 		case NETWORK_MYSQLD_LENENC_TYPE_INT:
