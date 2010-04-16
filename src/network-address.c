@@ -45,6 +45,8 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <glib.h>
+#include <glib/gstdio.h>
 
 #include "network-address.h"
 #include "glib-ext.h"
@@ -63,10 +65,33 @@ network_address *network_address_new() {
 }
 
 void network_address_free(network_address *addr) {
+
 	if (!addr) return;
 
-	g_string_free(addr->name, TRUE);
+#ifndef WIN32
+	/*
+	 * if the name we're freeing starts with a '/', we're
+	 * looking at a unix socket which needs to be removed
+	 */
+	if (addr->fail_errno == 0 && addr->name != NULL &&
+			addr->name->str != NULL) {
+		gchar	*name;
+		int		ret;
 
+		name = addr->name->str;
+		if (name[0] == '/' && g_access(name, 0) == 0) {
+			ret = g_remove(name);
+			if (ret == 0) 
+				g_debug("%s removing socket %s successful", 
+					G_STRLOC, name);
+			else
+				g_debug("%s removing socket %s failed: %s (%d)", 
+					G_STRLOC, name, strerror(errno));
+		}
+	}
+#endif /* WIN32 */
+
+	g_string_free(addr->name, TRUE);
 	g_free(addr);
 }
 

@@ -63,8 +63,8 @@ typedef struct {
 	} addr;
 
 	GString *name; 
-
 	network_socklen_t len;
+	int		fail_errno;		/* != 0: don't remove ... I guess */
 } network_address;
 
 NETWORK_API network_address *network_address_new(void);
