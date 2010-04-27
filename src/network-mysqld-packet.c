@@ -47,24 +47,16 @@ void network_mysqld_com_query_result_free(network_mysqld_com_query_result_t *uda
 	g_free(udata);
 }
 
-/* TODO: is this one dead? */
-int network_mysqld_com_query_result_track_state(network_packet *packet, network_mysqld_com_query_result_t *udata) {
-	int err = 0;
-
-	if (udata->state == PARSE_COM_QUERY_LOAD_DATA) {
-		/* if the packet length is 0, the client is done */
-		guint32 len;
-
-	       	err = err || network_mysqld_proto_get_int24(packet, &len);
-
-		if (len == 0) {
-			udata->state = PARSE_COM_QUERY_LOAD_DATA_END_DATA;
-		}
-	}
-
-	return err ? -1 : 0;
+/**
+ * unused
+ *
+ * @deprecated will be removed in 0.9
+ * @see network_mysqld_proto_get_com_query_result
+ */
+int network_mysqld_com_query_result_track_state(network_packet G_GNUC_UNUSED *packet, network_mysqld_com_query_result_t G_GNUC_UNUSED *udata) {
+	g_error("%s: this function is deprecated and network_mysqld_proto_get_com_query_result() should be used instead",
+			G_STRLOC);
 }
-
 /**
  * @return -1 on error
  *         0  on success and done
@@ -233,6 +225,17 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 			break;
 		}
 		break;
+	case PARSE_COM_QUERY_LOAD_DATA: {
+		guint32 len;
+
+		/* we will receive a empty packet if we are done */
+		len = packet->data->len - packet->offset;
+
+		if (len == 0) {
+			query->state = PARSE_COM_QUERY_LOAD_DATA_END_DATA;
+			is_finished = 1;
+		}
+		break; }
 	case PARSE_COM_QUERY_LOAD_DATA_END_DATA:
 		err = err || network_mysqld_proto_get_int8(packet, &status);
 		if (err) break;
@@ -254,12 +257,6 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 			break;
 		}
 
-		break;
-	default:
-		g_critical("%s: unknown state in COM_QUERY: %d", 
-				G_STRLOC,
-				query->state);
-		err = 1;
 		break;
 	}
 
@@ -585,30 +582,12 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 	case COM_PROCESS_INFO:
 	case COM_QUERY:
 		is_finished = network_mysqld_proto_get_com_query_result(packet, con->parse.data, FALSE);
-		{
-			network_mysqld_com_query_result_t *query = (network_mysqld_com_query_result_t*)con->parse.data;
-
-			if (query->state == PARSE_COM_QUERY_LOAD_DATA) {
-				con->in_load_data_local_state = TRUE;
-			}
-		}
 		break;
 	case COM_BINLOG_DUMP:
 		/**
 		 * the binlog-dump event stops, forward all packets as we see them
 		 * and keep the command active
 		 */
-		is_finished = 1;
-		break;
-	case COM_SLEEP:
-		/** 
-		 * this is not COM_SLEEP, even though it shares the same numeric value.
-		 * when executing a LOAD DATA LOCAL INFILE the server simply responds with
-		 * an OK packet (5th byte is 0x00), seen here as COM_SLEEP.
-		 * That's ok, because COM_SLEEP is an internal state and does not go over the wire.
-		 */
-		err = err || network_mysqld_proto_peek_int8(packet, &status);
-		if (err) return -1;
 		is_finished = 1;
 		break;
 	default:

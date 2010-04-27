@@ -1,6 +1,7 @@
 0.8.1
 
   * don't try to set a fd-limit if the user didn't explicitly tried to raise it
+  * fixed handling of LOAD DATA LOCAL INFILE (#51864)
 
 0.8.0 
 

@@ -551,6 +551,11 @@ network_socket_retval_t network_mysqld_con_get_packet(chassis G_GNUC_UNUSED*chas
 		} else {
 			con->last_packet_id = packet_id;
 		}
+
+#if 0
+		/* to trace the data we received from the socket, enable this */
+		g_debug_hexdump(G_STRLOC, S(packet));
+#endif
 	
 		network_queue_append(con->recv_queue, packet);
 	} else {
@@ -724,6 +729,39 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 			con->state = CON_STATE_READ_QUERY;
 		}
 		break;
+
+	case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA:
+		func = con->plugins.con_send_load_data_infile_local_data;
+
+		if (!func) { /* default implementation */
+			con->state = CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT;
+		}
+
+		break;
+	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA:
+		func = con->plugins.con_read_load_data_infile_local_data;
+
+		if (!func) { /* default implementation */
+			con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA;
+		}
+
+		break;
+	case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT:
+		func = con->plugins.con_send_load_data_infile_local_result;
+
+		if (!func) { /* default implementation */
+			con->state = CON_STATE_READ_QUERY;
+		}
+
+		break;
+	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT:
+		func = con->plugins.con_read_load_data_infile_local_result;
+
+		if (!func) { /* default implementation */
+			con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT;
+		}
+
+		break;
 	case CON_STATE_ERROR:
 		g_debug("%s.%d: not executing plugin function in state CON_STATE_ERROR", __FILE__, __LINE__);
 		return NETWORK_SOCKET_SUCCESS;
@@ -757,6 +795,37 @@ void network_mysqld_con_reset_command_response_state(network_mysqld_con *con) {
 	}
 }
 
+/**
+ * get the name of a connection state
+ */
+const char *network_mysqld_con_state_get_name(network_mysqld_con_state_t state) {
+	switch (state) {
+	case CON_STATE_INIT: return "CON_STATE_INIT";
+	case CON_STATE_CONNECT_SERVER: return "CON_STATE_CONNECT_SERVER";
+	case CON_STATE_READ_HANDSHAKE: return "CON_STATE_READ_HANDSHAKE";
+	case CON_STATE_SEND_HANDSHAKE: return "CON_STATE_SEND_HANDSHAKE";
+	case CON_STATE_READ_AUTH: return "CON_STATE_READ_AUTH";
+	case CON_STATE_SEND_AUTH: return "CON_STATE_SEND_AUTH";
+	case CON_STATE_READ_AUTH_OLD_PASSWORD: return "CON_STATE_READ_AUTH_OLD_PASSWORD";
+	case CON_STATE_SEND_AUTH_OLD_PASSWORD: return "CON_STATE_SEND_AUTH_OLD_PASSWORD";
+	case CON_STATE_READ_AUTH_RESULT: return "CON_STATE_READ_AUTH_RESULT";
+	case CON_STATE_SEND_AUTH_RESULT: return "CON_STATE_SEND_AUTH_RESULT";
+	case CON_STATE_READ_QUERY: return "CON_STATE_READ_QUERY";
+	case CON_STATE_SEND_QUERY: return "CON_STATE_SEND_QUERY";
+	case CON_STATE_READ_QUERY_RESULT: return "CON_STATE_READ_QUERY_RESULT";
+	case CON_STATE_SEND_QUERY_RESULT: return "CON_STATE_SEND_QUERY_RESULT";
+	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA: return "CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA";
+	case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA: return "CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA";
+	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT: return "CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT";
+	case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT: return "CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT";
+	case CON_STATE_CLOSE_CLIENT: return "CON_STATE_CLOSE_CLIENT";
+	case CON_STATE_CLOSE_SERVER: return "CON_STATE_CLOSE_SERVER";
+	case CON_STATE_ERROR: return "CON_STATE_ERROR";
+	case CON_STATE_SEND_ERROR: return "CON_STATE_SEND_ERROR";
+	}
+
+	return "unknown";
+}
 
 /**
  * handle the different states of the MySQL protocol
@@ -839,8 +908,17 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	} else {
 		NETWORK_MYSQLD_CON_TRACK_TIME(con, "con_handle_start");
 	}
+
 	do {
 		ostate = con->state;
+#if 0
+		/* if you need the state-change information without dtrace, enable this */
+		g_critical("%s: [%d] %s",
+				G_STRLOC,
+				getpid(),
+				network_mysqld_con_state_get_name(con->state));
+#endif
+
 		MYSQLPROXY_STATE_CHANGE(event_fd, events, con->state);
 		switch (con->state) {
 		case CON_STATE_ERROR:
@@ -1342,8 +1420,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			/* send the query to the server
 			 *
 			 * this state will loop until all the packets from the send-queue are flushed 
-			 *
-			 * we have to handle LOAD DATA INFILE LOCAL which can only happen for COM_QUERY packets
 			 */
 
 			if (con->server->send_queue->offset == 0) {
@@ -1357,41 +1433,36 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				packet.data = chunk->data;
 				packet.offset = 0;
 
-				/*  */
-				if (con->parse.command == COM_QUERY) {
-					network_mysqld_com_query_result_track_state(&packet, con->parse.data);
-				} else {
-					con->parse.command = packet.data->str[4];
-	
-					/* init the parser for the commands */
-					switch (con->parse.command) {
-					case COM_QUERY:
-					case COM_PROCESS_INFO:
-					case COM_STMT_EXECUTE:
-						con->parse.data = network_mysqld_com_query_result_new();
-						con->parse.data_free = (GDestroyNotify)network_mysqld_com_query_result_free;
-						break;
-					case COM_STMT_PREPARE:
-						con->parse.data = network_mysqld_com_stmt_prepare_result_new();
-						con->parse.data_free = (GDestroyNotify)network_mysqld_com_stmt_prepare_result_free;
-						break;
-					case COM_INIT_DB:
-						con->parse.data = network_mysqld_com_init_db_result_new();
-						con->parse.data_free = (GDestroyNotify)network_mysqld_com_init_db_result_free;
+				con->parse.command = packet.data->str[4];
 
-						network_mysqld_com_init_db_result_track_state(&packet, con->parse.data);
+				/* init the parser for the commands */
+				switch (con->parse.command) {
+				case COM_QUERY:
+				case COM_PROCESS_INFO:
+				case COM_STMT_EXECUTE:
+					con->parse.data = network_mysqld_com_query_result_new();
+					con->parse.data_free = (GDestroyNotify)network_mysqld_com_query_result_free;
+					break;
+				case COM_STMT_PREPARE:
+					con->parse.data = network_mysqld_com_stmt_prepare_result_new();
+					con->parse.data_free = (GDestroyNotify)network_mysqld_com_stmt_prepare_result_free;
+					break;
+				case COM_INIT_DB:
+					con->parse.data = network_mysqld_com_init_db_result_new();
+					con->parse.data_free = (GDestroyNotify)network_mysqld_com_init_db_result_free;
 
-						break;
-					case COM_QUIT:
-						/* track COM_QUIT going to the server, to be able to tell if the server
-						 a) simply went away or
-						 b) closed the connection because the client asked it to
-						 If b) we should not print a message at the next EV_READ event from the server fd
-						 */
-						con->com_quit_seen = TRUE;
-					default:
-						break;
-					}
+					network_mysqld_com_init_db_result_track_state(&packet, con->parse.data);
+
+					break;
+				case COM_QUIT:
+					/* track COM_QUIT going to the server, to be able to tell if the server
+					 a) simply went away or
+					 b) closed the connection because the client asked it to
+					 If b) we should not print a message at the next EV_READ event from the server fd
+					 */
+					con->com_quit_seen = TRUE;
+				default:
+					break;
 				}
 			}
 	
@@ -1415,23 +1486,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
-#if 0
-			/* in case we are waiting for LOAD DATA LOCAL INFILE data on this connection,
-			 we need to read the sentinel zero-length packet, too. Otherwise we will block
-			 this connection. Bug#37404
-			 */
-			if (con->in_load_data_local_state) {
-				/* the last packet of LOAD DATA LOCAL INFILE is zero-length, signalling "no more data following" */
-				if (con->parse.len == 0) {
-					con->state = CON_STATE_READ_QUERY_RESULT;
-					con->in_load_data_local_state = FALSE;
-				} else {
-					con->state = CON_STATE_READ_QUERY;
-				}
-				break;
-			}
-#endif
-
 			/* some statements don't have a server response */
 			switch (con->parse.command) {
 			case COM_STMT_SEND_LONG_DATA: /* not acked */
@@ -1439,13 +1493,6 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				con->state = CON_STATE_READ_QUERY;
 				if (con->client) network_mysqld_queue_reset(con->client);
 				if (con->server) network_mysqld_queue_reset(con->server);
-				break;
-			case COM_QUERY:
-				if (network_mysqld_com_query_result_is_load_data(con->parse.data)) {
-					con->state = CON_STATE_READ_QUERY;
-				} else {
-					con->state = CON_STATE_READ_QUERY_RESULT;
-				}
 				break;
 			default:
 				con->state = CON_STATE_READ_QUERY_RESULT;
@@ -1539,6 +1586,180 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
+				con->state = CON_STATE_ERROR;
+				break;
+			}
+
+			/* special treatment for the LOAD DATA LOCAL INFILE command */
+			switch (con->parse.command) {
+			case COM_QUERY:
+				if (network_mysqld_com_query_result_is_load_data(con->parse.data)) {
+					con->state = CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA;
+				}
+				break;
+			default:
+				break;
+			}
+
+			break;
+		case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA: {
+			/**
+			 * read the file content from the client 
+			 */
+			network_socket *recv_sock;
+			recv_sock = con->client;
+			g_assert(events == 0 || event_fd == recv_sock->fd);
+
+			switch (network_mysqld_read(srv, recv_sock)) {
+			case NETWORK_SOCKET_SUCCESS:
+				break;
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
+				/* call us again when you have a event */
+				WAIT_FOR_EVENT(recv_sock, EV_READ, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_load_data_infile_local_data");
+
+				return;
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
+				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA) returned an error", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
+				break;
+			}
+
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
+
+			/* check the packets if we found closing packet
+			 *
+			 * the client finishes the LOAD DATA INFILE LOCAL ... file with a empty packet
+			 */
+
+			switch (plugin_call(srv, con, con->state)) {
+			case NETWORK_SOCKET_SUCCESS:
+				break;
+			case NETWORK_SOCKET_ERROR:
+				/**
+				 * we couldn't understand the pack from the server 
+				 * 
+				 * we have something in the queue and will send it to the client
+				 * and close the connection afterwards
+				 */
+				
+				con->state = CON_STATE_SEND_ERROR;
+
+				break;
+			default:
+				g_critical("%s.%d: ...", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
+				break;
+			}
+	
+			break; }
+		case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA: 
+			/* send the hand-shake to the client and wait for a response */
+
+			switch (network_mysqld_write(srv, con->server)) {
+			case NETWORK_SOCKET_SUCCESS:
+				break;
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
+				WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_load_data_infile_local_data");
+				
+				return;
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
+				/**
+				 * writing failed, closing connection
+				 */
+				con->state = CON_STATE_ERROR;
+				break;
+			}
+
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
+
+			switch (plugin_call(srv, con, con->state)) {
+			case NETWORK_SOCKET_SUCCESS:
+				break;
+			default:
+				g_critical("%s.%d: plugin_call(CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
+				break;
+			}
+
+			break;
+		case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT: {
+			/**
+			 * read auth data from the remote mysql-server 
+			 */
+			network_socket *recv_sock;
+			recv_sock = con->server;
+			g_assert(events == 0 || event_fd == recv_sock->fd);
+
+			switch (network_mysqld_read(srv, recv_sock)) {
+			case NETWORK_SOCKET_SUCCESS:
+				break;
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
+				/* call us again when you have a event */
+				WAIT_FOR_EVENT(recv_sock, EV_READ, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_load_data_infile_local_result");
+
+				return;
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
+				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT) returned an error", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
+				break;
+			}
+
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
+
+			switch (plugin_call(srv, con, con->state)) {
+			case NETWORK_SOCKET_SUCCESS:
+				break;
+			case NETWORK_SOCKET_ERROR:
+				/**
+				 * we couldn't understand the pack from the server 
+				 * 
+				 * we have something in the queue and will send it to the client
+				 * and close the connection afterwards
+				 */
+				
+				con->state = CON_STATE_SEND_ERROR;
+
+				break;
+			default:
+				g_critical("%s.%d: ...", __FILE__, __LINE__);
+				con->state = CON_STATE_ERROR;
+				break;
+			}
+	
+			break; }
+		case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT: 
+			/* send the hand-shake to the client and wait for a response */
+
+			switch (network_mysqld_write(srv, con->client)) {
+			case NETWORK_SOCKET_SUCCESS:
+				break;
+			case NETWORK_SOCKET_WAIT_FOR_EVENT:
+				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_load_data_infile_local_result");
+				
+				return;
+			case NETWORK_SOCKET_ERROR_RETRY:
+			case NETWORK_SOCKET_ERROR:
+				/**
+				 * writing failed, closing connection
+				 */
+				con->state = CON_STATE_ERROR;
+				break;
+			}
+
+			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
+
+			switch (plugin_call(srv, con, con->state)) {
+			case NETWORK_SOCKET_SUCCESS:
+				break;
+			default:
+				g_critical("%s.%d: plugin_call(CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
 				con->state = CON_STATE_ERROR;
 				break;
 			}

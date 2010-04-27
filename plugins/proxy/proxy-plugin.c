@@ -948,36 +948,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 
 static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
-	char command = -1;
 	network_socket *recv_sock = con->client;
 	GList   *chunk  = recv_sock->recv_queue->chunks->head;
 	GString *packet = chunk->data;
 	chassis_plugin_config *config = con->config;
-
-	if (!config->profiling) return PROXY_SEND_QUERY;
-
-	if (packet->len <= NET_HEADER_SIZE) return PROXY_SEND_QUERY; /* packet too short or zero-length packet */
 	
-	if (con->in_load_data_local_state) return PROXY_SEND_QUERY; /* don't try to intercept LOAD DATA LOCAL data packets */
-
-	command = packet->str[NET_HEADER_SIZE + 0];
-
-	if (COM_QUERY == command) {
-		/* we need some more data after the COM_QUERY */
-		if (packet->len < NET_HEADER_SIZE + 2) return PROXY_SEND_QUERY;
-
-		/* LOAD DATA INFILE is nasty */
-		if (packet->len - NET_HEADER_SIZE - 1 >= sizeof("LOAD ") - 1 &&
-		    0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("LOAD "))) return PROXY_SEND_QUERY;
-
-		/* don't cover them with injected queries as it trashes the result */
-		if (packet->len - NET_HEADER_SIZE - 1 >= sizeof("SHOW ERRORS") - 1 &&
-		    0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("SHOW ERRORS"))) return PROXY_SEND_QUERY;
-		if (packet->len - NET_HEADER_SIZE - 1 >= sizeof("select @@error_count") - 1 &&
-		    0 == g_ascii_strncasecmp(packet->str + NET_HEADER_SIZE + 1, C("select @@error_count"))) return PROXY_SEND_QUERY;
-	
-	}
-
 	network_injection_queue_reset(st->injected.queries);
 
 	/* ok, here we go */
@@ -1792,6 +1767,95 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
 	return NETWORK_SOCKET_SUCCESS;
 }
 
+/**
+ * read the load data infile data from the client
+ *
+ * - decode the result-set to track if we are finished already
+ */
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
+	int is_finished = 0;
+	network_packet packet;
+	network_socket *recv_sock, *send_sock;
+	network_mysqld_com_query_result_t *com_query = con->parse.data;
+
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query_result::enter");
+	
+	recv_sock = con->client;
+	send_sock = con->server;
+
+	/* check if the last packet is valid */
+	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
+	packet.offset = 0;
+
+	/* if we get here from another state, src/network-mysqld.c is broken */
+	g_assert_cmpint(con->parse.command, ==, COM_QUERY);
+	g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOAD_DATA);
+
+	is_finished = network_mysqld_proto_get_query_result(&packet, con);
+	if (is_finished == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
+
+	network_mysqld_queue_append_raw(send_sock, send_sock->send_queue, g_queue_pop_tail(recv_sock->recv_queue->chunks));
+
+	if (is_finished) {
+		con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA;
+		g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOAD_DATA_END_DATA);
+	}
+
+	return NETWORK_SOCKET_SUCCESS;
+}
+
+/**
+ * read the load data infile result from the server
+ *
+ * - decode the result-set to track if we are finished already
+ */
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_result) {
+	int is_finished = 0;
+	network_packet packet;
+	network_socket *recv_sock, *send_sock;
+
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_load_data_infile_local_result::enter");
+
+	recv_sock = con->server;
+	send_sock = con->client;
+
+	/* check if the last packet is valid */
+	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
+	packet.offset = 0;
+	
+	is_finished = network_mysqld_proto_get_query_result(&packet, con);
+	if (is_finished == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
+
+	network_mysqld_queue_append_raw(send_sock, send_sock->send_queue, g_queue_pop_tail(recv_sock->recv_queue->chunks));
+
+	if (is_finished) {
+		con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT;
+	}
+
+	return NETWORK_SOCKET_SUCCESS;
+}
+
+/**
+ * cleanup after we sent to result of the LOAD DATA INFILE LOCAL data to the client
+ */
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_load_data_infile_local_result) {
+	network_socket *recv_sock, *send_sock;
+
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::send_load_data_infile_local_result::enter");
+
+	recv_sock = con->server;
+	send_sock = con->client;
+
+	/* reset the packet-ids */
+	network_mysqld_queue_reset(send_sock);
+	network_mysqld_queue_reset(recv_sock);
+
+	con->state = CON_STATE_READ_QUERY;
+
+	return NETWORK_SOCKET_SUCCESS;
+}
+
+
 int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
 	con->plugins.con_init                      = proxy_init;
 	con->plugins.con_connect_server            = proxy_connect_server;
@@ -1801,6 +1865,9 @@ int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
 	con->plugins.con_read_query                = proxy_read_query;
 	con->plugins.con_read_query_result         = proxy_read_query_result;
 	con->plugins.con_send_query_result         = proxy_send_query_result;
+	con->plugins.con_read_load_data_infile_local_data = proxy_read_load_data_infile_local_data;
+	con->plugins.con_read_load_data_infile_local_result = proxy_read_load_data_infile_local_result;
+	con->plugins.con_send_load_data_infile_local_result = proxy_send_load_data_infile_local_result;
 	con->plugins.con_cleanup                   = proxy_disconnect_client;
 
 	return 0;

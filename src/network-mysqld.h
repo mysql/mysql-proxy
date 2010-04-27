@@ -167,6 +167,12 @@ typedef struct {
      * @note There are no two separate callback functions for the two possibilities, which probably is a deficiency.
      */
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_cleanup);
+
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_load_data_infile_local_data);
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_load_data_infile_local_data);
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_load_data_infile_local_result);
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_load_data_infile_local_result);
+
 } network_mysqld_hooks;
 
 /**
@@ -211,8 +217,19 @@ typedef enum {
 	CON_STATE_SEND_ERROR = 15,           /**< An unrecoverable error occurred, leads to sending a MySQL ERR packet to the client and closing the client connection */
 	CON_STATE_ERROR = 16,                /**< An error occurred (malformed/unexpected packet, unrecoverable network error), internal state */
 
-	CON_STATE_CLOSE_SERVER = 17          /**< The server connection should be closed */
+	CON_STATE_CLOSE_SERVER = 17,         /**< The server connection should be closed */
+
+	/* handling the LOAD DATA INFILE LOCAL protocol extensions */
+	CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA = 18,
+	CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA = 19,
+	CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT = 20,
+	CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT = 21
 } network_mysqld_con_state_t;
+
+/**
+ * get the name of a connection state
+ */
+NETWORK_API const char *network_mysqld_con_state_get_name(network_mysqld_con_state_t state);
 
 /**
  * Encapsulates the state and callback functions for a MySQL protocol-based connection to and from MySQL Proxy.
@@ -303,10 +320,6 @@ struct network_mysqld_con {
 	 */
 	gboolean resultset_is_finished;
 
-	/**
-	 * Flag indicating that we are processing packets from a LOAD DATA LOCAL command.
-	 */
-	gboolean in_load_data_local_state;
 	/**
 	 * Flag indicating that we have received a COM_QUIT command.
 	 * 

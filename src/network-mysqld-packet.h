@@ -70,7 +70,7 @@ typedef struct {
 
 NETWORK_API network_mysqld_com_query_result_t *network_mysqld_com_query_result_new(void);
 NETWORK_API void network_mysqld_com_query_result_free(network_mysqld_com_query_result_t *udata);
-NETWORK_API int network_mysqld_com_query_result_track_state(network_packet *packet, network_mysqld_com_query_result_t *udata);
+NETWORK_API int network_mysqld_com_query_result_track_state(network_packet *packet, network_mysqld_com_query_result_t *udata) G_GNUC_DEPRECATED;
 NETWORK_API gboolean network_mysqld_com_query_result_is_load_data(network_mysqld_com_query_result_t *udata);
 NETWORK_API int network_mysqld_proto_get_com_query_result(network_packet *packet, network_mysqld_com_query_result_t *udata, gboolean use_binary_row_data);
 
