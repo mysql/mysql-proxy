@@ -741,8 +741,8 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA:
 		func = con->plugins.con_read_load_data_infile_local_data;
 
-		if (!func) { /* default implementation */
-			con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA;
+		if (!func) { /* the plugins have to implement this function to track LOAD DATA LOCAL INFILE handling work */
+			con->state = CON_STATE_ERROR;
 		}
 
 		break;
@@ -757,8 +757,8 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT:
 		func = con->plugins.con_read_load_data_infile_local_result;
 
-		if (!func) { /* default implementation */
-			con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT;
+		if (!func) { /* the plugins have to implement this function to track LOAD DATA LOCAL INFILE handling work */
+			con->state = CON_STATE_ERROR;
 		}
 
 		break;
