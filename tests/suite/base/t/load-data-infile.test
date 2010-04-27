@@ -18,4 +18,5 @@
 # 
 #  $%ENDLICENSE%$
 
-load data infile local 'test.file' into foo.bar;
+## the mock will figure out the real filename to request
+load data local infile 'testfile' into table foo.bar;

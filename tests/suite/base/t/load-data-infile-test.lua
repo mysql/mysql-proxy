@@ -27,6 +27,5 @@ function read_query(packet)
 end
 
 function read_query_result(inj)
-	print("result")
 end
 

@@ -24,7 +24,11 @@ function connect_server()
 	proxy.response = {
 		type = proxy.MYSQLD_PACKET_RAW,
 		packets = {
-			proto.to_challenge_packet({})
+			proto.to_challenge_packet({
+				capabilities = 128 +  -- CLIENT_LOCAL_FILES
+						512 + -- CLIENT_PROTOCOL_41
+						32768 -- CLIENT_SECURE_CONNECTION
+			})
 		}
 	}
 	return proxy.PROXY_SEND_RESULT
@@ -39,11 +43,13 @@ function read_query(packet)
 	end
 
 	local query = packet:sub(2) 
-	if query == "load data infile local 'test.file' into foo.bar" then
+	if query == "load data local infile 'testfile' into table foo.bar" then
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_RAW,
 			packets = {
-				"\251test.file"
+				-- a NUL to indicate the LOAD DATA INFILE LOCAL filename to we want to get
+				"\251" .. 
+				"load-data-infile.log" -- the file that 'mysqltest' will find. mysqltest's pwd is ${builddir}/tests/suite/
 			}
 		}
 	else
