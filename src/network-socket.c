@@ -89,6 +89,8 @@
 #include "network-socket.h"
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"
+#include "string-len.h"
+#include "glib-ext.h"
 
 #ifndef DISABLE_DEPRECATED_DECL
 network_socket *network_socket_init() {
@@ -577,7 +579,10 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
 
 		if (con->send_queue->offset >= s->len) {
 			con->send_queue->offset -= s->len;
-
+#if 0
+			/* to trace the data we sent to the socket, enable this */
+			g_debug_hexdump(G_STRLOC, S(s));
+#endif
 			g_string_free(s, TRUE);
 			
 			g_queue_delete_link(con->send_queue->chunks, chunk);
