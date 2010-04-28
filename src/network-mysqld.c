@@ -1696,7 +1696,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
-				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT) returned an error", __FILE__, __LINE__);
+				g_critical("%s: network_mysqld_read(%s) returned an error",
+						G_STRLOC,
+						network_mysqld_con_state_get_name(ostate));
+
 				con->state = CON_STATE_ERROR;
 				break;
 			}
