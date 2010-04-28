@@ -552,7 +552,7 @@ network_socket_retval_t network_mysqld_con_get_packet(chassis G_GNUC_UNUSED*chas
 			con->last_packet_id = packet_id;
 		}
 
-#if 0
+#ifdef NETWORK_DEBUG_TRACE_IO
 		/* to trace the data we received from the socket, enable this */
 		g_debug_hexdump(G_STRLOC, S(packet));
 #endif

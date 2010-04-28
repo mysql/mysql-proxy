@@ -579,7 +579,7 @@ static network_socket_retval_t network_socket_write_writev(network_socket *con, 
 
 		if (con->send_queue->offset >= s->len) {
 			con->send_queue->offset -= s->len;
-#if 0
+#ifdef NETWORK_DEBUG_TRACE_IO
 			/* to trace the data we sent to the socket, enable this */
 			g_debug_hexdump(G_STRLOC, S(s));
 #endif
