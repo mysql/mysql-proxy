@@ -912,7 +912,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 	do {
 		ostate = con->state;
-#if 0
+#ifdef NETWORK_DEBUG_TRACE_STATE_CHANGES
 		/* if you need the state-change information without dtrace, enable this */
 		g_critical("%s: [%d] %s",
 				G_STRLOC,
