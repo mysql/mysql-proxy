@@ -1773,7 +1773,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
  * - decode the result-set to track if we are finished already
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
-	int is_finished = 0;
+	int query_result = 0;
 	network_packet packet;
 	network_socket *recv_sock, *send_sock;
 	network_mysqld_com_query_result_t *com_query = con->parse.data;
@@ -1791,12 +1791,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
 	g_assert_cmpint(con->parse.command, ==, COM_QUERY);
 	g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOAD_DATA);
 
-	is_finished = network_mysqld_proto_get_query_result(&packet, con);
-	if (is_finished == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
+	query_result = network_mysqld_proto_get_query_result(&packet, con);
+	if (query_result == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
 
-	network_mysqld_queue_append_raw(send_sock, send_sock->send_queue, g_queue_pop_tail(recv_sock->recv_queue->chunks));
+	network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
+			g_queue_pop_tail(recv_sock->recv_queue->chunks));
 
-	if (is_finished) {
+	if (query_result == 1) { /* we have everything, send it to the backend */
 		con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA;
 		g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOAD_DATA_END_DATA);
 	}
@@ -1810,7 +1811,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
  * - decode the result-set to track if we are finished already
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_result) {
-	int is_finished = 0;
+	int query_result = 0;
 	network_packet packet;
 	network_socket *recv_sock, *send_sock;
 
@@ -1823,12 +1824,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_result) {
 	packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
 	packet.offset = 0;
 	
-	is_finished = network_mysqld_proto_get_query_result(&packet, con);
-	if (is_finished == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
+	query_result = network_mysqld_proto_get_query_result(&packet, con);
+	if (query_result == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
 
-	network_mysqld_queue_append_raw(send_sock, send_sock->send_queue, g_queue_pop_tail(recv_sock->recv_queue->chunks));
+	network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
+			g_queue_pop_tail(recv_sock->recv_queue->chunks));
 
-	if (is_finished) {
+	if (query_result == 1) {
 		con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT;
 	}
 
