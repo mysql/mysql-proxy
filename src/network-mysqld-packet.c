@@ -225,17 +225,13 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 			break;
 		}
 		break;
-	case PARSE_COM_QUERY_LOAD_DATA: {
-		guint32 len;
-
+	case PARSE_COM_QUERY_LOAD_DATA: 
 		/* we will receive a empty packet if we are done */
-		len = packet->data->len - packet->offset;
-
-		if (len == 0) {
+		if (packet->data->len == packet->offset) {
 			query->state = PARSE_COM_QUERY_LOAD_DATA_END_DATA;
 			is_finished = 1;
 		}
-		break; }
+		break;
 	case PARSE_COM_QUERY_LOAD_DATA_END_DATA:
 		err = err || network_mysqld_proto_get_int8(packet, &status);
 		if (err) break;
