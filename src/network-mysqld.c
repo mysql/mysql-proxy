@@ -839,6 +839,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	network_mysqld_con *con = user_data;
 	chassis *srv = con->srv;
 	int retval;
+	network_socket_retval_t call_ret;
 
 	g_assert(srv);
 	g_assert(con);
@@ -1456,9 +1457,9 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					break;
 				case COM_QUIT:
 					/* track COM_QUIT going to the server, to be able to tell if the server
-					 a) simply went away or
-					 b) closed the connection because the client asked it to
-					 If b) we should not print a message at the next EV_READ event from the server fd
+					 * a) simply went away or
+					 * b) closed the connection because the client asked it to
+					 * If b) we should not print a message at the next EV_READ event from the server fd
 					 */
 					con->com_quit_seen = TRUE;
 				default:
@@ -1591,14 +1592,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 
 			/* special treatment for the LOAD DATA LOCAL INFILE command */
-			switch (con->parse.command) {
-			case COM_QUERY:
-				if (network_mysqld_com_query_result_is_load_data(con->parse.data)) {
-					con->state = CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA;
-				}
-				break;
-			default:
-				break;
+			if (con->state != CON_STATE_ERROR &&
+			    con->parse.command == COM_QUERY &&
+			    1 == network_mysqld_com_query_result_is_load_data(con->parse.data)) {
+				con->state = CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA;
 			}
 
 			break;
@@ -1607,8 +1604,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			 * read the file content from the client 
 			 */
 			network_socket *recv_sock;
+
 			recv_sock = con->client;
-			g_assert(events == 0 || event_fd == recv_sock->fd);
 
 			switch (network_mysqld_read(srv, recv_sock)) {
 			case NETWORK_SOCKET_SUCCESS:
@@ -1621,34 +1618,24 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
 			case NETWORK_SOCKET_ERROR:
-				g_critical("%s.%d: network_mysqld_read(CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA) returned an error", __FILE__, __LINE__);
+				g_critical("%s: network_mysqld_read(%s) returned an error",
+						G_STRLOC,
+						network_mysqld_con_state_get_name(ostate));
 				con->state = CON_STATE_ERROR;
 				break;
 			}
 
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
-			/* check the packets if we found closing packet
-			 *
-			 * the client finishes the LOAD DATA INFILE LOCAL ... file with a empty packet
-			 */
-
-			switch (plugin_call(srv, con, con->state)) {
+			switch ((call_ret = plugin_call(srv, con, con->state))) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case NETWORK_SOCKET_ERROR:
-				/**
-				 * we couldn't understand the pack from the server 
-				 * 
-				 * we have something in the queue and will send it to the client
-				 * and close the connection afterwards
-				 */
-				
-				con->state = CON_STATE_SEND_ERROR;
-
-				break;
 			default:
-				g_critical("%s.%d: ...", __FILE__, __LINE__);
+				g_critical("%s: plugin_call(%s) unexpected return value: %d",
+						G_STRLOC,
+						network_mysqld_con_state_get_name(ostate),
+						call_ret);
+
 				con->state = CON_STATE_ERROR;
 				break;
 			}
@@ -1676,11 +1663,15 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
-			switch (plugin_call(srv, con, con->state)) {
+			switch ((call_ret = plugin_call(srv, con, con->state))) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_critical("%s.%d: plugin_call(CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				g_critical("%s: plugin_call(%s) unexpected return value: %d",
+						G_STRLOC,
+						network_mysqld_con_state_get_name(ostate),
+						call_ret);
+
 				con->state = CON_STATE_ERROR;
 				break;
 			}
@@ -1712,22 +1703,15 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
-			switch (plugin_call(srv, con, con->state)) {
+			switch ((call_ret = plugin_call(srv, con, con->state))) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
-			case NETWORK_SOCKET_ERROR:
-				/**
-				 * we couldn't understand the pack from the server 
-				 * 
-				 * we have something in the queue and will send it to the client
-				 * and close the connection afterwards
-				 */
-				
-				con->state = CON_STATE_SEND_ERROR;
-
-				break;
 			default:
-				g_critical("%s.%d: ...", __FILE__, __LINE__);
+				g_critical("%s: plugin_call(%s) unexpected return value: %d",
+						G_STRLOC,
+						network_mysqld_con_state_get_name(ostate),
+						call_ret);
+
 				con->state = CON_STATE_ERROR;
 				break;
 			}
@@ -1755,11 +1739,15 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
-			switch (plugin_call(srv, con, con->state)) {
+			switch ((call_ret = plugin_call(srv, con, con->state))) {
 			case NETWORK_SOCKET_SUCCESS:
 				break;
 			default:
-				g_critical("%s.%d: plugin_call(CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT) != NETWORK_SOCKET_SUCCESS", __FILE__, __LINE__);
+				g_critical("%s: plugin_call(%s) unexpected return value: %d",
+						G_STRLOC,
+						network_mysqld_con_state_get_name(ostate),
+						call_ret);
+
 				con->state = CON_STATE_ERROR;
 				break;
 			}
