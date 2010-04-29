@@ -73,20 +73,22 @@ void network_address_free(network_address *addr) {
 	 * if the name we're freeing starts with a '/', we're
 	 * looking at a unix socket which needs to be removed
 	 */
-	if (addr->fail_errno == 0 && addr->name != NULL &&
+	if (addr->can_unlink_socket == TRUE && addr->name != NULL &&
 			addr->name->str != NULL) {
 		gchar	*name;
 		int		ret;
 
 		name = addr->name->str;
-		if (name[0] == '/' && g_access(name, 0) == 0) {
+		if (name[0] == '/') {
 			ret = g_remove(name);
-			if (ret == 0) 
+			if (ret == 0) {
 				g_debug("%s removing socket %s successful", 
 					G_STRLOC, name);
-			else
-				g_critical("%s removing socket %s failed: %s (%d)", 
-					G_STRLOC, name, strerror(errno));
+			} else {
+				if (errno != EPERM && errno != EACCES)
+					g_critical("%s removing socket %s failed: %s (%d)", 
+						G_STRLOC, name, strerror(errno));
+			}
 		}
 	}
 #endif /* WIN32 */

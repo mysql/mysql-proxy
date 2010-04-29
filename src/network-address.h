@@ -64,7 +64,7 @@ typedef struct {
 
 	GString *name; 
 	network_socklen_t len;
-	int		fail_errno;		/* != 0: don't remove ... I guess */
+	gboolean can_unlink_socket; /* set TRUE *only* after successful bind */
 } network_address;
 
 NETWORK_API network_address *network_address_new(void);

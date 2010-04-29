@@ -399,7 +399,6 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 					G_STRLOC,
 					con->dst->name->str,
 					g_strerror(errno), errno);
-			con->dst->fail_errno = errno; /* if a unix socket, this tells us "don't remove" */
 			return NETWORK_SOCKET_ERROR;
 		}
 
@@ -432,6 +431,7 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 		}
 	}
 
+	con->dst->can_unlink_socket = TRUE;
 	return NETWORK_SOCKET_SUCCESS;
 }
 
