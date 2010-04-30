@@ -533,6 +533,7 @@ function run_test(filename, basedir)
 			database = MYSQL_DB,
 			host	 = PROXY_HOST,
 			port	 = PROXY_PORT,
+			verbose  = (VERBOSE > 0) and "TRUE" or "FALSE", -- pass down the verbose setting 
 			["test-file"] = basedir .. "/t/" .. testname .. ".test",
 			["result-file"] = basedir .. "/r/" .. testname .. ".result",
 			["logdir"] = builddir, -- the .result dir might not be writable
@@ -755,6 +756,7 @@ function chain_proxy (backend_lua_scripts, second_lua_script, use_replication)
 			["proxy-lua-script"]		= backend_lua_script or DEFAULT_SCRIPT_FILENAME,
 			["plugin-dir"]			= PROXY_LIBPATH,
 			["basedir"]					= PROXY_TEST_BASEDIR,
+			["log-level"]			= (VERBOSE == 4) and "debug" or "critical",
 		}
 		-- 
 		-- if replication was not started, then it is started here
@@ -776,6 +778,7 @@ function chain_proxy (backend_lua_scripts, second_lua_script, use_replication)
 			["proxy-lua-script"]		= second_lua_script or DEFAULT_SCRIPT_FILENAME,
 			["plugin-dir"]			= PROXY_LIBPATH,
 			["basedir"]					= PROXY_TEST_BASEDIR,
+			["log-level"]			= (VERBOSE == 3) and "debug" or "critical",
 	}
 	start_proxy('second_proxy',second_proxy_options) 
 end
