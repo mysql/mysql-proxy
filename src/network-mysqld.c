@@ -1427,43 +1427,15 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			if (con->server->send_queue->offset == 0) {
 				/* only parse the packets once */
 				network_packet packet;
-				GList *chunk;
 
-				g_assert(con->server->send_queue->chunks);
-				chunk = con->server->send_queue->chunks->head;
-
-				packet.data = chunk->data;
+				packet.data = g_queue_peek_head(con->server->send_queue->chunks);
 				packet.offset = 0;
 
-				con->parse.command = packet.data->str[4];
+				if (0 != network_mysqld_con_command_states_init(con, &packet)) {
+					g_debug("%s: tracking mysql protocol states failed",
+							G_STRLOC);
+					con->state = CON_STATE_ERROR;
 
-				/* init the parser for the commands */
-				switch (con->parse.command) {
-				case COM_QUERY:
-				case COM_PROCESS_INFO:
-				case COM_STMT_EXECUTE:
-					con->parse.data = network_mysqld_com_query_result_new();
-					con->parse.data_free = (GDestroyNotify)network_mysqld_com_query_result_free;
-					break;
-				case COM_STMT_PREPARE:
-					con->parse.data = network_mysqld_com_stmt_prepare_result_new();
-					con->parse.data_free = (GDestroyNotify)network_mysqld_com_stmt_prepare_result_free;
-					break;
-				case COM_INIT_DB:
-					con->parse.data = network_mysqld_com_init_db_result_new();
-					con->parse.data_free = (GDestroyNotify)network_mysqld_com_init_db_result_free;
-
-					network_mysqld_com_init_db_result_track_state(&packet, con->parse.data);
-
-					break;
-				case COM_QUIT:
-					/* track COM_QUIT going to the server, to be able to tell if the server
-					 * a) simply went away or
-					 * b) closed the connection because the client asked it to
-					 * If b) we should not print a message at the next EV_READ event from the server fd
-					 */
-					con->com_quit_seen = TRUE;
-				default:
 					break;
 				}
 			}

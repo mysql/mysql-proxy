@@ -431,8 +431,60 @@ int network_mysqld_proto_get_com_init_db(
 }
 
 /**
- * @return -1 on error, 
- *          0 is not finished, 
+ * init the tracking of the sub-states of the protocol
+ */
+int network_mysqld_con_command_states_init(network_mysqld_con *con, network_packet *packet) {
+	guint8 cmd;
+	int err = 0;
+
+	err = err || network_mysqld_proto_skip_network_header(packet);
+	err = err || network_mysqld_proto_get_int8(packet, &cmd);
+
+	if (err) return -1;
+
+	con->parse.command = cmd;
+
+	packet->offset = 0; /* reset the offset again for the next functions */
+
+	/* init the parser for the commands */
+	switch (con->parse.command) {
+	case COM_QUERY:
+	case COM_PROCESS_INFO:
+	case COM_STMT_EXECUTE:
+		con->parse.data = network_mysqld_com_query_result_new();
+		con->parse.data_free = (GDestroyNotify)network_mysqld_com_query_result_free;
+		break;
+	case COM_STMT_PREPARE:
+		con->parse.data = network_mysqld_com_stmt_prepare_result_new();
+		con->parse.data_free = (GDestroyNotify)network_mysqld_com_stmt_prepare_result_free;
+		break;
+	case COM_INIT_DB:
+		con->parse.data = network_mysqld_com_init_db_result_new();
+		con->parse.data_free = (GDestroyNotify)network_mysqld_com_init_db_result_free;
+
+		network_mysqld_com_init_db_result_track_state(packet, con->parse.data);
+
+		break;
+	case COM_QUIT:
+		/* track COM_QUIT going to the server, to be able to tell if the server
+		 * a) simply went away or
+		 * b) closed the connection because the client asked it to
+		 * If b) we should not print a message at the next EV_READ event from the server fd
+		 */
+		con->com_quit_seen = TRUE;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+/**
+ * @param packet the current packet that is passing by
+ *
+ *
+ * @return -1 on invalid packet, 
+ *          0 need more packets, 
  *          1 for the last packet 
  */
 int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld_con *con) {

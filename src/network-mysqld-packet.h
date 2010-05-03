@@ -107,6 +107,8 @@ NETWORK_API int network_mysqld_proto_get_com_init_db_result(network_packet *pack
 		);
 
 NETWORK_API int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld_con *con);
+NETWORK_API int network_mysqld_con_command_states_init(network_mysqld_con *con, network_packet *packet);
+
 NETWORK_API GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields);
 
 typedef struct {
