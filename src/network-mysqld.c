@@ -204,6 +204,7 @@ network_mysqld_con *network_mysqld_con_new() {
 
 	con = g_new0(network_mysqld_con, 1);
 	con->timestamps = chassis_timestamps_new();
+	con->parse.command = -1;
 
 	return con;
 }
@@ -1377,7 +1378,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
 				last_packet.data = g_queue_peek_tail(recv_sock->recv_queue->chunks);
-			} while (last_packet.data->len == PACKET_LEN_MAX + NET_HEADER_SIZE);
+			} while (last_packet.data->len == PACKET_LEN_MAX + NET_HEADER_SIZE); /* read all chunks of the overlong data */
 
 			if (con->server &&
 			    con->server->challenge &&
@@ -1415,7 +1416,24 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			}
 
-			network_mysqld_con_reset_command_response_state(con);
+			/**
+			 * there should be 3 possible next states from here:
+			 *
+			 * - CON_STATE_ERROR (if something went wrong and we want to close the connection
+			 * - CON_STATE_SEND_QUERY (if we want to send data to the con->server)
+			 * - CON_STATE_SEND_QUERY_RESULT (if we want to send data to the con->client)
+			 *
+			 * @todo verify this with a clean switch ()
+			 */
+
+			/* reset the tracked command
+			 *
+			 * if the plugin decided to send a result, it has to track the commands itself
+			 * otherwise LOAD DATA LOCAL INFILE and friends will fail
+			 */
+			if (con->state == CON_STATE_SEND_QUERY) {
+				network_mysqld_con_reset_command_response_state(con);
+			}
 
 			break; }
 		case CON_STATE_SEND_QUERY:
@@ -1580,38 +1598,43 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			recv_sock = con->client;
 
-			switch (network_mysqld_read(srv, recv_sock)) {
-			case NETWORK_SOCKET_SUCCESS:
-				break;
-			case NETWORK_SOCKET_WAIT_FOR_EVENT:
-				/* call us again when you have a event */
-				WAIT_FOR_EVENT(recv_sock, EV_READ, NULL);
-				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_load_data_infile_local_data");
+			/**
+			 * LDLI is usually a whole set of packets
+			 */
+			do {
+				switch (network_mysqld_read(srv, recv_sock)) {
+				case NETWORK_SOCKET_SUCCESS:
+					break;
+				case NETWORK_SOCKET_WAIT_FOR_EVENT:
+					/* call us again when you have a event */
+					WAIT_FOR_EVENT(recv_sock, EV_READ, NULL);
+					NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_load_data_infile_local_data");
 
-				return;
-			case NETWORK_SOCKET_ERROR_RETRY:
-			case NETWORK_SOCKET_ERROR:
-				g_critical("%s: network_mysqld_read(%s) returned an error",
-						G_STRLOC,
-						network_mysqld_con_state_get_name(ostate));
-				con->state = CON_STATE_ERROR;
-				break;
-			}
+					return;
+				case NETWORK_SOCKET_ERROR_RETRY:
+				case NETWORK_SOCKET_ERROR:
+					g_critical("%s: network_mysqld_read(%s) returned an error",
+							G_STRLOC,
+							network_mysqld_con_state_get_name(ostate));
+					con->state = CON_STATE_ERROR;
+					break;
+				}
 
-			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
+				if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
-			switch ((call_ret = plugin_call(srv, con, con->state))) {
-			case NETWORK_SOCKET_SUCCESS:
-				break;
-			default:
-				g_critical("%s: plugin_call(%s) unexpected return value: %d",
-						G_STRLOC,
-						network_mysqld_con_state_get_name(ostate),
-						call_ret);
+				switch ((call_ret = plugin_call(srv, con, con->state))) {
+				case NETWORK_SOCKET_SUCCESS:
+					break;
+				default:
+					g_critical("%s: plugin_call(%s) unexpected return value: %d",
+							G_STRLOC,
+							network_mysqld_con_state_get_name(ostate),
+							call_ret);
 
-				con->state = CON_STATE_ERROR;
-				break;
-			}
+					con->state = CON_STATE_ERROR;
+					break;
+				}
+			} while (con->state == ostate); /* read packets from the network until the plugin decodes to go to the next state */
 	
 			break; }
 		case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA: 

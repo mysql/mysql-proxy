@@ -1110,11 +1110,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		return NETWORK_SOCKET_ERROR;
 	}
 	
-	send_sock = con->server;
-
 	switch (ret) {
 	case PROXY_NO_DECISION:
 	case PROXY_SEND_QUERY:
+		send_sock = con->server;
+
 		/* no injection, pass on the chunks as is */
 		while ((packet = g_queue_pop_head(recv_sock->recv_queue->chunks))) {
 			network_mysqld_queue_append_raw(send_sock, send_sock->send_queue, packet);
@@ -1122,17 +1122,40 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 		con->resultset_is_needed = FALSE; /* we don't want to buffer the result-set */
 
 		break;
-	case PROXY_SEND_RESULT: 
+	case PROXY_SEND_RESULT: {
+		gboolean is_first_packet = TRUE;
 		proxy_query = 0;
-		
-		while ((packet = g_queue_pop_head(recv_sock->recv_queue->chunks))) g_string_free(packet, TRUE);
 
-		break; 
+		send_sock = con->client;
+
+		/* flush the recv-queue and track the command-states */
+		while ((packet = g_queue_pop_head(recv_sock->recv_queue->chunks))) {
+			if (is_first_packet) {
+				network_packet p;
+
+				p.data = packet;
+				p.offset = 0;
+
+				network_mysqld_con_reset_command_response_state(con);
+
+				if (0 != network_mysqld_con_command_states_init(con, &p)) {
+					g_debug("%s: ", G_STRLOC);
+				}
+
+				is_first_packet = FALSE;
+			}
+
+			g_string_free(packet, TRUE);
+		}
+
+		break; }
 	case PROXY_SEND_INJECTION: {
 		injection *inj;
 
 		inj = g_queue_peek_head(st->injected.queries);
 		con->resultset_is_needed = inj->resultset_is_needed; /* let the lua-layer decide if we want to buffer the result or not */
+
+		send_sock = con->server;
 
 		network_mysqld_queue_reset(send_sock);
 		network_mysqld_queue_append(send_sock, send_sock->send_queue, S(inj->query));
@@ -1147,6 +1170,21 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	if (proxy_query) {
 		con->state = CON_STATE_SEND_QUERY;
 	} else {
+		GList *cur;
+
+		/* if we don't send the query to the backend, it won't be tracked. So track it here instead 
+		 * to get the packet tracking right (LOAD DATA LOCAL INFILE, ...) */
+
+		for (cur = send_sock->send_queue->chunks->head; cur; cur = cur->next) {
+			network_packet p;
+			int r;
+
+			p.data = cur->data;
+			p.offset = 0;
+
+			r = network_mysqld_proto_get_query_result(&p, con);
+		}
+
 		con->state = CON_STATE_SEND_QUERY_RESULT;
 		con->resultset_is_finished = TRUE; /* we don't have more too send */
 	}
@@ -1196,6 +1234,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_query_result) {
 	}
 
 	if (st->injected.queries->length == 0) {
+		/* we have nothing more to send, let's see what the next state is */
+
 		con->state = CON_STATE_READ_QUERY;
 
 		return NETWORK_SOCKET_SUCCESS;
@@ -1771,6 +1811,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
  * read the load data infile data from the client
  *
  * - decode the result-set to track if we are finished already
+ * - gets called once for each packet
+ *
+ * @FIXME stream the data to the backend
  */
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
 	int query_result = 0;
@@ -1794,11 +1837,26 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
 	query_result = network_mysqld_proto_get_query_result(&packet, con);
 	if (query_result == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
 
-	network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
-			g_queue_pop_tail(recv_sock->recv_queue->chunks));
+	if (con->server) {
+		network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
+				g_queue_pop_tail(recv_sock->recv_queue->chunks));
+	} else {
+		GString *s;
+		/* we don't have a backend
+		 *
+		 * - free the received packets early
+		 * - send a OK later 
+		 */
+		while ((s = g_queue_pop_head(recv_sock->recv_queue->chunks))) g_string_free(s, TRUE);
+	}
 
 	if (query_result == 1) { /* we have everything, send it to the backend */
-		con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA;
+		if (con->server) {
+			con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA;
+		} else {
+			network_mysqld_con_send_ok(con->client);
+			con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT;
+		}
 		g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOAD_DATA_END_DATA);
 	}
 
