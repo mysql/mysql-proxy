@@ -85,7 +85,7 @@
 #endif
 #endif
 
-
+#include "network-debug.h"
 #include "network-socket.h"
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"

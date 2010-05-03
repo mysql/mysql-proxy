@@ -127,6 +127,9 @@ libmysql_proxy_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
 libmysql_proxy_la_CPPFLAGS = $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS)
 libmysql_proxy_la_LIBADD   = $(EVENT_LIBS) $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la libmysql-chassis-timing.la libmysql-chassis-glibext.la
 
+## should be packaged, but not installed
+noinst_HEADERS=\
+	network-debug.h
 
 include_HEADERS=\
 	network-mysqld.h \

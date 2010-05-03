@@ -63,6 +63,7 @@
 #include <mysql.h>
 #include <mysqld_error.h>
 
+#include "network-debug.h"
 #include "network-mysqld.h"
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"
@@ -539,6 +540,11 @@ network_socket_retval_t network_mysqld_con_get_packet(chassis G_GNUC_UNUSED*chas
 
 	/* move the packet from the raw queue to the recv-queue */
 	if ((packet = network_queue_pop_string(con->recv_queue_raw, packet_len + NET_HEADER_SIZE, NULL))) {
+#ifdef NETWORK_DEBUG_TRACE_IO
+		/* to trace the data we received from the socket, enable this */
+		g_debug_hexdump(G_STRLOC, S(packet));
+#endif
+
 		if (con->packet_id_is_reset) {
 			con->last_packet_id = packet_id;
 			con->packet_id_is_reset = FALSE;
@@ -551,11 +557,6 @@ network_socket_retval_t network_mysqld_con_get_packet(chassis G_GNUC_UNUSED*chas
 		} else {
 			con->last_packet_id = packet_id;
 		}
-
-#ifdef NETWORK_DEBUG_TRACE_IO
-		/* to trace the data we received from the socket, enable this */
-		g_debug_hexdump(G_STRLOC, S(packet));
-#endif
 	
 		network_queue_append(con->recv_queue, packet);
 	} else {
@@ -914,7 +915,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		ostate = con->state;
 #ifdef NETWORK_DEBUG_TRACE_STATE_CHANGES
 		/* if you need the state-change information without dtrace, enable this */
-		g_critical("%s: [%d] %s",
+		g_debug("%s: [%d] %s",
 				G_STRLOC,
 				getpid(),
 				network_mysqld_con_state_get_name(con->state));
