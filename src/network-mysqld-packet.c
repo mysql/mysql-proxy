@@ -402,12 +402,14 @@ int network_mysqld_proto_get_com_init_db(
 	case MYSQLD_PACKET_OK:
 		/**
 		 * track the change of the init_db */
-		g_string_truncate(con->server->default_db, 0);
+		if (con->server) g_string_truncate(con->server->default_db, 0);
 		g_string_truncate(con->client->default_db, 0);
 
 		if (udata->db_name && udata->db_name->len) {
-			g_string_append_len(con->server->default_db, 
-					S(udata->db_name));
+			if (con->server) {
+				g_string_append_len(con->server->default_db, 
+						S(udata->db_name));
+			}
 			
 			g_string_append_len(con->client->default_db, 
 					S(udata->db_name));

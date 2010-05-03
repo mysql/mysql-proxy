@@ -1849,8 +1849,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_load_data_infile_local_result) {
 	send_sock = con->client;
 
 	/* reset the packet-ids */
-	network_mysqld_queue_reset(send_sock);
-	network_mysqld_queue_reset(recv_sock);
+	if (send_sock) network_mysqld_queue_reset(send_sock);
+	if (recv_sock) network_mysqld_queue_reset(recv_sock);
 
 	con->state = CON_STATE_READ_QUERY;
 
