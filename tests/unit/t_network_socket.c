@@ -23,6 +23,10 @@
 #include <string.h>
 #include <errno.h>
 
+#ifndef WIN32
+#include <unistd.h>
+#endif /* WIN32 */
+
 #include <glib.h>
 #include <glib/gstdio.h> /* for g_unlink */
 
@@ -295,6 +299,10 @@ void t_network_socket_connect_udp(void) {
 	network_socket_free(server);
 }
 
+#ifndef WIN32
+
+#define LOCAL_SOCK "/tmp/mysql-proxy-test.socket"
+
 /**
  * test if _is_local() works on unix-domain sockets
  *
@@ -304,18 +312,23 @@ void t_network_socket_is_local_unix() {
 	network_socket *s_sock; /* the server side socket, listening for requests */
 	network_socket *c_sock; /* the client side socket, that connects */
 	network_socket *a_sock; /* the server side, accepted socket */
+	gchar sockname[sizeof(LOCAL_SOCK) + 10];
 
 	g_test_bug("42220");
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
 
+	snprintf(sockname, sizeof(sockname), LOCAL_SOCK ".%d", (int)getpid());
+
 	s_sock = network_socket_new();
-	network_address_set_address(s_sock->dst, "/tmp/mysql-proxy-test.socket");
+	network_address_set_address(s_sock->dst, sockname);
 
 	c_sock = network_socket_new();
-	network_address_set_address(c_sock->dst, "/tmp/mysql-proxy-test.socket");
+	network_address_set_address(c_sock->dst, sockname);
 
 	/* hack together a network_socket_accept() which we don't have in this tree yet */
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
+
+	g_assert_cmpint(g_access(sockname, 0), ==, 0);
 
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect(c_sock));
 
@@ -325,11 +338,15 @@ void t_network_socket_is_local_unix() {
 	g_assert_cmpint(TRUE, ==, network_address_is_local(s_sock->dst, a_sock->dst));
 
 	network_socket_free(a_sock);
+	g_assert_cmpint(g_access(sockname, 0), ==, 0);
 	network_socket_free(c_sock);
+	g_assert_cmpint(g_access(sockname, 0), ==, 0);
 	network_socket_free(s_sock);
+	g_assert_cmpint(g_access(sockname, 0), ==, -1);
 
-	g_unlink("/tmp/mysql-proxy-test.socket");
+	/* g_unlink("/tmp/mysql-proxy-test.socket"); */
 }
+#endif /* WIN32 */
 
 
 int main(int argc, char **argv) {
@@ -342,7 +359,9 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/network_queue_append", test_network_queue_append);
 	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
 	g_test_add_func("/core/network_queue_pop_string", test_network_queue_pop_string);
+#ifndef WIN32
 	g_test_add_func("/core/network_socket_is_local_unix", t_network_socket_is_local_unix);
+#endif
 #if 0
 	/**
 	 * disabled for now until we fixed the _to_read() on HP/UX and AIX (and MacOS X)
@@ -354,8 +373,8 @@ int main(int argc, char **argv) {
 
 	return g_test_run();
 }
-#else
+#else /* GLIB_CHECK_VERSION */
 int main() {
 	return 77;
 }
-#endif
+#endif /* GLIB_CHECK_VERSION */
