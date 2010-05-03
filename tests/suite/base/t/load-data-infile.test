@@ -18,5 +18,10 @@
 # 
 #  $%ENDLICENSE%$
 
-## the mock will figure out the real filename to request
+## test the local file request handling of LOAD DATA LOCAL INFILE 
+# the mock will figure out the real filename to request
 load data local infile 'testfile' into table foo.bar;
+# load it twice to know that we handle it correctly
+load data local infile 'testfile' into table foo.bar;
+## and now a regular command to see if the packet-ids are tracked nicely
+SELECT 1;

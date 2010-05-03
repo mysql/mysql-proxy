@@ -49,8 +49,20 @@ function read_query(packet)
 			packets = {
 				-- a NUL to indicate the LOAD DATA INFILE LOCAL filename to we want to get
 				"\251" .. 
-				"load-data-infile.log" -- the file that 'mysqltest' will find. mysqltest's pwd is ${builddir}/tests/suite/
+				"Makefile" -- the file that 'mysqltest' will find. mysqltest's pwd is ${builddir}/tests/suite/
 			}
+		}
+	elseif query == "SELECT 1" then
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			resultset = {
+				fields = {
+					{ name = "1", type = proxy.MYSQL_TYPE_STRING },
+				},
+				rows = {
+					{ 1 },
+				},
+			},
 		}
 	else
 		proxy.response = {
@@ -60,7 +72,4 @@ function read_query(packet)
 	end
 	return proxy.PROXY_SEND_RESULT
 end
-
-
-
 
