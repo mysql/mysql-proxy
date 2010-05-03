@@ -14,6 +14,7 @@ EXTRA_DIST = \
 		failover.result \
 		lineno.result \
 		load_multi.result \
+		load-data-infile.result \
 		mysql-40.result \
 		no_backend.result \
 		overlong.result \
