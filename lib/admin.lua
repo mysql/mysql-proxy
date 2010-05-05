@@ -37,7 +37,7 @@ function read_query(packet)
 	local rows = { }
 	local fields = { }
 
-	if query == "SELECT * FROM backends" then
+	if query:lower() == "select * from backends" then
 		fields = { 
 			{ name = "backend_ndx", 
 			  type = proxy.MYSQL_TYPE_LONG },
@@ -57,8 +57,17 @@ function read_query(packet)
 				i, b.dst.name, b.state, b.type 
 			}
 		end
+	elseif query:lower() == "select * from help" then
+		fields = { 
+			{ name = "command", 
+			  type = proxy.MYSQL_TYPE_STRING },
+			{ name = "description", 
+			  type = proxy.MYSQL_TYPE_STRING },
+		}
+		rows[#rows + 1] = { "SELECT * FROM help", "shows this help" }
+		rows[#rows + 1] = { "SELECT * FROM backends", "lists the backends and their state" }
 	else
-		set_error()
+		set_error("use 'SELECT * FROM help' to see the supported commands")
 		return proxy.PROXY_SEND_RESULT
 	end
 
