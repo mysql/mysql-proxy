@@ -567,6 +567,12 @@ static int network_mysqld_admin_plugin_apply_config(chassis *chas, chassis_plugi
 				G_STRLOC);
 		return -1;
 	}
+	if (!config->lua_script) {
+		g_critical("%s: --admin-lua-script needs to be set, <install-dir>/lib/mysql-proxy/lua/admin.lua may be a good value",
+				G_STRLOC);
+		return -1;
+	}
+
 
 	/** 
 	 * create a connection handle for the listen socket 
