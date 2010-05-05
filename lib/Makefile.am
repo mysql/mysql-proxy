@@ -27,6 +27,9 @@ else
 EXTRA_DIST += ${example_scripts}
 endif
 
+dist_luaext_DATA = \
+	admin.lua
+
 luaext_LTLIBRARIES = lfs.la glib2.la chassis.la mysql.la lpeg.la posix.la
 
 lfs_la_SOURCES  = lfs.c
