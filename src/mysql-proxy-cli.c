@@ -120,7 +120,10 @@ typedef struct {
 	gchar **plugin_names;
 
 	guint invoke_dbg_on_crash;
+#ifndef _WIN32
+	/* the --keepalive option isn't available on Unix */
 	guint auto_restart;
+#endif
 
 	gint max_files_number;
 
@@ -214,8 +217,10 @@ int chassis_frontend_set_chassis_options(chassis_frontend_t *frontend, chassis_o
 	chassis_options_add(opts,
 		"log-backtrace-on-crash",   0, 0, G_OPTION_ARG_NONE, &(frontend->invoke_dbg_on_crash), "try to invoke debugger on crash", NULL);
 
+#ifndef _WIN32
 	chassis_options_add(opts,
 		"keepalive",                0, 0, G_OPTION_ARG_NONE, &(frontend->auto_restart), "try to restart the proxy if it crashed", NULL);
+#endif
 
 	chassis_options_add(opts,
 		"max-open-files",           0, 0, G_OPTION_ARG_INT, &(frontend->max_files_number), "maximum number of open files (ulimit -n)", NULL);
