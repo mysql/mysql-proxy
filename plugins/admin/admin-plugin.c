@@ -533,8 +533,8 @@ static GOptionEntry * network_mysqld_admin_plugin_get_options(chassis_plugin_con
 	static GOptionEntry config_entries[] = 
 	{
 		{ "admin-address",            0, 0, G_OPTION_ARG_STRING, NULL, "listening address:port of the admin-server (default: :4041)", "<host:port>" },
-		{ "admin-username",           0, 0, G_OPTION_ARG_STRING, NULL, "username to allow to log in (default: root)", "<string>" },
-		{ "admin-password",           0, 0, G_OPTION_ARG_STRING, NULL, "password to allow to log in (default: )", "<string>" },
+		{ "admin-username",           0, 0, G_OPTION_ARG_STRING, NULL, "username to allow to log in", "<string>" },
+		{ "admin-password",           0, 0, G_OPTION_ARG_STRING, NULL, "password to allow to log in", "<string>" },
 		{ "admin-lua-script",         0, 0, G_OPTION_ARG_FILENAME, NULL, "script to execute by the admin plugin", "<filename>" },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
@@ -557,8 +557,16 @@ static int network_mysqld_admin_plugin_apply_config(chassis *chas, chassis_plugi
 	network_socket *listen_sock;
 
 	if (!config->address) config->address = g_strdup(":4041");
-	if (!config->admin_username) config->admin_username = g_strdup("root");
-	if (!config->admin_password) config->admin_password = g_strdup("secret");
+	if (!config->admin_username) {
+		g_critical("%s: --admin-username needs to be set",
+				G_STRLOC);
+		return -1;
+	}
+	if (!config->admin_password) {
+		g_critical("%s: --admin-password needs to be set",
+				G_STRLOC);
+		return -1;
+	}
 
 	/** 
 	 * create a connection handle for the listen socket 
