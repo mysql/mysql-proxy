@@ -661,7 +661,6 @@ static network_socket_retval_t network_socket_write_send(network_socket *con, in
 		}
 	}
 
-	con->dst->can_unlink_socket = TRUE;
 	return NETWORK_SOCKET_SUCCESS;
 }
 
