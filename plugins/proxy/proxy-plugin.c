@@ -1815,7 +1815,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_disconnect_client) {
  *
  * @FIXME stream the data to the backend
  */
-NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_local_infile_data) {
 	int query_result = 0;
 	network_packet packet;
 	network_socket *recv_sock, *send_sock;
@@ -1832,7 +1832,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
 
 	/* if we get here from another state, src/network-mysqld.c is broken */
 	g_assert_cmpint(con->parse.command, ==, COM_QUERY);
-	g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOAD_DATA);
+	g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOCAL_INFILE_DATA);
 
 	query_result = network_mysqld_proto_get_query_result(&packet, con);
 	if (query_result == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
@@ -1852,12 +1852,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
 
 	if (query_result == 1) { /* we have everything, send it to the backend */
 		if (con->server) {
-			con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA;
+			con->state = CON_STATE_SEND_LOCAL_INFILE_DATA;
 		} else {
 			network_mysqld_con_send_ok(con->client);
-			con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT;
+			con->state = CON_STATE_SEND_LOCAL_INFILE_RESULT;
 		}
-		g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOAD_DATA_END_DATA);
+		g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOCAL_INFILE_RESULT);
 	}
 
 	return NETWORK_SOCKET_SUCCESS;
@@ -1868,12 +1868,12 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_data) {
  *
  * - decode the result-set to track if we are finished already
  */
-NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_result) {
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_local_infile_result) {
 	int query_result = 0;
 	network_packet packet;
 	network_socket *recv_sock, *send_sock;
 
-	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_load_data_infile_local_result::enter");
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_local_infile_result::enter");
 
 	recv_sock = con->server;
 	send_sock = con->client;
@@ -1889,7 +1889,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_result) {
 			g_queue_pop_tail(recv_sock->recv_queue->chunks));
 
 	if (query_result == 1) {
-		con->state = CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT;
+		con->state = CON_STATE_SEND_LOCAL_INFILE_RESULT;
 	}
 
 	return NETWORK_SOCKET_SUCCESS;
@@ -1898,10 +1898,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_load_data_infile_local_result) {
 /**
  * cleanup after we sent to result of the LOAD DATA INFILE LOCAL data to the client
  */
-NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_load_data_infile_local_result) {
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_send_local_infile_result) {
 	network_socket *recv_sock, *send_sock;
 
-	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::send_load_data_infile_local_result::enter");
+	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::send_local_infile_result::enter");
 
 	recv_sock = con->server;
 	send_sock = con->client;
@@ -1925,9 +1925,9 @@ int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
 	con->plugins.con_read_query                = proxy_read_query;
 	con->plugins.con_read_query_result         = proxy_read_query_result;
 	con->plugins.con_send_query_result         = proxy_send_query_result;
-	con->plugins.con_read_load_data_infile_local_data = proxy_read_load_data_infile_local_data;
-	con->plugins.con_read_load_data_infile_local_result = proxy_read_load_data_infile_local_result;
-	con->plugins.con_send_load_data_infile_local_result = proxy_send_load_data_infile_local_result;
+	con->plugins.con_read_local_infile_data = proxy_read_local_infile_data;
+	con->plugins.con_read_local_infile_result = proxy_read_local_infile_result;
+	con->plugins.con_send_local_infile_result = proxy_send_local_infile_result;
 	con->plugins.con_cleanup                   = proxy_disconnect_client;
 
 	return 0;

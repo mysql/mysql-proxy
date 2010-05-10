@@ -50,8 +50,8 @@ typedef struct {
 		PARSE_COM_QUERY_INIT,
 		PARSE_COM_QUERY_FIELD,
 		PARSE_COM_QUERY_RESULT,
-		PARSE_COM_QUERY_LOAD_DATA,
-		PARSE_COM_QUERY_LOAD_DATA_END_DATA
+		PARSE_COM_QUERY_LOCAL_INFILE_DATA,
+		PARSE_COM_QUERY_LOCAL_INFILE_RESULT
 	} state;
 
 	guint16 server_status;
@@ -71,7 +71,7 @@ typedef struct {
 NETWORK_API network_mysqld_com_query_result_t *network_mysqld_com_query_result_new(void);
 NETWORK_API void network_mysqld_com_query_result_free(network_mysqld_com_query_result_t *udata);
 NETWORK_API int network_mysqld_com_query_result_track_state(network_packet *packet, network_mysqld_com_query_result_t *udata) G_GNUC_DEPRECATED;
-NETWORK_API gboolean network_mysqld_com_query_result_is_load_data(network_mysqld_com_query_result_t *udata);
+NETWORK_API gboolean network_mysqld_com_query_result_is_local_infile(network_mysqld_com_query_result_t *udata);
 NETWORK_API int network_mysqld_proto_get_com_query_result(network_packet *packet, network_mysqld_com_query_result_t *udata, gboolean use_binary_row_data);
 
 /**

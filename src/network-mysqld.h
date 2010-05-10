@@ -168,10 +168,10 @@ typedef struct {
      */
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_cleanup);
 
-	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_load_data_infile_local_data);
-	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_load_data_infile_local_data);
-	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_load_data_infile_local_result);
-	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_load_data_infile_local_result);
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_local_infile_data);
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_local_infile_data);
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_local_infile_result);
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_local_infile_result);
 
 } network_mysqld_hooks;
 
@@ -219,11 +219,11 @@ typedef enum {
 
 	CON_STATE_CLOSE_SERVER = 17,         /**< The server connection should be closed */
 
-	/* handling the LOAD DATA INFILE LOCAL protocol extensions */
-	CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA = 18,
-	CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA = 19,
-	CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT = 20,
-	CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT = 21
+	/* handling the LOAD DATA LOCAL INFILE protocol extensions */
+	CON_STATE_READ_LOCAL_INFILE_DATA = 18,
+	CON_STATE_SEND_LOCAL_INFILE_DATA = 19,
+	CON_STATE_READ_LOCAL_INFILE_RESULT = 20,
+	CON_STATE_SEND_LOCAL_INFILE_RESULT = 21
 } network_mysqld_con_state_t;
 
 /**

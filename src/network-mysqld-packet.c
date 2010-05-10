@@ -109,7 +109,7 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 			break;
 		case MYSQLD_PACKET_NULL:
 			/* OH NO, LOAD DATA INFILE :) */
-			query->state = PARSE_COM_QUERY_LOAD_DATA;
+			query->state = PARSE_COM_QUERY_LOCAL_INFILE_DATA;
 			is_finished = 1;
 
 			break;
@@ -225,14 +225,14 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 			break;
 		}
 		break;
-	case PARSE_COM_QUERY_LOAD_DATA: 
+	case PARSE_COM_QUERY_LOCAL_INFILE_DATA: 
 		/* we will receive a empty packet if we are done */
 		if (packet->data->len == packet->offset) {
-			query->state = PARSE_COM_QUERY_LOAD_DATA_END_DATA;
+			query->state = PARSE_COM_QUERY_LOCAL_INFILE_RESULT;
 			is_finished = 1;
 		}
 		break;
-	case PARSE_COM_QUERY_LOAD_DATA_END_DATA:
+	case PARSE_COM_QUERY_LOCAL_INFILE_RESULT:
 		err = err || network_mysqld_proto_get_int8(packet, &status);
 		if (err) break;
 
@@ -262,8 +262,8 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 }
 
 
-gboolean network_mysqld_com_query_result_is_load_data(network_mysqld_com_query_result_t *udata) {
-	return (udata->state == PARSE_COM_QUERY_LOAD_DATA) ? TRUE : FALSE;
+gboolean network_mysqld_com_query_result_is_local_infile(network_mysqld_com_query_result_t *udata) {
+	return (udata->state == PARSE_COM_QUERY_LOCAL_INFILE_DATA) ? TRUE : FALSE;
 }
 
 network_mysqld_com_stmt_prepare_result_t *network_mysqld_com_stmt_prepare_result_new() {

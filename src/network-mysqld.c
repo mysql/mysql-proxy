@@ -732,32 +732,32 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 		}
 		break;
 
-	case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA:
-		func = con->plugins.con_send_load_data_infile_local_data;
+	case CON_STATE_SEND_LOCAL_INFILE_DATA:
+		func = con->plugins.con_send_local_infile_data;
 
 		if (!func) { /* default implementation */
-			con->state = CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT;
+			con->state = CON_STATE_READ_LOCAL_INFILE_RESULT;
 		}
 
 		break;
-	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA:
-		func = con->plugins.con_read_load_data_infile_local_data;
+	case CON_STATE_READ_LOCAL_INFILE_DATA:
+		func = con->plugins.con_read_local_infile_data;
 
 		if (!func) { /* the plugins have to implement this function to track LOAD DATA LOCAL INFILE handling work */
 			con->state = CON_STATE_ERROR;
 		}
 
 		break;
-	case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT:
-		func = con->plugins.con_send_load_data_infile_local_result;
+	case CON_STATE_SEND_LOCAL_INFILE_RESULT:
+		func = con->plugins.con_send_local_infile_result;
 
 		if (!func) { /* default implementation */
 			con->state = CON_STATE_READ_QUERY;
 		}
 
 		break;
-	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT:
-		func = con->plugins.con_read_load_data_infile_local_result;
+	case CON_STATE_READ_LOCAL_INFILE_RESULT:
+		func = con->plugins.con_read_local_infile_result;
 
 		if (!func) { /* the plugins have to implement this function to track LOAD DATA LOCAL INFILE handling work */
 			con->state = CON_STATE_ERROR;
@@ -816,10 +816,10 @@ const char *network_mysqld_con_state_get_name(network_mysqld_con_state_t state) 
 	case CON_STATE_SEND_QUERY: return "CON_STATE_SEND_QUERY";
 	case CON_STATE_READ_QUERY_RESULT: return "CON_STATE_READ_QUERY_RESULT";
 	case CON_STATE_SEND_QUERY_RESULT: return "CON_STATE_SEND_QUERY_RESULT";
-	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA: return "CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA";
-	case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA: return "CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA";
-	case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT: return "CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT";
-	case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT: return "CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT";
+	case CON_STATE_READ_LOCAL_INFILE_DATA: return "CON_STATE_READ_LOCAL_INFILE_DATA";
+	case CON_STATE_SEND_LOCAL_INFILE_DATA: return "CON_STATE_SEND_LOCAL_INFILE_DATA";
+	case CON_STATE_READ_LOCAL_INFILE_RESULT: return "CON_STATE_READ_LOCAL_INFILE_RESULT";
+	case CON_STATE_SEND_LOCAL_INFILE_RESULT: return "CON_STATE_SEND_LOCAL_INFILE_RESULT";
 	case CON_STATE_CLOSE_CLIENT: return "CON_STATE_CLOSE_CLIENT";
 	case CON_STATE_CLOSE_SERVER: return "CON_STATE_CLOSE_SERVER";
 	case CON_STATE_ERROR: return "CON_STATE_ERROR";
@@ -1585,12 +1585,12 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			/* special treatment for the LOAD DATA LOCAL INFILE command */
 			if (con->state != CON_STATE_ERROR &&
 			    con->parse.command == COM_QUERY &&
-			    1 == network_mysqld_com_query_result_is_load_data(con->parse.data)) {
-				con->state = CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA;
+			    1 == network_mysqld_com_query_result_is_local_infile(con->parse.data)) {
+				con->state = CON_STATE_READ_LOCAL_INFILE_DATA;
 			}
 
 			break;
-		case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_DATA: {
+		case CON_STATE_READ_LOCAL_INFILE_DATA: {
 			/**
 			 * read the file content from the client 
 			 */
@@ -1608,7 +1608,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				case NETWORK_SOCKET_WAIT_FOR_EVENT:
 					/* call us again when you have a event */
 					WAIT_FOR_EVENT(recv_sock, EV_READ, NULL);
-					NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_load_data_infile_local_data");
+					NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_load_infile_data");
 
 					return;
 				case NETWORK_SOCKET_ERROR_RETRY:
@@ -1637,7 +1637,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			} while (con->state == ostate); /* read packets from the network until the plugin decodes to go to the next state */
 	
 			break; }
-		case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_DATA: 
+		case CON_STATE_SEND_LOCAL_INFILE_DATA: 
 			/* send the hand-shake to the client and wait for a response */
 
 			switch (network_mysqld_write(srv, con->server)) {
@@ -1645,7 +1645,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->server, EV_WRITE, NULL);
-				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_load_data_infile_local_data");
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_load_infile_data");
 				
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
@@ -1673,7 +1673,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 
 			break;
-		case CON_STATE_READ_LOAD_DATA_INFILE_LOCAL_RESULT: {
+		case CON_STATE_READ_LOCAL_INFILE_RESULT: {
 			/**
 			 * read auth data from the remote mysql-server 
 			 */
@@ -1687,7 +1687,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				/* call us again when you have a event */
 				WAIT_FOR_EVENT(recv_sock, EV_READ, NULL);
-				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_load_data_infile_local_result");
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::read_load_infile_result");
 
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
@@ -1716,7 +1716,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 	
 			break; }
-		case CON_STATE_SEND_LOAD_DATA_INFILE_LOCAL_RESULT: 
+		case CON_STATE_SEND_LOCAL_INFILE_RESULT: 
 			/* send the hand-shake to the client and wait for a response */
 
 			switch (network_mysqld_write(srv, con->client)) {
@@ -1724,7 +1724,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				WAIT_FOR_EVENT(con->client, EV_WRITE, NULL);
-				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_load_data_infile_local_result");
+				NETWORK_MYSQLD_CON_TRACK_TIME(con, "wait_for_event::send_load_infile_result");
 				
 				return;
 			case NETWORK_SOCKET_ERROR_RETRY:
