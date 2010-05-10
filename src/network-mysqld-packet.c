@@ -261,7 +261,22 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 	return is_finished;
 }
 
+/**
+ * check if the we are in the LOCAL INFILE 'send data from client' state
+ *
+ * is deprecated as the name doesn't reflect its purpose:
+ * - it isn't triggered for LOAD DATA INFILE (w/o LOCAL)
+ * - it also covers LOAD XML LOCAL INFILE
+ *
+ * @deprecated use network_mysqld_com_query_result_is_local_infile() instead
+ */
+gboolean network_mysqld_com_query_result_is_load_data(network_mysqld_com_query_result_t *udata) {
+	return network_mysqld_com_query_result_is_local_infile(udata);
+}
 
+/**
+ * check if the we are in the LOCAL INFILE 'send data from client' state
+ */
 gboolean network_mysqld_com_query_result_is_local_infile(network_mysqld_com_query_result_t *udata) {
 	return (udata->state == PARSE_COM_QUERY_LOCAL_INFILE_DATA) ? TRUE : FALSE;
 }
