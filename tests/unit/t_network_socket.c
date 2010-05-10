@@ -37,6 +37,17 @@
 #if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
 
+#ifndef WIN32
+#define LOCAL_SOCK "/tmp/mysql-proxy-test.socket"
+
+typedef struct {
+	char	sockname[sizeof(LOCAL_SOCK) + 10];
+} local_unix_t;
+
+static local_unix_t	*pp = NULL;
+static local_unix_t local_test_arg;
+#endif /* WIN32 */
+
 void test_network_socket_new() {
 	network_socket *sock;
 
@@ -303,39 +314,81 @@ void t_network_socket_connect_udp(void) {
 
 #ifndef WIN32
 
-#define LOCAL_SOCK "/tmp/mysql-proxy-test.socket"
-
-typedef struct {
-	char	sockname[sizeof(LOCAL_SOCK) + 10];
-} local_unix_t;
-
-static local_unix_t	*pp = NULL;
-
-void t_network_localsocket_setup(local_unix_t *p)
-{
-	g_assert(p != NULL);
-	snprintf(p->sockname, sizeof(p->sockname), LOCAL_SOCK ".%d", (int)getpid());
-	pp = p;
-}
-
-void t_network_localsocket_teardown(local_unix_t *p)
-{
-	g_assert(p != NULL);
-	(void) g_unlink(p->sockname);
-	pp = NULL;
-}
-
 /**
  * test if _is_local() works on unix-domain sockets
  *
  * MacOS X 10.4 doesn't report a .sa_family for one of the sides of the connection if it is a unix-socket 
  */
-void t_network_socket_is_local_unix(local_unix_t *p)
-{
+void t_network_socket_is_local_unix() {
 	network_socket *s_sock; /* the server side socket, listening for requests */
 	network_socket *c_sock; /* the client side socket, that connects */
 	network_socket *a_sock; /* the server side, accepted socket */
 
+	g_test_bug("42220");
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
+
+	s_sock = network_socket_new();
+	network_address_set_address(s_sock->dst, "/tmp/mysql-proxy-test.socket");
+
+	c_sock = network_socket_new();
+	network_address_set_address(c_sock->dst, "/tmp/mysql-proxy-test.socket");
+
+
+	/* hack together a network_socket_accept() which we don't have in this tree yet */
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
+
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect(c_sock));
+
+	a_sock = network_socket_accept(s_sock);
+	g_assert(a_sock);
+
+	g_assert_cmpint(TRUE, ==, network_address_is_local(s_sock->dst, a_sock->dst));
+
+	network_socket_free(a_sock);
+	network_socket_free(c_sock);
+	network_socket_free(s_sock);
+
+	g_unlink("/tmp/mysql-proxy-test.socket");
+}
+
+void t_network_localsocket_setup(local_unix_t *p) {
+	g_assert(p != NULL);
+	snprintf(p->sockname, sizeof(p->sockname), LOCAL_SOCK ".%d", (int)getpid());
+	pp = p;
+}
+
+void t_network_localsocket_teardown(local_unix_t *p) {
+	g_assert(p != NULL);
+	if (p->sockname[0] != '\0') {
+		(void) g_unlink(p->sockname);
+		p->sockname[0] = '\0';
+	}
+	pp = NULL;
+}
+
+void exitfunc(int sig) {
+	if (pp != NULL && pp->sockname[0] != '\0')
+		(void) g_unlink(pp->sockname);
+
+	abort();
+}
+
+/**
+ * test if local sockets are removed at shutdown
+ * this is an extension of _is_local_unix(), therefore looks much like it;
+ * just in case, we leave all tests from that function in as well.
+ */
+void t_network_socket_rem_local_unix(local_unix_t *p) {
+	network_socket *s_sock; /* the server side socket, listening for requests */
+	network_socket *c_sock; /* the client side socket, that connects */
+	network_socket *a_sock; /* the server side, accepted socket */
+
+	/*
+	 * if an assertion fails, we receive the ABORT signal. We need to
+	 * close the unix socket in that case too. The regular teardown function
+	 * is not called in this case, so we install our own handler.
+	 */
+	signal(SIGABRT, exitfunc);
 	g_test_bug("42220");
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
 
@@ -345,7 +398,6 @@ void t_network_socket_is_local_unix(local_unix_t *p)
 	c_sock = network_socket_new();
 	network_address_set_address(c_sock->dst, p->sockname);
 
-	/* hack together a network_socket_accept() which we don't have in this tree yet */
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
 
 	g_assert_cmpint(g_access(p->sockname, 0), ==, 0);
@@ -363,25 +415,14 @@ void t_network_socket_is_local_unix(local_unix_t *p)
 	g_assert_cmpint(g_access(p->sockname, 0), ==, 0);
 	network_socket_free(s_sock);
 	g_assert_cmpint(g_access(p->sockname, 0), ==, -1);
+
+	/* re-establish default signal disposition */
+	signal(SIGABRT, SIG_DFL);
 }
+
 #endif /* WIN32 */
 
-#ifndef WIN32
-local_unix_t local_test_arg;
-
-void exitfunc(int sig) {
-/* 	printf("debug: socket name is %s (addr: %p)\n", pp->sockname, pp); */
-	if (pp != NULL && pp->sockname[0] != '\0')
-		(void) g_unlink(pp->sockname);
-
-	abort();
-}
-
-#endif
-
-
 int main(int argc, char **argv) {
-
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
 
@@ -392,14 +433,13 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
 	g_test_add_func("/core/network_queue_pop_string", test_network_queue_pop_string);
 #ifndef WIN32
+	g_test_add_func("/core/network_socket_is_local_unix",t_network_socket_is_local_unix);
 
-	g_test_add("/core/network_socket_is_local_unix", local_unix_t, &local_test_arg,
-			t_network_localsocket_setup, t_network_socket_is_local_unix, 
+	g_test_add("/core/network_socket_rem_local_unix", local_unix_t,
+			&local_test_arg,
+			t_network_localsocket_setup, t_network_socket_rem_local_unix, 
 			t_network_localsocket_teardown);
-
-	signal(SIGABRT, exitfunc);
-	/* g_test_add_func("/core/network_socket_is_local_unix", t_network_socket_is_local_unix);*/
-#endif
+#endif /* WIN32 */
 #if 0
 	/**
 	 * disabled for now until we fixed the _to_read() on HP/UX and AIX (and MacOS X)

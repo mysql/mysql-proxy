@@ -82,11 +82,11 @@ void network_address_free(network_address *addr) {
 		if (name[0] == '/') {
 			ret = g_remove(name);
 			if (ret == 0) {
-				g_debug("%s removing socket %s successful", 
+				g_debug("%s: removing socket %s successful", 
 					G_STRLOC, name);
 			} else {
 				if (errno != EPERM && errno != EACCES)
-					g_critical("%s removing socket %s failed: %s (%d)", 
+					g_critical("%s: removing socket %s failed: %s (%d)", 
 						G_STRLOC, name, strerror(errno));
 			}
 		}
