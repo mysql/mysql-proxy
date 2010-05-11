@@ -31,6 +31,13 @@
 #define C_MODE_END G_END_DECLS
 typedef guint64 ulonglong;
 
+#ifndef HAVE_ULONG
+#ifdef HAVE_ULONG_T
+typedef ulong_t	ulong;
+#else /* HAVE_ULONG_T */
+typedef guint32 ulong;
+#endif /* HAVE_ULONG_T */
+#endif /* HAVE_ULONG */
 
 /**
   This structure contains the characteristics of all the supported timers.

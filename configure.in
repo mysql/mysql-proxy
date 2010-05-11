@@ -170,6 +170,8 @@ AC_SEARCH_LIBS(hstrerror,resolv)
 AC_CHECK_TYPES(socklen_t,,,[#include <sys/types.h>
 			    #include <sys/socket.h>])
 
+AC_CHECK_TYPES([ulong, ulong_t])
+
 dnl Checks for database.
 MYSQL_CFLAGS=""
 MYSQL_LIBS=""
