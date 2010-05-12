@@ -85,9 +85,10 @@ void network_address_free(network_address *addr) {
 				g_debug("%s: removing socket %s successful", 
 					G_STRLOC, name);
 			} else {
-				if (errno != EPERM && errno != EACCES)
+				if (errno != EPERM && errno != EACCES) {
 					g_critical("%s: removing socket %s failed: %s (%d)", 
-						G_STRLOC, name, strerror(errno));
+						G_STRLOC, name, strerror(errno), errno);
+				}
 			}
 		}
 	}
