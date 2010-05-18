@@ -4,7 +4,7 @@
   * fixed handling of LOAD DATA LOCAL INFILE (#51864)
   * deprecated a unused network_mysqld_com_query_result_track_state()
 
-0.8.0 
+0.8.0 - 2010-01-21
 
   * added a threaded event handling layer
   * added support to change the auth-response on the way to the backend
