@@ -51,6 +51,7 @@ void t_network_backend_new() {
 void t_network_backends_add() {
 	network_backends_t *backends;
 
+	g_log_set_always_fatal(G_LOG_FATAL_MASK);
 	backends = network_backends_new();
 	g_assert(backends);
 	
@@ -71,6 +72,9 @@ void t_network_backends_add() {
 	
 	g_assert_cmpint(network_backends_count(backends), ==, 1);
 
+	/* make sure bad port numbers also fail */
+	g_assert_cmpint(network_backends_add(backends, "127.0.0.1:113306", BACKEND_TYPE_RW), ==, -1);
+	
 	network_backends_free(backends);
 }
 

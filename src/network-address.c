@@ -238,7 +238,7 @@ gint network_address_set_address(network_address *addr, const gchar *address) {
 		return network_address_set_address_un(addr, address);
 	
 	if (NULL != (s = strchr(address, ':'))) {
-		gboolean ret;
+		gint ret;
 		char *ip_address = g_strndup(address, s - address); /* may be NULL for strdup(..., 0) */
 		char *port_err = NULL;
 

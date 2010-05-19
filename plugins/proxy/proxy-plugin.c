@@ -2073,11 +2073,17 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 	g_message("proxy listening on port %s", config->address);
 
 	for (i = 0; config->backend_addresses && config->backend_addresses[i]; i++) {
-		network_backends_add(g->backends, config->backend_addresses[i], BACKEND_TYPE_RW);
+		if (-1 == network_backends_add(g->backends, config->backend_addresses[i],
+				BACKEND_TYPE_RW)) {
+			return -1;
+		}
 	}
 	
 	for (i = 0; config->read_only_backend_addresses && config->read_only_backend_addresses[i]; i++) {
-		network_backends_add(g->backends, config->read_only_backend_addresses[i], BACKEND_TYPE_RO);
+		if (-1 == network_backends_add(g->backends,
+				config->read_only_backend_addresses[i], BACKEND_TYPE_RO)) {
+			return -1;
+		}
 	}
 
 	/* load the script and setup the global tables */

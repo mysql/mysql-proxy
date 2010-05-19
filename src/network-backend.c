@@ -98,10 +98,13 @@ void network_backends_free(network_backends_t *bs) {
 	g_free(bs);
 }
 
+/*
+ * FIXME: 1) remove _set_address, make this function callable with result of same
+ *        2) differentiate between reasons for "we didn't add" (now -1 in all cases)
+ */
 int network_backends_add(network_backends_t *bs, /* const */ gchar *address, backend_type_t type) {
 	network_backend_t *new_backend;
 	guint i;
-	gboolean is_known = FALSE;
 
 	new_backend = network_backend_new();
 	new_backend->type = type;
@@ -119,18 +122,20 @@ int network_backends_add(network_backends_t *bs, /* const */ gchar *address, bac
 		if (strleq(S(old_backend->addr->name), S(new_backend->addr->name))) {
 			network_backend_free(new_backend);
 
-			is_known = TRUE;
-			break;
+			g_mutex_unlock(bs->backends_mutex);
+			g_critical("backend %s is already known!", address);
+			return -1;
 		}
 	}
 
 
-	if (!is_known) g_ptr_array_add(bs->backends, new_backend);
+	g_ptr_array_add(bs->backends, new_backend);
 	g_mutex_unlock(bs->backends_mutex);
 
-	if (!is_known) g_message("added %s backend: %s", (type == BACKEND_TYPE_RW) ? "read/write" : "read-only", address);
+	g_message("added %s backend: %s", (type == BACKEND_TYPE_RW) ?
+			"read/write" : "read-only", address);
 
-	return is_known ? -1 : 0;
+	return 0;
 }
 
 /**
