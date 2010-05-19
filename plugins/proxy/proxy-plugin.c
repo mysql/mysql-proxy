@@ -2061,12 +2061,10 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 	/* set the plugin hooks as we want to apply them to the new connections too later */
 	network_mysqld_proxy_connection_init(con);
 
-	/* FIXME: network_socket_set_address() */
 	if (0 != network_address_set_address(listen_sock->dst, config->address)) {
 		return -1;
 	}
 
-	/* FIXME: network_socket_bind() */
 	if (0 != network_socket_bind(listen_sock)) {
 		return -1;
 	}
