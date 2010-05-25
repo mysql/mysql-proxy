@@ -264,28 +264,36 @@ AC_MSG_RESULT($WITH_WRAPPER_SCRIPT)
 AM_CONDITIONAL(USE_WRAPPER_SCRIPT, test x$WITH_WRAPPER_SCRIPT = xyes)
 
 dnl Check for lua
-AC_MSG_CHECKING(if with lua)
+AC_MSG_CHECKING(which pkg-config file to use to find Lua)
 AC_ARG_WITH(lua, AC_HELP_STRING([--with-lua],[lua]),
 [WITH_LUA=$withval],[WITH_LUA=yes])
 
 if test "$WITH_LUA" != "no"; then
- AC_MSG_RESULT($WITH_LUA)
- # try pkgconfig
+ ## if WITH_LUA is give, use that as .pc file
+ ## if not, prove lua.pc and lua5.1.pc
  if test "$WITH_LUA" = "yes"; then
-    LUAPC=lua
-  else
-    LUAPC=$WITH_LUA
-  fi
-
- PKG_CHECK_MODULES(LUA, $LUAPC >= 5.1, [
+  AC_MSG_RESULT(lua.pc and lua5.1.pc)
+  PKG_CHECK_MODULES(LUA, lua >= 5.1, [
    AC_DEFINE([HAVE_LUA], [1], [liblua])
    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
- ],[
-   PKG_CHECK_MODULES(LUA, lua5.1 >= 5.1, [
+  ],[
+   AC_MSG_RESULT([... checked for Lua via pkg-config: $LUA_PKG_ERRORS. retrying with lua5.1])
+   if test x"$LUA_PKG_ERROR" != "x"; then
+    PKG_CHECK_MODULES(LUA, lua5.1 >= 5.1, [
      AC_DEFINE([HAVE_LUA], [1], [liblua])
      AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
-   ]) 
- ])
+    ],[
+     AC_MSG_ERROR([checked for Lua via pkg-config: $LUA_PKG_ERRORS. Make sure lua and its devel-package, which includes the lua5.1.pc (debian and friends) or lua.pc (all others) file, is installed])]) 
+   fi
+  ])
+ else
+  AC_MSG_RESULT($WITH_LUA.pc)
+
+  PKG_CHECK_MODULES(LUA, $WITH_LUA >= 5.1, [
+    AC_DEFINE([HAVE_LUA], [1], [liblua])
+    AC_DEFINE([HAVE_LUA_H], [1], [lua.h])
+  ],[AC_MSG_ERROR([checked for Lua via pkg-config: $LUA_PKG_ERRORS. Make sure lua and its devel-package, which includes the $WITH_LUA.pc file, is installed])])
+ fi
 
  AC_SUBST(LUA_CFLAGS)
  AC_SUBST(LUA_LIBS)
