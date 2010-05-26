@@ -155,7 +155,7 @@ chassis_frontend_t *chassis_frontend_new(void) {
  * free the frontend of the chassis
  */
 void chassis_frontend_free(chassis_frontend_t *frontend) {
-	if (frontend) return;
+	if (!frontend) return;
 
 	if (frontend->keyfile) g_key_file_free(frontend->keyfile);
 	if (frontend->default_file) g_free(frontend->default_file);
