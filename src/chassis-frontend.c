@@ -362,12 +362,12 @@ int chassis_frontend_load_plugins(GPtrArray *plugins, const gchar *plugin_dir, g
 
 		p = chassis_plugin_load(plugin_filename);
 		g_free(plugin_filename);
-		p->option_grp_name = g_strdup(plugin_names[i]);
 
 		if (NULL == p) {
 			g_critical("setting --plugin-dir=<dir> might help");
 			return -1;
 		}
+		p->option_grp_name = g_strdup(plugin_names[i]);
 
 		g_ptr_array_add(plugins, p);
 	}
