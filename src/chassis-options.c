@@ -98,7 +98,17 @@ chassis_options_t *chassis_options_new() {
  * free the options
  */
 void chassis_options_free(chassis_options_t *opts) {
+	GList *node;
+
 	if (!opts) return;
+
+	/* free the options itself */
+	for (node = opts->options; node; node = node->next) {
+		chassis_option_t *opt = node->data;
+
+		chassis_option_free(opt);
+	}
+	g_list_free(opts->options);
 
 	g_slice_free(chassis_options_t, opts);
 }
