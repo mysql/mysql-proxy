@@ -521,6 +521,26 @@ void test_literal_digit() {
 	}
 	sql_tokens_free(tokens);
 
+	/* 1.1e+1 is a float ("1.1e+1") */
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("1.1e+1"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+		switch (i) {
+		case 0: T(TK_FLOAT, "1.1e+1"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
+
 	/* e1.1e is a literal ("e1"), a dot and a literal ("1e") */
 	tokens = sql_tokens_new();
 
