@@ -541,7 +541,53 @@ void test_literal_digit() {
 	}
 	sql_tokens_free(tokens);
 
-	/* e1.1e is a literal ("e1"), a dot and a literal ("1e") */
+	/* .1t is a float (".1") and a literal ("t")
+	 *
+	 * the same thing with 'e' is a parse-error in the server side
+	 */
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C(".1t"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+		switch (i) {
+		case 0: T(TK_FLOAT, ".1"); break;
+		case 1: T(TK_LITERAL, "t"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
+
+	/* t1.1t is a literal ("t1"), a dot and a literal ("1t") */
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("t1.1t"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+		switch (i) {
+		case 0: T(TK_LITERAL, "t1"); break;
+		case 1: T(TK_DOT, "."); break;
+		case 2: T(TK_LITERAL, "1t"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
+
+	/* e1.1e is a literal ("e1"), a dot and a literal ("1e") ... as 'e' is special */
 	tokens = sql_tokens_new();
 
 	sql_tokenizer(tokens, C("e1.1e"));
@@ -563,6 +609,100 @@ void test_literal_digit() {
 	}
 	sql_tokens_free(tokens);
 
+	/* e1.1e + 1 is a literal ("e1"), a dot, a literal ("1e"), a plus ("+") and a integer ("1")*/
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("e1.1e + 1"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+		switch (i) {
+		case 0: T(TK_LITERAL, "e1"); break;
+		case 1: T(TK_DOT, "."); break;
+		case 2: T(TK_LITERAL, "1e"); break;
+		case 3: T(TK_PLUS, "+"); break;
+		case 4: T(TK_INTEGER, "1"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
+
+	/* e1 . 1e + 1 is a literal ("e1"), a dot, a literal ("1e"), a plus ("+") and a integer ("1")*/
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("e1 . 1e + 1"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+		switch (i) {
+		case 0: T(TK_LITERAL, "e1"); break;
+		case 1: T(TK_DOT, "."); break;
+		case 2: T(TK_LITERAL, "1e"); break;
+		case 3: T(TK_PLUS, "+"); break;
+		case 4: T(TK_INTEGER, "1"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
+
+	/* e1 . 1e+1 is a literal ("e1"), a dot, a float ("1e+1")
+	 * ... which is a invalid syntax as fieldnames can't be floats */
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("e1 . 1e+1"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+		switch (i) {
+		case 0: T(TK_LITERAL, "e1"); break;
+		case 1: T(TK_DOT, "."); break;
+		case 2: T(TK_FLOAT, "1e+1"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
+
+	/* e1.1e+1 is a literal ("e1"), a dot, a literal ("1e"), a plus ("+") and a integer ("1") */
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("e1.1e+1"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+		switch (i) {
+		case 0: T(TK_LITERAL, "e1"); break;
+		case 1: T(TK_DOT, "."); break;
+		case 2: T(TK_LITERAL, "1e"); break;
+		case 3: T(TK_PLUS, "+"); break;
+		case 4: T(TK_INTEGER, "1"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
 
 #undef T
 

@@ -98,26 +98,60 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 	/** strings, quoting, literals */
 [[:space:]]+	/** ignore WS */
 
-	/* literals (and function names) are
+	/* unquoted literals (and function names) are
 	 * 
-	 *  all alpha-nums that are not digits-only and NOT floats
+	 *   all alpha-nums that are not digits-only and NOT floats
 	 *
-	 * Examples:
-	 *   - simple cases
-	 *     1e, e1 are all literals
-	 *     1 is a number
-	 *   - floats in scientific notation
-	 *     1e+1 is a float
-	 *   - lead to special cases
-	 *     1e + 1 is a literal, a plus and integer
-	 *     1e+1e  is a float and a literal ("e")
-	 *
-	 * @note lex processes the rules top-down
+	 * Floats are
+	 *   1.1
+	 *   1e+1
+	 *   1.1e+1
+	 *   .1e+1
+	 * unquoted literals:
+	 *   e1
+	 *   1e
+	 * complex cases
+	 *   1e + 1 is a literal ("1e"), a plus ("+") and integer ("1")
+	 *   1e+1e  is a float ("1e+1") and a literal ("e")
+	 *   compare this to 1.1e which is INVALID (a broken scientific notation)
 	 */
 ([[:digit:]]*".")?[[:digit:]]+[eE][-+]?[[:digit:]]+	sql_token_append(tokens, TK_FLOAT, yytext);
-[[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*	sql_token_append(tokens, sql_token_get_id(yytext), yytext);
+	/* literals
+	 * - be greedy and capture specifiers made up of up to 3 literals: lit.lit.lit
+	 * - if it has a dot, split it into 3 tokens: lit dot lit
+	 *
+	 * when it comes to dots in specifiers spaces matter:
+	 *   e1 . 1e + 1
+	 *   e1.1e + 1
+	 *   e1.1e+1 are all a literal ("e1"), a dot, a literal ("1e"), a plus and a integer ("1")
+	 * but 
+	 *   e1. 1e+1 is invalid as it is a literal ("e1"), a dot and a float ("1e+1")
+	 */
+[[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*("."[[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*){0,2}	{
+		char *cur, *tk_start = yytext;
+		for (cur = yytext; cur < yytext + yyleng; cur++) {
+			if (*cur == '.') {
+				*cur = '\0';
+				sql_token_append(tokens, sql_token_get_id(tk_start), tk_start);
+				sql_token_append(tokens, TK_DOT, ".");
+				tk_start = cur + 1;
+			}
+		}
+		sql_token_append(tokens, sql_token_get_id(tk_start), tk_start);
+	}
 	/* literals followed by a ( are function names */
-[[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*\(	{ yyless(yyleng - 1); sql_token_append(tokens, TK_FUNCTION, yytext); }
+[[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*("."[[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*){0,2}\(	 {
+		char *cur, *tk_start = yytext;
+		for (cur = yytext; cur < yytext + yyleng; cur++) {
+			if (*cur == '.') {
+				*cur = '\0';
+				sql_token_append(tokens, sql_token_get_id(tk_start), tk_start);
+				sql_token_append(tokens, TK_DOT, ".");
+				tk_start = cur + 1;
+			}
+		}
+		sql_token_append(tokens, TK_FUNCTION, tk_start);
+	}
 
 [[:digit:]]+	sql_token_append(tokens, TK_INTEGER, yytext);
 [[:digit:]]*"."[[:digit:]]+	sql_token_append(tokens, TK_FLOAT, yytext);
