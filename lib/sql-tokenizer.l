@@ -142,6 +142,9 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 	/* literals followed by a ( are function names */
 [[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*("."[[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*){0,2}\(	 {
 		char *cur, *tk_start = yytext;
+
+		yyless(yyleng - 1); /* on step back to track the parantheses correctly */
+
 		for (cur = yytext; cur < yytext + yyleng; cur++) {
 			if (*cur == '.') {
 				*cur = '\0';
