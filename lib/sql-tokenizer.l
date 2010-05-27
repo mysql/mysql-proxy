@@ -97,12 +97,26 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 
 	/** strings, quoting, literals */
 [[:space:]]+	/** ignore WS */
+
 	/* literals (and function names) are
-	 * - all alpha-nums that are not digits-only
-	 *   1tbl, tbl1, t1t, 1t1 are all literals
-	 *   1 is a number
+	 * 
+	 *  all alpha-nums that are not digits-only and NOT floats
+	 *
+	 * Examples:
+	 *   - simple cases
+	 *     1e, e1 are all literals
+	 *     1 is a number
+	 *   - floats in scientific notation
+	 *     1e+1 is a float
+	 *   - lead to special cases
+	 *     1e + 1 is a literal, a plus and integer
+	 *     1e+1e  is a float and a literal ("e")
+	 *
+	 * @note lex processes the rules top-down
 	 */
+[[:digit:]]+[eE][-+]?[[:digit:]]+	sql_token_append(tokens, TK_FLOAT, yytext);
 [[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*	sql_token_append(tokens, sql_token_get_id(yytext), yytext);
+	/* literals followed by a ( are function names */
 [[:digit:]]*[[:alpha:]_@][[:alnum:]_@]*\(	{ yyless(yyleng - 1); sql_token_append(tokens, TK_FUNCTION, yytext); }
 
 [[:digit:]]+	sql_token_append(tokens, TK_INTEGER, yytext);
