@@ -361,44 +361,110 @@ void test_tokenizer_keywords() {
 }
 
 /**
- * @test table names can start with a digit, bug#49716
+ * @test literals can start with a digit, bug#49716
  *
+ * - e1 is a literal ("e1")
+ * - 1e is a literal ("1e")
+ * - 1e + 1 is a literal ("1e"), a plus ("+") and  a int ("1")
+ * - 1e+1 is a float ("1e+1")
+ * - 1e+1e is a float ("1e+1") and literal ("e") 
  */
-START_TEST(test_table_name_digit) {
+void test_literal_digit() {
 	GPtrArray *tokens = NULL;
 	gsize i;
 
+#define T(t_id, t_text) \
+		g_assert_cmpstr(sql_token_get_name(token->token_id), ==, sql_token_get_name(t_id)); \
+		g_assert_cmpstr(token->text->str, ==, t_text);
+
+	/* e1 is a literal ("e1") */
 	tokens = sql_tokens_new();
 
-	sql_tokenizer(tokens, C("SELECT * FROM d.1t"));
+	sql_tokenizer(tokens, C("e1"));
 
 	for (i = 0; i < tokens->len; i++) {
 		sql_token *token = tokens->pdata[i];
 
-#define T(t_id, t_text) \
-		g_assert_cmpint(token->token_id, ==, t_id); \
-		g_assert_cmpstr(token->text->str, ==, t_text);
-
 		switch (i) {
-		case 0: T(TK_SQL_SELECT, "SELECT"); break;
-		case 1: T(TK_STAR, "*"); break;
-		case 2: T(TK_SQL_FROM, "FROM"); break;
-		case 3: T(TK_LITERAL, "d"); break;
-		case 4: T(TK_DOT, "."); break;
-		case 5: T(TK_LITERAL, "1t"); break;
-#undef T
+		case 0: T(TK_LITERAL, "e1"); break;
 		default:
 			 /**
 			  * a self-writing test-case
 			  */
 			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
-			break;
+			g_assert_not_reached();
 		}
 	}
-
-	/* cleanup */
 	sql_tokens_free(tokens);
-} END_TEST
+
+	/* 1e is a literal ("1e") */
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("1e"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+
+		switch (i) {
+		case 0: T(TK_LITERAL, "1e"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
+
+	/* 1e + 1 is a literal ("1e"), a plus ("+") and a integer ("1") */
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("1e + 1"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+
+		switch (i) {
+		case 0: T(TK_LITERAL, "1e"); break;
+		case 1: T(TK_PLUS, "+"); break;
+		case 2: T(TK_INTEGER, "1"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
+
+	/* 1e+1 is a float ("1e+1") */
+	tokens = sql_tokens_new();
+
+	sql_tokenizer(tokens, C("1e + 1"));
+
+	for (i = 0; i < tokens->len; i++) {
+		sql_token *token = tokens->pdata[i];
+
+
+		switch (i) {
+		case 0: T(TK_FLOAT, "1e+1"); break;
+		default:
+			 /**
+			  * a self-writing test-case
+			  */
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			g_assert_not_reached();
+		}
+	}
+	sql_tokens_free(tokens);
+
+#undef T
+
+}
 
 
 int main(int argc, char **argv) {
@@ -416,10 +482,8 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/tokenizer_startstate_reset_quoted", test_startstate_reset_quoted);
 	g_test_add_func("/core/tokenizer_startstate_reset_comment", test_startstate_reset_comment);
 
-#if 0
-	/* for bug#49716, currently tricky to fix. can't skip individual tests with gtester, it seems :( */
-	g_test_add_func("/core/tokenizer_table_name_digit", test_table_name_digit);
-#endif
+	g_test_add_func("/core/tokenizer_literal_digit", test_literal_digit);
+
 	return g_test_run();
 }
 #else
