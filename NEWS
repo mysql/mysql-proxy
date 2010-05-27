@@ -8,6 +8,10 @@
   * fixed hard-limit in case the fdlimit is set (#48120)
   * fixed traversing a resultset in Lua if it contained NULL fields
 
+  SQL Tokenizer
+  * fixed parsing of literals that start with a digit (#49716)
+  * added parsing of floats in scientific notation
+
   Proxy Plugin
   * fixed query forwarding of time goes backwards (#50806)
   * allow to intercept LOAD DATA and SHOW ERROR commands
