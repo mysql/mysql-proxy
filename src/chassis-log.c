@@ -225,6 +225,36 @@ static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 	return 0;
 }
 
+/**
+ * skip the 'top_srcdir' from a string starting with G_STRLOC or __FILE__
+ *
+ * ../trunk/src/chassis-log.c will become src/chassis-log.c
+ *
+ * NOTE: the code assumes it is located in src/ or src\. If it gets moves somewhere else
+ *       it won't crash, but strip too much of pathname
+ */
+const char *chassis_log_skip_topsrcdir(const char *message) {
+	const char *my_filename = __FILE__;
+	int ndx;
+
+	/* usually the message start with G_STRLOC which may contain a rather long, absolute path. If
+	 * it matches the TOP_SRCDIR, we filter it out
+	 *
+	 * - strip what is the same as our __FILE__
+	 * - don't strip our own sub-path 'src/'
+	 */
+	for (ndx = 0; message[ndx]; ndx++) {
+		if (0 == strncmp(message + ndx, "src" G_DIR_SEPARATOR_S, sizeof("src" G_DIR_SEPARATOR_S) - 1)) break;
+		if (message[ndx] != my_filename[ndx]) break;
+	}
+
+	if (message[ndx] != '\0') {
+		message += ndx;
+	}
+
+	return message;
+}
+
 void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
 	chassis_log *log = user_data;
 	int i;
@@ -266,6 +296,8 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 	if (!is_duplicate ||
 	    log->last_msg_count > 100 ||
 	    time(NULL) - log->last_msg_ts > 30) {
+		const char *stripped_message = chassis_log_skip_topsrcdir(message);
+
 		/* if we lave the last message repeating, log it */
 		if (log->last_msg_count) {
 			chassis_log_update_timestamp(log);
@@ -279,10 +311,11 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 		g_string_append(log->log_ts_str, ": (");
 		g_string_append(log->log_ts_str, log_lvl_name);
 		g_string_append(log->log_ts_str, ") ");
-		g_string_append(log->log_ts_str, message);
+
+		g_string_append(log->log_ts_str, stripped_message);
 
 		/* reset the last-logged message */	
-		g_string_assign(log->last_msg, message);
+		g_string_assign(log->last_msg, stripped_message);
 		log->last_msg_count = 0;
 		log->last_msg_ts = time(NULL);
 			

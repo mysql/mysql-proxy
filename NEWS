@@ -7,6 +7,7 @@
   * don't try to set a fd-limit if the user didn't explicitly tried to raise it
   * fixed hard-limit in case the fdlimit is set (#48120)
   * fixed traversing a resultset in Lua if it contained NULL fields
+  * strip the top_srcdir from the leading source filenames in log-messages
 
   SQL Tokenizer
   * fixed parsing of literals that start with a digit (#49716)
