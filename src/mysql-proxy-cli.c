@@ -206,7 +206,7 @@ int chassis_frontend_set_chassis_options(chassis_frontend_t *frontend, chassis_o
 		"plugins",                  0, 0, G_OPTION_ARG_STRING_ARRAY, &(frontend->plugin_names), "plugins to load", "<name>");
 
 	chassis_options_add(opts,
-		"log-level",                0, 0, G_OPTION_ARG_STRING, &(frontend->log_level), "log all messages of level ... or higer", "(error|warning|info|message|debug)");
+		"log-level",                0, 0, G_OPTION_ARG_STRING, &(frontend->log_level), "log all messages of level ... or higher", "(error|warning|info|message|debug)");
 
 	chassis_options_add(opts,
 		"log-file",                 0, 0, G_OPTION_ARG_STRING, &(frontend->log_filename), "log all messages in a file", "<file>");
