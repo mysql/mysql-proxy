@@ -76,5 +76,6 @@ CHASSIS_API int chassis_options_add(chassis_options_t *opts,
 		const char *arg_description);
 
 CHASSIS_API GOptionEntry *chassis_options_to_g_option_entries(chassis_options_t *opts);
+CHASSIS_API void chassis_options_free_g_option_entries(chassis_options_t G_GNUC_UNUSED *opts, GOptionEntry *entries);
 
 #endif
