@@ -442,6 +442,7 @@ int chassis_frontend_init_base_options(GOptionContext *option_ctx,
 		ret = -1;
 	}
 
+	/* do not use chassis_options_free_g_options... here, we need to hang on to the data until the end of the program! */
 	g_free(base_main_entries);
 	chassis_options_free(opts);
 

@@ -147,13 +147,13 @@ GOptionEntry *chassis_options_to_g_option_entries(chassis_options_t *opts) {
 	for (node = opts->options, count = 0; node; node = node->next) {
 		chassis_option_t *opt = node->data;
 
-		entries[count].long_name       = opt->long_name;
+		entries[count].long_name       = g_strdup(opt->long_name);
 		entries[count].short_name      = opt->short_name;
 		entries[count].flags           = opt->flags;
 		entries[count].arg             = opt->arg;
 		entries[count].arg_data        = opt->arg_data;
-		entries[count].description     = opt->description;
-		entries[count].arg_description = opt->arg_description;
+		entries[count].description     = g_strdup(opt->description);
+		entries[count].arg_description = g_strdup(opt->arg_description);
 		count++;
 	}
 
@@ -172,6 +172,17 @@ GOptionEntry *chassis_options_to_g_option_entries(chassis_options_t *opts) {
  * free the GOptionEntry created by chassis_options_to_g_option_entries()
  */
 void chassis_options_free_g_option_entries(chassis_options_t G_GNUC_UNUSED *opts, GOptionEntry *entries) {
+	GOptionEntry *entries_copy;
+
+	if (NULL == entries)
+		return;
+
+	for (entries_copy = entries; entries_copy->long_name != NULL; entries_copy++) {
+		if (NULL != entries_copy->long_name) g_free(entries_copy->long_name);
+		if (NULL != entries_copy->description) g_free(entries_copy->description);
+		if (NULL != entries_copy->arg_description) g_free(entries_copy->arg_description);
+	}
+
 	g_free(entries);
 }
 
