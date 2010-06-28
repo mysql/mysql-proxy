@@ -93,6 +93,7 @@ chassis_log *chassis_log_new(void) {
 
 	log->log_file_fd = -1;
 	log->log_ts_str = g_string_sized_new(sizeof("2004-01-01T00:00:00.000Z"));
+	log->log_ts_resolution = CHASSIS_RESOLUTION_DEFAULT;
 	log->min_lvl = G_LOG_LEVEL_CRITICAL;
 
 	log->last_msg = g_string_new(NULL);
@@ -173,17 +174,33 @@ void chassis_log_free(chassis_log *log) {
 
 static int chassis_log_update_timestamp(chassis_log *log) {
 	struct tm *tm;
-	time_t t;
+	struct timeval tv;
 	GString *s = log->log_ts_str;
 
-	t = time(NULL);
-	
-	tm = localtime(&(t));
+	gettimeofday(&tv, NULL);
+	tm = localtime(&(tv.tv_sec));
 	
 	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%d %H:%M:%S", tm);
+	if (log->log_ts_resolution == CHASSIS_RESOLUTION_MS)
+		g_string_append_printf(s, ".%.3d", (int) tv.tv_usec/1000);
 	
 	return 0;
 }
+
+void chassis_set_logtimestamp_resolution(chassis_log *log, int res) {
+	if (log == NULL)
+		return;
+	/* only set resolution to valid values, ignore otherwise */
+	if (res == CHASSIS_RESOLUTION_SEC || res == CHASSIS_RESOLUTION_MS)
+		log->log_ts_resolution = res;
+}
+
+int chassis_get_logtimestamp_resolution(chassis_log *log) {
+	if (log == NULL)
+		return -1;
+	return log->log_ts_resolution;
+}
+
 
 static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 	if (-1 != log->log_file_fd) {

@@ -59,11 +59,46 @@ START_TEST(test_log_compress) {
 }
 /*@}*/
 
+/**
+ * @test Test log timestamp resolution
+ */
+START_TEST(test_log_timestamp) {
+	chassis_log *l;
+	GLogFunc old_log_func;
+
+	l = chassis_log_new();
+	chassis_set_logtimestamp_resolution(l, CHASSIS_RESOLUTION_SEC);
+
+	g_log_set_always_fatal(G_LOG_FATAL_MASK);
+
+	old_log_func = g_log_set_default_handler(chassis_log_func, l);
+
+	g_critical("this message has a second-resolution timestamp");
+	chassis_set_logtimestamp_resolution(l, CHASSIS_RESOLUTION_MS);
+	g_critical("this message has a millisecond-resolution timestamp");
+
+	g_assert_cmpint(CHASSIS_RESOLUTION_MS, ==, chassis_get_logtimestamp_resolution(l));
+	/* try an illegal value, we should see no change */
+	chassis_set_logtimestamp_resolution(l, -1);
+	g_assert_cmpint(CHASSIS_RESOLUTION_MS, ==, chassis_get_logtimestamp_resolution(l));
+	/* tset back top _SEC resolution */
+	chassis_set_logtimestamp_resolution(l, CHASSIS_RESOLUTION_SEC);
+	g_assert_cmpint(CHASSIS_RESOLUTION_SEC, ==, chassis_get_logtimestamp_resolution(l));
+
+	
+
+	g_log_set_default_handler(old_log_func, NULL);
+
+	chassis_log_free(l);
+}
+/*@}*/
+
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
 	g_test_bug_base("http://bugs.mysql.com/");
 
 	g_test_add_func("/core/log_compress", test_log_compress);
+	g_test_add_func("/core/log_timestamp", test_log_timestamp);
 
 	return g_test_run();
 }
