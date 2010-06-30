@@ -175,10 +175,12 @@ void chassis_log_free(chassis_log *log) {
 static int chassis_log_update_timestamp(chassis_log *log) {
 	struct tm *tm;
 	GTimeVal tv;
+	time_t	t;
 	GString *s = log->log_ts_str;
 
 	g_get_current_time(&tv);
-	tm = localtime(&(tv.tv_sec));
+	t = (time_t) tv.tv_sec;
+	tm = localtime(&t);
 	
 	s->len = strftime(s->str, s->allocated_len, "%Y-%m-%d %H:%M:%S", tm);
 	if (log->log_ts_resolution == CHASSIS_RESOLUTION_MS)
