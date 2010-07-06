@@ -178,9 +178,15 @@ void chassis_options_free_g_option_entries(chassis_options_t G_GNUC_UNUSED *opts
 		return;
 
 	for (entries_copy = entries; entries_copy->long_name != NULL; entries_copy++) {
-		if (NULL != entries_copy->long_name) g_free(entries_copy->long_name);
-		if (NULL != entries_copy->description) g_free(entries_copy->description);
-		if (NULL != entries_copy->arg_description) g_free(entries_copy->arg_description);
+		/* type-cast to 'char *' to silence gcc's warning:
+		 *
+		 *   warning: passing argument 1 of 'g_free' discards qualifiers from pointer target type
+		 *
+		 * as the declaration of GOptionEntry is a 'const char *'
+		 */
+		if (NULL != entries_copy->long_name) g_free((char *)entries_copy->long_name);
+		if (NULL != entries_copy->description) g_free((char *)entries_copy->description);
+		if (NULL != entries_copy->arg_description) g_free((char *)entries_copy->arg_description);
 	}
 
 	g_free(entries);
