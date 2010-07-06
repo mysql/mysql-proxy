@@ -62,7 +62,7 @@ int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, G
 			arg_string_array = g_key_file_get_string_list(keyfile, ini_group_name, entry->long_name, &len, &gerr);
 			if (!gerr) {
 				for (j = 0; arg_string_array[j]; j++) {
-					g_strchomp(arg_string_array[j]);
+					arg_string_array[j] = g_strstrip(arg_string_array[j]);
 				}	
 				*(gchar ***)(entry->arg_data) = arg_string_array;
 			}
