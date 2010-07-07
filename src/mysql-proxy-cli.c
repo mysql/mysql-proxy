@@ -308,12 +308,23 @@ int main_cmdline(int argc, char **argv) {
 	if (chassis_frontend_init_base_options(option_ctx,
 				&argc, &argv,
 				&(frontend->print_version),
-				&(frontend->default_file))) {
+				&(frontend->default_file),
+				&gerr)) {
+		g_critical("%s: %s",
+				G_STRLOC,
+				gerr->message);
+		g_clear_error(&gerr);
+
 		GOTO_EXIT(EXIT_FAILURE);
 	}
 
 	if (frontend->default_file) {
-		if (!(frontend->keyfile = chassis_frontend_open_config_file(frontend->default_file))) {
+		if (!(frontend->keyfile = chassis_frontend_open_config_file(frontend->default_file, &gerr))) {
+			g_critical("%s: loading config from '%s' failed: %s",
+					G_STRLOC,
+					frontend->default_file,
+					gerr->message);
+			g_clear_error(&gerr);
 			GOTO_EXIT(EXIT_FAILURE);
 		}
 	}
@@ -460,7 +471,13 @@ int main_cmdline(int argc, char **argv) {
 				&argc, &argv,
 				frontend->keyfile,
 				"mysql-proxy",
-				srv->base_dir)) {
+				srv->base_dir,
+				&gerr)) {
+		g_critical("%s: %s",
+				G_STRLOC, 
+				gerr->message);
+		g_clear_error(&gerr);
+
 		GOTO_EXIT(EXIT_FAILURE);
 	}
 

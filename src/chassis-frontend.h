@@ -72,9 +72,12 @@ CHASSIS_API int chassis_frontend_init_basedir(const char *prg_name, char **_base
 /**
  * open the configfile 
  *
+ * @param filename       name of the configfile
+ * @param gerr           a pointer to a clean GError * or NULL in case the possible error should be ignored
+ *
  * @see g_key_file_free
  */
-CHASSIS_API GKeyFile *chassis_frontend_open_config_file(const char *filename);
+CHASSIS_API GKeyFile *chassis_frontend_open_config_file(const char *filename, GError **gerr);
 
 CHASSIS_API int chassis_frontend_init_plugin_dir(char **_plugin_dir, const char *base_dir);
 CHASSIS_API int chassis_frontend_init_lua_path(const char *set_path, const char *base_dir, char **lua_subdirs);
@@ -88,11 +91,13 @@ CHASSIS_API int chassis_frontend_init_lua_cpath(const char *set_path, const char
  * @param argv_p         pointer to arguments to parse
  * @param print_version  pointer to int to set if --version is specified
  * @param config_file    pointer to char * to store if --defaults-file is specified
+ * @param gerr           a pointer to a clean GError * or NULL in case the possible error should be ignored
  */
 CHASSIS_API int chassis_frontend_init_base_options(GOptionContext *option_ctx,
 		int *argc_p, char ***argv_p,
 		int *print_version,
-		char **config_file);
+		char **config_file,
+		GError **gerr);
 
 /**
  * load the plugins
@@ -121,6 +126,7 @@ CHASSIS_API int chassis_frontend_load_plugins(GPtrArray *plugins,
  * @param argv_p         pointer to arguments to parse
  * @param keyfile        the configfile 
  * @param base_dir       base directory
+ * @param gerr           a pointer to a clean GError * or NULL in case the possible error should be ignored
  *
  * @see chassis_frontend_init_basedir, chassis_frontend_init_plugins
  */
@@ -129,7 +135,8 @@ CHASSIS_API int chassis_frontend_init_plugins(GPtrArray *plugins,
 		int *argc_p, char ***argv_p,
 		GKeyFile *keyfile,
 		const char *keyfile_section_name,
-		const char *base_dir);
+		const char *base_dir,
+		GError **gerr);
 
 /**
  * print the version of the program 

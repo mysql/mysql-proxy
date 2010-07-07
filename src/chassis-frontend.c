@@ -379,7 +379,8 @@ int chassis_frontend_init_plugins(GPtrArray *plugins,
 		int *argc_p, char ***argv_p,
 		GKeyFile *keyfile,
 		const char *keyfile_section_name,
-		const char *base_dir) {
+		const char *base_dir,
+		GError **gerr) {
 	guint i;
 
 	for (i = 0; i < plugins->len; i++) {
@@ -387,7 +388,6 @@ int chassis_frontend_init_plugins(GPtrArray *plugins,
 		chassis_plugin *p = plugins->pdata[i];
 
 		if (NULL != (config_entries = chassis_plugin_get_options(p))) {
-			GError *gerr = NULL;
 			gchar *group_desc = g_strdup_printf("%s-module", p->option_grp_name);
 			gchar *help_msg = g_strdup_printf("Show options for the %s-module", p->option_grp_name);
 			const gchar *group_name = p->option_grp_name;
@@ -400,10 +400,7 @@ int chassis_frontend_init_plugins(GPtrArray *plugins,
 			g_free(group_desc);
 
 			/* parse the new options */
-			if (FALSE == g_option_context_parse(option_ctx, argc_p, argv_p, &gerr)) {
-				g_critical("%s", gerr->message);
-				g_clear_error(&gerr);
-
+			if (FALSE == g_option_context_parse(option_ctx, argc_p, argv_p, gerr)) {
 				return -1;
 			}
 	
@@ -420,13 +417,15 @@ int chassis_frontend_init_plugins(GPtrArray *plugins,
 
 	return 0;
 }
+
+
 int chassis_frontend_init_base_options(GOptionContext *option_ctx,
 		int *argc_p, char ***argv_p,
 		int *print_version,
-		char **config_file) {
+		char **config_file,
+		GError **gerr) {
 	chassis_options_t *opts;
 	GOptionEntry *base_main_entries;
-	GError *gerr = NULL;
 	int ret = 0;
 
 	opts = chassis_options_new();
@@ -437,8 +436,7 @@ int chassis_frontend_init_base_options(GOptionContext *option_ctx,
 	g_option_context_set_help_enabled(option_ctx, FALSE);
 	g_option_context_set_ignore_unknown_options(option_ctx, TRUE);
 
-	if (FALSE == g_option_context_parse(option_ctx, argc_p, argv_p, &gerr)) {
-		g_clear_error(&gerr);
+	if (FALSE == g_option_context_parse(option_ctx, argc_p, argv_p, gerr)) {
 		ret = -1;
 	}
 
@@ -449,9 +447,8 @@ int chassis_frontend_init_base_options(GOptionContext *option_ctx,
 	return ret;
 }
 
-GKeyFile *chassis_frontend_open_config_file(const char *filename) {
+GKeyFile *chassis_frontend_open_config_file(const char *filename, GError **gerr) {
 	GKeyFile *keyfile;
-	GError *gerr = NULL;
 
 	if (chassis_filemode_check(filename) != 0) {
 		return NULL;
@@ -459,13 +456,7 @@ GKeyFile *chassis_frontend_open_config_file(const char *filename) {
 	keyfile = g_key_file_new();
 	g_key_file_set_list_separator(keyfile, ',');
 
-	if (FALSE == g_key_file_load_from_file(keyfile, filename, G_KEY_FILE_NONE, &gerr)) {
-		g_critical("%s: loading configuration from %s failed: %s", 
-				G_STRLOC,
-				filename,
-				gerr->message);
-		g_clear_error(&gerr);
-
+	if (FALSE == g_key_file_load_from_file(keyfile, filename, G_KEY_FILE_NONE, gerr)) {
 		g_key_file_free(keyfile);
 
 		return NULL;
