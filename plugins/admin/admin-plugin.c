@@ -241,7 +241,14 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 
 	auth = network_mysqld_auth_response_new();
 	if (network_mysqld_proto_get_auth_response(&packet, auth)) {
-		g_assert_not_reached();
+		network_mysqld_auth_response_free(auth);
+		return NETWORK_SOCKET_ERROR;
+	}
+	if (!(auth->capabilities & CLIENT_PROTOCOL_41)) {
+		/* should use packet-id 0 */
+		network_mysqld_queue_append(con->client, con->client->send_queue, C("\xff\xd7\x07" "4.0 protocol is not supported"));
+		network_mysqld_auth_response_free(auth);
+		return NETWORK_SOCKET_ERROR;
 	}
 	
 	con->client->response = auth;
