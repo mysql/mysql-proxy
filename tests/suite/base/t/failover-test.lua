@@ -17,4 +17,7 @@
  02110-1301  USA
 
  $%ENDLICENSE%$ --]]
-require("admin-sql")
+
+-- forward everything
+--
+-- TODO: only handle the "wait_for_backend_down()" query

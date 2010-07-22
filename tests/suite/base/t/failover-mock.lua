@@ -21,36 +21,18 @@
 -- test if failover works
 --
 -- * this script is started twice to simulate two backends
--- * one is shutdown in the test with COM_SHUTDOWN
+-- * one is shutdown in the test with COMMIT SUICIDE
 --
 
-require("chassis")
-
-function packet_auth(fields)
-	fields = fields or { }
-	return "\010" ..             -- proto version
-		(fields.version or "5.0.45-proxy") .. -- version
-		"\000" ..             -- term-null
-		"\001\000\000\000" .. -- thread-id
-		"\065\065\065\065" ..
-		"\065\065\065\065" .. -- challenge - part I
-		"\000" ..             -- filler
-		"\001\130" ..         -- server cap (long pass, 4.1 proto)
-		"\008" ..             -- charset
-		"\002\000" ..         -- status
-		("\000"):rep(13) ..   -- filler
-		"\065\065\065\065"..
-		"\065\065\065\065"..
-		"\065\065\065\065"..
-		"\000"                -- challenge - part II
-end
+require("chassis") -- 
+local proto = require("mysql.proto")
 
 function connect_server()
 	-- emulate a server
 	proxy.response = {
 		type = proxy.MYSQLD_PACKET_RAW,
 		packets = {
-			packet_auth()
+			proto.to_challenge_packet({})
 		}
 	}
 	return proxy.PROXY_SEND_RESULT
@@ -63,15 +45,7 @@ end
 ---
 -- 
 function read_query(packet)
-	if packet:byte() == proxy.COM_SHUTDOWN then
-		-- stop the proxy if we are asked to
-		chassis.set_shutdown()
-		proxy.response = {
-			type = proxy.MYSQLD_PACKET_RAW,
-			packets = { string.char(254) },
-		}
-		return proxy.PROXY_SEND_RESULT
-	elseif packet:byte() ~= proxy.COM_QUERY then
+	if packet:byte() ~= proxy.COM_QUERY then
 		-- just ACK all non COM_QUERY's
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_OK
@@ -103,11 +77,18 @@ function read_query(packet)
 				rows = { { proxy.global.backend_id } }
 			}
 		}
-
+	elseif query == 'COMMIT SUICIDE' then
+		-- stop the proxy if we are asked to
+		chassis.set_shutdown()
+		proxy.response = {
+			type = proxy.MYSQLD_PACKET_OK,
+			affected_rows = 0,
+			insert_id = 0
+		}
 	else
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_ERR,
-			errmsg = "(pooling-mock) " .. query
+			errmsg = "(failover-mock) query not handled: " .. query
 		}
 	end
 	return proxy.PROXY_SEND_RESULT
