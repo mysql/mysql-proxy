@@ -26,6 +26,10 @@ EXTRA_DIST = \
 		bug_43078-mock.lua \
 		bug_43078.test \
 		bug_43078.options \
+		bug_55459-test.lua \
+		bug_55459-mock.lua \
+		bug_55459.test \
+		bug_55459.options \
 		chain1.options \
 		chain1.test \
 		chain1a.lua \
