@@ -1040,9 +1040,19 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 	
 				break;
 			case PROXY_NO_DECISION:
-				/**
-				 * PROXY_NO_DECISION and PROXY_SEND_QUERY may pick another backend
+				/* send on the data we got from the client unchanged
 				 */
+
+				if (st->injected.queries->length) {
+					injection *inj;
+
+					g_critical("%s: proxy.queue:append() or :prepend() used without 'return proxy.PROXY_SEND_QUERY'. Discarding %d elements from the queue.",
+							G_STRLOC,
+							st->injected.queries->length);
+
+					while ((inj = g_queue_pop_head(st->injected.queries))) injection_free(inj);
+				}
+			
 				break;
 			case PROXY_SEND_QUERY:
 				/* send the injected queries
@@ -1051,7 +1061,10 @@ static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con)
 				 * 
 				 *  */
 
-				if (st->injected.queries->length) {
+				if (st->injected.queries->length == 0) {
+					g_critical("%s: 'return proxy.PROXY_SEND_QUERY' used without proxy.queue:append() or :prepend(). Assuming 'nil' was returned",
+							G_STRLOC);
+				} else {
 					ret = PROXY_SEND_INJECTION;
 				}
 	
