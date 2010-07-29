@@ -41,7 +41,9 @@ function read_query(packet)
 
 	proxy.response = {
 		type = proxy.MYSQLD_PACKET_ERR,
-		errcode = 1234
+		errcode = 1054,
+		errmsg = "Unknown column 'x' in 'field list'",
+		sqlstate = "42S22",
 	}
 
 	return proxy.PROXY_SEND_RESULT

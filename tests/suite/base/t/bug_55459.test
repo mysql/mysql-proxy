@@ -24,4 +24,5 @@
 #   http://bugs.mysql.com/55459
 #   Access to resultset.raw lead to SIGSEGV
 #
-SELECT 1;
+--error 1054
+SELECT x;
