@@ -209,11 +209,11 @@ static void sigterm_handler(int G_GNUC_UNUSED fd, short G_GNUC_UNUSED event_type
 static void sighup_handler(int G_GNUC_UNUSED fd, short G_GNUC_UNUSED event_type, void *_data) {
 	chassis *chas = _data;
 
-	g_message("received a SIGHUP, rotating logfile"); /* this should go into the old logfile */
+	g_message("received a SIGHUP, closing log file"); /* this should go into the old logfile */
 
 	chassis_log_set_logrotate(chas->log);
 	
-	g_message("rotated logfile"); /* ... and this into the new one */
+	g_message("re-opened log file after SIGHUP"); /* ... and this into the new one */
 }
 
 

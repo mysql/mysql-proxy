@@ -285,6 +285,20 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 	 */
 	static GStaticMutex log_mutex = G_STATIC_MUTEX_INIT;
 
+	/**
+	 * rotate logs straight away if log->rotate_logs is true
+	 * we do this before ignoring any log levels, so that rotation 
+	 * happens straight away - see Bug#55711 
+	 */
+        if (-1 != log->log_file_fd) {
+                if (log->rotate_logs) {
+                        chassis_log_close(log);
+                        chassis_log_open(log);
+
+                        is_duplicate = FALSE; /* after a log-rotation always dump the queue */
+                }
+        }
+
 	/* ignore the verbose log-levels */
 	if (log_level > log->min_lvl) return;
 
@@ -301,16 +315,6 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 	    0 == strcmp(log->last_msg->str, message)) {
 		is_duplicate = TRUE;
 	}
-
-	if (-1 != log->log_file_fd) {
-		if (log->rotate_logs) {
-			chassis_log_close(log);
-			chassis_log_open(log);
-
-			is_duplicate = FALSE; /* after a log-rotation always dump the queue */
-		}
-	}
-
 
 	if (!is_duplicate ||
 	    log->last_msg_count > 100 ||
