@@ -279,6 +279,8 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 	int i;
 	gchar *log_lvl_name = "(error)";
 	gboolean is_duplicate = FALSE;
+	gboolean is_log_rotated = FALSE;
+	const char *stripped_message = chassis_log_skip_topsrcdir(message);
 
 	/**
 	 * make sure we syncronize the order of the write-statements 
@@ -290,14 +292,14 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 	 * we do this before ignoring any log levels, so that rotation 
 	 * happens straight away - see Bug#55711 
 	 */
-        if (-1 != log->log_file_fd) {
-                if (log->rotate_logs) {
-                        chassis_log_close(log);
-                        chassis_log_open(log);
+	if (-1 != log->log_file_fd) {
+		if (log->rotate_logs) {
+			chassis_log_close(log);
+			chassis_log_open(log);
 
-                        is_duplicate = FALSE; /* after a log-rotation always dump the queue */
-                }
-        }
+			is_log_rotated = TRUE; /* we will need to dump even duplicates */
+		}
+	}
 
 	/* ignore the verbose log-levels */
 	if (log_level > log->min_lvl) return;
@@ -312,14 +314,20 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 	}
 
 	if (log->last_msg->len > 0 &&
-	    0 == strcmp(log->last_msg->str, message)) {
+	    0 == strcmp(log->last_msg->str, stripped_message)) {
 		is_duplicate = TRUE;
 	}
 
-	if (!is_duplicate ||
+	/**
+	 * if the log has been rotated, we always dump the last message even if it 
+	 * was a duplicate. Otherwise, do not print duplicates unless they have been
+	 * ignored at least 100 times, or they were last printed greater than 
+	 * 30 seconds ago.
+	 */
+	if (is_log_rotated ||
+	    !is_duplicate ||
 	    log->last_msg_count > 100 ||
 	    time(NULL) - log->last_msg_ts > 30) {
-		const char *stripped_message = chassis_log_skip_topsrcdir(message);
 
 		/* if we lave the last message repeating, log it */
 		if (log->last_msg_count) {
