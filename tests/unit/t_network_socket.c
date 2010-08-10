@@ -354,13 +354,13 @@ void t_network_socket_is_local_unix() {
 	g_unlink("/tmp/mysql-proxy-test.socket");
 }
 
-void t_network_localsocket_setup(local_unix_t *p) {
+void t_network_localsocket_setup(local_unix_t *p, gconstpointer G_GNUC_UNUSED _test_data) {
 	g_assert(p != NULL);
 	snprintf(p->sockname, sizeof(p->sockname), LOCAL_SOCK ".%d", (int)getpid());
 	pp = p;
 }
 
-void t_network_localsocket_teardown(local_unix_t *p) {
+void t_network_localsocket_teardown(local_unix_t *p, gconstpointer G_GNUC_UNUSED _test_data) {
 	g_assert(p != NULL);
 	if (p->sockname[0] != '\0') {
 		(void) g_unlink(p->sockname);
@@ -381,7 +381,7 @@ void exitfunc(int sig) {
  * this is an extension of _is_local_unix(), therefore looks much like it;
  * just in case, we leave all tests from that function in as well.
  */
-void t_network_socket_rem_local_unix(local_unix_t *p) {
+void t_network_socket_rem_local_unix(local_unix_t *p, gconstpointer G_GNUC_UNUSED _test_data) {
 	network_socket *s_sock; /* the server side socket, listening for requests */
 	network_socket *c_sock; /* the client side socket, that connects */
 	network_socket *a_sock; /* the server side, accepted socket */
