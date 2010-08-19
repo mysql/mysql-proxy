@@ -135,9 +135,12 @@ int chassis_unix_proc_keepalive(int *child_exit_status) {
 						G_STRLOC,
 						pid);
 
+				/* forward a few signals that are sent to us to the child instead */
 				signal(SIGINT, chassis_unix_signal_forward);
 				signal(SIGTERM, chassis_unix_signal_forward);
 				signal(SIGHUP, chassis_unix_signal_forward);
+				signal(SIGUSR1, chassis_unix_signal_forward);
+				signal(SIGUSR2, chassis_unix_signal_forward);
 
 				child_pid = pid;
 				nprocs++;
