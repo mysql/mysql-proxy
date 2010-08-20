@@ -33,6 +33,20 @@ static int lua_g_usleep (lua_State *L) {
 	return 0;
 }
 
+static int lua_g_get_current_time (lua_State *L) {
+	GTimeVal t;
+
+	g_get_current_time(&t);
+
+	lua_newtable(L);
+	lua_pushinteger(L, t.tv_sec);
+	lua_setfield(L, -2, "tv_sec");
+	lua_pushinteger(L, t.tv_usec);
+	lua_setfield(L, -2, "tv_usec");
+
+	return 1;
+}
+
 static int lua_g_checksum_md5 (lua_State *L) {
 	size_t str_len;
 	const char *str = luaL_checklstring (L, 1, &str_len);
@@ -54,7 +68,7 @@ static int lua_g_checksum_md5 (lua_State *L) {
 */
 static void set_info (lua_State *L) {
 	lua_pushliteral (L, "_COPYRIGHT");
-	lua_pushliteral (L, "Copyright (c) 2008 MySQL AB, 2008 Sun Microsystems, Inc.");
+	lua_pushliteral (L, "Copyright (c) 2010 Oracle");
 	lua_settable (L, -3);
 	lua_pushliteral (L, "_DESCRIPTION");
 	lua_pushliteral (L, "export glib2-functions as glib.*");
@@ -68,6 +82,7 @@ static void set_info (lua_State *L) {
 static const struct luaL_reg gliblib[] = {
 	{"usleep", lua_g_usleep},
 	{"md5", lua_g_checksum_md5},
+	{"get_current_time", lua_g_get_current_time},
 	{NULL, NULL},
 };
 
