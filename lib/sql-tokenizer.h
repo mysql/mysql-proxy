@@ -355,7 +355,7 @@ void sql_token_free(sql_token *token);
 /**
  * get the name for a token-id
  */
-const gchar *sql_token_get_name(sql_token_id token_id);
+const gchar *sql_token_get_name(sql_token_id token_id, size_t *name_len);
 
 /**
  * get the token_id for a literal
@@ -365,7 +365,18 @@ const gchar *sql_token_get_name(sql_token_id token_id);
  * @param name     a SQL keyword
  * @return         TK_SQL_(keyword) or TK_LITERAL
  */
-sql_token_id sql_token_get_id(const gchar *name);
+sql_token_id sql_token_get_id(const gchar *name) G_GNUC_DEPRECATED;
+
+/**
+ * get the token_id for a literal
+ *
+ * @internal       only used to drive the test-cases 
+ *
+ * @param name     a SQL keyword
+ * @return         TK_SQL_(keyword) or TK_LITERAL
+ */
+sql_token_id sql_token_get_id_len(const gchar *name, size_t name_len);
+
 
 /**
  * scan a string into SQL tokens

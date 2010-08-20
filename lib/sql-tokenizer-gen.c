@@ -28,9 +28,9 @@ int main() {
 
 	for (i = 0; i < sql_token_get_last_id(); i++) {
 		/** only tokens with TK_SQL_* are keyworks */
-		if (0 != strncmp(sql_token_get_name(i), "TK_SQL_", sizeof("TK_SQL_") - 1)) continue;
+		if (0 != strncmp(sql_token_get_name(i, NULL), "TK_SQL_", sizeof("TK_SQL_") - 1)) continue;
 
-		g_tree_insert(tokens, (sql_token_get_name(i) + sizeof("TK_SQL_") - 1), GINT_TO_POINTER(i));
+		g_tree_insert(tokens, (sql_token_get_name(i, NULL) + sizeof("TK_SQL_") - 1), GINT_TO_POINTER(i));
 	}
 
 	/* traverse the tree and output all keywords in a sorted way */

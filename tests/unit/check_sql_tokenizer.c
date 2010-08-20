@@ -76,7 +76,7 @@ START_TEST(test_tokenizer) {
 			 /**
 			  * a self-writing test-case 
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			break;
 		}
 	}
@@ -114,7 +114,7 @@ START_TEST(test_table_name_underscore) {
 			 /**
 			  * a self-writing test-case 
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			break;
 		}
 	}
@@ -135,7 +135,7 @@ START_TEST(test_token2name) {
 	for (i = 0; i < TK_LAST_TOKEN; i++) {
 		const char *name;
 
-		g_assert((name = sql_token_get_name(i)));
+		g_assert((name = sql_token_get_name(i, NULL)));
 	}
 } END_TEST
 
@@ -346,18 +346,24 @@ g_assert_cmpstr(token->text->str, ==, t_text);
 void test_tokenizer_keywords() {
 	gsize i;
 
-	for (i = 0; sql_token_get_name(i); i++) {
+	for (i = 0; sql_token_get_name(i, NULL); i++) {
 		const char *keyword;
+		size_t keyword_len;
 
 		/** only tokens with TK_SQL_* are keyworks */
-		if (0 != strncmp(sql_token_get_name(i), "TK_SQL_", sizeof("TK_SQL_") - 1)) continue;
+		if (0 != strncmp(sql_token_get_name(i, NULL), "TK_SQL_", sizeof("TK_SQL_") - 1)) continue;
 		
-		keyword = sql_token_get_name(i) + sizeof("TK_SQL_") - 1;
+		keyword = sql_token_get_name(i, &keyword_len);
+		/* strip the TK_SQL_ prefix to get the keyword itself */
+		keyword += sizeof("TK_SQL_") - 1;
+		keyword_len -= sizeof("TK_SQL_") - 1;
 
-		g_assert_cmpint(sql_token_get_id(keyword), ==, i);
+		g_assert_cmpint(sql_token_get_id_len(keyword, keyword_len), ==, i);
 	}
-		
-	g_assert_cmpint(sql_token_get_id("COMMIT"), ==, TK_LITERAL);
+	
+	/* check that some SQL commands are not keywords */
+	g_assert_cmpint(sql_token_get_id_len(C("COMMIT")), ==, TK_LITERAL);
+	g_assert_cmpint(sql_token_get_id_len(C("TRUNCATE")), ==, TK_LITERAL);
 }
 
 /**
@@ -375,7 +381,7 @@ void test_literal_digit() {
 	gsize i;
 
 #define T(t_id, t_text) \
-		g_assert_cmpstr(sql_token_get_name(token->token_id), ==, sql_token_get_name(t_id)); \
+		g_assert_cmpstr(sql_token_get_name(token->token_id, NULL), ==, sql_token_get_name(t_id, NULL)); \
 		g_assert_cmpstr(token->text->str, ==, t_text);
 
 	/* e1 is a literal ("e1") */
@@ -392,7 +398,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -412,7 +418,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -434,7 +440,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -454,7 +460,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -474,7 +480,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -495,7 +501,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -515,7 +521,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -535,7 +541,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -559,7 +565,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -581,7 +587,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -603,7 +609,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -627,7 +633,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -651,7 +657,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -674,7 +680,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}
@@ -698,7 +704,7 @@ void test_literal_digit() {
 			 /**
 			  * a self-writing test-case
 			  */
-			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id), token->text->str);
+			printf("case %"G_GSIZE_FORMAT": T(%s, \"%s\"); break;\n", i, sql_token_get_name(token->token_id, NULL), token->text->str);
 			g_assert_not_reached();
 		}
 	}

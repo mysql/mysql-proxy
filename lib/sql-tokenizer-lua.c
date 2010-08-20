@@ -39,7 +39,9 @@ static int proxy_tokenize_token_get(lua_State *L) {
 		lua_pushinteger(L, token->token_id);
 		return 1;
 	} else if (strleq(key, keysize, C("token_name"))) {
-		lua_pushstring(L, sql_token_get_name(token->token_id));
+		size_t token_name_len;
+		const char *token_name = sql_token_get_name(token->token_id, &token_name_len);
+		lua_pushlstring(L, token_name, token_name_len);
 		return 1;
 	} else {
 		luaL_error(L, "tokens[...] has no %s field", key);

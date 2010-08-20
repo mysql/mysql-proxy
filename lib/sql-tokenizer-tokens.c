@@ -1,13 +1,16 @@
 #include "sql-tokenizer.h"
 
-#define S(x) #x
+#define S(x) { #x, sizeof(#x) - 1 }
 
 /**
  * this list has to be kept in sync with the tokens itself 
  *
  * maps token_ids (array-pos) to token-names
  */
-static const char *token_names[] = {
+static struct {
+	const char *token;
+	size_t token_len;
+} token_names[] = {
 	S(TK_UNKNOWN),
 	S(TK_LE),
 	S(TK_GE),
@@ -275,21 +278,25 @@ static const char *token_names[] = {
 	
 	S(TK_COMMENT_MYSQL),
 
-	NULL
+	{ NULL, 0 }
 };
 #undef S
 
 /**
  * get the name for a token-id
  */
-const gchar *sql_token_get_name(sql_token_id token_id) {
+const gchar *sql_token_get_name(sql_token_id token_id, size_t *name_len) {
 	if (token_id >= TK_LAST_TOKEN) return NULL;
 
-	if (sizeof(token_names)/sizeof(char *) != TK_LAST_TOKEN + 1) {
-		g_error("sql_token_get_name() is out of sync [%"G_GSIZE_FORMAT" != %d]", sizeof(token_names)/sizeof(char *), TK_LAST_TOKEN + 1);
+	if (sizeof(token_names)/sizeof(token_names[0]) != TK_LAST_TOKEN + 1) {
+		g_error("sql_token_get_name() is out of sync [%"G_GSIZE_FORMAT" != %d]", sizeof(token_names)/sizeof(token_names[0]), TK_LAST_TOKEN + 1);
 	}
 
-	return token_names[token_id];
+	if (name_len) {
+		*name_len = token_names[token_id].token_len;
+	}
+
+	return token_names[token_id].token;
 }
 
 int sql_token_get_last_id() {
