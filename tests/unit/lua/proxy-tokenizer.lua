@@ -72,6 +72,21 @@ function TestScript:testComments()
 	assertEquals(tokens[3].text, "1")
 end
 
+---
+-- test if empty -- comments are detected
+function TestScript:testUnset()
+	local tokens = tokenizer.tokenize("SELECT 1")
+	
+	assertEquals(tokens[1].token_name, "TK_SQL_SELECT")
+	assertEquals(tokens[1].text, "SELECT")
+	assertEquals(tokens[2].token_name, "TK_INTEGER")
+	assertEquals(tokens[2].text, "1")
+
+	tokens[1] = nil
+
+	assertEquals(tokens[1], nil)
+end
+
 
 
 ---

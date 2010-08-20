@@ -291,7 +291,7 @@ void sql_tokens_free(GPtrArray *tokens) {
 	for (i = 0; i < tokens->len; i++) {
 		sql_token *token = tokens->pdata[i];
 
-		sql_token_free(token);
+		if (token) sql_token_free(token);
 	}
 	g_ptr_array_free(tokens, TRUE);
 }

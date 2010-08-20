@@ -56,7 +56,10 @@ int sql_tokenizer_lua_token_getmetatable(lua_State *L) {
 	return proxy_getmetatable(L, methods);
 }	
 
-
+/**
+ * get a token from the tokens array
+ *
+ */
 static int proxy_tokenize_get(lua_State *L) {
 	GPtrArray *tokens = *(GPtrArray **)luaL_checkself(L); 
 	int ndx = luaL_checkinteger(L, 2);
@@ -73,6 +76,11 @@ static int proxy_tokenize_get(lua_State *L) {
 	}
 
 	token = tokens->pdata[ndx - 1];
+	if (NULL == token) {
+		lua_pushnil(L);
+
+		return 1;
+	}
 
 	token_p = lua_newuserdata(L, sizeof(token));                          /* (sp += 1) */
 	*token_p = token;
@@ -82,6 +90,37 @@ static int proxy_tokenize_get(lua_State *L) {
 
 	return 1;
 }
+
+/**
+ * a settor for the tokens
+ *
+ * only allow to unset a token in the tokens array to free its memory
+ */
+static int proxy_tokenize_set(lua_State *L) {
+	GPtrArray *tokens = *(GPtrArray **)luaL_checkself(L); 
+	int ndx = luaL_checkinteger(L, 2);
+	sql_token *token;
+
+	luaL_checktype(L, 3, LUA_TNIL); /* for now we can only use = nil */
+
+	if (tokens->len > G_MAXINT) {
+		return 0;
+	}
+
+	/* lua uses 1 is starting index */
+	if (ndx < 1 || ndx > (int)tokens->len) {
+		return 0;
+	}
+
+	token = tokens->pdata[ndx - 1];
+	if (NULL != token) {
+		sql_token_free(token);
+		tokens->pdata[ndx - 1] = NULL;
+	}
+
+	return 0;
+}
+
 
 static int proxy_tokenize_len(lua_State *L) {
 	GPtrArray *tokens = *(GPtrArray **)luaL_checkself(L); 
@@ -103,6 +142,7 @@ static int proxy_tokenize_gc(lua_State *L) {
 static int sql_tokenizer_lua_getmetatable(lua_State *L) {
 	static const struct luaL_reg methods[] = {
 		{ "__index", proxy_tokenize_get },
+		{ "__newindex", proxy_tokenize_set },
 		{ "__len",   proxy_tokenize_len },
 		{ "__gc",   proxy_tokenize_gc },
 		{ NULL, NULL },
