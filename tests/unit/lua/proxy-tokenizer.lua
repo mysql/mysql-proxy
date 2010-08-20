@@ -51,10 +51,10 @@ function TestScript:testFields()
 
 	local tokens = tokenizer.tokenize(cmd.query);
 
-	assertEquals(tokens[0], nil)
+	assertEquals(tokens[0], nil) -- out of range
 	assertEquals(tokens[1].text, "FOO")
 	assertEquals(tokens[2].text, "BAR")
-	assertEquals(tokens[3], nil)
+	assertEquals(tokens[3], nil) -- out of range
 end
 
 ---
@@ -71,6 +71,22 @@ function TestScript:testComments()
 	assertEquals(tokens[3].token_name, "TK_INTEGER")
 	assertEquals(tokens[3].text, "1")
 end
+
+---
+-- test if function names are detected
+function TestScript:testFunctions()
+	local tokens = tokenizer.tokenize("CALL foo.bar(foo)")
+	
+	assertEquals(tokens[1].token_name, "TK_SQL_CALL")
+	assertEquals(tokens[1].text, "CALL")
+	assertEquals(tokens[2].token_name, "TK_LITERAL")
+	assertEquals(tokens[2].text, "foo")
+	assertEquals(tokens[3].token_name, "TK_DOT")
+	assertEquals(tokens[3].text, ".")
+	assertEquals(tokens[4].token_name, "TK_FUNCTION")
+	assertEquals(tokens[4].text, "bar")
+end
+
 
 ---
 -- test if empty -- comments are detected
