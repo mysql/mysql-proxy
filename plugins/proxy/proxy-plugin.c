@@ -1331,6 +1331,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 	}
 
 	if (is_finished) {
+		network_mysqld_lua_stmt_ret ret;
+
 		/**
 		 * the resultset handler might decide to trash the send-queue
 		 * 
@@ -1358,14 +1360,16 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query_result) {
 			/* g_get_current_time(&(inj->ts_read_query_result_last)); */
 		}
 		
-		network_mysqld_queue_reset(recv_sock);
+		network_mysqld_queue_reset(recv_sock); /* reset the packet-id checks as the server-side is finished */
 
 		NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query_result::enter_lua");
-		proxy_lua_read_query_result(con);
+		ret = proxy_lua_read_query_result(con);
 		NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query_result::leave_lua");
 
-		/** recv_sock might be != con->server now */
-		network_mysqld_queue_reset(send_sock);
+		if (PROXY_IGNORE_RESULT != ret) {
+			/* reset the packet-id checks, if we sent something to the client */
+			network_mysqld_queue_reset(send_sock);
+		}
 
 		/**
 		 * if the send-queue is empty, we have nothing to send
