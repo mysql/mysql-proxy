@@ -51,6 +51,10 @@ EXTRA_DIST = \
 		failover-mock.lua \
 		failover.test \
 		failover.options \
+		ignore-resultset-test.lua \
+		ignore-resultset-mock.lua \
+		ignore-resultset.options \
+		ignore-resultset.test \
 		lineno.test \
 		lineno.lua \
 		lm1.lua \
