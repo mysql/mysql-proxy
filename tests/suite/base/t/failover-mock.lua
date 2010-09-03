@@ -21,10 +21,11 @@
 -- test if failover works
 --
 -- * this script is started twice to simulate two backends
--- * one is shutdown in the test with COMMIT SUICIDE
+-- * one is shutdown in the test with KILL BACKEND
 --
 
 require("chassis") -- 
+require("posix") -- 
 local proto = require("mysql.proto")
 
 function connect_server()
@@ -77,9 +78,11 @@ function read_query(packet)
 				rows = { { proxy.global.backend_id } }
 			}
 		}
-	elseif query == 'COMMIT SUICIDE' then
+	elseif query == 'KILL BACKEND' then
 		-- stop the proxy if we are asked to
-		chassis.set_shutdown()
+		posix.kill(posix.getpid(), 9) -- send SIGKILL to ourself
+
+		-- this won't be sent as we are already dead ... let's hope
 		proxy.response = {
 			type = proxy.MYSQLD_PACKET_OK,
 			affected_rows = 0,

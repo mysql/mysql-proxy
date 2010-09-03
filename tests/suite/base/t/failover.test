@@ -43,19 +43,13 @@ connection conn1;
 GET ID;
 
 # now kill the backend
-COMMIT SUICIDE;
-
-# waiting 2 seconds should be enough for the backend to finish.
-# FIXME: instead of real_sleep we should ask the test-proxy to return to
-#        us as soon as the killed backend is down
-real_sleep 2;
+--error 2013
+KILL BACKEND;
 
 # ... and this should fail now as the backend is gone
--- error 2013
-GET ID;
-
 -- error 2006
 GET ID;
+
 disconnect conn1;
 
 connection conn2;

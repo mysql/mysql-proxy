@@ -13,8 +13,7 @@ id
 GET ID;
 id
 1
-COMMIT SUICIDE;
-GET ID;
+KILL BACKEND;
 ERROR HY000: Lost connection to MySQL server during query
 GET ID;
 ERROR HY000: MySQL server has gone away
