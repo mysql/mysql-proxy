@@ -107,8 +107,6 @@ function pretty_print(cmd)
 		-- should have a table-name
 		return ("[%s]"):format(cmd.type_name)
 	elseif cmd.type == proxy.COM_STMT_EXECUTE then
-    	return ("[%s] %s"):format(cmd.type_name, cmd.stmt_handler_id)
-	elseif cmd.type == proxy.COM_STMT_EXECUTE then
 		return ("[%s] %s"):format(cmd.type_name, cmd.stmt_handler_id)
 	end
 
