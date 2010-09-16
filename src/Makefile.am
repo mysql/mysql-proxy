@@ -109,6 +109,7 @@ libmysql_proxy_la_SOURCES = \
 	network-mysqld-proto.c \
 	network-mysqld-binlog.c \
 	network-mysqld-packet.c \
+	network_mysqld_type.c \
 	network-mysqld-masterinfo.c \
 	network-conn-pool.c  \
 	network-conn-pool-lua.c  \
@@ -137,6 +138,7 @@ include_HEADERS=\
 	network-mysqld-proto.h \
 	network-mysqld-binlog.h \
 	network-mysqld-packet.h \
+	network_mysqld_type.h \
 	network-mysqld-masterinfo.h \
 	network-conn-pool.h \
 	network-conn-pool-lua.h \
