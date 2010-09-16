@@ -25,6 +25,7 @@
 #include <stdio.h>
 
 #include "network-mysqld-packet.h"
+#include "network_mysqld_type.h"
 
 #include "glib-ext.h"
 
@@ -668,6 +669,59 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 	return is_finished;
 }
 
+int network_mysqld_proto_get_fielddef(network_packet *packet, MYSQL_FIELD *field, guint32 capabilities) {
+	int err = 0;
+
+	err = err || network_mysqld_proto_skip_network_header(packet);
+
+	if (capabilities & CLIENT_PROTOCOL_41) {
+		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->catalog, NULL);
+		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->db, NULL);
+		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->table, NULL);
+		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->org_table, NULL);
+		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->name, NULL);
+		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->org_name, NULL);
+        
+		err = err || network_mysqld_proto_skip(packet, 1); /* filler */
+        
+		err = err || network_mysqld_proto_get_int16(packet, (guint16 *)&field->charsetnr);
+		err = err || network_mysqld_proto_get_int32(packet, (guint32 *)&field->length);
+		err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->type);
+		err = err || network_mysqld_proto_get_int16(packet, (guint16 *)&field->flags);
+		err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->decimals);
+        
+		err = err || network_mysqld_proto_skip(packet, 2); /* filler */
+	} else {
+		guint8 len;
+
+		/* see protocol.cc Protocol::send_fields */
+
+		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->table, NULL);
+		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->name, NULL);
+		err = err || network_mysqld_proto_get_int8(packet, &len);
+		err = err || (len != 3);
+		err = err || network_mysqld_proto_get_int24(packet, (guint32 *)&field->length);
+		err = err || network_mysqld_proto_get_int8(packet, &len);
+		err = err || (len != 1);
+		err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->type);
+		err = err || network_mysqld_proto_get_int8(packet, &len);
+		if (len == 3) { /* the CLIENT_LONG_FLAG is set */
+			err = err || network_mysqld_proto_get_int16(packet, (guint16 *)&field->flags);
+			err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->decimals);
+		} else if (len == 2) {
+			guint8 flags = 0;
+			err = err || network_mysqld_proto_get_int8(packet, &flags);
+			err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->decimals);
+
+			if (!err) field->flags = flags;
+		} else {
+			/* well */
+		}
+	}
+
+	return err ? -1 : 0;
+}
+
 /**
  * parse the result-set packet and extract the fields
  *
@@ -722,56 +776,10 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 		packet.data = chunk->data;
 		packet.offset = 0;
 
-		err = err || network_mysqld_proto_skip_network_header(&packet);
- 
 		field = network_mysqld_proto_fielddef_new();
 
-		if (capabilities & CLIENT_PROTOCOL_41) {
-			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->catalog, NULL);
-			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->db, NULL);
-			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->table, NULL);
-			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->org_table, NULL);
-			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->name, NULL);
-			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->org_name, NULL);
-	        
-			err = err || network_mysqld_proto_skip(&packet, 1); /* filler */
-	        
-			err = err || network_mysqld_proto_get_int16(&packet, (guint16 *)&field->charsetnr);
-			err = err || network_mysqld_proto_get_int32(&packet, (guint32 *)&field->length);
-			err = err || network_mysqld_proto_get_int8(&packet, (guint8 *)&field->type);
-			err = err || network_mysqld_proto_get_int16(&packet, (guint16 *)&field->flags);
-			err = err || network_mysqld_proto_get_int8(&packet, (guint8 *)&field->decimals);
-	        
-			err = err || network_mysqld_proto_skip(&packet, 2); /* filler */
-		} else {
-			guint8 len;
+		err = err || network_mysqld_proto_get_fielddef(&packet, field, capabilities);
 
-			/* see protocol.cc Protocol::send_fields */
-
-			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->table, NULL);
-			err = err || network_mysqld_proto_get_lenenc_string(&packet, &field->name, NULL);
-			err = err || network_mysqld_proto_get_int8(&packet, &len);
-			err = err || (len != 3);
-			err = err || network_mysqld_proto_get_int24(&packet, (guint32 *)&field->length);
-			err = err || network_mysqld_proto_get_int8(&packet, &len);
-			err = err || (len != 1);
-			err = err || network_mysqld_proto_get_int8(&packet, (guint8 *)&field->type);
-			err = err || network_mysqld_proto_get_int8(&packet, &len);
-			if (len == 3) { /* the CLIENT_LONG_FLAG is set */
-				err = err || network_mysqld_proto_get_int16(&packet, (guint16 *)&field->flags);
-				err = err || network_mysqld_proto_get_int8(&packet, (guint8 *)&field->decimals);
-			} else if (len == 2) {
-				guint8 flags = 0;
-				err = err || network_mysqld_proto_get_int8(&packet, &flags);
-				err = err || network_mysqld_proto_get_int8(&packet, (guint8 *)&field->decimals);
-
-				if (!err) field->flags = flags;
-			} else {
-				/* well */
-			}
-
-		}
-        
 		g_ptr_array_add(fields, field); /* even if we had an error, append it so that we can free it later */
 
 		if (err) return NULL;
@@ -1356,6 +1364,335 @@ network_mysqld_auth_response *network_mysqld_auth_response_copy(network_mysqld_a
 	g_string_assign_len(dst->database, S(src->database));
 
 	return dst;
+}
+
+/*
+ * prepared statements
+ */
+
+/**
+ * 
+ */
+network_mysqld_stmt_prepare_packet_t *network_mysqld_stmt_prepare_packet_new() {
+	network_mysqld_stmt_prepare_packet_t *stmt_prepare_packet;
+
+	stmt_prepare_packet = g_slice_new0(network_mysqld_stmt_prepare_packet_t);
+	stmt_prepare_packet->stmt_text = g_string_new(NULL);
+
+	return stmt_prepare_packet;
+}
+
+/**
+ * 
+ */
+void network_mysqld_stmt_prepare_packet_free(network_mysqld_stmt_prepare_packet_t *stmt_prepare_packet) {
+	if (NULL == stmt_prepare_packet) return;
+
+	if (NULL != stmt_prepare_packet->stmt_text) g_string_free(stmt_prepare_packet->stmt_text, TRUE);
+
+	g_slice_free(network_mysqld_stmt_prepare_packet_t, stmt_prepare_packet);
+}
+
+/**
+ * 
+ */
+int network_mysqld_proto_get_stmt_prepare_packet(network_packet *packet, network_mysqld_stmt_prepare_packet_t *stmt_prepare_packet) {
+	guint8 packet_type;
+
+	int err = 0;
+
+	err = err || network_mysqld_proto_get_int8(packet, &packet_type);
+	if (err) return -1;
+
+	if (COM_STMT_PREPARE != packet_type) {
+		g_critical("%s: expected the first byte to be %02x, got %02x",
+				G_STRLOC,
+				COM_STMT_PREPARE,
+				packet_type);
+		return -1;
+	}
+
+	g_string_assign_len(stmt_prepare_packet->stmt_text, packet->data->str + packet->offset, packet->data->len - packet->offset);
+
+	return err ? -1 : 0;
+}
+
+int network_mysqld_proto_append_stmt_prepare_packet(GString *packet, network_mysqld_stmt_prepare_packet_t *stmt_prepare_packet) {
+	network_mysqld_proto_append_int8(packet, COM_STMT_PREPARE);
+	g_string_append_len(packet, S(stmt_prepare_packet->stmt_text));
+
+	return 0;
+}
+
+/**
+ * 
+ */
+network_mysqld_stmt_prepare_ok_packet_t *network_mysqld_stmt_prepare_ok_packet_new() {
+	network_mysqld_stmt_prepare_ok_packet_t *stmt_prepare_ok_packet;
+
+	stmt_prepare_ok_packet = g_slice_new0(network_mysqld_stmt_prepare_ok_packet_t);
+
+	return stmt_prepare_ok_packet;
+}
+
+/**
+ * 
+ */
+void network_mysqld_stmt_prepare_ok_packet_free(network_mysqld_stmt_prepare_ok_packet_t *stmt_prepare_ok_packet) {
+	if (NULL == stmt_prepare_ok_packet) return;
+
+	g_slice_free(network_mysqld_stmt_prepare_ok_packet_t, stmt_prepare_ok_packet);
+}
+
+/**
+ * parse the first packet of the OK response for a COM_STMT_PREPARE
+ *
+ * it is followed by the field defs for the params and the columns and their EOF packets which is handled elsewhere
+ */
+int network_mysqld_proto_get_stmt_prepare_ok_packet(network_packet *packet, network_mysqld_stmt_prepare_ok_packet_t *stmt_prepare_ok_packet) {
+	guint8 packet_type;
+	guint16 num_columns;
+	guint16 num_params;
+	guint16 warnings;
+	guint32 stmt_id;
+
+	int err = 0;
+
+	err = err || network_mysqld_proto_get_int8(packet, &packet_type);
+	if (err) return -1;
+
+	if (0x00 != packet_type) {
+		g_critical("%s: expected the first byte to be %02x, got %02x",
+				G_STRLOC,
+				0x00,
+				packet_type);
+		return -1;
+	}
+	err = err || network_mysqld_proto_get_int32(packet, &stmt_id);
+	err = err || network_mysqld_proto_get_int16(packet, &num_columns);
+	err = err || network_mysqld_proto_get_int16(packet, &num_params);
+	err = err || network_mysqld_proto_skip(packet, 1); /* the filler */
+	err = err || network_mysqld_proto_get_int16(packet, &warnings);
+
+	if (!err) {
+		stmt_prepare_ok_packet->stmt_id = stmt_id;
+		stmt_prepare_ok_packet->num_columns = num_columns;
+		stmt_prepare_ok_packet->num_params = num_params;
+		stmt_prepare_ok_packet->warnings = warnings;
+	}
+
+	return err ? -1 : 0;
+}
+
+int network_mysqld_proto_append_stmt_prepare_ok_packet(GString *packet, network_mysqld_stmt_prepare_ok_packet_t *stmt_prepare_ok_packet) {
+	network_mysqld_proto_append_int8(packet, MYSQLD_PACKET_OK);
+	network_mysqld_proto_append_int32(packet, stmt_prepare_ok_packet->stmt_id);
+	network_mysqld_proto_append_int16(packet, stmt_prepare_ok_packet->num_columns);
+	network_mysqld_proto_append_int16(packet, stmt_prepare_ok_packet->num_params);
+	network_mysqld_proto_append_int8(packet, 0x00);
+	network_mysqld_proto_append_int16(packet, stmt_prepare_ok_packet->warnings);
+
+	return 0;
+}
+
+/**
+ * create a struct for a COM_STMT_EXECUTE packet
+ */
+network_mysqld_stmt_execute_packet_t *network_mysqld_stmt_execute_packet_new() {
+	network_mysqld_stmt_execute_packet_t *stmt_execute_packet;
+
+	stmt_execute_packet = g_slice_new0(network_mysqld_stmt_execute_packet_t);
+
+	return stmt_execute_packet;
+}
+
+/**
+ * free a struct for a COM_STMT_EXECUTE packet
+ */
+void network_mysqld_stmt_execute_packet_free(network_mysqld_stmt_execute_packet_t *stmt_execute_packet) {
+	if (NULL == stmt_execute_packet) return;
+
+	g_slice_free(network_mysqld_stmt_execute_packet_t, stmt_execute_packet);
+}
+
+/**
+ */
+int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet, network_mysqld_stmt_execute_packet_t *stmt_execute_packet) {
+	guint8 packet_type;
+	int err = 0;
+	guint param_count = 0; /* FIXME: where to get the param count from  ? */
+
+	err = err || network_mysqld_proto_get_int8(packet, &packet_type);
+	if (err) return -1;
+
+	if (COM_STMT_EXECUTE != packet_type) {
+		g_critical("%s: expected the first byte to be %02x, got %02x",
+				G_STRLOC,
+				COM_STMT_EXECUTE,
+				packet_type);
+		return -1;
+	}
+
+	err = err || network_mysqld_proto_get_int32(packet, &stmt_execute_packet->stmt_id);
+	err = err || network_mysqld_proto_get_int8(packet, &stmt_execute_packet->flags);
+	err = err || network_mysqld_proto_get_int32(packet, &stmt_execute_packet->iteration_count);
+	err = err || network_mysqld_proto_get_gstring_len(packet, (param_count * 7) / 8, stmt_execute_packet->nul_bits);
+	err = err || network_mysqld_proto_get_int8(packet, &stmt_execute_packet->new_params_bound);
+
+	if (err) return -1; /* exit early if something failed up to now */
+
+	if (stmt_execute_packet->new_params_bound) {
+		guint i;
+
+		for (i = 0; 0 == err && i < param_count; i++) {
+			guint16 param_type;
+
+			err = err || network_mysqld_proto_get_int16(packet, &param_type);
+
+			if (0 == err) {
+				network_mysqld_type_t *type;
+
+				type = network_mysqld_type_new(param_type & 0xff);
+
+				g_ptr_array_add(stmt_execute_packet->params, type);
+			}
+		}
+
+		for (i = 0; 0 == err && i < param_count; i++) {
+			network_mysqld_type_t *type = g_ptr_array_index(stmt_execute_packet->params, i);
+
+			err = err || type->from_binary(type, packet);
+		}
+	}
+
+	return err ? -1 : 0;
+}
+
+int network_mysqld_proto_append_stmt_execute_packet(GString *packet, network_mysqld_stmt_execute_packet_t *stmt_execute_packet) {
+	network_mysqld_proto_append_int8(packet, COM_STMT_EXECUTE);
+	network_mysqld_proto_append_int32(packet, stmt_execute_packet->stmt_id);
+	network_mysqld_proto_append_int8(packet, stmt_execute_packet->flags);
+	network_mysqld_proto_append_int32(packet, stmt_execute_packet->iteration_count);
+	g_string_append_len(packet, S(stmt_execute_packet->nul_bits));
+	network_mysqld_proto_append_int8(packet, stmt_execute_packet->new_params_bound);
+
+	if (stmt_execute_packet->new_params_bound) {
+		guint i;
+
+		for (i = 0; i < stmt_execute_packet->params->len; i++) {
+			network_mysqld_type_t *type = g_ptr_array_index(stmt_execute_packet->params, i);
+
+			network_mysqld_proto_append_int16(packet, (guint16)type->type);
+		}
+		for (i = 0; i < stmt_execute_packet->params->len; i++) {
+			network_mysqld_type_t *type = g_ptr_array_index(stmt_execute_packet->params, i);
+
+			type->to_binary(type, packet);
+		}
+	}
+
+	return 0;
+}
+
+/**
+ * create a struct for a COM_STMT_EXECUTE resultset row
+ */
+network_mysqld_resultset_row_t *network_mysqld_resultset_row_new() {
+	return g_ptr_array_new();
+}
+
+/**
+ * free a struct for a COM_STMT_EXECUTE resultset row
+ */
+void network_mysqld_resultset_row_free(network_mysqld_resultset_row_t *row) {
+	if (NULL == row) return;
+
+	g_ptr_array_free(row, TRUE);
+}
+
+/**
+ */
+GList *network_mysqld_proto_get_next_binary_row(GList *chunk, network_mysqld_proto_fielddefs_t *fields, network_mysqld_resultset_row_t *row) {
+	network_packet packet;
+	int err = 0;
+	network_mysqld_lenenc_type lenenc_type;
+	guint i;
+    
+	packet.data = chunk->data;
+	packet.offset = 0;
+
+	err = err || network_mysqld_proto_skip_network_header(&packet);
+
+	err = err || network_mysqld_proto_peek_lenenc_type(&packet, &lenenc_type);
+	if (0 != err) return NULL;
+
+	if (NETWORK_MYSQLD_LENENC_TYPE_EOF == lenenc_type) {
+		/* this is a EOF packet, we are done */
+		return NULL;
+	}
+
+	for (i = 0; 0 == err && i < fields->len; i++) {
+		network_mysqld_type_t *type;
+		network_mysqld_proto_fielddef_t *field = g_ptr_array_index(fields, i);
+
+		type = network_mysqld_type_new(field->type);
+
+		err = err || network_mysqld_proto_skip_network_header(&packet);
+		err = err || type->from_binary(type, &packet);
+
+		g_ptr_array_add(row, type);
+	}
+
+	return err ? NULL : chunk->next;
+}
+
+/**
+ * create a struct for a COM_STMT_CLOSE packet
+ */
+network_mysqld_stmt_close_packet_t *network_mysqld_stmt_close_packet_new() {
+	network_mysqld_stmt_close_packet_t *stmt_close_packet;
+
+	stmt_close_packet = g_slice_new0(network_mysqld_stmt_close_packet_t);
+
+	return stmt_close_packet;
+}
+
+/**
+ * free a struct for a COM_STMT_CLOSE packet
+ */
+void network_mysqld_stmt_close_packet_free(network_mysqld_stmt_close_packet_t *stmt_close_packet) {
+	if (NULL == stmt_close_packet) return;
+
+	g_slice_free(network_mysqld_stmt_close_packet_t, stmt_close_packet);
+}
+
+/**
+ */
+int network_mysqld_proto_get_stmt_close_packet(network_packet *packet, network_mysqld_stmt_close_packet_t *stmt_close_packet) {
+	guint8 packet_type;
+	int err = 0;
+
+	err = err || network_mysqld_proto_get_int8(packet, &packet_type);
+	if (err) return -1;
+
+	if (COM_STMT_CLOSE != packet_type) {
+		g_critical("%s: expected the first byte to be %02x, got %02x",
+				G_STRLOC,
+				COM_STMT_CLOSE,
+				packet_type);
+		return -1;
+	}
+
+	err = err || network_mysqld_proto_get_int32(packet, &stmt_close_packet->stmt_id);
+
+	return err ? -1 : 0;
+}
+
+int network_mysqld_proto_append_stmt_close_packet(GString *packet, network_mysqld_stmt_close_packet_t *stmt_close_packet) {
+	network_mysqld_proto_append_int8(packet, COM_STMT_CLOSE);
+	network_mysqld_proto_append_int32(packet, stmt_close_packet->stmt_id);
+
+	return 0;
 }
 
 
