@@ -27,6 +27,7 @@
 
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"
+#include "network_mysqld_type.h"
 #include "glib-ext.h"
 
 #if GLIB_CHECK_VERSION(2, 16, 0)
@@ -695,6 +696,213 @@ void t_resultset_fields_parse_high(void) {
 	network_queue_free(q);
 }
 
+/* prepared statements */
+
+/* COM_STMT_PREPARE */
+static void t_com_stmt_prepare_new(void) {
+	network_mysqld_stmt_prepare_packet_t *cmd;
+
+	cmd = network_mysqld_stmt_prepare_packet_new();
+	g_assert(cmd);
+
+	network_mysqld_stmt_prepare_packet_free(cmd);
+}
+
+static void t_com_stmt_prepare_from_packet(void) {
+	network_mysqld_stmt_prepare_packet_t *cmd;
+	const char raw_packet[] = "\x1c\x00\x00\x00\x16SELECT CONCAT(?, ?) AS col1";
+	network_packet packet;
+
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+
+	cmd = network_mysqld_stmt_prepare_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_stmt_prepare_packet(&packet, cmd));
+	g_assert_cmpint(sizeof("SELECT CONCAT(?, ?) AS col1") - 1, ==, cmd->stmt_text->len);
+	g_assert_cmpstr("SELECT CONCAT(?, ?) AS col1", ==, cmd->stmt_text->str);
+
+	network_mysqld_stmt_prepare_packet_free(cmd);
+}
+
+/* COM_STMT_PREPARE OK-result */
+
+static void t_com_stmt_prepare_ok_new(void) {
+	network_mysqld_stmt_prepare_ok_packet_t *cmd;
+
+	cmd = network_mysqld_stmt_prepare_ok_packet_new();
+	g_assert(cmd);
+
+	network_mysqld_stmt_prepare_ok_packet_free(cmd);
+}
+
+/**
+ * test if we parse all the fields of a COM_STMT_PREPARE-ok response correctly
+ */
+static void t_com_stmt_prepare_ok_from_packet(void) {
+	network_mysqld_stmt_prepare_ok_packet_t *cmd;
+	network_mysqld_eof_packet_t *eof;
+	network_mysqld_proto_fielddef_t *coldef;
+
+	/* a response for the COM_STMT_PREPARE command
+	 *
+	 * the OK part with stmt-id and so on is in the first packet. The others are
+	 * the field-defs, a EOF, the param-defs, and the last EOF */
+	strings packets[] = {
+		{ C("\x0c\x00\x00\x01\x00\x01\x00\x00\x00\x01\x00\x02\x00\x00\x00\x00") }, /* the PREPARE OK packet */
+		{ C("\x17\x00\x00\x02\x03\x64\x65\x66\x00\x00\x00\x01\x3f\x00\x0c\x3f\x00\x00\x00\x00\x00\xfd\x80\x00\x00\x00\x00") }, /* column-def: param 1 */
+		{ C("\x17\x00\x00\x03\x03\x64\x65\x66\x00\x00\x00\x01\x3f\x00\x0c\x3f\x00\x00\x00\x00\x00\xfd\x80\x00\x00\x00\x00") }, /* column-def: param 2 */
+		{ C("\x05\x00\x00\x04\xfe\x00\x00\x02\x00") }, /* the seperator */
+		{ C("\x1a\x00\x00\x05\x03\x64\x65\x66\x00\x00\x00\x04\x63\x6f\x6c\x31\x00\x0c\x3f\x00\x00\x00\x00\x00\xfd\x80\x00\x1f\x00\x00") }, /* column-def: result-col 1 */
+		{ C("\x05\x00\x00\x06\xfe\x00\x00\x02\x00") } /* the terminator */
+	};
+	network_packet packet;
+
+	packet.data = g_string_new_len(packets[0].s, packets[0].s_len);
+	packet.offset = 0;
+
+	cmd = network_mysqld_stmt_prepare_ok_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_stmt_prepare_ok_packet(&packet, cmd));
+	g_assert_cmpint(1, ==, cmd->stmt_id);
+	g_assert_cmpint(1, ==, cmd->num_columns);
+	g_assert_cmpint(2, ==, cmd->num_params);
+	g_assert_cmpint(0, ==, cmd->warnings);
+	
+	network_mysqld_stmt_prepare_ok_packet_free(cmd);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+	packet.data = g_string_new_len(packets[1].s, packets[1].s_len);
+	packet.offset = 0;
+
+	coldef = network_mysqld_proto_fielddef_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_fielddef(&packet, coldef, CLIENT_PROTOCOL_41));
+
+	network_mysqld_proto_fielddef_free(coldef);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+
+	packet.data = g_string_new_len(packets[2].s, packets[2].s_len);
+	packet.offset = 0;
+
+	coldef = network_mysqld_proto_fielddef_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_fielddef(&packet, coldef, CLIENT_PROTOCOL_41));
+	network_mysqld_proto_fielddef_free(coldef);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+
+	packet.data = g_string_new_len(packets[3].s, packets[3].s_len);
+	packet.offset = 0;
+
+	eof = network_mysqld_eof_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_eof_packet(&packet, eof));
+
+	network_mysqld_eof_packet_free(eof);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+
+	packet.data = g_string_new_len(packets[4].s, packets[4].s_len);
+	packet.offset = 0;
+
+	coldef = network_mysqld_proto_fielddef_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_fielddef(&packet, coldef, CLIENT_PROTOCOL_41));
+	network_mysqld_proto_fielddef_free(coldef);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+
+	packet.data = g_string_new_len(packets[5].s, packets[5].s_len);
+	packet.offset = 0;
+
+	eof = network_mysqld_eof_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_eof_packet(&packet, eof));
+
+	network_mysqld_eof_packet_free(eof);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+}
+
+/* COM_STMT_EXECUTE */
+
+static void t_com_stmt_execute_new(void) {
+	network_mysqld_stmt_execute_packet_t *cmd;
+
+	cmd = network_mysqld_stmt_execute_packet_new();
+	g_assert(cmd);
+
+	network_mysqld_stmt_execute_packet_free(cmd);
+}
+
+static void t_com_stmt_execute_from_packet(void) {
+	network_mysqld_stmt_execute_packet_t *cmd;
+	const char raw_packet[] = "\x18\x00\x00\x00\x17\x01\x00\x00\x00\x00\x01\x00\x00\x00\x00\x01\xfe\x00\xfe\x00\x03" "foo" "\x03" "bar";
+	network_packet packet;
+	network_mysqld_type_t *type;
+
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+
+	cmd = network_mysqld_stmt_execute_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_stmt_execute_packet(&packet, cmd, 2));
+	g_assert_cmpint(1, ==, cmd->stmt_id);
+	g_assert_cmpint(0, ==, cmd->flags);
+	g_assert_cmpint(1, ==, cmd->iteration_count);
+	g_assert_cmpint(1, ==, cmd->new_params_bound);
+
+	/* we should have 2 string params */
+	type = g_ptr_array_index(cmd->params, 0);
+	g_assert(type);
+	g_assert_cmpint(MYSQL_TYPE_STRING, ==, type->type);
+
+	type = g_ptr_array_index(cmd->params, 1);
+	g_assert(type);
+	g_assert_cmpint(MYSQL_TYPE_STRING, ==, type->type);
+
+	network_mysqld_stmt_execute_packet_free(cmd);
+}
+
+
+/* COM_STMT_CLOSE */
+static void t_com_stmt_close_new(void) {
+	network_mysqld_stmt_close_packet_t *cmd;
+
+	cmd = network_mysqld_stmt_close_packet_new();
+	g_assert(cmd);
+
+	network_mysqld_stmt_close_packet_free(cmd);
+}
+
+static void t_com_stmt_close_from_packet(void) {
+	network_mysqld_stmt_close_packet_t *cmd;
+	const char raw_packet[] = "\x05\x00\x00\x00\x19\x01\x00\x00\x00";
+	network_packet packet;
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+
+	cmd = network_mysqld_stmt_close_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_stmt_close_packet(&packet, cmd));
+	g_assert_cmpint(1, ==, cmd->stmt_id);
+
+	network_mysqld_stmt_close_packet_free(cmd);
+}
+
 
 /**
  * @cond
@@ -726,6 +934,19 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/resultset-fields-broken-proto-null", t_resultset_fields_parse_null);
 	g_test_add_func("/core/resultset-fields-broken-proto-field-count-low", t_resultset_fields_parse_low);
 	g_test_add_func("/core/resultset-fields-broken-proto-field-count-high", t_resultset_fields_parse_high);
+
+	/* prepared statements */
+	g_test_add_func("/core/com_stmt_prepare_new", t_com_stmt_prepare_new);
+	g_test_add_func("/core/com_stmt_prepare_from_packet", t_com_stmt_prepare_from_packet);
+
+	g_test_add_func("/core/com_stmt_prepare_ok_new", t_com_stmt_prepare_ok_new);
+	g_test_add_func("/core/com_stmt_prepare_ok_from_packet", t_com_stmt_prepare_ok_from_packet);
+
+	g_test_add_func("/core/com_stmt_execute_new", t_com_stmt_execute_new);
+	g_test_add_func("/core/com_stmt_execute_from_packet", t_com_stmt_execute_from_packet);
+
+	g_test_add_func("/core/com_stmt_close_new", t_com_stmt_close_new);
+	g_test_add_func("/core/com_stmt_close_from_packet", t_com_stmt_close_from_packet);
 
 	return g_test_run();
 }

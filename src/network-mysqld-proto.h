@@ -114,6 +114,7 @@ NETWORK_API int network_mysqld_proto_get_lenenc_int(network_packet *packet, guin
 typedef MYSQL_FIELD network_mysqld_proto_fielddef_t;
 NETWORK_API network_mysqld_proto_fielddef_t *network_mysqld_proto_fielddef_new(void);
 NETWORK_API void network_mysqld_proto_fielddef_free(network_mysqld_proto_fielddef_t *fielddef);
+NETWORK_API int network_mysqld_proto_get_fielddef(network_packet *packet, network_mysqld_proto_fielddef_t *field, guint32 capabilities);
 
 typedef GPtrArray network_mysqld_proto_fielddefs_t;
 NETWORK_API network_mysqld_proto_fielddefs_t *network_mysqld_proto_fielddefs_new(void);

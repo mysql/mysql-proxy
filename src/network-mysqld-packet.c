@@ -23,6 +23,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "network-mysqld-packet.h"
 #include "network_mysqld_type.h"
@@ -669,10 +670,8 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 	return is_finished;
 }
 
-int network_mysqld_proto_get_fielddef(network_packet *packet, MYSQL_FIELD *field, guint32 capabilities) {
+int network_mysqld_proto_get_fielddef(network_packet *packet, network_mysqld_proto_fielddef_t *field, guint32 capabilities) {
 	int err = 0;
-
-	err = err || network_mysqld_proto_skip_network_header(packet);
 
 	if (capabilities & CLIENT_PROTOCOL_41) {
 		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->catalog, NULL);
@@ -768,7 +767,7 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
     
 	/* the next chunk, the field-def */
 	for (i = 0; i < field_count; i++) {
-		MYSQL_FIELD *field;
+		network_mysqld_proto_fielddef_t *field;
         
 		chunk = chunk->next;
 		g_assert(chunk);
@@ -778,6 +777,7 @@ GList *network_mysqld_proto_get_fielddefs(GList *chunk, GPtrArray *fields) {
 
 		field = network_mysqld_proto_fielddef_new();
 
+		err = err || network_mysqld_proto_skip_network_header(&packet);
 		err = err || network_mysqld_proto_get_fielddef(&packet, field, capabilities);
 
 		g_ptr_array_add(fields, field); /* even if we had an error, append it so that we can free it later */
@@ -1502,6 +1502,7 @@ network_mysqld_stmt_execute_packet_t *network_mysqld_stmt_execute_packet_new() {
 	network_mysqld_stmt_execute_packet_t *stmt_execute_packet;
 
 	stmt_execute_packet = g_slice_new0(network_mysqld_stmt_execute_packet_t);
+	stmt_execute_packet->params = g_ptr_array_new();
 
 	return stmt_execute_packet;
 }
@@ -1512,15 +1513,24 @@ network_mysqld_stmt_execute_packet_t *network_mysqld_stmt_execute_packet_new() {
 void network_mysqld_stmt_execute_packet_free(network_mysqld_stmt_execute_packet_t *stmt_execute_packet) {
 	if (NULL == stmt_execute_packet) return;
 
+	g_ptr_array_free(stmt_execute_packet->params, TRUE);
+
 	g_slice_free(network_mysqld_stmt_execute_packet_t, stmt_execute_packet);
 }
 
 /**
+ *
+ * param_count has to be taken from the response of the prepare-stmt-ok packet
+ *
+ * @param param_count number of parameters that we expect to see here
  */
-int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet, network_mysqld_stmt_execute_packet_t *stmt_execute_packet) {
+int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
+		network_mysqld_stmt_execute_packet_t *stmt_execute_packet,
+		guint param_count) {
 	guint8 packet_type;
 	int err = 0;
-	guint param_count = 0; /* FIXME: where to get the param count from  ? */
+	GString *nul_bits;
+	gsize nul_bits_len;
 
 	err = err || network_mysqld_proto_get_int8(packet, &packet_type);
 	if (err) return -1;
@@ -1533,13 +1543,19 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet, network
 		return -1;
 	}
 
+	nul_bits_len = (param_count + 7) / 8;
+	nul_bits = g_string_sized_new(nul_bits_len);
 	err = err || network_mysqld_proto_get_int32(packet, &stmt_execute_packet->stmt_id);
 	err = err || network_mysqld_proto_get_int8(packet, &stmt_execute_packet->flags);
 	err = err || network_mysqld_proto_get_int32(packet, &stmt_execute_packet->iteration_count);
-	err = err || network_mysqld_proto_get_gstring_len(packet, (param_count * 7) / 8, stmt_execute_packet->nul_bits);
+	err = err || network_mysqld_proto_get_gstring_len(packet, nul_bits_len, nul_bits);
 	err = err || network_mysqld_proto_get_int8(packet, &stmt_execute_packet->new_params_bound);
 
-	if (err) return -1; /* exit early if something failed up to now */
+	if (0 != err) {
+		g_string_free(nul_bits, TRUE);
+
+		return -1; /* exit early if something failed up to now */
+	}
 
 	if (stmt_execute_packet->new_params_bound) {
 		guint i;
@@ -1553,6 +1569,7 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet, network
 				network_mysqld_type_t *type;
 
 				type = network_mysqld_type_new(param_type & 0xff);
+				type->is_null = (nul_bits->str[i / 8] & (1 << (i % 8))) != 0;
 
 				g_ptr_array_add(stmt_execute_packet->params, type);
 			}
@@ -1564,21 +1581,38 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet, network
 			err = err || type->from_binary(type, packet);
 		}
 	}
+	g_string_free(nul_bits, TRUE);
 
 	return err ? -1 : 0;
 }
 
-int network_mysqld_proto_append_stmt_execute_packet(GString *packet, network_mysqld_stmt_execute_packet_t *stmt_execute_packet) {
+int network_mysqld_proto_append_stmt_execute_packet(GString *packet,
+		network_mysqld_stmt_execute_packet_t *stmt_execute_packet,
+		guint param_count) {
+	gsize nul_bits_len;
+	GString *nul_bits;
+	guint i;
+
+	nul_bits_len = (param_count + 7) / 8;
+	nul_bits = g_string_sized_new(nul_bits_len);
+	memset(nul_bits->str, 0, nul_bits->len); /* set it all to zero */
+
+	for (i = 0; i < param_count; i++) {
+		network_mysqld_type_t *type = g_ptr_array_index(stmt_execute_packet->params, i);
+
+		if (type->is_null) {
+			nul_bits->str[i / 8] |= 1 << (i % 8);
+		}
+	}
+
 	network_mysqld_proto_append_int8(packet, COM_STMT_EXECUTE);
 	network_mysqld_proto_append_int32(packet, stmt_execute_packet->stmt_id);
 	network_mysqld_proto_append_int8(packet, stmt_execute_packet->flags);
 	network_mysqld_proto_append_int32(packet, stmt_execute_packet->iteration_count);
-	g_string_append_len(packet, S(stmt_execute_packet->nul_bits));
+	g_string_append_len(packet, S(nul_bits));
 	network_mysqld_proto_append_int8(packet, stmt_execute_packet->new_params_bound);
 
 	if (stmt_execute_packet->new_params_bound) {
-		guint i;
-
 		for (i = 0; i < stmt_execute_packet->params->len; i++) {
 			network_mysqld_type_t *type = g_ptr_array_index(stmt_execute_packet->params, i);
 

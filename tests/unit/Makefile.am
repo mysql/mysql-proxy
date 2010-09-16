@@ -85,6 +85,7 @@ t_network_mysqld_packet_SOURCES  = \
 	t_network_mysqld_packet.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
+	$(top_srcdir)/src/network_mysqld_type.c \
 	$(top_srcdir)/src/network-queue.c \
 	$(top_srcdir)/src/network-socket.c \
 	$(top_srcdir)/src/network-address.c \

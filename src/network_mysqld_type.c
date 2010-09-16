@@ -1,4 +1,7 @@
+#include <glib.h>
+
 #include "network_mysqld_type.h"
+#include "string-len.h"
 
 /* tiny */
 static int network_mysqld_type_tiny_from_binary(network_mysqld_type_t *type, network_packet *packet) {
@@ -145,6 +148,45 @@ network_mysqld_type_t *network_mysqld_type_longlong_new() {
 	return type;
 }
 
+/* all kinds of strings */
+static int network_mysqld_type_string_from_binary(network_mysqld_type_t *type, network_packet *packet) {
+	int err = 0;
+
+	type->data = g_string_new(NULL);
+
+	err = err || network_mysqld_proto_get_lenenc_gstring(packet, type->data);
+
+	return err ? -1 : 0;
+}
+
+static int network_mysqld_type_string_to_binary(network_mysqld_type_t *type, GString *packet) {
+	GString *data = type->data;
+
+	network_mysqld_proto_append_lenenc_string_len(packet, S(data));
+
+	return 0;
+}
+
+static void network_mysqld_type_string_free(network_mysqld_type_t *type) {
+	if (NULL == type) return;
+	if (NULL == type->data) return;
+
+	g_string_free(type->data, TRUE);
+}
+
+network_mysqld_type_t *network_mysqld_type_string_new(enum enum_field_types field_type) {
+	network_mysqld_type_t *type;
+
+	type = g_slice_new0(network_mysqld_type_t);
+	type->type = field_type;
+	type->free_data = network_mysqld_type_string_free;
+
+	type->to_binary = network_mysqld_type_string_to_binary;
+	type->from_binary = network_mysqld_type_string_from_binary;
+
+	return type;
+}
+
 
 network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types type) {
 	switch (type) {
@@ -163,13 +205,17 @@ network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types type) {
 	case MYSQL_TYPE_TIME:
 	case MYSQL_TYPE_DATE:
 	case MYSQL_TYPE_DATETIME:
+		g_assert_not_reached();
+		break;
 	case MYSQL_TYPE_BLOB:
 	case MYSQL_TYPE_TINY_BLOB:
 	case MYSQL_TYPE_MEDIUM_BLOB:
 	case MYSQL_TYPE_LONG_BLOB:
-	default:
-		g_assert_not_reached();
-		break;
+	case MYSQL_TYPE_STRING:
+	case MYSQL_TYPE_VAR_STRING:
+	case MYSQL_TYPE_VARCHAR:
+		/* they are all length-encoded strings */
+		return network_mysqld_type_string_new(type);
 	}
 	return NULL;
 }

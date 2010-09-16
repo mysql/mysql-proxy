@@ -257,15 +257,14 @@ typedef struct {
 	guint32 stmt_id;
 	guint8  flags;
 	guint32 iteration_count;
-	GString *nul_bits; /**< a NULL-bitmap, size is (params * 7)/8 */
 	guint8 new_params_bound;
 	GPtrArray *params; /**< array<network_mysqld_type *> */
 } network_mysqld_stmt_execute_packet_t;
 
 NETWORK_API network_mysqld_stmt_execute_packet_t *network_mysqld_stmt_execute_packet_new(void);
 NETWORK_API void network_mysqld_stmt_execute_packet_free(network_mysqld_stmt_execute_packet_t *stmt_execute_packet);
-NETWORK_API int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet, network_mysqld_stmt_execute_packet_t *stmt_execute_packet);
-NETWORK_API int network_mysqld_proto_append_stmt_execute_packet(GString *packet, network_mysqld_stmt_execute_packet_t *stmt_execute_packet);
+NETWORK_API int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet, network_mysqld_stmt_execute_packet_t *stmt_execute_packet, guint param_count);
+NETWORK_API int network_mysqld_proto_append_stmt_execute_packet(GString *packet, network_mysqld_stmt_execute_packet_t *stmt_execute_packet, guint param_count);
 
 
 /*
