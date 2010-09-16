@@ -1644,13 +1644,39 @@ void network_mysqld_resultset_row_free(network_mysqld_resultset_row_t *row) {
 	g_ptr_array_free(row, TRUE);
 }
 
+int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_proto_fielddefs_t *fields, network_mysqld_resultset_row_t *row) {
+	int err = 0;
+	guint i;
+	guint nul_bytes;
+
+	/* the packet starts with a \x00 byte to distinguish it from other packets
+	 * followed by the NULL-bits having the 2 MSBs
+	 * */
+
+	network_mysqld_proto_skip(packet, 1); /* the packet header which seems to be always 0 */
+	nul_bytes = (fields->len + 7 + 2) / 8;
+	network_mysqld_proto_skip(packet, nul_bytes); /* skip the nul-bytes for now */
+
+	for (i = 0; 0 == err && i < fields->len; i++) {
+		network_mysqld_type_t *type;
+		network_mysqld_proto_fielddef_t *field = g_ptr_array_index(fields, i);
+
+		type = network_mysqld_type_new(field->type);
+
+		err = err || type->from_binary(type, packet);
+
+		g_ptr_array_add(row, type);
+	}
+
+	return err ? -1 : 0;
+}
+
 /**
  */
 GList *network_mysqld_proto_get_next_binary_row(GList *chunk, network_mysqld_proto_fielddefs_t *fields, network_mysqld_resultset_row_t *row) {
 	network_packet packet;
 	int err = 0;
 	network_mysqld_lenenc_type lenenc_type;
-	guint i;
     
 	packet.data = chunk->data;
 	packet.offset = 0;
@@ -1665,17 +1691,7 @@ GList *network_mysqld_proto_get_next_binary_row(GList *chunk, network_mysqld_pro
 		return NULL;
 	}
 
-	for (i = 0; 0 == err && i < fields->len; i++) {
-		network_mysqld_type_t *type;
-		network_mysqld_proto_fielddef_t *field = g_ptr_array_index(fields, i);
-
-		type = network_mysqld_type_new(field->type);
-
-		err = err || network_mysqld_proto_skip_network_header(&packet);
-		err = err || type->from_binary(type, &packet);
-
-		g_ptr_array_add(row, type);
-	}
+	err = err || network_mysqld_proto_get_binary_row(&packet, fields, row);
 
 	return err ? NULL : chunk->next;
 }

@@ -877,6 +877,104 @@ static void t_com_stmt_execute_from_packet(void) {
 	network_mysqld_stmt_execute_packet_free(cmd);
 }
 
+/* COM_STMT_EXECUTE result */
+
+/**
+ * test if we parse all the fields of a COM_STMT_EXECUTE result correctly
+ */
+static void t_com_stmt_execute_result_from_packet(void) {
+	network_mysqld_eof_packet_t *eof;
+	network_mysqld_proto_fielddefs_t *coldefs;
+	network_mysqld_proto_fielddef_t *coldef;
+	network_mysqld_resultset_row_t *row;
+	network_mysqld_type_t *field;
+	GString *data;
+	guint64 field_count;
+
+	strings packets[] = {
+		{ C("\x01\x00\x00\x01\x01") }, /* on field */
+		{ C("\x1a\x00\x00\x02\x03\x64\x65\x66\x00\x00\x00\x04\x63\x6f\x6c\x31\x00\x0c\x08\x00\x06\x00\x00\x00\xfd\x00\x00\x1f\x00\x00") }, /* column-def: 1 */
+		{ C("\x05\x00\x00\x03\xfe\x00\x00\x02\x00") }, /* EOF */
+		{ C("\x09\x00\x00\x04\x00\x00\x06" "foobar") }, /* data */
+		{ C("\x05\x00\x00\x05\xfe\x00\x00\x02\x00") } /* EOF */
+	};
+	network_packet packet;
+
+	packet.data = g_string_new_len(packets[0].s, packets[0].s_len);
+	packet.offset = 0;
+
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_lenenc_int(&packet, &field_count));
+	g_assert_cmpint(1, ==, field_count);
+	
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+	packet.data = g_string_new_len(packets[1].s, packets[1].s_len);
+	packet.offset = 0;
+
+	coldefs = network_mysqld_proto_fielddefs_new();
+	coldef = network_mysqld_proto_fielddef_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_fielddef(&packet, coldef, CLIENT_PROTOCOL_41));
+
+	g_ptr_array_add(coldefs, coldef);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+	
+	packet.data = g_string_new_len(packets[2].s, packets[2].s_len);
+	packet.offset = 0;
+
+	eof = network_mysqld_eof_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_eof_packet(&packet, eof));
+
+	network_mysqld_eof_packet_free(eof);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+	packet.data = g_string_new_len(packets[3].s, packets[3].s_len);
+	packet.offset = 0;
+
+	row = network_mysqld_resultset_row_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_binary_row(&packet, coldefs, row));
+
+	/* check if the first field is "foobar" */
+	field = g_ptr_array_index(row, 0);
+	g_assert(field);
+	g_assert_cmpint(MYSQL_TYPE_VAR_STRING, ==, field->type);
+
+	/* FIXME: find a way to test this without touching the internal representation */
+	data = field->data;
+	g_assert(data);
+	g_assert_cmpint(data->len, ==, 6);
+	g_assert_cmpstr(data->str, ==, "foobar");
+
+	network_mysqld_resultset_row_free(row);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+	packet.data = g_string_new_len(packets[4].s, packets[4].s_len);
+	packet.offset = 0;
+
+	eof = network_mysqld_eof_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_eof_packet(&packet, eof));
+
+	network_mysqld_eof_packet_free(eof);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+	
+	network_mysqld_proto_fielddefs_free(coldefs);
+}
+
+
 
 /* COM_STMT_CLOSE */
 static void t_com_stmt_close_new(void) {
@@ -944,6 +1042,8 @@ int main(int argc, char **argv) {
 
 	g_test_add_func("/core/com_stmt_execute_new", t_com_stmt_execute_new);
 	g_test_add_func("/core/com_stmt_execute_from_packet", t_com_stmt_execute_from_packet);
+	
+	g_test_add_func("/core/com_stmt_execute_result_from_packet", t_com_stmt_execute_result_from_packet);
 
 	g_test_add_func("/core/com_stmt_close_new", t_com_stmt_close_new);
 	g_test_add_func("/core/com_stmt_close_from_packet", t_com_stmt_close_from_packet);

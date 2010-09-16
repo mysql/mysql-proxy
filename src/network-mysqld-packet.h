@@ -290,6 +290,7 @@ typedef GPtrArray network_mysqld_resultset_row_t;
 
 NETWORK_API network_mysqld_resultset_row_t *network_mysqld_resultset_row_new(void);
 NETWORK_API void network_mysqld_resultset_row_free(network_mysqld_resultset_row_t *row);
+NETWORK_API int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_proto_fielddefs_t *fields, network_mysqld_resultset_row_t *row);
 NETWORK_API GList *network_mysqld_proto_get_next_binary_row(GList *chunk, network_mysqld_proto_fielddefs_t *fields, network_mysqld_resultset_row_t *row);
 
 
