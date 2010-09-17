@@ -33,8 +33,6 @@ function read_query( packet )
 	elseif cmd_type == proxy.COM_STMT_CLOSE then
 		proxy.queries:append(3, packet, { resultset_is_needed = true } )
 		return proxy.PROXY_SEND_QUERY
-	else
-		print((" cmd: %d"):format(cmd_type))
 	end
 end
 
@@ -46,7 +44,7 @@ function read_query_result(inj)
 
 		-- and the stmt-id we got for it
 		local stmt_prepare_ok = assert(proto.from_stmt_prepare_ok_packet(inj.resultset.raw))
-		print(("< PREPARE: id = %d (cols = %d, params = %d)"):format(
+		print(("< PREPARE: stmt-id = %d (resultset-cols = %d, params = %d)"):format(
 			stmt_prepare_ok.stmt_id,
 			stmt_prepare_ok.num_columns,
 			stmt_prepare_ok.num_params))
@@ -58,15 +56,15 @@ function read_query_result(inj)
 	elseif inj.id == 2 then
 		local stmt_id = assert(proto.stmt_id_from_stmt_execute_packet(inj.query))
 		local stmt_execute = assert(proto.from_stmt_execute_packet(inj.query, prep_stmts[stmt_id].num_params))
-		print(("> EXECUTE: %d"):format(stmt_execute.stmt_id))
+		print(("> EXECUTE: stmt-id = %d"):format(stmt_execute.stmt_id))
 		if stmt_execute.new_params_bound then
 			for ndx, v in ipairs(stmt_execute.params) do
-				print((" [%d] %s (%d)"):format(ndx, tostring(v.value), v.type))
+				print((" [%d] %s (type = %d)"):format(ndx, tostring(v.value), v.type))
 			end
 		end
 	elseif inj.id == 3 then
 		local stmt_close = assert(proto.from_stmt_close_packet(inj.query))
-		print(("> CLOSE: %d"):format(stmt_close.stmt_id))
+		print(("> CLOSE: stmt-id = %d"):format(stmt_close.stmt_id))
 
 		prep_stmts[stmt_close.stmt_id] = nil -- cleanup
 	end
