@@ -1511,7 +1511,15 @@ network_mysqld_stmt_execute_packet_t *network_mysqld_stmt_execute_packet_new() {
  * free a struct for a COM_STMT_EXECUTE packet
  */
 void network_mysqld_stmt_execute_packet_free(network_mysqld_stmt_execute_packet_t *stmt_execute_packet) {
+	guint i;
+
 	if (NULL == stmt_execute_packet) return;
+
+	for (i = 0; i < stmt_execute_packet->params->len; i++) {
+		network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
+
+		network_mysqld_type_free(param);
+	}
 
 	g_ptr_array_free(stmt_execute_packet->params, TRUE);
 
