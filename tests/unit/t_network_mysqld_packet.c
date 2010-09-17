@@ -939,6 +939,34 @@ static void t_com_stmt_execute_from_packet(void) {
 	network_mysqld_stmt_execute_packet_free(cmd);
 }
 
+/**
+ * if there are no parameters, we don't have any nul-flags to send
+ */
+static void t_com_stmt_execute_from_packet_no_params(void) {
+	network_mysqld_stmt_execute_packet_t *cmd;
+	const char raw_packet[] = 
+		"\x0a\x00\x00\x00"
+		"\x17" /* COM_STMT_EXECUTE */
+		"\x01\x00\x00\x00" /* stmt-id */
+		"\x00" /* flags */
+		"\x01\x00\x00\x00" /* iteration count */
+		;
+
+	network_packet packet;
+
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+
+	cmd = network_mysqld_stmt_execute_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_stmt_execute_packet(&packet, cmd, 0));
+	g_assert_cmpint(1, ==, cmd->stmt_id);
+	g_assert_cmpint(0, ==, cmd->flags);
+	g_assert_cmpint(1, ==, cmd->iteration_count);
+
+	network_mysqld_stmt_execute_packet_free(cmd);
+}
+
 /* COM_STMT_EXECUTE result */
 
 /**
@@ -1075,8 +1103,6 @@ static void t_com_stmt_execute_result_from_packet(void) {
 	network_mysqld_proto_fielddefs_free(coldefs);
 }
 
-
-
 /* COM_STMT_CLOSE */
 static void t_com_stmt_close_new(void) {
 	network_mysqld_stmt_close_packet_t *cmd;
@@ -1143,6 +1169,7 @@ int main(int argc, char **argv) {
 
 	g_test_add_func("/core/com_stmt_execute_new", t_com_stmt_execute_new);
 	g_test_add_func("/core/com_stmt_execute_from_packet", t_com_stmt_execute_from_packet);
+	g_test_add_func("/core/com_stmt_execute_from_packet_no_params", t_com_stmt_execute_from_packet_no_params);
 	
 	g_test_add_func("/core/com_stmt_execute_result_from_packet", t_com_stmt_execute_result_from_packet);
 

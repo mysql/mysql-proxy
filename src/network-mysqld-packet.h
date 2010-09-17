@@ -224,6 +224,11 @@ NETWORK_API int network_mysqld_proto_append_stmt_prepare_packet(GString *packet,
  *  00 00 05 03 64 65 66 00    00 00 04 63 6f 6c 31 00    ....def....col1.
  *  0c 3f 00 00 00 00 00 fd    80 00 1f 00 00|05 00 00    .?..............
  *  06 fe 00 00 02 00                                     ...... 
+ *
+ * for a DO 1 it is:
+ *
+ *  0c 00 00 01 00 01 00 00    00 00 00 00 00 00 00 00
+ *
  */
 
 typedef struct {
@@ -251,6 +256,10 @@ NETWORK_API int network_mysqld_proto_append_stmt_prepare_ok_packet(GString *pack
  *
  *  18 00 00 00.17.01 00 00    00.00.01 00 00 00.00.01    ................
  *  fe 00.fe 00.03 66 6f 6f.   03 62 61 72                .....foo.bar
+ *
+ * if there is no parameter, there is also no nul-bit-map nor new-params-bound flag
+ *
+ *  0a 00 00 00 17 01 00 00    00 00 01 00 00 00          ..............
  */
 
 typedef struct {

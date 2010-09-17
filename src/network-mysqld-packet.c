@@ -1565,6 +1565,12 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
 	err = err || network_mysqld_proto_get_int8(packet, &stmt_execute_packet->flags);
 	err = err || network_mysqld_proto_get_int32(packet, &stmt_execute_packet->iteration_count);
 
+	if (0 == param_count) {
+		/* if there is no parameter requested, there is also no NUL-bit-mask send */
+
+		return err ? -1 : 0;
+	}
+
 	nul_bits_len = (param_count + 7) / 8;
 	nul_bits = g_string_sized_new(nul_bits_len);
 	err = err || network_mysqld_proto_get_gstring_len(packet, nul_bits_len, nul_bits);
