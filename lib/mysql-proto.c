@@ -617,7 +617,7 @@ static int lua_proto_get_stmt_execute_packet (lua_State *L) {
 				}
 			}
 			lua_setfield(L, -2, "value");
-			lua_rawseti(L, -2, i);
+			lua_rawseti(L, -2, i + 1);
 		}
 		lua_setfield(L, -2, "params"); 
 	}
