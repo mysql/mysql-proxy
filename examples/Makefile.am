@@ -8,6 +8,7 @@ example_scripts = \
 	tutorial-monitor.lua \
 	tutorial-packets.lua \
 	tutorial-query-time.lua \
+	tutorial-prep-stmts.lua \
 	tutorial-resultset.lua \
 	tutorial-rewrite.lua \
 	tutorial-routing.lua \

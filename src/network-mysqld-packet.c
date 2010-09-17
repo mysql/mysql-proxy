@@ -1519,18 +1519,18 @@ void network_mysqld_stmt_execute_packet_free(network_mysqld_stmt_execute_packet_
 }
 
 /**
+ * get the statement-id from the COM_STMT_EXECUTE packet
  *
- * param_count has to be taken from the response of the prepare-stmt-ok packet
+ * as network_mysqld_proto_get_stmt_execute_packet() needs the parameter count
+ * to calculate the number of null-bits, we need a way to look it up in a 
+ * external store which is very likely indexed by the stmt-id
  *
- * @param param_count number of parameters that we expect to see here
+ * @see network_mysqld_proto_get_stmt_execute_packet()
  */
-int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
-		network_mysqld_stmt_execute_packet_t *stmt_execute_packet,
-		guint param_count) {
+int network_mysqld_proto_get_stmt_execute_packet_stmt_id(network_packet *packet,
+		guint32 *stmt_id) {
 	guint8 packet_type;
 	int err = 0;
-	GString *nul_bits;
-	gsize nul_bits_len;
 
 	err = err || network_mysqld_proto_get_int8(packet, &packet_type);
 	if (err) return -1;
@@ -1543,11 +1543,30 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
 		return -1;
 	}
 
-	nul_bits_len = (param_count + 7) / 8;
-	nul_bits = g_string_sized_new(nul_bits_len);
-	err = err || network_mysqld_proto_get_int32(packet, &stmt_execute_packet->stmt_id);
+	err = err || network_mysqld_proto_get_int32(packet, stmt_id);
+
+	return err ? -1 : 0;
+}
+
+/**
+ *
+ * param_count has to be taken from the response of the prepare-stmt-ok packet
+ *
+ * @param param_count number of parameters that we expect to see here
+ */
+int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
+		network_mysqld_stmt_execute_packet_t *stmt_execute_packet,
+		guint param_count) {
+	int err = 0;
+	GString *nul_bits;
+	gsize nul_bits_len;
+
+	err = err || network_mysqld_proto_get_stmt_execute_packet_stmt_id(packet, &stmt_execute_packet->stmt_id);
 	err = err || network_mysqld_proto_get_int8(packet, &stmt_execute_packet->flags);
 	err = err || network_mysqld_proto_get_int32(packet, &stmt_execute_packet->iteration_count);
+
+	nul_bits_len = (param_count + 7) / 8;
+	nul_bits = g_string_sized_new(nul_bits_len);
 	err = err || network_mysqld_proto_get_gstring_len(packet, nul_bits_len, nul_bits);
 	err = err || network_mysqld_proto_get_int8(packet, &stmt_execute_packet->new_params_bound);
 
