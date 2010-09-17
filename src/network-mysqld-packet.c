@@ -1579,11 +1579,13 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
 			network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
 			network_mysqld_type_factory_t *factory;
 
-			factory = network_mysqld_type_factory_new(param->type);
+			if (!param->is_null) {
+				factory = network_mysqld_type_factory_new(param->type);
 
-			err = err || factory->from_binary(factory, packet, param);
+				err = err || factory->from_binary(factory, packet, param);
 
-			network_mysqld_type_factory_free(factory);
+				network_mysqld_type_factory_free(factory);
+			}
 		}
 	}
 

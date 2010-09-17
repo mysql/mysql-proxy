@@ -850,7 +850,7 @@ static void t_com_stmt_execute_new(void) {
 
 static void t_com_stmt_execute_from_packet(void) {
 	network_mysqld_stmt_execute_packet_t *cmd;
-	const char raw_packet[] = "\x18\x00\x00\x00\x17\x01\x00\x00\x00\x00\x01\x00\x00\x00\x00\x01\xfe\x00\xfe\x00\x03" "foo" "\x03" "bar";
+	const char raw_packet[] = "\x1a\x00\x00\x00\x17\x01\x00\x00\x00\x00\x01\x00\x00\x00\x01\x01\xfe\x00\xfe\x00\xfe\x00\x03" "bar" "\x03" "foo";
 	network_packet packet;
 	network_mysqld_type_t *type;
 
@@ -859,7 +859,7 @@ static void t_com_stmt_execute_from_packet(void) {
 
 	cmd = network_mysqld_stmt_execute_packet_new();
 	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
-	g_assert_cmpint(0, ==, network_mysqld_proto_get_stmt_execute_packet(&packet, cmd, 2));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_stmt_execute_packet(&packet, cmd, 3));
 	g_assert_cmpint(1, ==, cmd->stmt_id);
 	g_assert_cmpint(0, ==, cmd->flags);
 	g_assert_cmpint(1, ==, cmd->iteration_count);
@@ -869,10 +869,17 @@ static void t_com_stmt_execute_from_packet(void) {
 	type = g_ptr_array_index(cmd->params, 0);
 	g_assert(type);
 	g_assert_cmpint(MYSQL_TYPE_STRING, ==, type->type);
+	g_assert_cmpint(TRUE, ==, type->is_null);
 
 	type = g_ptr_array_index(cmd->params, 1);
 	g_assert(type);
 	g_assert_cmpint(MYSQL_TYPE_STRING, ==, type->type);
+	g_assert_cmpint(FALSE, ==, type->is_null);
+
+	type = g_ptr_array_index(cmd->params, 2);
+	g_assert(type);
+	g_assert_cmpint(MYSQL_TYPE_STRING, ==, type->type);
+	g_assert_cmpint(FALSE, ==, type->is_null);
 
 	network_mysqld_stmt_execute_packet_free(cmd);
 }
