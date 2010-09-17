@@ -1566,21 +1566,27 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
 			err = err || network_mysqld_proto_get_int16(packet, &param_type);
 
 			if (0 == err) {
-				network_mysqld_type_t *type;
+				network_mysqld_type_t *param;
 
-				type = network_mysqld_type_new(param_type & 0xff);
-				type->is_null = (nul_bits->str[i / 8] & (1 << (i % 8))) != 0;
+				param = network_mysqld_type_new(param_type & 0xff);
+				param->is_null = (nul_bits->str[i / 8] & (1 << (i % 8))) != 0;
 
-				g_ptr_array_add(stmt_execute_packet->params, type);
+				g_ptr_array_add(stmt_execute_packet->params, param);
 			}
 		}
 
 		for (i = 0; 0 == err && i < param_count; i++) {
-			network_mysqld_type_t *type = g_ptr_array_index(stmt_execute_packet->params, i);
+			network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
+			network_mysqld_type_factory_t *factory;
 
-			err = err || type->from_binary(type, packet);
+			factory = network_mysqld_type_factory_new(param->type);
+
+			err = err || factory->from_binary(factory, packet, param);
+
+			network_mysqld_type_factory_free(factory);
 		}
 	}
+
 	g_string_free(nul_bits, TRUE);
 
 	return err ? -1 : 0;
@@ -1614,14 +1620,19 @@ int network_mysqld_proto_append_stmt_execute_packet(GString *packet,
 
 	if (stmt_execute_packet->new_params_bound) {
 		for (i = 0; i < stmt_execute_packet->params->len; i++) {
-			network_mysqld_type_t *type = g_ptr_array_index(stmt_execute_packet->params, i);
+			network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
 
-			network_mysqld_proto_append_int16(packet, (guint16)type->type);
+			network_mysqld_proto_append_int16(packet, (guint16)param->type);
 		}
 		for (i = 0; i < stmt_execute_packet->params->len; i++) {
-			network_mysqld_type_t *type = g_ptr_array_index(stmt_execute_packet->params, i);
+			network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
+			network_mysqld_type_factory_t *factory;
 
-			type->to_binary(type, packet);
+			factory = network_mysqld_type_factory_new(param->type);
+
+			factory->to_binary(factory, packet, param);
+
+			network_mysqld_type_factory_free(factory);
 		}
 	}
 
@@ -1676,7 +1687,13 @@ int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_p
 		if (nul_bytes->str[(i + 2) / 8] & (1 << ((i + 2) % 8))) {
 			field->is_null = TRUE;
 		} else {
-			err = err || field->from_binary(field, packet);
+			network_mysqld_type_factory_t *factory;
+
+			factory = network_mysqld_type_factory_new(field->type); /* FIXME: get the factory from a global place instead of recreating them all the time */
+
+			err = err || factory->from_binary(factory, packet, field);
+
+			network_mysqld_type_factory_free(factory);
 		}
 
 		g_ptr_array_add(row, field);
