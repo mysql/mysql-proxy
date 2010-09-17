@@ -1639,34 +1639,50 @@ network_mysqld_resultset_row_t *network_mysqld_resultset_row_new() {
  * free a struct for a COM_STMT_EXECUTE resultset row
  */
 void network_mysqld_resultset_row_free(network_mysqld_resultset_row_t *row) {
+	guint i;
+
 	if (NULL == row) return;
+
+	for (i = 0; i < row->len; i++) {
+		network_mysqld_type_t *field = g_ptr_array_index(row, i);
+
+		network_mysqld_type_free(field);
+	}
 
 	g_ptr_array_free(row, TRUE);
 }
 
-int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_proto_fielddefs_t *fields, network_mysqld_resultset_row_t *row) {
+int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_proto_fielddefs_t *coldefs, network_mysqld_resultset_row_t *row) {
 	int err = 0;
 	guint i;
-	guint nul_bytes;
+	guint nul_bytes_len;
+	GString *nul_bytes;
 
 	/* the packet starts with a \x00 byte to distinguish it from other packets
-	 * followed by the NULL-bits having the 2 MSBs
+	 * followed by the NULL-bits that don't use the first 2 bits
 	 * */
+	nul_bytes_len = (coldefs->len + 7 + 2) / 8;
+	nul_bytes = g_string_sized_new(nul_bytes_len);
 
-	network_mysqld_proto_skip(packet, 1); /* the packet header which seems to be always 0 */
-	nul_bytes = (fields->len + 7 + 2) / 8;
-	network_mysqld_proto_skip(packet, nul_bytes); /* skip the nul-bytes for now */
+	err = err || network_mysqld_proto_skip(packet, 1); /* the packet header which seems to be always 0 */
+	err = err || network_mysqld_proto_get_gstring_len(packet, nul_bytes_len, nul_bytes);
 
-	for (i = 0; 0 == err && i < fields->len; i++) {
-		network_mysqld_type_t *type;
-		network_mysqld_proto_fielddef_t *field = g_ptr_array_index(fields, i);
+	for (i = 0; 0 == err && i < coldefs->len; i++) {
+		network_mysqld_type_t *field;
+		network_mysqld_proto_fielddef_t *coldef = g_ptr_array_index(coldefs, i);
 
-		type = network_mysqld_type_new(field->type);
+		field = network_mysqld_type_new(coldef->type);
 
-		err = err || type->from_binary(type, packet);
+		if (nul_bytes->str[(i + 2) / 8] & (1 << ((i + 2) % 8))) {
+			field->is_null = TRUE;
+		} else {
+			err = err || field->from_binary(field, packet);
+		}
 
-		g_ptr_array_add(row, type);
+		g_ptr_array_add(row, field);
 	}
+
+	g_string_free(nul_bytes, TRUE);
 
 	return err ? -1 : 0;
 }

@@ -890,27 +890,42 @@ static void t_com_stmt_execute_result_from_packet(void) {
 	network_mysqld_type_t *field;
 	GString *data;
 	guint64 field_count;
+	int packet_id = 0;
 
+	/* response for a 
+	 *   SELECT ? AS col2, CONCAT(?, ?) AS col1
+	 * with
+	 *   1: NULL
+	 *   2: STRING bar
+	 *   3: STRING foo
+	 */
 	strings packets[] = {
-		{ C("\x01\x00\x00\x01\x01") }, /* on field */
-		{ C("\x1a\x00\x00\x02\x03\x64\x65\x66\x00\x00\x00\x04\x63\x6f\x6c\x31\x00\x0c\x08\x00\x06\x00\x00\x00\xfd\x00\x00\x1f\x00\x00") }, /* column-def: 1 */
-		{ C("\x05\x00\x00\x03\xfe\x00\x00\x02\x00") }, /* EOF */
-		{ C("\x09\x00\x00\x04\x00\x00\x06" "foobar") }, /* data */
-		{ C("\x05\x00\x00\x05\xfe\x00\x00\x02\x00") } /* EOF */
+		{ C("\x01\x00\x00\x01\x02") },
+		{ C("\x1a\x00\x00\x02\x03\x64\x65\x66\x00\x00\x00\x04\x63\x6f\x6c\x32\x00\x0c\x3f\x00\x00\x00\x00\x00\xfe\x80\x00\x00\x00\x00") },
+		{ C("\x1a\x00\x00\x03\x03\x64\x65\x66\x00\x00\x00\x04\x63\x6f\x6c\x31\x00\x0c\x08\x00\x06\x00\x00\x00\xfd\x00\x00\x1f\x00\x00") },
+		{ C("\x05\x00\x00\x04\xfe\x00\x00\x02\x00") },
+		{ C("\x09\x00\x00\x05\x00\x04\x06" "barfoo") },
+		{ C("\x05\x00\x00\x06\xfe\x00\x00\x02\x00") }
+
 	};
 	network_packet packet;
 
-	packet.data = g_string_new_len(packets[0].s, packets[0].s_len);
+	/* the field-count */
+	packet_id = 0;
+	packet.data = g_string_new_len(packets[packet_id].s, packets[packet_id].s_len);
 	packet.offset = 0;
 
 	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_lenenc_int(&packet, &field_count));
-	g_assert_cmpint(1, ==, field_count);
+	g_assert_cmpint(2, ==, field_count);
 	
 	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
 	g_string_free(packet.data, TRUE);
 
-	packet.data = g_string_new_len(packets[1].s, packets[1].s_len);
+
+	/* the colum defs */
+	packet_id++;
+	packet.data = g_string_new_len(packets[packet_id].s, packets[packet_id].s_len);
 	packet.offset = 0;
 
 	coldefs = network_mysqld_proto_fielddefs_new();
@@ -923,8 +938,23 @@ static void t_com_stmt_execute_result_from_packet(void) {
 	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
 	g_string_free(packet.data, TRUE);
 
-	
-	packet.data = g_string_new_len(packets[2].s, packets[2].s_len);
+	/* the string column */
+	packet_id++;
+	packet.data = g_string_new_len(packets[packet_id].s, packets[packet_id].s_len);
+	packet.offset = 0;
+
+	coldef = network_mysqld_proto_fielddef_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_fielddef(&packet, coldef, CLIENT_PROTOCOL_41));
+
+	g_ptr_array_add(coldefs, coldef);
+
+	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
+	g_string_free(packet.data, TRUE);
+
+	/* the EOF */	
+	packet_id++;
+	packet.data = g_string_new_len(packets[packet_id].s, packets[packet_id].s_len);
 	packet.offset = 0;
 
 	eof = network_mysqld_eof_packet_new();
@@ -936,30 +966,39 @@ static void t_com_stmt_execute_result_from_packet(void) {
 	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
 	g_string_free(packet.data, TRUE);
 
-	packet.data = g_string_new_len(packets[3].s, packets[3].s_len);
+	/* the row */
+	packet_id++;
+	packet.data = g_string_new_len(packets[packet_id].s, packets[packet_id].s_len);
 	packet.offset = 0;
 
 	row = network_mysqld_resultset_row_new();
 	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
 	g_assert_cmpint(0, ==, network_mysqld_proto_get_binary_row(&packet, coldefs, row));
 
-	/* check if the first field is "foobar" */
+	/* check if the 1st field is NULL */
 	field = g_ptr_array_index(row, 0);
 	g_assert(field);
+	g_assert_cmpint(TRUE, ==, field->is_null);
+
+	/* check if the 2nd field is "barfoo" */
+	field = g_ptr_array_index(row, 1);
+	g_assert(field);
 	g_assert_cmpint(MYSQL_TYPE_VAR_STRING, ==, field->type);
+	g_assert_cmpint(FALSE, ==, field->is_null);
 
 	/* FIXME: find a way to test this without touching the internal representation */
 	data = field->data;
 	g_assert(data);
 	g_assert_cmpint(data->len, ==, 6);
-	g_assert_cmpstr(data->str, ==, "foobar");
+	g_assert_cmpstr(data->str, ==, "barfoo");
 
 	network_mysqld_resultset_row_free(row);
 
 	g_assert_cmpint(packet.offset, ==, packet.data->len); /* is everything parsed */
 	g_string_free(packet.data, TRUE);
 
-	packet.data = g_string_new_len(packets[4].s, packets[4].s_len);
+	packet_id++;
+	packet.data = g_string_new_len(packets[packet_id].s, packets[packet_id].s_len);
 	packet.offset = 0;
 
 	eof = network_mysqld_eof_packet_new();
