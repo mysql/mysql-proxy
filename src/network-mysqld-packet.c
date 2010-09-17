@@ -1570,6 +1570,7 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
 
 				param = network_mysqld_type_new(param_type & 0xff);
 				param->is_null = (nul_bits->str[i / 8] & (1 << (i % 8))) != 0;
+				param->is_unsigned = (param_type & 0x8000) != 0;
 
 				g_ptr_array_add(stmt_execute_packet->params, param);
 			}

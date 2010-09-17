@@ -15,6 +15,7 @@ struct _network_mysqld_type_t{
 	void (*free_data)(network_mysqld_type_t *type);
 
 	gboolean is_null;
+	gboolean is_unsigned;
 }; 
 
 NETWORK_API network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types _type);
