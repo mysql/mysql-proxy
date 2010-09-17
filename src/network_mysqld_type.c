@@ -114,7 +114,7 @@ void network_mysqld_type_free(network_mysqld_type_t *type) {
 /* tiny */
 static int network_mysqld_type_factory_tiny_from_binary(network_mysqld_type_factory_t *factory, network_packet *packet, network_mysqld_type_t *type) {
 	guint8 i8;
-	int err;
+	int err = 0;
 
 	err = err || network_mysqld_proto_get_int8(packet, &i8);
 
@@ -150,7 +150,7 @@ network_mysqld_type_factory_t *network_mysqld_type_factory_tiny_new(void) {
 /* short */
 static int network_mysqld_type_factory_short_from_binary(network_mysqld_type_factory_t *factory, network_packet *packet, network_mysqld_type_t *type) {
 	guint16 i16;
-	int err;
+	int err = 0;
 
 	err = err || network_mysqld_proto_get_int16(packet, &i16);
 
@@ -183,7 +183,7 @@ network_mysqld_type_factory_t *network_mysqld_type_factory_short_new() {
 /* long */
 static int network_mysqld_type_factory_long_from_binary(network_mysqld_type_factory_t *factory, network_packet *packet, network_mysqld_type_t *type) {
 	guint32 i32;
-	int err;
+	int err = 0;
 
 	err = err || network_mysqld_proto_get_int32(packet, &i32);
 
@@ -216,7 +216,7 @@ network_mysqld_type_factory_t *network_mysqld_type_factory_long_new() {
 /* longlong */
 static int network_mysqld_type_factory_longlong_from_binary(network_mysqld_type_factory_t *factory, network_packet *packet, network_mysqld_type_t *type) {
 	guint64 i64;
-	int err;
+	int err = 0;
 
 	err = err || network_mysqld_proto_get_int64(packet, &i64);
 
