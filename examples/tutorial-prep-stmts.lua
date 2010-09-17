@@ -43,16 +43,18 @@ function read_query_result(inj)
 		print(("> PREPARE: %s"):format(stmt_prepare.stmt_text))
 
 		-- and the stmt-id we got for it
-		local stmt_prepare_ok = assert(proto.from_stmt_prepare_ok_packet(inj.resultset.raw))
-		print(("< PREPARE: stmt-id = %d (resultset-cols = %d, params = %d)"):format(
-			stmt_prepare_ok.stmt_id,
-			stmt_prepare_ok.num_columns,
-			stmt_prepare_ok.num_params))
+		if inj.resultset.raw:byte() == 0 then
+			local stmt_prepare_ok = assert(proto.from_stmt_prepare_ok_packet(inj.resultset.raw))
+			print(("< PREPARE: stmt-id = %d (resultset-cols = %d, params = %d)"):format(
+				stmt_prepare_ok.stmt_id,
+				stmt_prepare_ok.num_columns,
+				stmt_prepare_ok.num_params))
 
-		prep_stmts[stmt_prepare_ok.stmt_id] = {
-			num_columns = stmt_prepare_ok.num_columns,
-			num_params = stmt_prepare_ok.num_params,
-		}
+			prep_stmts[stmt_prepare_ok.stmt_id] = {
+				num_columns = stmt_prepare_ok.num_columns,
+				num_params = stmt_prepare_ok.num_params,
+			}
+		end
 	elseif inj.id == 2 then
 		local stmt_id = assert(proto.stmt_id_from_stmt_execute_packet(inj.query))
 		local stmt_execute = assert(proto.from_stmt_execute_packet(inj.query, prep_stmts[stmt_id].num_params))
