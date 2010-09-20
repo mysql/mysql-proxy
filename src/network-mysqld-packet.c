@@ -1611,14 +1611,16 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
 
 		for (i = 0; 0 == err && i < param_count; i++) {
 			network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
-			network_mysqld_type_factory_t *factory;
 
 			if (!param->is_null) {
+				network_mysqld_type_factory_t *factory;
+
 				factory = network_mysqld_type_factory_new(param->type);
 
+				err = err || (factory == NULL);
 				err = err || factory->from_binary(factory, packet, param);
 
-				network_mysqld_type_factory_free(factory);
+				if (NULL != factory) network_mysqld_type_factory_free(factory);
 			}
 		}
 	}
@@ -1727,9 +1729,10 @@ int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_p
 
 			factory = network_mysqld_type_factory_new(field->type); /* FIXME: get the factory from a global place instead of recreating them all the time */
 
+			err = err || (factory == NULL);
 			err = err || factory->from_binary(factory, packet, field);
 
-			network_mysqld_type_factory_free(factory);
+			if (NULL != factory) network_mysqld_type_factory_free(factory);
 		}
 
 		g_ptr_array_add(row, field);
