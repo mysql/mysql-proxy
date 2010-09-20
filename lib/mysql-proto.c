@@ -594,6 +594,13 @@ static int lua_proto_get_stmt_execute_packet (lua_State *L) {
 			} else {
 				/* FIXME: instead of accessing the fields directly, we should have a cleaner way to access 
 				 * the data */
+				const char *const_s;
+				char *_s;
+				gsize s_len;
+				guint64 _i;
+				gboolean is_unsigned;
+				double d;
+
 				switch (param->type) {
 				case MYSQL_TYPE_BLOB:
 				case MYSQL_TYPE_MEDIUM_BLOB:
@@ -601,15 +608,44 @@ static int lua_proto_get_stmt_execute_packet (lua_State *L) {
 				case MYSQL_TYPE_STRING:
 				case MYSQL_TYPE_VARCHAR:
 				case MYSQL_TYPE_VAR_STRING:
-					lua_pushlstring(L, S(((GString *)param->data)));
+					if (0 != param->get_string_const(param, &const_s, &s_len)) {
+						return luaL_error(L, "FAIL");
+					}
+
+					lua_pushlstring(L, const_s, s_len);
 					break;
 				case MYSQL_TYPE_TINY:
 				case MYSQL_TYPE_SHORT:
 				case MYSQL_TYPE_LONG:
-					lua_pushinteger(L, GPOINTER_TO_INT(param->data));
-					break;
 				case MYSQL_TYPE_LONGLONG:
-					lua_pushinteger(L, *(guint64 *)param->data);
+					if (0 != param->get_int(param, &_i, &is_unsigned)) {
+						return luaL_error(L, "FAIL");
+					}
+
+					lua_pushinteger(L, _i);
+					break;
+				case MYSQL_TYPE_DOUBLE:
+				case MYSQL_TYPE_FLOAT:
+					if (0 != param->get_double(param, &d)) {
+						return luaL_error(L, "FAIL");
+					}
+
+					lua_pushnumber(L, d);
+					break;
+				case MYSQL_TYPE_DATETIME:
+				case MYSQL_TYPE_TIMESTAMP:
+				case MYSQL_TYPE_DATE:
+				case MYSQL_TYPE_TIME:
+					_s = NULL;
+					s_len = 0;
+
+					if (0 != param->get_string(param, &_s, &s_len)) {
+						return luaL_error(L, "FAIL");
+					}
+
+					lua_pushlstring(L, _s, s_len);
+
+					if (NULL != _s) g_free(_s);
 					break;
 				default:
 					luaL_error(L, "can't decode type %d yet", param->type); /* we don't have that value yet */

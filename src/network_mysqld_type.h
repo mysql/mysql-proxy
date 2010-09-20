@@ -6,31 +6,6 @@
 
 #include "network-mysqld-proto.h"
 
-typedef struct _network_mysqld_type_t network_mysqld_type_t;
-
-struct _network_mysqld_type_t{
-	enum enum_field_types type;
-
-	gpointer data;
-	void (*free_data)(network_mysqld_type_t *type);
-
-	gboolean is_null;
-	gboolean is_unsigned;
-}; 
-
-NETWORK_API network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types _type);
-NETWORK_API void network_mysqld_type_free(network_mysqld_type_t *type);
-
-/* expose the types itself and their internal representation */
-
-typedef double network_mysqld_type_double_t;
-network_mysqld_type_double_t *network_mysqld_type_double_new(void);
-void network_mysqld_type_double_free(network_mysqld_type_double_t *t);
-
-typedef float network_mysqld_type_float_t;
-
-typedef GString network_mysqld_type_string_t;
-
 typedef struct {
 	guint16 year;
 	guint8  month;
@@ -54,10 +29,34 @@ typedef struct {
 	guint32 nsec; /* the nano-second part */
 } network_mysqld_type_time_t;
 
-typedef struct {
-	guint64 i;
+typedef struct _network_mysqld_type_t network_mysqld_type_t;
+
+struct _network_mysqld_type_t {
+	enum enum_field_types type;
+
+	gpointer data;
+	void (*free_data)(network_mysqld_type_t *type);
+
+	int (*get_gstring)(network_mysqld_type_t *type, GString *s);
+	int (*get_string_const)(network_mysqld_type_t *type, const char **s, gsize *s_len);
+	int (*get_string)(network_mysqld_type_t *type, char **s, gsize *len);
+	int (*set_string)(network_mysqld_type_t *type, const char *s, gsize s_len);
+	int (*get_int)(network_mysqld_type_t *type, guint64 *i, gboolean *is_unsigned);
+	int (*set_int)(network_mysqld_type_t *type, guint64 i, gboolean is_unsigned);
+	int (*get_double)(network_mysqld_type_t *type, double *d);
+	int (*set_double)(network_mysqld_type_t *type, double d);
+	int (*get_date)(network_mysqld_type_t *type, network_mysqld_type_date_t *date);
+	int (*set_date)(network_mysqld_type_t *type, network_mysqld_type_date_t *date);
+	int (*get_time)(network_mysqld_type_t *type, network_mysqld_type_time_t *t);
+	int (*set_time)(network_mysqld_type_t *type, network_mysqld_type_time_t *t);
+
+
+	gboolean is_null;
 	gboolean is_unsigned;
-} network_mysqld_type_longlong_t;
+}; 
+
+NETWORK_API network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types _type);
+NETWORK_API void network_mysqld_type_free(network_mysqld_type_t *type);
 
 /**
  * factory for types

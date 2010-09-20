@@ -911,11 +911,12 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_STRING, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	G_STMT_START {
-		network_mysqld_type_string_t *value;
-		value = param->data;
-		g_assert(value);
-		g_assert_cmpint(value->len, ==, 3);
-		g_assert_cmpstr(value->str, ==, "foo");
+		const char *s;
+		gsize s_len;
+
+		g_assert_cmpint(0, ==, param->get_string_const(param, &s, &s_len));
+		g_assert_cmpint(s_len, ==, 3);
+		g_assert_cmpstr(s, ==, "foo");
 	} G_STMT_END;
 
 	/* (_INT64)1 */
@@ -924,6 +925,14 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_LONGLONG, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	g_assert_cmpint(FALSE, ==, param->is_unsigned);
+	G_STMT_START {
+		guint64 i;
+		gboolean is_unsigned;
+
+		g_assert_cmpint(0, ==, param->get_int(param, &i, &is_unsigned));
+		g_assert_cmpint(i, ==, 1);
+		g_assert_cmpint(is_unsigned, ==, FALSE);
+	} G_STMT_END;
 
 	/* (_UINT64)1 */
 	param = g_ptr_array_index(cmd->params, param_ndx++);
@@ -931,6 +940,13 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_LONGLONG, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	g_assert_cmpint(TRUE, ==, param->is_unsigned);
+	G_STMT_START {
+		guint64 i;
+		gboolean is_unsigned;
+
+		g_assert_cmpint(0, ==, param->get_int(param, &i, &is_unsigned));
+		g_assert_cmpint(i, ==, 1);
+	} G_STMT_END;
 
 	/* (_INT32)1 */
 	param = g_ptr_array_index(cmd->params, param_ndx++);
@@ -938,6 +954,13 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_LONG, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	g_assert_cmpint(FALSE, ==, param->is_unsigned);
+	G_STMT_START {
+		guint64 i;
+		gboolean is_unsigned;
+
+		g_assert_cmpint(0, ==, param->get_int(param, &i, &is_unsigned));
+		g_assert_cmpint(i, ==, 1);
+	} G_STMT_END;
 
 	/* (_INT16)1 */
 	param = g_ptr_array_index(cmd->params, param_ndx++);
@@ -945,6 +968,13 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_SHORT, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	g_assert_cmpint(FALSE, ==, param->is_unsigned);
+	G_STMT_START {
+		guint64 i;
+		gboolean is_unsigned;
+
+		g_assert_cmpint(0, ==, param->get_int(param, &i, &is_unsigned));
+		g_assert_cmpint(i, ==, 1);
+	} G_STMT_END;
 
 	/* (_INT8)1 */
 	param = g_ptr_array_index(cmd->params, param_ndx++);
@@ -952,6 +982,13 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_TINY, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	g_assert_cmpint(FALSE, ==, param->is_unsigned);
+	G_STMT_START {
+		guint64 i;
+		gboolean is_unsigned;
+
+		g_assert_cmpint(0, ==, param->get_int(param, &i, &is_unsigned));
+		g_assert_cmpint(i, ==, 1);
+	} G_STMT_END;
 
 	/* (_DOUBLE)10.2 */
 	param = g_ptr_array_index(cmd->params, param_ndx++);
@@ -959,10 +996,10 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_DOUBLE, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	G_STMT_START {
-		network_mysqld_type_double_t *value;
-		value = param->data;
-		g_assert(value);
-		g_assert_cmpfloat(*value, ==, 10.2);
+		double d;
+
+		g_assert_cmpint(0, ==, param->get_double(param, &d));
+		g_assert_cmpfloat(d, ==, 10.2);
 	} G_STMT_END;
 
 	/* (_FLOAT)10.2 */
@@ -971,10 +1008,10 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_FLOAT, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	G_STMT_START {
-		network_mysqld_type_float_t *value;
-		value = param->data;
-		g_assert(value);
-		g_assert_cmpfloat(*value, ==, (float)10.2);
+		double d;
+
+		g_assert_cmpint(0, ==, param->get_double(param, &d));
+		g_assert_cmpfloat(d, ==, (float)10.2);
 	} G_STMT_END;
 
 	/* (_DATE)2010-10-17 */
@@ -983,17 +1020,17 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_DATE, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	G_STMT_START {
-		network_mysqld_type_date_t *value;
-		value = param->data;
-		g_assert(value);
-		g_assert_cmpint(value->year, ==, 2010);
-		g_assert_cmpint(value->month, ==, 10);
-		g_assert_cmpint(value->day, ==, 17);
+		network_mysqld_type_date_t date;
 
-		g_assert_cmpint(value->hour, ==, 0);
-		g_assert_cmpint(value->min, ==, 0);
-		g_assert_cmpint(value->sec, ==, 0);
-		g_assert_cmpint(value->nsec, ==, 0);
+		g_assert_cmpint(0, ==, param->get_date(param, &date));
+		g_assert_cmpint(date.year, ==, 2010);
+		g_assert_cmpint(date.month, ==, 10);
+		g_assert_cmpint(date.day, ==, 17);
+
+		g_assert_cmpint(date.hour, ==, 0);
+		g_assert_cmpint(date.min, ==, 0);
+		g_assert_cmpint(date.sec, ==, 0);
+		g_assert_cmpint(date.nsec, ==, 0);
 	} G_STMT_END;
 
 	/* (_DATETIME)2010-10-17 19:27:30.000 010 */
@@ -1002,17 +1039,18 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_DATETIME, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	G_STMT_START {
-		network_mysqld_type_date_t *value;
-		value = param->data;
-		g_assert(value);
-		g_assert_cmpint(value->year, ==, 2010);
-		g_assert_cmpint(value->month, ==, 10);
-		g_assert_cmpint(value->day, ==, 17);
+		network_mysqld_type_date_t date;
 
-		g_assert_cmpint(value->hour, ==, 19);
-		g_assert_cmpint(value->min, ==, 27);
-		g_assert_cmpint(value->sec, ==, 30);
-		g_assert_cmpint(value->nsec, ==, 1);
+		g_assert_cmpint(0, ==, param->get_date(param, &date));
+
+		g_assert_cmpint(date.year, ==, 2010);
+		g_assert_cmpint(date.month, ==, 10);
+		g_assert_cmpint(date.day, ==, 17);
+
+		g_assert_cmpint(date.hour, ==, 19);
+		g_assert_cmpint(date.min, ==, 27);
+		g_assert_cmpint(date.sec, ==, 30);
+		g_assert_cmpint(date.nsec, ==, 1);
 	} G_STMT_END;
 
 	/* (_TIMESTAMP)2010-10-17 19:27:30.000 010 */
@@ -1021,17 +1059,17 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_TIMESTAMP, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	G_STMT_START {
-		network_mysqld_type_date_t *value;
-		value = param->data;
-		g_assert(value);
-		g_assert_cmpint(value->year, ==, 2010);
-		g_assert_cmpint(value->month, ==, 10);
-		g_assert_cmpint(value->day, ==, 17);
+		network_mysqld_type_date_t date;
 
-		g_assert_cmpint(value->hour, ==, 19);
-		g_assert_cmpint(value->min, ==, 27);
-		g_assert_cmpint(value->sec, ==, 30);
-		g_assert_cmpint(value->nsec, ==, 1);
+		g_assert_cmpint(0, ==, param->get_date(param, &date));
+		g_assert_cmpint(date.year, ==, 2010);
+		g_assert_cmpint(date.month, ==, 10);
+		g_assert_cmpint(date.day, ==, 17);
+
+		g_assert_cmpint(date.hour, ==, 19);
+		g_assert_cmpint(date.min, ==, 27);
+		g_assert_cmpint(date.sec, ==, 30);
+		g_assert_cmpint(date.nsec, ==, 1);
 	} G_STMT_END;
 
 	/* (_TIME)-120 19:27:30.000 010 */
@@ -1040,16 +1078,16 @@ static void t_com_stmt_execute_from_packet(void) {
 	g_assert_cmpint(MYSQL_TYPE_TIME, ==, param->type);
 	g_assert_cmpint(FALSE, ==, param->is_null);
 	G_STMT_START {
-		network_mysqld_type_time_t *value;
-		value = param->data;
-		g_assert(value);
-		g_assert_cmpint(value->sign, ==, 1);
-		g_assert_cmpint(value->days, ==, 120);
+		network_mysqld_type_time_t t;
 
-		g_assert_cmpint(value->hour, ==, 19);
-		g_assert_cmpint(value->min, ==, 27);
-		g_assert_cmpint(value->sec, ==, 30);
-		g_assert_cmpint(value->nsec, ==, 1);
+		g_assert_cmpint(0, ==, param->get_time(param, &t));
+		g_assert_cmpint(t.sign, ==, 1);
+		g_assert_cmpint(t.days, ==, 120);
+
+		g_assert_cmpint(t.hour, ==, 19);
+		g_assert_cmpint(t.min, ==, 27);
+		g_assert_cmpint(t.sec, ==, 30);
+		g_assert_cmpint(t.nsec, ==, 1);
 	} G_STMT_END;
 
 	network_mysqld_stmt_execute_packet_free(cmd);
