@@ -21,6 +21,44 @@ struct _network_mysqld_type_t{
 NETWORK_API network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types _type);
 NETWORK_API void network_mysqld_type_free(network_mysqld_type_t *type);
 
+/* expose the types itself and their internal representation */
+
+typedef double network_mysqld_type_double_t;
+network_mysqld_type_double_t *network_mysqld_type_double_new(void);
+void network_mysqld_type_double_free(network_mysqld_type_double_t *t);
+
+typedef float network_mysqld_type_float_t;
+
+typedef GString network_mysqld_type_string_t;
+
+typedef struct {
+	guint16 year;
+	guint8  month;
+	guint8  day;
+	
+	guint8  hour;
+	guint8  min;
+	guint8  sec;
+
+	guint32 nsec; /* the nano-second part */
+} network_mysqld_type_date_t;
+
+typedef struct {
+	guint8  sign;
+	guint32 days;
+	
+	guint8  hour;
+	guint8  min;
+	guint8  sec;
+
+	guint32 nsec; /* the nano-second part */
+} network_mysqld_type_time_t;
+
+typedef struct {
+	guint64 i;
+	gboolean is_unsigned;
+} network_mysqld_type_longlong_t;
+
 /**
  * factory for types
  *

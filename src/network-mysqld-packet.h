@@ -254,8 +254,22 @@ NETWORK_API int network_mysqld_proto_append_stmt_prepare_ok_packet(GString *pack
  *        n*2 type-of-param if new-params-bound
  *        <params>
  *
- *  18 00 00 00.17.01 00 00    00.00.01 00 00 00.00.01    ................
- *  fe 00.fe 00.03 66 6f 6f.   03 62 61 72                .....foo.bar
+ *
+ *  7a 00 00 00 -- header
+ *  17 01 00 00 00 00 01 00 00 00 03 00 01 -- basic EXECUTE header
+ *  fe 00 06 00 fe 00 08 00 08 80 03 00 02 00 01 00 05 00 04 00 0a 00 0c 00 0b 00 07 00 -- fields
+ *  03 66 6f 6f -- string = "foo"
+ *  01 00 00 00 00 00 00 00 -- int64 = 1 
+ *  01 00 00 00 00 00 00 00 -- uint64 = 1
+ *  01 00 00 00 -- int32 = 1
+ *  01 00 -- int16 = 1
+ *  01 -- int8 = 1
+ *  66 66 66 66 66 66 24 40 -- double = 10.2
+ *  33 33 23 41 -- float = 10.2
+ *  04 da 07 0a 11 -- date = 2010-10-17
+ *  0b da 07 0a 11 13 1b 1e 01 00 00 00 -- datetime 2010-10-17 19:27:30.000 010
+ *  0c 01 78 00 00 00 13 1b 1e 01 00 00 00 -- time  -120d 19:27:30.000 010
+ *  0b da 07 0a 11 13 1b 1e 01 00 00 00 -- timestamp 
  *
  * if there is no parameter, there is also no nul-bit-map nor new-params-bound flag
  *
