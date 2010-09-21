@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include <glib.h>
 
@@ -289,6 +290,40 @@ static int network_mysqld_type_data_date_get_date(network_mysqld_type_t *type, n
 	return 0;
 }
 
+static int network_mysqld_type_data_date_get_string(network_mysqld_type_t *type, char **dst, gsize *dst_len) {
+	network_mysqld_type_date_t *src = type->data;
+
+	if (NULL == type->data) return -1;
+
+	if (*dst_len > 0 && NULL != *dst) {
+		/* dst_len already contains a size and we don't have to alloc */
+		if (*dst_len < 29 + 1) {
+			return -1; /* ... but it is too small .. we could return the right size here */
+		}
+		*dst_len = snprintf(*dst, *dst_len, "%04u-%02u-%02u %02u:%02u:%02u.%09u",
+				src->year,
+				src->month,
+				src->day,
+				src->hour,
+				src->min,
+				src->sec,
+				src->nsec);
+	} else {
+		*dst = g_strdup_printf("%04u-%02u-%02u %02u:%02u:%02u.%09u",
+				src->year,
+				src->month,
+				src->day,
+				src->hour,
+				src->min,
+				src->sec,
+				src->nsec);
+		*dst_len = strlen(*dst);
+	}
+
+	return 0;
+}
+
+
 static int network_mysqld_type_data_date_set_date(network_mysqld_type_t *type, network_mysqld_type_date_t *src) {
 	network_mysqld_type_date_t *dst;
 
@@ -307,6 +342,7 @@ static void network_mysqld_type_data_date_init(network_mysqld_type_t *type, enum
 	type->type	= field_type;
 	type->free_data = network_mysqld_type_data_date_free;
 	type->get_date   = network_mysqld_type_data_date_get_date;
+	type->get_string = network_mysqld_type_data_date_get_string;
 	type->set_date   = network_mysqld_type_data_date_set_date;
 }
 
@@ -333,11 +369,40 @@ static void network_mysqld_type_data_time_free(network_mysqld_type_t *type) {
 }
 
 static int network_mysqld_type_data_time_get_time(network_mysqld_type_t *type, network_mysqld_type_time_t *dst) {
-	network_mysqld_type_date_t *src = type->data;
+	network_mysqld_type_time_t *src = type->data;
 
 	if (NULL == type->data) return -1;
 
 	memcpy(dst, src, sizeof(network_mysqld_type_time_t));
+
+	return 0;
+}
+
+static int network_mysqld_type_data_time_get_string(network_mysqld_type_t *type, char **dst, gsize *dst_len) {
+	network_mysqld_type_time_t *src = type->data;
+
+	if (NULL == type->data) return -1;
+
+	if (*dst_len > 0 && NULL != *dst) {
+		/* dst_len already contains a size and we don't have to alloc */
+		if (*dst_len < 30 + 1) {
+			return -1; /* ... but it is too small .. we could return the right size here */
+		}
+		*dst_len = snprintf(*dst, *dst_len, "%d %02u:%02u:%02u.%09u",
+				src->days * (src->sign ? -1 : 1), /* 11 digits */
+				src->hour,
+				src->min,
+				src->sec,
+				src->nsec);
+	} else {
+		*dst = g_strdup_printf("%d %02u:%02u:%02u.%09u",
+				src->days * (src->sign ? -1 : 1),
+				src->hour,
+				src->min,
+				src->sec,
+				src->nsec);
+		*dst_len = strlen(*dst);
+	}
 
 	return 0;
 }
@@ -360,6 +425,7 @@ static void network_mysqld_type_data_time_init(network_mysqld_type_t *type, enum
 	type->type	= field_type;
 	type->free_data = network_mysqld_type_data_time_free;
 	type->get_time = network_mysqld_type_data_time_get_time;
+	type->get_string = network_mysqld_type_data_time_get_string;
 	type->set_time = network_mysqld_type_data_time_set_time;
 }
 
