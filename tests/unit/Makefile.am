@@ -86,6 +86,7 @@ t_network_mysqld_packet_SOURCES  = \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network_mysqld_type.c \
+	$(top_srcdir)/src/network_mysqld_proto_binary.c \
 	$(top_srcdir)/src/network-queue.c \
 	$(top_srcdir)/src/network-socket.c \
 	$(top_srcdir)/src/network-address.c \
@@ -128,6 +129,7 @@ t_network_socket_SOURCES  = \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network_mysqld_type.c \
+	$(top_srcdir)/src/network_mysqld_proto_binary.c \
 	$(top_srcdir)/src/network-address.c \
 	$(top_srcdir)/src/network-queue.c \
 	$(top_srcdir)/src/network-socket.c
@@ -180,6 +182,7 @@ t_network_backend_SOURCES  = \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network_mysqld_type.c \
+	$(top_srcdir)/src/network_mysqld_proto_binary.c \
 	$(top_srcdir)/src/network-conn-pool.c \
 	$(top_srcdir)/src/network-address.c \
 	$(top_srcdir)/src/network-queue.c \
@@ -208,6 +211,7 @@ t_network_injection_SOURCES  = \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network_mysqld_type.c \
+	$(top_srcdir)/src/network_mysqld_proto_binary.c \
 	$(top_srcdir)/src/network-injection.c \
 	$(top_srcdir)/src/my_rdtsc.c \
 	$(top_srcdir)/src/chassis-timings.c

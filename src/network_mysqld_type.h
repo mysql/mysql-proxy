@@ -138,27 +138,4 @@ NETWORK_API int network_mysqld_type_set_date(network_mysqld_type_t *type, networ
 NETWORK_API int network_mysqld_type_get_time(network_mysqld_type_t *type, network_mysqld_type_time_t *t);
 NETWORK_API int network_mysqld_type_set_time(network_mysqld_type_t *type, network_mysqld_type_time_t *t);
 
-/**
- * factory for types
- *
- * generate types from the binary or text protocol
- */
-typedef struct _network_mysqld_type_factory_t network_mysqld_type_factory_t;
-
-struct _network_mysqld_type_factory_t {
-	enum enum_field_types type;
-
-	/* to binary protocol */
-	int (*to_binary)(network_mysqld_type_factory_t *factory, GString *packet, network_mysqld_type_t *type);
-	int (*from_binary)(network_mysqld_type_factory_t *factory, network_packet *packet, network_mysqld_type_t *type);
-#if 0
-	/* will be added later */
-	int (*to_text)(network_mysqld_type_factory_t *factory, GString *packet, network_mysqld_type_t *type);
-	int (*from_text)(network_mysqld_type_factory_t *factory, network_packet *packet, network_mysqld_type_t *type);
-#endif
-};
-
-NETWORK_API network_mysqld_type_factory_t *network_mysqld_type_factory_new(enum enum_field_types _type);
-NETWORK_API void network_mysqld_type_factory_free(network_mysqld_type_factory_t *factory);
-
 #endif

@@ -27,6 +27,7 @@
 
 #include "network-mysqld-packet.h"
 #include "network_mysqld_type.h"
+#include "network_mysqld_proto_binary.h"
 
 #include "glib-ext.h"
 
@@ -1613,14 +1614,7 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
 			network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
 
 			if (!param->is_null) {
-				network_mysqld_type_factory_t *factory;
-
-				factory = network_mysqld_type_factory_new(param->type);
-
-				err = err || (factory == NULL);
-				err = err || factory->from_binary(factory, packet, param);
-
-				if (NULL != factory) network_mysqld_type_factory_free(factory);
+				err = err || network_mysqld_proto_binary_get_type(packet, param);
 			}
 		}
 	}
@@ -1636,6 +1630,7 @@ int network_mysqld_proto_append_stmt_execute_packet(GString *packet,
 	gsize nul_bits_len;
 	GString *nul_bits;
 	guint i;
+	int err = 0;
 
 	nul_bits_len = (param_count + 7) / 8;
 	nul_bits = g_string_sized_new(nul_bits_len);
@@ -1664,17 +1659,14 @@ int network_mysqld_proto_append_stmt_execute_packet(GString *packet,
 		}
 		for (i = 0; i < stmt_execute_packet->params->len; i++) {
 			network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
-			network_mysqld_type_factory_t *factory;
-
-			factory = network_mysqld_type_factory_new(param->type);
-
-			factory->to_binary(factory, packet, param);
-
-			network_mysqld_type_factory_free(factory);
+			
+			if (!param->is_null) {
+				err = err || network_mysqld_proto_binary_append_type(packet, param);
+			}
 		}
 	}
 
-	return 0;
+	return err ? -1 : 0;
 }
 
 /**
@@ -1725,14 +1717,7 @@ int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_p
 		if (nul_bytes->str[(i + 2) / 8] & (1 << ((i + 2) % 8))) {
 			field->is_null = TRUE;
 		} else {
-			network_mysqld_type_factory_t *factory;
-
-			factory = network_mysqld_type_factory_new(field->type); /* FIXME: get the factory from a global place instead of recreating them all the time */
-
-			err = err || (factory == NULL);
-			err = err || factory->from_binary(factory, packet, field);
-
-			if (NULL != factory) network_mysqld_type_factory_free(factory);
+			err = err || network_mysqld_proto_binary_get_type(packet, field);
 		}
 
 		g_ptr_array_add(row, field);
