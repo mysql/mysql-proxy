@@ -493,6 +493,88 @@ void network_mysqld_type_free(network_mysqld_type_t *type) {
 	g_slice_free(network_mysqld_type_t, type);
 }
 
+int network_mysqld_type_get_gstring(network_mysqld_type_t *type, GString *s) {
+	if (NULL == type->get_gstring) return -1;
+
+	return type->get_gstring(type, s);
+}
+
+int network_mysqld_type_get_string_const(network_mysqld_type_t *type, const char **s, gsize *s_len) {
+	if (NULL == type->get_string_const) return -1;
+
+	return type->get_string_const(type, s, s_len);
+}
+
+int network_mysqld_type_get_string(network_mysqld_type_t *type, char **s, gsize *s_len) {
+	if (NULL == type->get_string) return -1;
+
+	return type->get_string(type, s, s_len);
+}
+
+
+int network_mysqld_type_set_string(network_mysqld_type_t *type, const char *s, gsize s_len) {
+	if (NULL == type->set_string) return -1;
+
+	return type->set_string(type, s, s_len);
+}
+
+
+int network_mysqld_type_get_int(network_mysqld_type_t *type, guint64 *i, gboolean *is_unsigned) {
+	if (NULL == type->get_int) return -1;
+
+	return type->get_int(type, i, is_unsigned);
+}
+
+
+int network_mysqld_type_set_int(network_mysqld_type_t *type, guint64 i, gboolean is_unsigned) {
+	if (NULL == type->set_int) return -1;
+
+	return type->set_int(type, i, is_unsigned);
+}
+
+
+int network_mysqld_type_get_double(network_mysqld_type_t *type, double *d) {
+	if (NULL == type->get_double) return -1;
+
+	return type->get_double(type, d);
+}
+
+
+int network_mysqld_type_set_double(network_mysqld_type_t *type, double d) {
+	if (NULL == type->set_double) return -1;
+
+	return type->set_double(type, d);
+}
+
+
+int network_mysqld_type_get_date(network_mysqld_type_t *type, network_mysqld_type_date_t *date) {
+	if (NULL == type->get_date) return -1;
+
+	return type->get_date(type, date);
+}
+
+
+int network_mysqld_type_set_date(network_mysqld_type_t *type, network_mysqld_type_date_t *date) {
+	if (NULL == type->set_date) return -1;
+
+	return type->set_date(type, date);
+}
+
+
+int network_mysqld_type_get_time(network_mysqld_type_t *type, network_mysqld_type_time_t *t) {
+	if (NULL == type->get_time) return -1;
+
+	return type->get_time(type, t);
+}
+
+
+int network_mysqld_type_set_time(network_mysqld_type_t *type, network_mysqld_type_time_t *t) {
+	if (NULL == type->set_time) return -1;
+
+	return type->set_time(type, t);
+}
+
+
 /* ints */
 static int network_mysqld_type_factory_int_from_binary(network_mysqld_type_factory_t G_GNUC_UNUSED *factory, network_packet *packet, network_mysqld_type_t *type) {
 	int err = 0;

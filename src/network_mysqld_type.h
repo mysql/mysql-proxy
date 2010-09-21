@@ -55,8 +55,28 @@ struct _network_mysqld_type_t {
 	gboolean is_unsigned;
 }; 
 
+
 NETWORK_API network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types _type);
 NETWORK_API void network_mysqld_type_free(network_mysqld_type_t *type);
+
+/**
+ * wrappers around the gettors and settors 
+ *
+ * @return -1 if no settor or gettor defined or settor or gettor failed to convert
+ */
+NETWORK_API int network_mysqld_type_get_gstring(network_mysqld_type_t *type, GString *s);
+NETWORK_API int network_mysqld_type_get_gstring(network_mysqld_type_t *type, GString *s);
+NETWORK_API int network_mysqld_type_get_string_const(network_mysqld_type_t *type, const char **s, gsize *s_len);
+NETWORK_API int network_mysqld_type_get_string(network_mysqld_type_t *type, char **s, gsize *len);
+NETWORK_API int network_mysqld_type_set_string(network_mysqld_type_t *type, const char *s, gsize s_len);
+NETWORK_API int network_mysqld_type_get_int(network_mysqld_type_t *type, guint64 *i, gboolean *is_unsigned);
+NETWORK_API int network_mysqld_type_set_int(network_mysqld_type_t *type, guint64 i, gboolean is_unsigned);
+NETWORK_API int network_mysqld_type_get_double(network_mysqld_type_t *type, double *d);
+NETWORK_API int network_mysqld_type_set_double(network_mysqld_type_t *type, double d);
+NETWORK_API int network_mysqld_type_get_date(network_mysqld_type_t *type, network_mysqld_type_date_t *date);
+NETWORK_API int network_mysqld_type_set_date(network_mysqld_type_t *type, network_mysqld_type_date_t *date);
+NETWORK_API int network_mysqld_type_get_time(network_mysqld_type_t *type, network_mysqld_type_time_t *t);
+NETWORK_API int network_mysqld_type_set_time(network_mysqld_type_t *type, network_mysqld_type_time_t *t);
 
 /**
  * factory for types

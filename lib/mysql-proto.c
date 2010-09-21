@@ -592,8 +592,6 @@ static int lua_proto_get_stmt_execute_packet (lua_State *L) {
 			if (param->is_null) {
 				lua_pushnil(L);
 			} else {
-				/* FIXME: instead of accessing the fields directly, we should have a cleaner way to access 
-				 * the data */
 				const char *const_s;
 				char *_s;
 				gsize s_len;
@@ -608,8 +606,10 @@ static int lua_proto_get_stmt_execute_packet (lua_State *L) {
 				case MYSQL_TYPE_STRING:
 				case MYSQL_TYPE_VARCHAR:
 				case MYSQL_TYPE_VAR_STRING:
-					if (0 != param->get_string_const(param, &const_s, &s_len)) {
-						return luaL_error(L, "FAIL");
+					if (0 != network_mysqld_type_get_string_const(param, &const_s, &s_len)) {
+						return luaL_error(L, "%s: _get_string_const() failed for type = %d",
+								G_STRLOC,
+								param->type);
 					}
 
 					lua_pushlstring(L, const_s, s_len);
@@ -618,16 +618,20 @@ static int lua_proto_get_stmt_execute_packet (lua_State *L) {
 				case MYSQL_TYPE_SHORT:
 				case MYSQL_TYPE_LONG:
 				case MYSQL_TYPE_LONGLONG:
-					if (0 != param->get_int(param, &_i, &is_unsigned)) {
-						return luaL_error(L, "FAIL");
+					if (0 != network_mysqld_type_get_int(param, &_i, &is_unsigned)) {
+						return luaL_error(L, "%s: _get_int() failed for type = %d",
+								G_STRLOC,
+								param->type);
 					}
 
 					lua_pushinteger(L, _i);
 					break;
 				case MYSQL_TYPE_DOUBLE:
 				case MYSQL_TYPE_FLOAT:
-					if (0 != param->get_double(param, &d)) {
-						return luaL_error(L, "FAIL");
+					if (0 != network_mysqld_type_get_double(param, &d)) {
+						return luaL_error(L, "%s: _get_double() failed for type = %d",
+								G_STRLOC,
+								param->type);
 					}
 
 					lua_pushnumber(L, d);
@@ -639,8 +643,10 @@ static int lua_proto_get_stmt_execute_packet (lua_State *L) {
 					_s = NULL;
 					s_len = 0;
 
-					if (0 != param->get_string(param, &_s, &s_len)) {
-						return luaL_error(L, "FAIL");
+					if (0 != network_mysqld_type_get_string(param, &_s, &s_len)) {
+						return luaL_error(L, "%s: _get_string() failed for type = %d",
+								G_STRLOC,
+								param->type);
 					}
 
 					lua_pushlstring(L, _s, s_len);
@@ -648,7 +654,9 @@ static int lua_proto_get_stmt_execute_packet (lua_State *L) {
 					if (NULL != _s) g_free(_s);
 					break;
 				default:
-					luaL_error(L, "can't decode type %d yet", param->type); /* we don't have that value yet */
+					luaL_error(L, "%s: can't decode type %d yet",
+							G_STRLOC,
+							param->type); /* we don't have that value yet */
 					break;
 				}
 			}
