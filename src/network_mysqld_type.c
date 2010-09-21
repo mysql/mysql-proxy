@@ -296,28 +296,61 @@ static int network_mysqld_type_data_date_get_string(network_mysqld_type_t *type,
 	if (NULL == type->data) return -1;
 
 	if (*dst_len > 0 && NULL != *dst) {
-		/* dst_len already contains a size and we don't have to alloc */
-		if (*dst_len < 29 + 1) {
-			return -1; /* ... but it is too small .. we could return the right size here */
+		switch (type->type) {
+		case MYSQL_TYPE_DATE:
+			/* dst_len already contains a size and we don't have to alloc */
+			if (*dst_len < 10 + 1) {
+				return -1; /* ... but it is too small .. we could return the right size here */
+			}
+			*dst_len = snprintf(*dst, *dst_len, "%04u-%02u-%02u",
+					src->year,
+					src->month,
+					src->day);
+			break;
+		case MYSQL_TYPE_DATETIME:
+		case MYSQL_TYPE_TIMESTAMP:
+			/* dst_len already contains a size and we don't have to alloc */
+			if (*dst_len < 29 + 1) {
+				return -1; /* ... but it is too small .. we could return the right size here */
+			}
+			*dst_len = snprintf(*dst, *dst_len, "%04u-%02u-%02u %02u:%02u:%02u.%09u",
+					src->year,
+					src->month,
+					src->day,
+					src->hour,
+					src->min,
+					src->sec,
+					src->nsec);
+			break;
+		default:
+			g_assert_not_reached();
+			break;
 		}
-		*dst_len = snprintf(*dst, *dst_len, "%04u-%02u-%02u %02u:%02u:%02u.%09u",
-				src->year,
-				src->month,
-				src->day,
-				src->hour,
-				src->min,
-				src->sec,
-				src->nsec);
 	} else {
-		*dst = g_strdup_printf("%04u-%02u-%02u %02u:%02u:%02u.%09u",
-				src->year,
-				src->month,
-				src->day,
-				src->hour,
-				src->min,
-				src->sec,
-				src->nsec);
-		*dst_len = strlen(*dst);
+		switch (type->type) {
+		case MYSQL_TYPE_DATE:
+			*dst = g_strdup_printf("%04u-%02u-%02u",
+					src->year,
+					src->month,
+					src->day);
+			*dst_len = strlen(*dst);
+			break;
+		case MYSQL_TYPE_DATETIME:
+		case MYSQL_TYPE_TIMESTAMP:
+			*dst = g_strdup_printf("%04u-%02u-%02u %02u:%02u:%02u.%09u",
+					src->year,
+					src->month,
+					src->day,
+					src->hour,
+					src->min,
+					src->sec,
+					src->nsec);
+			*dst_len = strlen(*dst);
+			break;
+		default:
+			g_assert_not_reached();
+			break;
+		}
 	}
 
 	return 0;
