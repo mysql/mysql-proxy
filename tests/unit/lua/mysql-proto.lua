@@ -19,7 +19,7 @@
  $%ENDLICENSE%$ --]]
 local proto = assert(require("mysql.proto"))
 local password = assert(require("mysql.password"))
-
+require("proxy.test")
 ---
 -- err packet
 
@@ -264,4 +264,26 @@ local response   = "09876543210987654321"
 assert(password.unscramble(challenge, response, dbl_hashed) ~= hashed)
 
 assert(false == password.check(challenge, response, dbl_hashed))
+
+---
+-- prepared stmt decoders
+--
+
+-- EXECUTE packet, no params
+local packet = "\023\001\000\000\000\000\001\000\000\000"
+local execute = proto.from_stmt_execute_packet(packet, 0)
+assert(execute)
+assertEquals(execute.stmt_id, 1)
+assertEquals(execute.flags, 0)
+assertEquals(execute.iteration_count, 1)
+assertEquals(execute.new_params_bound, false)
+
+-- EXECUTE packet with 14 params
+local packet = "\023\001\000\000\000\000\001\000\000\000\003\000\001\254\000\006\000\254\000\008\000\008\128\003\000\002\000\001\000\005\000\004\000\010\000\012\000\007\000\011\000\003\102\111\111\001\000\000\000\000\000\000\000\001\000\000\000\000\000\000\000\001\000\000\000\001\000\001\102\102\102\102\102\102\036\064\051\051\035\065\004\218\007\010\017\011\218\007\010\017\019\027\030\001\000\000\000\011\218\007\010\017\019\027\030\001\000\000\000\012\001\120\000\000\000\019\027\030\001\000\000\000"
+local execute = proto.from_stmt_execute_packet(packet, 14)
+assert(execute)
+assertEquals(execute.stmt_id, 1)
+assertEquals(execute.flags, 0)
+assertEquals(execute.iteration_count, 1)
+assertEquals(execute.new_params_bound, true)
 
