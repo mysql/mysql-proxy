@@ -21,6 +21,10 @@ typedef struct {
 	guint32 nsec; /* the nano-second part */
 } network_mysqld_type_date_t;
 
+#define NETWORK_MYSQLD_TYPE_DATE_MIN_BUF_LEN (sizeof("2010-10-27"))
+#define NETWORK_MYSQLD_TYPE_DATETIME_MIN_BUF_LEN (sizeof("2010-10-27 19:27:30.000000001"))
+#define NETWORK_MYSQLD_TYPE_TIMESTAMP_MIN_BUF_LEN NETWORK_MYSQLD_TYPE_DATETIME_MIN_BUF_LEN
+
 /**
  * struct for the MYSQL_TYPE_TIME 
  */
@@ -34,6 +38,8 @@ typedef struct {
 
 	guint32 nsec; /* the nano-second part */
 } network_mysqld_type_time_t;
+
+#define NETWORK_MYSQLD_TYPE_TIME_MIN_BUF_LEN (sizeof("-2147483647 19:27:30.000000001"))
 
 typedef struct _network_mysqld_type_t network_mysqld_type_t;
 
