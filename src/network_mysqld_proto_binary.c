@@ -34,29 +34,32 @@
 /* ints */
 static int network_mysqld_proto_binary_get_int_type(network_packet *packet, network_mysqld_type_t *type) {
 	int err = 0;
+	guint8 i8;
+	guint16 i16;
+	guint32 i32;
+	guint64 i64;
 
-	if (type->type == MYSQL_TYPE_TINY) {
-		guint8 i8;
-
+	switch (type->type) {
+	case MYSQL_TYPE_TINY:
 		err = err || network_mysqld_proto_get_int8(packet, &i8);
-		err = err || type->set_int(type, (guint64)i8, type->is_unsigned);
-	} else if (type->type == MYSQL_TYPE_SHORT) {
-		guint16 i16;
-
+		err = err || network_mysqld_type_set_int(type, (guint64)i8, type->is_unsigned);
+		break;
+	case MYSQL_TYPE_SHORT:
 		err = err || network_mysqld_proto_get_int16(packet, &i16);
-		err = err || type->set_int(type, (guint64)i16, type->is_unsigned);
-	} else if (type->type == MYSQL_TYPE_LONG || type->type == MYSQL_TYPE_INT24) {
-		guint32 i32;
-
+		err = err || network_mysqld_type_set_int(type, (guint64)i16, type->is_unsigned);
+		break;
+	case MYSQL_TYPE_LONG:
+	case MYSQL_TYPE_INT24:
 		err = err || network_mysqld_proto_get_int32(packet, &i32);
-		err = err || type->set_int(type, (guint64)i32, type->is_unsigned);
-	} else if (type->type == MYSQL_TYPE_LONGLONG) {
-		guint64 i64;
-
+		err = err || network_mysqld_type_set_int(type, (guint64)i32, type->is_unsigned);
+		break;
+	case MYSQL_TYPE_LONGLONG:
 		err = err || network_mysqld_proto_get_int64(packet, &i64);
-		err = err || type->set_int(type, i64, type->is_unsigned);
-	} else {
+		err = err || network_mysqld_type_set_int(type, i64, type->is_unsigned);
+		break;
+	default:
 		err = -1;
+		break;
 	}
 
 	return err ? -1 : 0;
@@ -64,32 +67,41 @@ static int network_mysqld_proto_binary_get_int_type(network_packet *packet, netw
 
 static int network_mysqld_proto_binary_append_int_type(GString *packet, network_mysqld_type_t *type) {
 	guint64 i64;
+	guint8  i8;
+	guint16 i16;
+	guint32 i32;
+	int err = 0;
 
-	type->get_int(type, &i64, NULL);
+	err = err || network_mysqld_type_get_int(type, &i64, NULL);
+	if (0 != err) return -1;
 
-	if (type->type == MYSQL_TYPE_TINY) {
-		guint8  i8;
+	switch (type->type) {
+	case MYSQL_TYPE_TINY:
 
 		i8 = i64;
 
-		network_mysqld_proto_append_int8(packet, i8);
-	} else if (type->type == MYSQL_TYPE_SHORT) {
-		guint16  i16;
-
+		err = err || network_mysqld_proto_append_int8(packet, i8);
+		break;
+	case MYSQL_TYPE_SHORT:
 		i16 = i64;
 
-		network_mysqld_proto_append_int16(packet, i16);
-	} else if (type->type == MYSQL_TYPE_LONG || type->type == MYSQL_TYPE_INT24) {
-		guint32  i32;
-
+		err = err || network_mysqld_proto_append_int16(packet, i16);
+		break;
+	case MYSQL_TYPE_LONG:
+	case MYSQL_TYPE_INT24:
 		i32 = i64;
 
-		network_mysqld_proto_append_int32(packet, i32);
-	} else if (type->type == MYSQL_TYPE_LONGLONG) {
-		network_mysqld_proto_append_int64(packet, i64);
+		err = err || network_mysqld_proto_append_int32(packet, i32);
+		break;
+	case MYSQL_TYPE_LONGLONG:
+		err = err || network_mysqld_proto_append_int64(packet, i64);
+		break;
+	default:
+		err = -1;
+		break;
 	}
 
-	return 0;
+	return err ? -1 : 0;
 }
 
 /* double */
@@ -108,7 +120,7 @@ static int network_mysqld_proto_binary_get_double_type(network_packet *packet, n
 	err = err || network_mysqld_proto_get_gstring_len(packet, sizeof(double), &s);
 
 	if (0 == err) {
-		type->set_double(type, double_copy.d);
+		err = err || network_mysqld_type_set_double(type, double_copy.d);
 	}
 
 	return err ? -1 : 0;
@@ -119,12 +131,13 @@ static int network_mysqld_proto_binary_append_double_type(GString *packet, netwo
 		double d;
 		char d_char_shadow[sizeof(double)];
 	} double_copy;
+	int err = 0;
 
-	network_mysqld_type_get_double(type, &double_copy.d);
+	err = err || network_mysqld_type_get_double(type, &double_copy.d);
 
 	g_string_append_len(packet, double_copy.d_char_shadow, sizeof(double));
 
-	return 0;
+	return err ? -1 : 0;
 }
 
 /* float */
@@ -143,26 +156,31 @@ static int network_mysqld_proto_binary_get_float_type(network_packet *packet, ne
 	err = err || network_mysqld_proto_get_gstring_len(packet, sizeof(float), &s);
 
 	if (0 == err) {
-		err = err || type->set_double(type, (double)float_copy.d);
+		err = err || network_mysqld_type_set_double(type, (double)float_copy.d);
 	}
 
 	return err ? -1 : 0;
 }
 
 static int network_mysqld_proto_binary_append_float_type(GString *packet, network_mysqld_type_t *type) {
-	union {
-		float f;
-		char d_char_shadow[sizeof(float)];
-	} float_copy;
 	double d;
+	int err = 0;
 
-	network_mysqld_type_get_double(type, &d);
+	err = err || network_mysqld_type_get_double(type, &d); /* get our float as double */
 
-	float_copy.f = (float)d;
+	if (0 == err) {
+		/* copy the float directly without switching byte-order */
+		union {
+			float f;
+			char f_char_shadow[sizeof(float)];
+		} float_copy; /* shadow the float with a equally sized char to be able to copy it without extra type-casting */
 
-	g_string_append_len(packet, float_copy.d_char_shadow, sizeof(float));
+		float_copy.f = (float)d;
 
-	return 0;
+		g_string_append_len(packet, float_copy.f_char_shadow, sizeof(float));
+	}
+
+	return err ? -1 : 0;
 }
 
 /* all kinds of strings */
@@ -204,9 +222,7 @@ static int network_mysqld_proto_binary_get_date_type(network_packet *packet, net
 
 	err = err || network_mysqld_proto_get_int8(packet, &len);
 
-	/* check the valid len's
-	 *
-	 * sadly we can't use fallthrough here as we can only process the packets left-to-right
+	/* check the valid lengths
 	 */
 	switch (len) {
 	case 11: /* date + time + ms */
@@ -243,6 +259,7 @@ static int network_mysqld_proto_binary_get_date_type(network_packet *packet, net
 }
 
 static int network_mysqld_proto_binary_append_date_type(GString G_GNUC_UNUSED *packet, network_mysqld_type_t G_GNUC_UNUSED *type) {
+	/* not implemented yet */
 	return -1;
 }
 
@@ -256,9 +273,7 @@ static int network_mysqld_proto_binary_get_time_type(network_packet *packet, net
 
 	err = err || network_mysqld_proto_get_int8(packet, &len);
 
-	/* check the valid len's
-	 *
-	 * sadly we can't use fallthrough here as we can only process the packets left-to-right
+	/* check the valid lengths
 	 */
 	switch (len) {
 	case 12: /* day + time + ms */
@@ -268,7 +283,6 @@ static int network_mysqld_proto_binary_get_time_type(network_packet *packet, net
 	default:
 		return -1;
 	}
-
 
 	memset(&t, 0, sizeof(t));
 	if (len > 0) {
@@ -292,6 +306,7 @@ static int network_mysqld_proto_binary_get_time_type(network_packet *packet, net
 }
 
 static int network_mysqld_proto_binary_append_time_type(GString G_GNUC_UNUSED *packet, network_mysqld_type_t G_GNUC_UNUSED *type) {
+	/* not implemented yet */
 	return -1;
 }
 
