@@ -285,9 +285,27 @@ static int network_mysqld_type_data_date_get_date(network_mysqld_type_t *type, n
 
 	if (NULL == type->data) return -1;
 
-	memcpy(dst, src, sizeof(network_mysqld_type_date_t));
+	memcpy(dst, src, sizeof(*src));
 
 	return 0;
+}
+
+static gboolean network_mysqld_type_date_time_is_valid(network_mysqld_type_date_t *date) {
+	return (date->nsec < 1000000000 &&
+	      date->sec  < 100 &&
+	      date->min  <= 60 &&
+	      date->hour <= 24);
+}
+
+static gboolean network_mysqld_type_date_date_is_valid(network_mysqld_type_date_t *date) {
+	return (date->day <= 31 &&
+	      date->month <= 12 &&
+	      date->year  <= 9999);
+}
+
+gboolean network_mysqld_type_date_is_valid(network_mysqld_type_date_t *date) {
+	return network_mysqld_type_date_time_is_valid(date) &&
+		network_mysqld_type_date_date_is_valid(date);
 }
 
 static int network_mysqld_type_data_date_get_string(network_mysqld_type_t *type, char **dst, gsize *dst_len) {
@@ -295,11 +313,28 @@ static int network_mysqld_type_data_date_get_string(network_mysqld_type_t *type,
 
 	if (NULL == type->data) return -1;
 
-	if (*dst_len > 0 && NULL != *dst) {
+	switch (type->type) {
+	case MYSQL_TYPE_DATE:
+		if (!network_mysqld_type_date_date_is_valid(src)) {
+			return -1;
+		}
+		break;
+	case MYSQL_TYPE_DATETIME:
+	case MYSQL_TYPE_TIMESTAMP:
+		if (!network_mysqld_type_date_is_valid(src)) {
+			return -1;
+		}
+		break;
+	default:
+		/* we shouldn't be here */
+		return -1;
+	}
+
+	if (NULL != *dst) {
 		switch (type->type) {
 		case MYSQL_TYPE_DATE:
 			/* dst_len already contains a size and we don't have to alloc */
-			if (*dst_len < 10 + 1) {
+			if (*dst_len < NETWORK_MYSQLD_TYPE_DATE_MIN_BUF_LEN) {
 				return -1; /* ... but it is too small .. we could return the right size here */
 			}
 			*dst_len = snprintf(*dst, *dst_len, "%04u-%02u-%02u",
@@ -310,7 +345,7 @@ static int network_mysqld_type_data_date_get_string(network_mysqld_type_t *type,
 		case MYSQL_TYPE_DATETIME:
 		case MYSQL_TYPE_TIMESTAMP:
 			/* dst_len already contains a size and we don't have to alloc */
-			if (*dst_len < 29 + 1) {
+			if (*dst_len < NETWORK_MYSQLD_TYPE_DATETIME_MIN_BUF_LEN) {
 				return -1; /* ... but it is too small .. we could return the right size here */
 			}
 			*dst_len = snprintf(*dst, *dst_len, "%04u-%02u-%02u %02u:%02u:%02u.%09u",
@@ -366,7 +401,7 @@ static int network_mysqld_type_data_date_set_date(network_mysqld_type_t *type, n
 
 	dst = type->data;
 
-	memcpy(dst, src, sizeof(network_mysqld_type_date_t));
+	memcpy(dst, src, sizeof(*src));
 
 	return 0;
 }
@@ -406,7 +441,7 @@ static int network_mysqld_type_data_time_get_time(network_mysqld_type_t *type, n
 
 	if (NULL == type->data) return -1;
 
-	memcpy(dst, src, sizeof(network_mysqld_type_time_t));
+	memcpy(dst, src, sizeof(*src));
 
 	return 0;
 }
@@ -416,20 +451,22 @@ static int network_mysqld_type_data_time_get_string(network_mysqld_type_t *type,
 
 	if (NULL == type->data) return -1;
 
-	if (*dst_len > 0 && NULL != *dst) {
+	if (NULL != *dst) {
 		/* dst_len already contains a size and we don't have to alloc */
-		if (*dst_len < 30 + 1) {
+		if (*dst_len < NETWORK_MYSQLD_TYPE_TIME_MIN_BUF_LEN) {
 			return -1; /* ... but it is too small .. we could return the right size here */
 		}
-		*dst_len = snprintf(*dst, *dst_len, "%d %02u:%02u:%02u.%09u",
-				src->days * (src->sign ? -1 : 1), /* 11 digits */
+		*dst_len = snprintf(*dst, *dst_len, "%s%d %02u:%02u:%02u.%09u",
+				src->sign ? "-" : "",
+				src->days,
 				src->hour,
 				src->min,
 				src->sec,
 				src->nsec);
 	} else {
-		*dst = g_strdup_printf("%d %02u:%02u:%02u.%09u",
-				src->days * (src->sign ? -1 : 1),
+		*dst = g_strdup_printf("%s%d %02u:%02u:%02u.%09u",
+				src->sign ? "-" : "",
+				src->days,
 				src->hour,
 				src->min,
 				src->sec,
@@ -448,7 +485,7 @@ static int network_mysqld_type_data_time_set_time(network_mysqld_type_t *type, n
 	}
 	dst = type->data;
 
-	memcpy(dst, src, sizeof(network_mysqld_type_time_t));
+	memcpy(dst, src, sizeof(*src));
 
 	return 0;
 }
