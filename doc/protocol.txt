@@ -1,123 +1,478 @@
-/** 
-@page protocol MySQL Protocol
 
-The MySQL Protocol is spilt into the four phases:
 
-@dot
-digraph {
-connect -> auth;
-auth -> command;
-command -> disconnect;
-command -> command;
-connect -> disconnect;
-auth -> disconnect;
-}
-@enddot
 
-The client and the server send and receive packets as documented in http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol 
+The packets
+===========
 
-@dot
-digraph states {
-  graph [rankdir=LR];
-  node [fontname=Helvetica, fontsize=10];
+All the examples here are captured with:
 
-  connect [ shape=record ];
-  disconnect [ shape=record ];
+  $ ngrep -x -q -d lo0 '' 'port 3306'
 
-  subgraph cluster_client { 
-    label = "client";
-    style = filled;
-    node [ style=filled, fillcolor=lightblue ];
-    connect; 
-    auth_response; 
-    auth_old; 
-    command; 
-    command_local;
-  }
+The packets that are exchanged between client and server look like:
 
-  subgraph cluster_server { 
-    label = "server";
-    style = filled;
-    node [ style=filled, fillcolor=orange ];
-    auth_challenge; 
-    auth_result; 
-    command_result; 
-    command_infile;
-  }
+  ...
+  T 127.0.0.1:51656 -> 127.0.0.1:3306 [AP]
+    01 00 00 00 01 
+
+The example shows a COM_QUIT packet. It starts (like all packets) with a 4 byte packet header:
+
+* 3 byte length
+* 1 byte sequence-id
+
+The length is the length of the payload of the packet. If the payload is larger than 2^24-2 bytes the length is set to 2^24-1
+and a additional packets are sent with the rest of the payload until the payload of a packet is less than 2^24-2 bytes.
+
+The sequence-id is incremented with each packet for a sequence of packets. It is reset, when a new command begins.
+
+A mysql client logs in
+----------------------
+
+Taking a look at the packet dump when a mysql-client logs in:
+
+  client -> server 
+    <connect>
+
+The client initiates the communication by connecting to the server.
+
+  server -> client
+    36 00 00 00 0a 35 2e 35    2e 32 2d 6d 32 00 03 00    6....5.5.2-m2...
+    00 00 27 75 3e 6f 38 66    79 4e 00 ff f7 08 02 00    ..'u>o8fyN......
+    00 00 00 00 00 00 00 00    00 00 00 00 00 57 4d 5d    .............WM]
+    6a 7c 53 68 32 5c 59 2e    73 00                      j|Sh2\Y.s.      
   
-  subgraph { 
-    edge [ fontcolor=blue, color=blue, fontsize=10, fontname=Helvetica ];
+which responds with a handshake packet which contains the version, some flags and a password challenge.
 
-    connect->auth_challenge [ label = "connecting server" ];
-    auth_response->auth_result [ label = "capabilities, password, default-db", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Client_Authentication_Packet" ]; 
-    auth_old->auth_result [ label = "scrambled password" ] ; 
-    command->command_result [ label = "command (COM_*)", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Command_Packet" ] ;
-    command->command_infile [ label = "LOAD DATA INFILE LOCAL" ];
-    command_local->command_result [ label = "file content"];
-  }
+  client -> server
+    3a 00 00 01 05 a6 03 00    00 00 00 01 08 00 00 00    :...............
+    00 00 00 00 00 00 00 00    00 00 00 00 00 00 00 00    ................
+    00 00 00 00 72 6f 6f 74    00 14 cb b5 ea 68 eb 6b    ....root.....h.k
+    3b 03 cb ae fb 9b df 5a    cb 0f 6d b5 de fd          ;......Z..m...  
 
-  subgraph {
-    edge [ fontcolor=red, color=red, fontsize=10, fontname=Helvetica ];
-    auth_challenge->disconnect [ label = "ERR: host denied", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
-    auth_challenge->auth_response [ label = "0x10: auth_challenge", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Handshake_Initialization_Packet" ];
-    auth_result->auth_old [ label = "EOF: old password reauth" ];
-    auth_result->command [ label = "OK: auth done", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#OK_Packet" ];
-    auth_result->disconnect [ label = "ERR: auth failed", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Error_Packet" ];
-    command_result->command [ label = "OK|ERR|Resultset", URL="http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol#Result_Set_Header_Packet" ] ;
-    command_result->disconnect [ label = "command = COM_QUIT" ];
-    command_result->command_result [ label = "command = COM_BINLOG_DUMP" ];
-    command_infile->command_local [ label = "EOF: filename" ];
-  }
-}
-@enddot
+The client answers with username, some flags and the response to the challenge.
 
-The @ref page-core exposes all the states to the @ref page-plugins.
+  server -> client
+    07 00 00 02 00 00 00 02    00 00 00                   ...........     
+  
+As the client provided the right password and the flags are fine, the server responds with a OK packet. That closes auth-phase
+and switches to the command-phase.
 
-@section section-protocol-use-cases Use Cases
+  client -> server
+    21 00 00 00 03 73 65 6c    65 63 74 20 40 40 76 65    !....select @@ve
+    72 73 69 6f 6e 5f 63 6f    6d 6d 65 6e 74 20 6c 69    rsion_comment li
+    6d 69 74 20 31                                        mit 1           
+ 
+The mysql client first checks the version string of the server and sends a COM_QUERY packet.
 
--# the client connects to the server and waits for data to return @msc
-  client, backend;
-  --- [ label = "connect to backend" ];
-  client->backend  [ label = "INIT" ];
-@endmsc
--# the auth-phase handles the new SHA1-style passwords and the old scramble() passwords 
-  -# 4.1+ passwords @msc
-  client, backend;
-  --- [ label = "authenticate" ];
-  backend->client [ label = "HANDSHAKE" ];
-  client->backend [ label = "AUTH" ];
-  backend->client [ label = "AUTH_RESULT" ];
-@endmsc
-  -# pre-4.1 passwords @msc
-  client, backend;
-  --- [ label = "authenticate" ];
-  backend->client [ label = "HANDSHAKE" ];
-  client->backend [ label = "AUTH" ];
-  backend->client [ label = "OLD_PASSWORD_SCRAMBLE" ];
-  client->backend [ label = "OLD_PASSWORD_AUTH" ];
-  backend->client [ label = "AUTH_RESULT" ];
-@endmsc
--# the query-phase repeats 
-  -# COM_QUERY and friends @msc
-  client, backend;
-  --- [ label = "query result phase" ];
-  client->backend [ label = "QUERY" ];
-  backend->client [ label = "QUERY_RESULT" ];
-@endmsc
-  -# COM_QUIT @msc
-  client, backend;
-  --- [ label = "query result phase" ];
-  client->backend [ label = "QUERY" ];
-  backend->client [ label = "connection close" ];
-@endmsc
-  -# COM_BINLOG_DUMP @msc
-  client, backend;
-  --- [ label = "query result phase" ];
-  client->backend [ label = "QUERY" ];
-  backend->client [ label = "QUERY_RESULT" ];
-  ... [ label = "more binlog entries" ];
-  backend->client [ label = "QUERY_RESULT"];
-@endmsc
- */
+  server -> client
+    01 00 00 01 01 27 00 00    02 03 64 65 66 00 00 00    .....'....def...
+    11 40 40 76 65 72 73 69    6f 6e 5f 63 6f 6d 6d 65    .@@version_comme
+    6e 74 00 0c 08 00 1c 00    00 00 fd 00 00 1f 00 00    nt..............
+    05 00 00 03 fe 00 00 02    00 1d 00 00 04 1c 4d 79    ..............My
+    53 51 4c 20 43 6f 6d 6d    75 6e 69 74 79 20 53 65    SQL Community Se
+    72 76 65 72 20 28 47 50    4c 29 05 00 00 05 fe 00    rver (GPL)......
+    00 02 00                                              ...             
+
+The server responds with a resultset containing the version-string.
+
+  client -> server
+    0e 00 00 00 03 73 65 6c    65 63 74 20 55 53 45 52    .....select USER
+    28 29                                                 ()              
+
+For the prompt (\u ...) the mysql client also asks for the current username.  
+
+  server -> client
+    01 00 00 01 01 1c 00 00    02 03 64 65 66 00 00 00    ..........def...
+    06 55 53 45 52 28 29 00    0c 08 00 4d 00 00 00 fd    .USER()....M....
+    01 00 1f 00 00 05 00 00    03 fe 00 00 02 00 0f 00    ................
+    00 04 0e 72 6f 6f 74 40    6c 6f 63 61 6c 68 6f 73    ...root@localhos
+    74 05 00 00 05 fe 00 00    02 00                      t.........      
+
+which is 'root@localhost' in this example.
+
+You can also see how the sequence-id starts with 00 for each new sequence of packets.
+
+Describing packets
+------------------
+
+In this document we describe the packets by first defining their payload and provide examples with packet header and payload as 
+you would see it on the wire.
+
+  COM_QUIT
+    <description>
+
+    direction: client -> server
+    response: ...
+    
+    payload:
+      <type>        <description>
+
+    Example:
+      01 00 00 00 01
+
+The payload types
+.................
+
+The MySQL Protocol has a set of possible encodings for integers:
+
+  * fixed length intergers
+  * length encoded integers
+
+The fixed length integers are described by their byte-length (1, 2, 3, 4, 8) and send their first byte first as seen in the packet length
+above:
+
+  01 00 00 00 01
+
+is the packet length 1 as it is a 3-byte fixed length integer.
+
+In other places integers have a variable size if (1, 3, 4, 9) bytes depending on their value and are described as 'lenenc-int'.
+
+  < 251 - 1 byte
+  >= 251 < (2^16 - 1) - 3 byte
+  >= (2^16) < (2^24 - 1) - 4 byte
+  >= (2^24) - 9 byte
+
+The 1-byte values from 251 to 255 have a special meaning and aren't used for integers:
+
+  * 0xfb -> 251 - NULL
+  * 0xfc -> 252 - next is a 2-byte integer
+  * 0xfd -> 253 - next is a 3-byte integer
+  * 0xfe -> 254 - next is a 8-byte integer or a EOF packet
+  * 0xff -> 255 - ERR packet
+
+The auth phase
+--------------
+
+  * auth-challenge
+  * auth-response
+  * old-password
+  * ok, err
+
+The command phase
+-----------------
+
+In the command phase the client sends a command packet with the sequence-id 0:
+
+   13 00 00 00 03 53 ... 
+   01 00 00 00 01 
+            ^^
+
+The first byte of the payload describes the command-type like:
+
+* COM_QUERY
+* COM_QUIT 
+* ...
+
+COM_QUIT
+--------
+
+  COM_QUIT
+    tells the server that the client wants to close the connection
+
+    direction: client -> server
+    response: either a connection close or a OK packet
+    
+    payload:
+      \x01          command-byte: COM_QUIT
+
+    Example:
+      01 00 00 00 01
+
+
+COM_QUERY
+---------
+
+  COM_QUERY
+    tells the server to execute a text-based query
+
+    direction: client -> server
+    response: a query-response packet
+    
+    payload:
+      1          command-byte: COM_QUERY
+      n          the query the server shall execute
+
+    Example:
+
+Query-Response packet
+---------------------
+
+The query-response packet is a meta packet which can be one of
+
+  * a ERR packet
+  * a OK packet
+  * a LOCAL INFILE packet
+  * a resultset
+
+The type of the packet is defined by the type-identifier:
+
+  COM_QUERY response
+    response to a COM_QUERY packet
+
+    payload
+      lenenc-int     number of columns in the resultset
+
+If the number of columns in the resultset is 0, this is a OK packet.
+
+If it is not a valid lenenc-int (ERR, EOF) it is a either a ERR packet or a LOCAL INFILE packet. 
+ 
+OK packet
+---------
+
+  OK
+    
+    direction: server -> client
+
+    payload:
+      1              [00] the OK header
+      lenenc-int     affected rows
+      lenenc-int     last-insert-id
+      2              flags
+        if capabilities & PROTOCOL_41:
+      2              warnings 
+
+    example:
+      07 00 00 02 00 00 00 02    00 00 00                   ...........     
+
+ERR packet
+----------
+
+  ERR
+    
+    direction: server -> client
+
+    payload:
+      1              [ff] the ERR header
+      2              error code 
+        if capabilities & PROTOCOL_41:
+      1              '#' the sql-state marker
+      string[5]      sql-state
+        all protocols:
+      string*        error-message
+
+    example:
+      17 00 00 01 ff 48 04 23    48 59 30 30 30 4e 6f 20    .....H.#HY000No 
+      74 61 62 6c 65 73 20 75    73 65 64                   tables used 
+
+
+EOF packet
+----------
+
+  EOF
+  
+    direction: server -> client
+
+    payload:
+      1              [fe] the EOF header
+        if capabilities & PROTOCOL_41:
+      2              warning count
+      2              server-status
+
+    example:
+      ... 05 00 00 05 fe 00 00 02 00
+      
+The server-status is a bit-field:
+
+  * _AUTOCOMMIT == 2
+
+The prepare statement protocol
+------------------------------
+
+  COM_STMT_PREPARE
+    create a prepared statement 
+
+    payload:
+      1              [16] the COM_STMT_PREPARE command
+      string         the query to prepare
+
+    example:
+      1c 00 00 00 16 53 45 4c    45 43 54 20 43 4f 4e 43    .....SELECT CONC
+      41 54 28 3f 2c 20 3f 29    20 41 53 20 63 6f 6c 31    AT(?, ?) AS col1
+
+
+COM_STMT_PREPARE response
+-------------------------
+
+* COM_STMT_PREPARE OK
+* num-params * <param-defs> <EOF packet> if num-params > 0
+* num-colums * <column-defs> <EOF packet> if num-columns > 0
+
+Example:
+  
+   0c 00 00 01 00 01 00 00    00 01 00 02 00 00 00 00|   ................
+   17 00 00 02 03 64 65 66    00 00 00 01 3f 00 0c 3f    .....def....?..?
+   00 00 00 00 00 fd 80 00    00 00 00|17 00 00 03 03    ................
+   64 65 66 00 00 00 01 3f    00 0c 3f 00 00 00 00 00    def....?..?.....
+   fd 80 00 00 00 00|05 00    00 04 fe 00 00 02 00|1a    ................
+   00 00 05 03 64 65 66 00    00 00 04 63 6f 6c 31 00    ....def....col1.
+   0c 3f 00 00 00 00 00 fd    80 00 1f 00 00|05 00 00    .?..............
+   06 fe 00 00 02 00                                     ...... 
+  
+for a query without parameters and resultset like "DO 1" it is:
+  
+   0c 00 00 01 00 01 00 00    00 00 00 00 00 00 00 00
+
+COM_STMT_PREPARE OK packet
+--------------------------   
+
+  COM_STMT_PREPARE OK
+    OK response to a COM_STMT_PREPARE packet 
+
+    direction: server -> client
+
+    payload:
+      4              statement-id
+      2              num columns
+      2              num params
+      1              filler
+      2              warning count
+
+
+COM_STMT_EXECUTE
+----------------
+  
+  COM_STMT_EXECUTE
+    execute a prepared statement
+
+    direction: client -> server
+
+    payload:
+      1              [17] COM_STMT_EXECUTE
+      4              stmt-id
+      1              flags
+      4              iteration-count
+      nul-bit-map
+      1              new-params-bound-flag
+        if new-params-bound-flag == 1:
+      param-count*2  type of each parameter               
+      data<n>        value of each parameter, see Binary Resultset value format
+ 
+    example: 
+
+Binary Resultset value format
+---------------------------
+
+  Strings
+    lenenc-int       length of the string
+    string<len>      string
+
+    example:
+      03 66 6f 6f -- string = "foo"
+
+  int64
+    8                integer least significant byte first
+
+    example:
+      01 00 00 00 00 00 00 00 -- int64 = 1
+
+  int32
+    4                integer least significant byte first
+
+    example:
+      01 00 00 00 -- int32 = 1
+
+  int16
+    2                integer least significant byte first
+
+    example:
+      01 00 -- int16 = 1
+
+  int8
+    1                integer
+
+    example:
+      01 -- int8 = 1
+
+   double
+    8                double
+
+    example:
+      66 66 66 66 66 66 24 40 -- double = 10.2
+
+   float
+    4                float
+
+    example:
+      33 33 23 41 -- float = 10.2
+
+   date
+     1               length == [04]
+     2               year
+     1               month
+     1               day
+
+     example: 
+       04 da 07 0a 11 -- date = 2010-10-17
+
+   datetime
+     1               length == [0b]
+     2               year
+     1               month
+     1               day
+     1               hour
+     1               minutes
+     1               seconds
+     4               nseconds
+
+     example: 
+       0b da 07 0a 11 13 1b 1e 01 00 00 00 -- datetime 2010-10-17 19:27:30.000 000 001
+
+   time
+     1               length == [0c]
+     1               sign (1 if minus, 0 for plus)
+     4               days
+     1               hour
+     1               minutes
+     1               seconds
+     4               nseconds
+
+     example: 
+       0c 01 78 00 00 00 13 1b 1e 01 00 00 00 -- time  -120d 19:27:30.000 000 001
+
+   timestamp
+     1               length == [0b]
+     2               year
+     1               month
+     1               day
+     1               hour
+     1               minutes
+     1               seconds
+     4               nseconds
+
+     example: 
+       0b da 07 0a 11 13 1b 1e 01 00 00 00 -- timestamp 
+  
+COM_STMT_EXECUTE resultset
+--------------------------
+
+COM_STMT_EXECUTE resultset is similar the COM_QUERY resulset. It just contains the rows in 
+Binary Row Format.
+
+    lenenc field-count
+    field-count * fielddef
+    <EOF>
+    <rows>
+    <EOF>
+
+  example:
+    01 00 00 01 01|1a 00 00    02 03 64 65 66 00 00 00    ..........def...
+    04 63 6f 6c 31 00 0c 08    00 06 00 00 00 fd 00 00    .col1...........
+    1f 00 00|05 00 00 03 fe    00 00 02 00|09 00 00 04    ................
+    00 00 06 66 6f 6f 62 61    72|05 00 00 05 fe 00 00    ...foobar.......
+    02 00                                                 ..     
+
+
+COM_STMT_CLOSE
+--------------
+  
+  COM_STMT_CLOSE
+    payload:
+      1              [19]
+      4              statement-id
+ 
+    example: 
+      05 00 00 00 19 01 00 00    00                         ......... 
+  
+  
+  
 
 

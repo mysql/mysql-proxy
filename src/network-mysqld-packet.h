@@ -187,14 +187,6 @@ NETWORK_API network_mysqld_auth_response *network_mysqld_auth_response_copy(netw
 
 /* COM_STMT_* */
 
-/*
- * COM_STMT_PREPARE
- *   -> \x16 string
- * 
- *  1c 00 00 00 16 53 45 4c    45 43 54 20 43 4f 4e 43    .....SELECT CONC
- *  41 54 28 3f 2c 20 3f 29    20 41 53 20 63 6f 6c 31    AT(?, ?) AS col1
- */
-
 typedef struct {
 	GString *stmt_text;
 } network_mysqld_stmt_prepare_packet_t;
@@ -203,33 +195,6 @@ NETWORK_API network_mysqld_stmt_prepare_packet_t *network_mysqld_stmt_prepare_pa
 NETWORK_API void network_mysqld_stmt_prepare_packet_free(network_mysqld_stmt_prepare_packet_t *stmt_prepare_packet);
 NETWORK_API int network_mysqld_proto_get_stmt_prepare_packet(network_packet *packet, network_mysqld_stmt_prepare_packet_t *stmt_prepare_packet);
 NETWORK_API int network_mysqld_proto_append_stmt_prepare_packet(GString *packet, network_mysqld_stmt_prepare_packet_t *stmt_prepare_packet);
-
-/**
- * COM_STMT_PREPARE OK
- *     \x00 
- *        4-byte stmt-id
- *        2-byte num-col
- *        2-byte num-params
- *        1-byte filler
- *        2-byte warning count
- *    is followed by some extra packets which are handled elsewhere:
- *        num-params * <param-defs> <EOF> if num-params > 0
- *        num-colums * <column-defs> <EOF> if num-columns > 0
- *
- *  0c 00 00 01 00 01 00 00    00 01 00 02 00 00 00 00|   ................
- *  17 00 00 02 03 64 65 66    00 00 00 01 3f 00 0c 3f    .....def....?..?
- *  00 00 00 00 00 fd 80 00    00 00 00|17 00 00 03 03    ................
- *  64 65 66 00 00 00 01 3f    00 0c 3f 00 00 00 00 00    def....?..?.....
- *  fd 80 00 00 00 00|05 00    00 04 fe 00 00 02 00|1a    ................
- *  00 00 05 03 64 65 66 00    00 00 04 63 6f 6c 31 00    ....def....col1.
- *  0c 3f 00 00 00 00 00 fd    80 00 1f 00 00|05 00 00    .?..............
- *  06 fe 00 00 02 00                                     ...... 
- *
- * for a DO 1 it is:
- *
- *  0c 00 00 01 00 01 00 00    00 00 00 00 00 00 00 00
- *
- */
 
 typedef struct {
 	guint32 stmt_id;
@@ -242,39 +207,6 @@ NETWORK_API network_mysqld_stmt_prepare_ok_packet_t *network_mysqld_stmt_prepare
 NETWORK_API void network_mysqld_stmt_prepare_ok_packet_free(network_mysqld_stmt_prepare_ok_packet_t *stmt_prepare_ok_packet);
 NETWORK_API int network_mysqld_proto_get_stmt_prepare_ok_packet(network_packet *packet, network_mysqld_stmt_prepare_ok_packet_t *stmt_prepare_ok_packet);
 NETWORK_API int network_mysqld_proto_append_stmt_prepare_ok_packet(GString *packet, network_mysqld_stmt_prepare_ok_packet_t *stmt_prepare_ok_packet);
-
-/*
- * COM_STMT_EXECUTE
- *   -> \x17
- *        4-byte stmt-id
- *        1-byte flags
- *        4-byte iteration-count
- *        nul-bit-map
- *        1-byte new-params-bound-flag
- *        n*2 type-of-param if new-params-bound
- *        <params>
- *
- *
- *  7a 00 00 00 -- header
- *  17 01 00 00 00 00 01 00 00 00 03 00 01 -- basic EXECUTE header
- *  fe 00 06 00 fe 00 08 00 08 80 03 00 02 00 01 00 05 00 04 00 0a 00 0c 00 0b 00 07 00 -- fields
- *  03 66 6f 6f -- string = "foo"
- *  01 00 00 00 00 00 00 00 -- int64 = 1 
- *  01 00 00 00 00 00 00 00 -- uint64 = 1
- *  01 00 00 00 -- int32 = 1
- *  01 00 -- int16 = 1
- *  01 -- int8 = 1
- *  66 66 66 66 66 66 24 40 -- double = 10.2
- *  33 33 23 41 -- float = 10.2
- *  04 da 07 0a 11 -- date = 2010-10-17
- *  0b da 07 0a 11 13 1b 1e 01 00 00 00 -- datetime 2010-10-17 19:27:30.000 010
- *  0c 01 78 00 00 00 13 1b 1e 01 00 00 00 -- time  -120d 19:27:30.000 010
- *  0b da 07 0a 11 13 1b 1e 01 00 00 00 -- timestamp 
- *
- * if there is no parameter, there is also no nul-bit-map nor new-params-bound flag
- *
- *  0a 00 00 00 17 01 00 00    00 00 01 00 00 00          ..............
- */
 
 typedef struct {
 	guint32 stmt_id;
@@ -291,25 +223,6 @@ NETWORK_API int network_mysqld_proto_append_stmt_execute_packet(GString *packet,
 NETWORK_API int network_mysqld_proto_get_stmt_execute_packet_stmt_id(network_packet *packet, guint32 *stmt_id);
 
 
-/*
- * COM_STMT_EXECUTE resultset
- *   -> field-packet
- *     lenenc field-count
- *     field-count * fielddef
- *     <EOF>
- *     <rows>
- *     <EOF>
- *
- * the header is the same as for normal resultsets:
- *   @see network_mysqld_proto_get_fielddefs()
- *
- *  01 00 00 01 01|1a 00 00    02 03 64 65 66 00 00 00    ..........def...
- *  04 63 6f 6c 31 00 0c 08    00 06 00 00 00 fd 00 00    .col1...........
- *  1f 00 00|05 00 00 03 fe    00 00 02 00|09 00 00 04    ................
- *  00 00 06 66 6f 6f 62 61    72|05 00 00 05 fe 00 00    ...foobar.......
- *  02 00                                                 ..     
- */
-
 typedef GPtrArray network_mysqld_resultset_row_t;
 
 NETWORK_API network_mysqld_resultset_row_t *network_mysqld_resultset_row_new(void);
@@ -317,14 +230,6 @@ NETWORK_API void network_mysqld_resultset_row_free(network_mysqld_resultset_row_
 NETWORK_API int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_proto_fielddefs_t *fields, network_mysqld_resultset_row_t *row);
 NETWORK_API GList *network_mysqld_proto_get_next_binary_row(GList *chunk, network_mysqld_proto_fielddefs_t *fields, network_mysqld_resultset_row_t *row);
 
-
-/*
- * COM_STMT_CLOSE
- *   -> \x19
- *        4-byte stmt-id
- *
- * 05 00 00 00 19 01 00 00    00                         ......... 
- */
 typedef struct {
 	guint32 stmt_id;
 } network_mysqld_stmt_close_packet_t;
