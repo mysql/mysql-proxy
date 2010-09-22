@@ -118,10 +118,7 @@ static int network_mysqld_proto_binary_get_double_type(network_packet *packet, n
 	s.allocated_len = sizeof(double_copy.d_char_shadow);
 
 	err = err || network_mysqld_proto_get_gstring_len(packet, sizeof(double), &s);
-
-	if (0 == err) {
-		err = err || network_mysqld_type_set_double(type, double_copy.d);
-	}
+	err = err || network_mysqld_type_set_double(type, double_copy.d);
 
 	return err ? -1 : 0;
 }
@@ -134,6 +131,7 @@ static int network_mysqld_proto_binary_append_double_type(GString *packet, netwo
 	int err = 0;
 
 	err = err || network_mysqld_type_get_double(type, &double_copy.d);
+	if (0 != err) return -1;
 
 	g_string_append_len(packet, double_copy.d_char_shadow, sizeof(double));
 
@@ -154,10 +152,7 @@ static int network_mysqld_proto_binary_get_float_type(network_packet *packet, ne
 	s.allocated_len = sizeof(float_copy.d_char_shadow);
 
 	err = err || network_mysqld_proto_get_gstring_len(packet, sizeof(float), &s);
-
-	if (0 == err) {
-		err = err || network_mysqld_type_set_double(type, (double)float_copy.d);
-	}
+	err = err || network_mysqld_type_set_double(type, (double)float_copy.d);
 
 	return err ? -1 : 0;
 }
