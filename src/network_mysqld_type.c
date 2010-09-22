@@ -467,9 +467,7 @@ static void network_mysqld_type_data_time_init(network_mysqld_type_t *type, enum
  * create a type 
  */
 network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types field_type) {
-	network_mysqld_type_t *type;
-
-	type = g_slice_new0(network_mysqld_type_t);
+	network_mysqld_type_t *type = NULL;
 
 	switch (field_type) {
 	case MYSQL_TYPE_TINY:
@@ -477,20 +475,30 @@ network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types field_type)
 	case MYSQL_TYPE_LONG:
 	case MYSQL_TYPE_INT24:
 	case MYSQL_TYPE_LONGLONG:
+		type = g_slice_new0(network_mysqld_type_t);
+
 		network_mysqld_type_data_int_init(type, field_type);
 		break;
 	case MYSQL_TYPE_FLOAT: /* 4 bytes */
+		type = g_slice_new0(network_mysqld_type_t);
+
 		network_mysqld_type_data_float_init(type, field_type);
 		break;
 	case MYSQL_TYPE_DOUBLE: /* 8 bytes */
+		type = g_slice_new0(network_mysqld_type_t);
+
 		network_mysqld_type_data_double_init(type, field_type);
 		break;
 	case MYSQL_TYPE_DATETIME:
 	case MYSQL_TYPE_DATE:
 	case MYSQL_TYPE_TIMESTAMP:
+		type = g_slice_new0(network_mysqld_type_t);
+
 		network_mysqld_type_data_date_init(type, field_type);
 		break;
 	case MYSQL_TYPE_TIME:
+		type = g_slice_new0(network_mysqld_type_t);
+
 		network_mysqld_type_data_time_init(type, field_type);
 		break;
 	case MYSQL_TYPE_NEWDECIMAL:
@@ -502,14 +510,15 @@ network_mysqld_type_t *network_mysqld_type_new(enum enum_field_types field_type)
 	case MYSQL_TYPE_VAR_STRING:
 	case MYSQL_TYPE_VARCHAR:
 		/* they are all length-encoded strings */
+		type = g_slice_new0(network_mysqld_type_t);
+
 		network_mysqld_type_data_string_init(type, field_type);
 		break;
 	case MYSQL_TYPE_NULL:
+		type = g_slice_new0(network_mysqld_type_t);
+
 		type->type = field_type;
 		break;
-	default:
-		g_error("%s: type = %d isn't known", G_STRLOC, field_type);
-		return NULL;
 	}
 
 	return type;

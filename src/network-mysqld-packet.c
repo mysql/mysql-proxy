@@ -1603,6 +1603,12 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
 				network_mysqld_type_t *param;
 
 				param = network_mysqld_type_new(param_type & 0xff);
+				if (NULL == param) {
+					g_critical("%s: couldn't create type = %d", G_STRLOC, param_type & 0xff);
+
+					err = -1;
+					break;
+				}
 				param->is_null = (nul_bits->str[i / 8] & (1 << (i % 8))) != 0;
 				param->is_unsigned = (param_type & 0x8000) != 0;
 
@@ -1709,18 +1715,24 @@ int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_p
 	err = err || network_mysqld_proto_get_gstring_len(packet, nul_bytes_len, nul_bytes);
 
 	for (i = 0; 0 == err && i < coldefs->len; i++) {
-		network_mysqld_type_t *field;
+		network_mysqld_type_t *param;
 		network_mysqld_proto_fielddef_t *coldef = g_ptr_array_index(coldefs, i);
 
-		field = network_mysqld_type_new(coldef->type);
+		param = network_mysqld_type_new(coldef->type);
+		if (NULL == param) {
+			g_critical("%s: coulnd't create type = %d", G_STRLOC, coldef->type);
 
-		if (nul_bytes->str[(i + 2) / 8] & (1 << ((i + 2) % 8))) {
-			field->is_null = TRUE;
-		} else {
-			err = err || network_mysqld_proto_binary_get_type(packet, field);
+			err = -1;
+			break;
 		}
 
-		g_ptr_array_add(row, field);
+		if (nul_bytes->str[(i + 2) / 8] & (1 << ((i + 2) % 8))) {
+			param->is_null = TRUE;
+		} else {
+			err = err || network_mysqld_proto_binary_get_type(packet, param);
+		}
+
+		g_ptr_array_add(row, param);
 	}
 
 	g_string_free(nul_bytes, TRUE);

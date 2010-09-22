@@ -1094,6 +1094,38 @@ static void t_com_stmt_execute_from_packet(void) {
 }
 
 /**
+ * test if we decode all valid types from EXECUTE stmt 
+ */
+static void t_com_stmt_execute_from_packet_invalid(void) {
+	network_mysqld_stmt_execute_packet_t *cmd;
+	const char raw_packet[] = 
+		"\x12\x00\x00\x00"
+		"\x17" /* COM_STMT_EXECUTE */
+		"\x01\x00\x00\x00" /* stmt-id */
+		"\x00" /* flags */
+		"\x01\x00\x00\x00" /* iteration count */
+		"\x00"
+		"\x01"
+		"\x0f\x00"
+		"\x03\x66\x6f\x6f";
+
+	network_packet packet;
+	network_mysqld_type_t *param;
+	int param_ndx = 0;
+
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+
+#define EXPECTED_NUM_PARAMS 1
+	cmd = network_mysqld_stmt_execute_packet_new();
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, !=, network_mysqld_proto_get_stmt_execute_packet(&packet, cmd, EXPECTED_NUM_PARAMS));
+#undef EXPECTED_NUM_PARAMS
+
+	network_mysqld_stmt_execute_packet_free(cmd);
+}
+
+/**
  * if there are no parameters, we don't have any nul-flags to send
  */
 static void t_com_stmt_execute_from_packet_no_params(void) {
@@ -1324,6 +1356,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/com_stmt_execute_new", t_com_stmt_execute_new);
 	g_test_add_func("/core/com_stmt_execute_from_packet", t_com_stmt_execute_from_packet);
 	g_test_add_func("/core/com_stmt_execute_from_packet_no_params", t_com_stmt_execute_from_packet_no_params);
+	g_test_add_func("/core/com_stmt_execute_from_packet_invalid", t_com_stmt_execute_from_packet_invalid);
 	
 	g_test_add_func("/core/com_stmt_execute_result_from_packet", t_com_stmt_execute_result_from_packet);
 
