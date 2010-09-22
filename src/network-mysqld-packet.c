@@ -1486,14 +1486,16 @@ int network_mysqld_proto_get_stmt_prepare_ok_packet(network_packet *packet, netw
 }
 
 int network_mysqld_proto_append_stmt_prepare_ok_packet(GString *packet, network_mysqld_stmt_prepare_ok_packet_t *stmt_prepare_ok_packet) {
-	network_mysqld_proto_append_int8(packet, MYSQLD_PACKET_OK);
-	network_mysqld_proto_append_int32(packet, stmt_prepare_ok_packet->stmt_id);
-	network_mysqld_proto_append_int16(packet, stmt_prepare_ok_packet->num_columns);
-	network_mysqld_proto_append_int16(packet, stmt_prepare_ok_packet->num_params);
-	network_mysqld_proto_append_int8(packet, 0x00);
-	network_mysqld_proto_append_int16(packet, stmt_prepare_ok_packet->warnings);
+	int err = 0;
 
-	return 0;
+	err = err || network_mysqld_proto_append_int8(packet, MYSQLD_PACKET_OK);
+	err = err || network_mysqld_proto_append_int32(packet, stmt_prepare_ok_packet->stmt_id);
+	err = err || network_mysqld_proto_append_int16(packet, stmt_prepare_ok_packet->num_columns);
+	err = err || network_mysqld_proto_append_int16(packet, stmt_prepare_ok_packet->num_params);
+	err = err || network_mysqld_proto_append_int8(packet, 0x00);
+	err = err || network_mysqld_proto_append_int16(packet, stmt_prepare_ok_packet->warnings);
+
+	return err ? -1 : 0;
 }
 
 /**
@@ -1575,8 +1577,6 @@ int network_mysqld_proto_get_stmt_execute_packet(network_packet *packet,
 	err = err || network_mysqld_proto_get_int32(packet, &stmt_execute_packet->iteration_count);
 
 	if (0 == param_count) {
-		/* if there is no parameter requested, there is also no NUL-bit-mask send */
-
 		return err ? -1 : 0;
 	}
 
@@ -1643,9 +1643,9 @@ int network_mysqld_proto_append_stmt_execute_packet(GString *packet,
 	memset(nul_bits->str, 0, nul_bits->len); /* set it all to zero */
 
 	for (i = 0; i < param_count; i++) {
-		network_mysqld_type_t *type = g_ptr_array_index(stmt_execute_packet->params, i);
+		network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
 
-		if (type->is_null) {
+		if (param->is_null) {
 			nul_bits->str[i / 8] |= 1 << (i % 8);
 		}
 	}
@@ -1663,7 +1663,7 @@ int network_mysqld_proto_append_stmt_execute_packet(GString *packet,
 
 			network_mysqld_proto_append_int16(packet, (guint16)param->type);
 		}
-		for (i = 0; i < stmt_execute_packet->params->len; i++) {
+		for (i = 0; 0 == err && i < stmt_execute_packet->params->len; i++) {
 			network_mysqld_type_t *param = g_ptr_array_index(stmt_execute_packet->params, i);
 			
 			if (!param->is_null) {
@@ -1699,19 +1699,19 @@ void network_mysqld_resultset_row_free(network_mysqld_resultset_row_t *row) {
 	g_ptr_array_free(row, TRUE);
 }
 
+/**
+ * get the fields of a row that is in binary row format
+ */
 int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_proto_fielddefs_t *coldefs, network_mysqld_resultset_row_t *row) {
 	int err = 0;
 	guint i;
 	guint nul_bytes_len;
 	GString *nul_bytes;
 
-	/* the packet starts with a \x00 byte to distinguish it from other packets
-	 * followed by the NULL-bits that don't use the first 2 bits
-	 * */
-	nul_bytes_len = (coldefs->len + 7 + 2) / 8;
-	nul_bytes = g_string_sized_new(nul_bytes_len);
-
 	err = err || network_mysqld_proto_skip(packet, 1); /* the packet header which seems to be always 0 */
+
+	nul_bytes_len = (coldefs->len + 7 + 2) / 8; /* the first 2 bits are reserved */
+	nul_bytes = g_string_sized_new(nul_bytes_len);
 	err = err || network_mysqld_proto_get_gstring_len(packet, nul_bytes_len, nul_bytes);
 
 	for (i = 0; 0 == err && i < coldefs->len; i++) {
