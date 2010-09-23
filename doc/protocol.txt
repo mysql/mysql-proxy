@@ -414,7 +414,7 @@ The query-response packet is a meta packet which can be one of
 
 * a `ERR packet`_
 * a `OK packet`_
-* a LOCAL INFILE packet
+* a `LOCAL INFILE request`_
 * a `Text Resultset`_
 
 The type of the packet is defined by the type-identifier::
@@ -427,7 +427,7 @@ The type of the packet is defined by the type-identifier::
 
 If the number of columns in the resultset is 0, this is a `OK packet`_.
 
-If it is not a valid `length encoded integer`_ it is a either a `ERR packet`_ or a LOCAL INFILE packet. 
+If it is not a valid `length encoded integer`_ it is a either a `ERR packet`_ or a `LOCAL INFILE request`_. 
 
 Text Resultset
 --------------
@@ -565,6 +565,45 @@ EOF packet
 The server-status is a bit-field:
 
   * _AUTOCOMMIT == 2
+
+LOCAL INFILE request
+....................
+
+If the client wants to LOAD DATA from a LOCAL file into the server it sends::
+
+  LOAD DATA LOCAL INFILE '<filename>' INTO TABLE <table>;  
+
+The LOCAL keyword triggers the server to send a LOAD INFILE packet asks the client
+to send the file via a `LOCAL INFILE data`_ response.
+
+::
+
+  LOAD INFILE packet
+
+    direction: server -> client
+    response: LOCAL INFILE data
+
+    payload:
+      1              [fb] LOCAL INFILE 
+      string[p]      filename the client shall send
+
+    example:
+      0c 00 00 01 fb 2f 65 74    63 2f 70 61 73 73 77 64    ...../etc/passwd
+
+LOCAL INFILE data
+.................
+
+The client sends its file data AS IS to the server in response to a `LOCAL INFILE request`_.
+
+::
+
+   LOAD INFILE data
+
+     direction: client data
+
+     payload:
+       n             the filedata
+
 
 COM_CREATE_DB
 -------------
@@ -818,6 +857,9 @@ for a query without parameters and resultset like "DO 1" it is::
 
 If it failed, a `ERR packet`_ is sent.
 
+As LOAD DATA isn't supported by `COM_STMT_PREPARE`_ yet, no is `LOCAL INFILE request`_ expected here.
+Compare this to `COM_QUERY response`_.
+
 COM_STMT_PREPARE OK packet
 --------------------------   
 
@@ -884,7 +926,6 @@ Similar to the `COM_QUERY Response`_ a `COM_STMT_EXECUTE`_ either returns:
 
 * a `OK packet`_
 * a `ERR packet`_
-* a `LOCAL INFILE packet`
 * or a resultset: `Binary Protocol Resultset`_
 
 COM_STMT_CLOSE
