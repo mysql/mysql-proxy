@@ -4,6 +4,37 @@ MySQL Protocol
 
 .. contents::
 
+The MySQL protocol is used between the MySQL Clients and the MySQL Server. It is implemented by
+
+* the Connectors (Connector/C, ...)
+* MySQL Proxy
+* the MySQL Server itself for the slaves
+
+The documentation is sparse and is split between:
+
+  http://forge.mysql.com/wiki/MySQL_Internals_ClientServer_Protocol
+
+and the source files of the MySQL Server:
+
+* sql/sql_parse.cc for the protocol basics
+
+  * dispatch_command()
+
+* sql/sql_prepare.cc for the prepared statement protocol
+
+  * mysqld_stmt_prepare()
+  * mysqld_stmt_execute()
+  * mysqld_stmt_close()
+  * mysqld_stmt_reset()
+  * mysqld_stmt_fetch()
+  * mysql_stmt_get_long_data()
+
+* sql/sql_repl.cc for the binlog protocol
+
+  * mysql_binlog_send()
+
+* sql/protocol.cc for the value and type encoding
+
 Tracking the MySQL Protocol
 ===========================
 
@@ -654,6 +685,10 @@ The prepared statement protocol was introduced in MySQL 4.1 and adds a few new c
 
 It also defines a more compact resultset format that is used instead of the `Text Resultset`_ to
 return resultsets.
+
+Keep in mind that not all statements can be prepared:
+
+  http://forge.mysql.com/worklog/task.php?id=2871
 
 Binary Protocol Resultset
 -------------------------
