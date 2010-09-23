@@ -636,9 +636,9 @@ ff   _`MYSQL_TYPE_GEOMETRY`
 Column Definition
 .................
 
-::
+If the PROTOCOL_41 capability is set::
 
-  Column Definition
+  Column Definition - 4.1+
 
     payload:
       lenenc-str     catalog
@@ -654,6 +654,25 @@ Column Definition
       2              flags
       1              decimals
       2              filler [00] [00]
+
+If not ::
+
+  Column Definition - pre-4.1
+
+    payload:
+      lenenc-str     table
+      lenenc-str     name
+      1              [03]
+      3              column length
+      1              [01]
+      1              type
+      1              [02] or [03]
+        if above field == 02:
+      1              flags
+        if ... == 03:
+      2              flags
+        all:
+      1              decimals
 
 Text Resultset Row
 ..................
