@@ -1086,7 +1086,7 @@ No response is sent back to the client.
     response: none
 
     payload:
-      1              [19] COM_STMT_SEND_LONG_DATA
+      1              [18] COM_STMT_SEND_LONG_DATA
       4              statement-id
       2              param-id
       n              data
