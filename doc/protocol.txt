@@ -715,7 +715,9 @@ COM_STMT_PREPARE
 COM_STMT_PREPARE response
 -------------------------
 
-* COM_STMT_PREPARE OK
+If the `COM_STMT_PREPARE`_ succeeded, it sends:
+
+* `COM_STMT_PREPARE OK packet`_
 * if num-params > 0
 
   * num-params * `Column Definition`_
@@ -741,10 +743,12 @@ for a query without parameters and resultset like "DO 1" it is::
   
    0c 00 00 01 00 01 00 00    00 00 00 00 00 00 00 00
 
+If it failed, a `ERR packet`_ is sent.
+
 COM_STMT_PREPARE OK packet
 --------------------------   
 
-::
+The `COM_STMT_PREPARE response`_ starts a packet which contains the meta-information for the following packets::
 
   COM_STMT_PREPARE OK
     OK response to a COM_STMT_PREPARE packet 
@@ -752,6 +756,7 @@ COM_STMT_PREPARE OK packet
     direction: server -> client
 
     payload:
+      1              [00] OK
       4              statement-id
       2              num-columns
       2              num-params
