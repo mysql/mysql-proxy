@@ -95,24 +95,6 @@ and a additional packets are sent with the rest of the payload until the payload
 
 The sequence-id is incremented with each packet for a sequence of packets. It is reset, when a new command begins.
 
-Describing packets
-------------------
-
-In this document we describe the packets by first defining their payload and provide examples with packet header and payload as 
-you would see it on the wire.::
-
-  COM_QUIT
-    <description>
-
-    direction: client -> server
-    response: ...
-    
-    payload:
-      <type>        <description>
-
-    Example:
-      01 00 00 00 01
-
 Basic Types
 ===========
 
@@ -170,11 +152,52 @@ Strings appear in a few forms in the protocol:
 * fixed length
 * variable length, 0-terminated
 * variable length, length encoded
+* variable length, packet length
 
 Length Encoded String
 .....................
 
 A length encoded string is a string that is prefixed with `length encoded integer`_ describing the length of the string.
+
+Describing packets
+------------------
+
+In this document we describe the packets by first defining their payload and provide examples with packet header and payload as 
+you would see it on the wire.::
+
+  <packetname>
+    <description>
+
+    direction: client -> server
+    
+    payload:
+      <type>        <description>
+
+    Example:
+      01 00 00 00 01
+
+The `<type>` describes the sequence of bytes of the packet:
+
+============== ===========
+type           description
+============== ===========
+1              1 byte `fixed length integer`_
+2              2 byte `fixed length integer`_
+3              3 byte `fixed length integer`_
+4              4 byte `fixed length integer`_
+8              8 byte `fixed length integer`_
+lenenc-int     `length encoded integer`_
+string         0-terminated `string`_
+string[p]      packet length dependent `string`_
+string[`<n>`]  fixed length string with the length `<n>`
+lenenc-str     `length encoded string`_
+n              a byte sequence of any length
+============== ===========
+
+Some packets have option fields or a different layout depending on the capability flags that are sent as part of the
+`Auth Response Packet`_.
+
+If a field has a fixed value its description will show it as hex value in brackets like `[00]`.
 
 The Auth Phase
 ==============
@@ -280,7 +303,7 @@ COM_QUIT
     response: either a connection close or a OK packet
     
     payload:
-      \x01          command-byte: COM_QUIT
+      1              [01] COM_QUIT
 
     Example:
       01 00 00 00 01
@@ -301,13 +324,15 @@ The server replies to a COM_QUERY packet with a `COM_QUERY Response`_.
     direction: client -> server
     
     payload:
-      1          command-byte: COM_QUERY
-      n          the query the server shall execute
+      1              [03] COM_QUERY
+      string[p]      the query the server shall execute
 
     Example:
       21 00 00 00 03 73 65 6c    65 63 74 20 40 40 76 65    !....select @@ve
       72 73 69 6f 6e 5f 63 6f    6d 6d 65 6e 74 20 6c 69    rsion_comment li
       6d 69 74 20 31                                        mit 1           
+
+The length of the query-string is a taken from the packet length - 1.
 
 COM_QUERY Response
 ------------------
@@ -422,12 +447,12 @@ Column Definition
   Column Definition
 
     payload:
-      lenenc-string  catalog
-      lenenc-string  schema
-      lenenc-string  table
-      lenenc-string  org_table
-      lenenc-string  name
-      lenenc-string  org_name
+      lenenc-str     catalog
+      lenenc-str     schema
+      lenenc-str     table
+      lenenc-str     org_table
+      lenenc-str     name
+      lenenc-str     org_name
       1              filler [00]
       2              character set
       4              column length
@@ -482,7 +507,7 @@ ERR packet
       1              '#' the sql-state marker
       string[5]      sql-state
         all protocols:
-      string*        error-message
+      string[p]      error-message
 
     example:
       17 00 00 01 ff 48 04 23    48 59 30 30 30 4e 6f 20    .....H.#HY000No 
@@ -505,7 +530,7 @@ EOF packet
       2              server-status
 
     example:
-      ... 05 00 00 05 fe 00 00 02 00
+      05 00 00 05 fe 00 00 02 00
       
 The server-status is a bit-field:
 
@@ -559,7 +584,7 @@ resultset + 2 and the values for columns that are not NULL in the `Binary Protoc
 
     payload:
       1              packet header [00]
-      (params+9)/8   nul-bit-mask
+      n              nul-bit-mask if length (column-count + 7 + 2) / 8
       n              values
 
     example:
@@ -570,8 +595,7 @@ Binary Protocol Value
 
 * Strings like `MYSQL_TYPE_STRING`_ `MYSQL_TYPE_BLOB`_ and `MYSQL_TYPE_DECIMAL`_::
 
-    lenenc-int       length of the string
-    string<len>      string
+    lenenc-str       string
 
     example:
       03 66 6f 6f -- string = "foo"
@@ -620,7 +644,7 @@ Binary Protocol Value
 
 * `MYSQL_TYPE_DATE`_::
 
-    1               length == [04]
+    1               [04] length of the encoded value
     2               year
     1               month
     1               day
@@ -630,7 +654,7 @@ Binary Protocol Value
 
 * `MYSQL_TYPE_DATETIME`_::
 
-    1               length == [0b]
+    1               [0b] length of the encoded value
     2               year
     1               month
     1               day
@@ -644,7 +668,7 @@ Binary Protocol Value
 
 * `MYSQL_TYPE_TIME`_::
 
-    1               length == [0c]
+    1               [0c] length of the encoded value
     1               sign (1 if minus, 0 for plus)
     4               days
     1               hour
@@ -657,7 +681,7 @@ Binary Protocol Value
 
 * `MYSQL_TYPE_TIMESTAMP`_::
 
-     1               length == [0b]
+     1               [0b] length of the encoded value
      2               year
      1               month
      1               day
@@ -681,7 +705,7 @@ COM_STMT_PREPARE
 
     payload:
       1              [16] the COM_STMT_PREPARE command
-      string         the query to prepare
+      string[p]      the query to prepare
 
     example:
       1c 00 00 00 16 53 45 4c    45 43 54 20 43 4f 4e 43    .....SELECT CONC
@@ -731,7 +755,7 @@ COM_STMT_PREPARE OK packet
       4              statement-id
       2              num-columns
       2              num-params
-      1              filler
+      1              [00] filler
       2              warning count
 
 
@@ -762,10 +786,10 @@ of the corresponding prepared statement.
       1              flags
       4              iteration-count
         if num-params > 0:
-      (num-params+7)/8 nul-bit-map
+      n              nul-bit-map, length: (num-params+7)/8
       1              new-params-bound-flag
         if new-params-bound-flag == 1:
-      num-params*2  type of each parameter               
+      n              type of each parameter, length: num-params * 2
       n              value of each parameter
  
     example: 
@@ -781,7 +805,7 @@ a COM_STMT_CLOSE deallocates a prepared statement
 
   COM_STMT_CLOSE
     payload:
-      1              [19]
+      1              [19] COM_STMT_CLOSE
       4              statement-id
  
     example: 
