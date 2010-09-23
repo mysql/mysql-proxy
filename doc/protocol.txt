@@ -372,6 +372,9 @@ COM_INIT_DB
   COM_INIT_DB
     change the default schema of the connection
 
+    direction: client -> server
+    response: OK or ERR
+
     payload:
       1              [02] COM_INIT_DB
       string[p]      schema name
@@ -571,6 +574,9 @@ COM_CREATE_DB
   COM_CREATE_DB
     create a schema
 
+    direction: client -> server
+    response: OK or ERR
+
     payload:
       1              [05] COM_CREATE_DB
       string[p]      schema name
@@ -585,6 +591,9 @@ COM_DROP_DB
 
   COM_DROP_DB
     drop a schema
+
+    direction: client -> server
+    response: OK or ERR
 
     payload:
       1              [06] COM_DROP_DB
@@ -612,7 +621,6 @@ Binary Protocol Resultset
 
 Binary Protocol Resultset is similar the `Text Resultset`_. It just contains the rows in 
 `Binary Protocol Resultset Row`_ format.
-
 
 * lenenc column-count
 * column-count * `Column Definition`_
@@ -755,10 +763,18 @@ Binary Protocol Value
 COM_STMT_PREPARE
 ----------------
 
+COM_STMT_PREPARE creates a prepared statement from the passed query string.
+
+The server returns a `COM_STMT_PREPARE Response`_ which contains a statement-id which is
+used to identify the prepared statement.
+
 ::
 
   COM_STMT_PREPARE
     create a prepared statement 
+
+    direction: client -> server
+    response: COM_STMT_PREPARE response
 
     payload:
       1              [16] the COM_STMT_PREPARE command
@@ -829,11 +845,13 @@ COM_STMT_EXECUTE asks the server to execute a prepared statement as identified b
 It sends the values for the placeholders of the prepared statement if it contained any in
 `Binary Protocol Value`_ form. The type of each parameter is made up of two bytes:
 
-* the type as in `Column Types`
+* the type as in `Column Types`_
 * a flag byte which has the highest bit set if the type is unsigned [80]
 
 The `num-params` used for this packet has to match the `num-params` of the `COM_STMT_PREPARE OK packet`_
 of the corresponding prepared statement.
+
+The server returns a `COM_STMT_EXECUTE Response`_.
 
 ::
  
@@ -841,6 +859,7 @@ of the corresponding prepared statement.
     execute a prepared statement
 
     direction: client -> server
+    response: COM_STMT_EXECUTE Response
 
     payload:
       1              [17] COM_STMT_EXECUTE
@@ -858,6 +877,16 @@ of the corresponding prepared statement.
       12 00 00 00 17 01 00 00    00 00 01 00 00 00 00 01    ................
       0f 00 03 66 6f 6f                                     ...foo
 
+COM_STMT_EXECUTE Response
+-------------------------
+
+Similar to the `COM_QUERY Response`_ a `COM_STMT_EXECUTE`_ either returns:
+
+* a `OK packet`_
+* a `ERR packet`_
+* a `LOCAL INFILE packet`
+* or a resultset: `Binary Protocol Resultset`_
+
 COM_STMT_CLOSE
 --------------
 
@@ -866,14 +895,16 @@ a COM_STMT_CLOSE deallocates a prepared statement
 ::
 
   COM_STMT_CLOSE
+    direction: client -> server
+    response: none
+
     payload:
       1              [19] COM_STMT_CLOSE
       4              statement-id
  
     example: 
       05 00 00 00 19 01 00 00    00                         ......... 
-  
-  
+
   
 
 
