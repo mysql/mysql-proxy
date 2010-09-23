@@ -27,7 +27,7 @@ and the source files of the MySQL Server:
   * mysqld_stmt_close()
   * mysqld_stmt_reset()
   * mysqld_stmt_fetch()
-  * mysql_stmt_get_long_data()
+  * mysql_stmt_get_longdata()
 
 * sql/sql_repl.cc for the binlog protocol
 
@@ -454,9 +454,9 @@ hex  constant name
 15   COM_REGISTER_SLAVE
 16   `COM_STMT_PREPARE`_
 17   `COM_STMT_EXECUTE`_
-18   COM_STMT_SEND_LONG_DATA
+18   `COM_STMT_SEND_LONG_DATA`_
 19   `COM_STMT_CLOSE`_
-1a   COM_STMT_RESET
+1a   `COM_STMT_RESET`_
 1b   COM_SET_OPTION
 1c   COM_STMT_FETCH
 1d   COM_DAEMON
@@ -1053,6 +1053,24 @@ Similar to the `COM_QUERY Response`_ a `COM_STMT_EXECUTE`_ either returns:
 * a `ERR packet`_
 * or a resultset: `Binary Protocol Resultset`_
 
+COM_STMT_SEND_LONG_DATA
+-----------------------
+
+COM_STMT_SEND_LONG_DATA sends the data for a column. Repeating to send it, appends the data to the parameter.
+
+::
+
+  COM_STMT_SEND_LONG_DATA
+    direction: client -> server
+    response: none
+
+    payload:
+      1              [19] COM_STMT_SEND_LONG_DATA
+      4              statement-id
+      2              param-id
+      n              data
+ 
+
 COM_STMT_CLOSE
 --------------
 
@@ -1070,6 +1088,25 @@ a COM_STMT_CLOSE deallocates a prepared statement
  
     example: 
       05 00 00 00 19 01 00 00    00                         ......... 
+
+  
+COM_STMT_RESET
+--------------
+
+a COM_STMT_RESET resets the data of a prepared statement. Useful in together with `COM_STMT_SEND_LONG_DATA`_.
+
+::
+
+  COM_STMT_RESET
+    direction: client -> server
+    response: none
+
+    payload:
+      1              [1a] COM_STMT_RESET
+      4              statement-id
+ 
+    example: 
+      05 00 00 00 1a 01 00 00    00                         ......... 
 
   
 
