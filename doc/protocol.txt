@@ -199,6 +199,57 @@ Some packets have option fields or a different layout depending on the capabilit
 
 If a field has a fixed value its description will show it as hex value in brackets like `[00]`.
 
+Generic Response Packets
+========================
+
+For most of the commands the client sends to the server one of two packets is returned as response:
+
+* `OK packet`_
+* `ERR packet`_
+
+OK packet
+---------
+
+::
+
+  OK
+    
+    direction: server -> client
+
+    payload:
+      1              [00] the OK header
+      lenenc-int     affected rows
+      lenenc-int     last-insert-id
+      2              flags
+        if capabilities & PROTOCOL_41:
+      2              warnings 
+
+    example:
+      07 00 00 02 00 00 00 02    00 00 00                   ...........     
+
+ERR packet
+----------
+
+::
+
+  ERR
+    
+    direction: server -> client
+
+    payload:
+      1              [ff] the ERR header
+      2              error code 
+        if capabilities & PROTOCOL_41:
+      1              '#' the sql-state marker
+      string[5]      sql-state
+        all protocols:
+      string[p]      error-message
+
+    example:
+      17 00 00 01 ff 48 04 23    48 59 30 30 30 4e 6f 20    .....H.#HY000No 
+      74 61 62 6c 65 73 20 75    73 65 64                   tables used 
+
+
 The Auth Phase
 ==============
 
@@ -373,7 +424,7 @@ The type of the packet is defined by the type-identifier::
 
 If the number of columns in the resultset is 0, this is a `OK packet`_.
 
-If it is not a valid `length encoded integers` it is a either a `ERR packet`_ or a LOCAL INFILE packet. 
+If it is not a valid `length encoded integer`_ it is a either a `ERR packet`_ or a LOCAL INFILE packet. 
 
 Text Resultset
 --------------
@@ -490,6 +541,28 @@ A row with the data for each column.
 
 If a field is NULL `0xfb` is sent as described in `length encoded integer`_.
 
+EOF packet
+..........
+
+::
+
+  EOF
+  
+    direction: server -> client
+
+    payload:
+      1              [fe] the EOF header
+        if capabilities & PROTOCOL_41:
+      2              warning count
+      2              server-status
+
+    example:
+      05 00 00 05 fe 00 00 02 00
+      
+The server-status is a bit-field:
+
+  * _AUTOCOMMIT == 2
+
 COM_CREATE_DB
 -------------
 
@@ -519,71 +592,6 @@ COM_DROP_DB
 
     example:
       05 00 00 00 06 74 65 73    74                         .....test     
- 
-OK packet
----------
-
-::
-
-  OK
-    
-    direction: server -> client
-
-    payload:
-      1              [00] the OK header
-      lenenc-int     affected rows
-      lenenc-int     last-insert-id
-      2              flags
-        if capabilities & PROTOCOL_41:
-      2              warnings 
-
-    example:
-      07 00 00 02 00 00 00 02    00 00 00                   ...........     
-
-ERR packet
-----------
-
-::
-
-  ERR
-    
-    direction: server -> client
-
-    payload:
-      1              [ff] the ERR header
-      2              error code 
-        if capabilities & PROTOCOL_41:
-      1              '#' the sql-state marker
-      string[5]      sql-state
-        all protocols:
-      string[p]      error-message
-
-    example:
-      17 00 00 01 ff 48 04 23    48 59 30 30 30 4e 6f 20    .....H.#HY000No 
-      74 61 62 6c 65 73 20 75    73 65 64                   tables used 
-
-
-EOF packet
-----------
-
-::
-
-  EOF
-  
-    direction: server -> client
-
-    payload:
-      1              [fe] the EOF header
-        if capabilities & PROTOCOL_41:
-      2              warning count
-      2              server-status
-
-    example:
-      05 00 00 05 fe 00 00 02 00
-      
-The server-status is a bit-field:
-
-  * _AUTOCOMMIT == 2
 
 The prepare statement protocol
 ==============================
