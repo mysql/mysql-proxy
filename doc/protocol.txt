@@ -258,13 +258,13 @@ The first byte of the payload describes the command-type like:
 ===  ======================
 hex  constant name 
 ===  ======================
-00   COM_SLEEP
+00   `COM_SLEEP`_
 01   `COM_QUIT`_
-02   COM_INIT_DB
+02   `COM_INIT_DB`_
 03   `COM_QUERY`_
 04   COM_FIELD_LIST
-05   COM_CREATE_DB
-06   COM_DROP_DB
+05   `COM_CREATE_DB`_
+06   `COM_DROP_DB`_
 07   COM_REFRESH
 08   COM_SHUTDOWN
 09   COM_STATISTICS
@@ -289,7 +289,12 @@ hex  constant name
 1c   COM_STMT_FETCH
 1d   COM_DAEMON
 ===  ======================
- 
+
+COM_SLEEP
+---------
+
+This command is only used internally by the server. Sending it to the server always results in a 
+`ERR packet`_.
 
 COM_QUIT
 --------
@@ -308,6 +313,20 @@ COM_QUIT
     Example:
       01 00 00 00 01
 
+COM_INIT_DB
+-----------
+
+::
+
+  COM_INIT_DB
+    change the default schema of the connection
+
+    payload:
+      1              [02] COM_INIT_DB
+      string[p]      schema name
+
+    example:
+      05 00 00 00 02 74 65 73    74                         .....test     
 
 COM_QUERY
 ---------
@@ -470,6 +489,36 @@ A row with the data for each column.
 * everything else sent as `length encoded string`_. 
 
 If a field is NULL `0xfb` is sent as described in `length encoded integer`_.
+
+COM_CREATE_DB
+-------------
+
+::
+
+  COM_CREATE_DB
+    create a schema
+
+    payload:
+      1              [05] COM_CREATE_DB
+      string[p]      schema name
+
+    example:
+      05 00 00 00 05 74 65 73    74                         .....test     
+
+COM_DROP_DB
+-----------
+
+::
+
+  COM_DROP_DB
+    drop a schema
+
+    payload:
+      1              [06] COM_DROP_DB
+      string[p]      schema name
+
+    example:
+      05 00 00 00 06 74 65 73    74                         .....test     
  
 OK packet
 ---------
