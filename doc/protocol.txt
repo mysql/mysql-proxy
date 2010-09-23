@@ -1077,6 +1077,8 @@ COM_STMT_SEND_LONG_DATA
 
 COM_STMT_SEND_LONG_DATA sends the data for a column. Repeating to send it, appends the data to the parameter.
 
+No response is sent back to the client.
+
 ::
 
   COM_STMT_SEND_LONG_DATA
@@ -1094,6 +1096,8 @@ COM_STMT_CLOSE
 --------------
 
 a COM_STMT_CLOSE deallocates a prepared statement
+
+No response is sent back to the client.
 
 ::
 
@@ -1114,11 +1118,13 @@ COM_STMT_RESET
 
 a COM_STMT_RESET resets the data of a prepared statement. Useful in together with `COM_STMT_SEND_LONG_DATA`_.
 
+The server will send a `OK packet`_ if the statement could be reset, a `ERR packet`_ if not.
+
 ::
 
   COM_STMT_RESET
     direction: client -> server
-    response: none
+    response: OK or ERR
 
     payload:
       1              [1a] COM_STMT_RESET
