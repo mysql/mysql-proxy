@@ -315,15 +315,105 @@ MySQL 4.1+ server also may respond at step 4 with a `Old Password Auth Challenge
 Auth Challenge Packet
 ---------------------
 
+As first packet the server sends a Auth Challenge to the client. It contains several other fields:
+
+* the protocol version
+* the mysql-server version string
+* the server capabilities
+* the auth challenge
+
+The client answers with a `Auth Response Packet`_.
+
+::
+
+  Auth Challenge Packet
+    response: Auth Response Packet
+
+    payload:
+      1              [0a] protocol version
+      string         server version
+      4              connection id
+      string[8]      challenge-part-1
+      1              [00] filler
+      2              capability flags
+      1              character set
+      2              server status
+      string[13]     reserved
+        if capabilities & SECURE_CONNECTION:
+      string[12]     challenge-part-2
+      1              [00] filler
+
+    example:
+      36 00 00 00 0a 35 2e 35    2e 32 2d 6d 32 00 0b 00    6....5.5.2-m2...
+      00 00 64 76 48 40 49 2d    43 4a 00 ff f7 08 02 00    ..dvH@I-CJ......
+      00 00 00 00 00 00 00 00    00 00 00 00 00 2a 34 64    .............*4d
+      7c 63 5a 77 6b 34 5e 5d    3a 00                      |cZwk4^]:.      
+     
+
 Auth Response Packet
 --------------------
+
+The client answers the `Auth Challenge Packet`_ with:
+
+* its capability flags
+* its password hashed with challenge
+
+If the capabilities have a CLIENT_PROTOCOL_41 flag set the response packet is::
+
+  Auth Response Packet 4.1+
+    payload:
+      4              capability flags
+      4              max-packet size
+      1              character set
+      string[23]     reserved
+      string         username
+        if capabilities & SECURE_CONNECTION:
+      lenenc-str     auth-response
+        else:
+      string         auth-response
+        all:
+      string[p]      database       
+
+If not, it is::
+
+  Auth Response Packet pre-4.1
+    payload:
+      2              capability flags
+      3              max-packet size
+      string         username
+      string         auth-response
 
 Old Password Auth Challenge Packet
 ----------------------------------
 
+In case the server stored a password in the OLD_PASSWORD() fashion for this
+user the client has to use another hash for the password.
+
+::
+
+  Old Password Auth Challenge Packet
+    ask the client to send the password hashed with insecure hash-function
+
+    payload:
+      1              [fe]
+
+    example:
+      01 00 00 02 fe 
+
 Old Password Auth Response Packet
 ---------------------------------
 
+::
+
+  Old Password Auth Response Packet
+    the password hashed with old, insecure hash-function
+
+    payload:
+      string         auth-response
+
+    example:
+      09 00 00 03 5c 49 4d 5e    4e 58 4f 47 00             ....\IM^NXOG.
+  
 
 
 The Command Phase
