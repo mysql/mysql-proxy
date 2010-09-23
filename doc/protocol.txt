@@ -1,14 +1,85 @@
+==============
+MySQL Protocol
+==============
 
+.. contents::
 
+Tracking the MySQL Protocol
+===========================
 
-The packets
-===========
-
-All the examples here are captured with:
+All the examples here are captured with::
 
   $ ngrep -x -q -d lo0 '' 'port 3306'
 
-The packets that are exchanged between client and server look like:
+A mysql client logs in
+----------------------
+
+Taking a look at the packet dump when a mysql-client logs in::
+
+  client -> server 
+    <connect>
+
+The client initiates the communication by connecting to the server.::
+
+  server -> client
+    36 00 00 00 0a 35 2e 35    2e 32 2d 6d 32 00 03 00    6....5.5.2-m2...
+    00 00 27 75 3e 6f 38 66    79 4e 00 ff f7 08 02 00    ..'u>o8fyN......
+    00 00 00 00 00 00 00 00    00 00 00 00 00 57 4d 5d    .............WM]
+    6a 7c 53 68 32 5c 59 2e    73 00                      j|Sh2\Y.s.      
+  
+which responds with a handshake packet which contains the version, some flags and a password challenge.::
+
+  client -> server
+    3a 00 00 01 05 a6 03 00    00 00 00 01 08 00 00 00    :...............
+    00 00 00 00 00 00 00 00    00 00 00 00 00 00 00 00    ................
+    00 00 00 00 72 6f 6f 74    00 14 cb b5 ea 68 eb 6b    ....root.....h.k
+    3b 03 cb ae fb 9b df 5a    cb 0f 6d b5 de fd          ;......Z..m...  
+
+The client answers with username, some flags and the response to the challenge.::
+
+  server -> client
+    07 00 00 02 00 00 00 02    00 00 00                   ...........     
+  
+As the client provided the right password and the flags are fine, the server responds with a `OK packet`_. That closes auth-phase
+and switches to the command-phase.::
+
+  client -> server
+    21 00 00 00 03 73 65 6c    65 63 74 20 40 40 76 65    !....select @@ve
+    72 73 69 6f 6e 5f 63 6f    6d 6d 65 6e 74 20 6c 69    rsion_comment li
+    6d 69 74 20 31                                        mit 1           
+ 
+The mysql client first checks the version string of the server and sends a `COM_QUERY`_ packet.::
+
+  server -> client
+    01 00 00 01 01 27 00 00    02 03 64 65 66 00 00 00    .....'....def...
+    11 40 40 76 65 72 73 69    6f 6e 5f 63 6f 6d 6d 65    .@@version_comme
+    6e 74 00 0c 08 00 1c 00    00 00 fd 00 00 1f 00 00    nt..............
+    05 00 00 03 fe 00 00 02    00 1d 00 00 04 1c 4d 79    ..............My
+    53 51 4c 20 43 6f 6d 6d    75 6e 69 74 79 20 53 65    SQL Community Se
+    72 76 65 72 20 28 47 50    4c 29 05 00 00 05 fe 00    rver (GPL)......
+    00 02 00                                              ...             
+
+The server responds with a resultset containing the version-string.::
+
+  client -> server
+    0e 00 00 00 03 73 65 6c    65 63 74 20 55 53 45 52    .....select USER
+    28 29                                                 ()              
+
+For the prompt (\u ...) the mysql client also asks for the current username.::
+
+  server -> client
+    01 00 00 01 01 1c 00 00    02 03 64 65 66 00 00 00    ..........def...
+    06 55 53 45 52 28 29 00    0c 08 00 4d 00 00 00 fd    .USER()....M....
+    01 00 1f 00 00 05 00 00    03 fe 00 00 02 00 0f 00    ................
+    00 04 0e 72 6f 6f 74 40    6c 6f 63 61 6c 68 6f 73    ...root@localhos
+    74 05 00 00 05 fe 00 00    02 00                      t.........      
+
+which is 'root@localhost' in this example.
+
+MySQL Packet header
+-------------------
+
+The packets that are exchanged between client and server look like::
 
   ...
   T 127.0.0.1:51656 -> 127.0.0.1:3306 [AP]
@@ -24,78 +95,11 @@ and a additional packets are sent with the rest of the payload until the payload
 
 The sequence-id is incremented with each packet for a sequence of packets. It is reset, when a new command begins.
 
-A mysql client logs in
-----------------------
-
-Taking a look at the packet dump when a mysql-client logs in:
-
-  client -> server 
-    <connect>
-
-The client initiates the communication by connecting to the server.
-
-  server -> client
-    36 00 00 00 0a 35 2e 35    2e 32 2d 6d 32 00 03 00    6....5.5.2-m2...
-    00 00 27 75 3e 6f 38 66    79 4e 00 ff f7 08 02 00    ..'u>o8fyN......
-    00 00 00 00 00 00 00 00    00 00 00 00 00 57 4d 5d    .............WM]
-    6a 7c 53 68 32 5c 59 2e    73 00                      j|Sh2\Y.s.      
-  
-which responds with a handshake packet which contains the version, some flags and a password challenge.
-
-  client -> server
-    3a 00 00 01 05 a6 03 00    00 00 00 01 08 00 00 00    :...............
-    00 00 00 00 00 00 00 00    00 00 00 00 00 00 00 00    ................
-    00 00 00 00 72 6f 6f 74    00 14 cb b5 ea 68 eb 6b    ....root.....h.k
-    3b 03 cb ae fb 9b df 5a    cb 0f 6d b5 de fd          ;......Z..m...  
-
-The client answers with username, some flags and the response to the challenge.
-
-  server -> client
-    07 00 00 02 00 00 00 02    00 00 00                   ...........     
-  
-As the client provided the right password and the flags are fine, the server responds with a OK packet. That closes auth-phase
-and switches to the command-phase.
-
-  client -> server
-    21 00 00 00 03 73 65 6c    65 63 74 20 40 40 76 65    !....select @@ve
-    72 73 69 6f 6e 5f 63 6f    6d 6d 65 6e 74 20 6c 69    rsion_comment li
-    6d 69 74 20 31                                        mit 1           
- 
-The mysql client first checks the version string of the server and sends a COM_QUERY packet.
-
-  server -> client
-    01 00 00 01 01 27 00 00    02 03 64 65 66 00 00 00    .....'....def...
-    11 40 40 76 65 72 73 69    6f 6e 5f 63 6f 6d 6d 65    .@@version_comme
-    6e 74 00 0c 08 00 1c 00    00 00 fd 00 00 1f 00 00    nt..............
-    05 00 00 03 fe 00 00 02    00 1d 00 00 04 1c 4d 79    ..............My
-    53 51 4c 20 43 6f 6d 6d    75 6e 69 74 79 20 53 65    SQL Community Se
-    72 76 65 72 20 28 47 50    4c 29 05 00 00 05 fe 00    rver (GPL)......
-    00 02 00                                              ...             
-
-The server responds with a resultset containing the version-string.
-
-  client -> server
-    0e 00 00 00 03 73 65 6c    65 63 74 20 55 53 45 52    .....select USER
-    28 29                                                 ()              
-
-For the prompt (\u ...) the mysql client also asks for the current username.  
-
-  server -> client
-    01 00 00 01 01 1c 00 00    02 03 64 65 66 00 00 00    ..........def...
-    06 55 53 45 52 28 29 00    0c 08 00 4d 00 00 00 fd    .USER()....M....
-    01 00 1f 00 00 05 00 00    03 fe 00 00 02 00 0f 00    ................
-    00 04 0e 72 6f 6f 74 40    6c 6f 63 61 6c 68 6f 73    ...root@localhos
-    74 05 00 00 05 fe 00 00    02 00                      t.........      
-
-which is 'root@localhost' in this example.
-
-You can also see how the sequence-id starts with 00 for each new sequence of packets.
-
 Describing packets
 ------------------
 
 In this document we describe the packets by first defining their payload and provide examples with packet header and payload as 
-you would see it on the wire.
+you would see it on the wire.::
 
   COM_QUIT
     <description>
@@ -109,48 +113,118 @@ you would see it on the wire.
     Example:
       01 00 00 00 01
 
-The payload types
-.................
+Basic Types
+===========
+
+Integer
+-------
 
 The MySQL Protocol has a set of possible encodings for integers:
 
-  * fixed length intergers
-  * length encoded integers
+* fixed length intergers
+* length encoded integers
 
-The fixed length integers are described by their byte-length (1, 2, 3, 4, 8) and send their first byte first as seen in the packet length
-above:
+fixed length integer
+....................
 
-  01 00 00 00 01
+The fixed length integers can be of a byte-length 1, 2, 3, 4 or 8 and send their first byte first. The packet length
+for example is::
 
-is the packet length 1 as it is a 3-byte fixed length integer.
+  01 00 00
 
-In other places integers have a variable size if (1, 3, 4, 9) bytes depending on their value and are described as 'lenenc-int'.
+is a 3-byte fixed length integer with the value `1`.
 
-  < 251 - 1 byte
-  >= 251 < (2^16 - 1) - 3 byte
-  >= (2^16) < (2^24 - 1) - 4 byte
-  >= (2^24) - 9 byte
+length encoded integer
+......................
+
+In other places integers have a variable size of 1, 3, 4 or 9 bytes depending on their value:
+
+======================  ======
+value                   bytes
+======================  ======
+< 251                   1 byte
+>= 251 < (2^16 - 1)     3 byte
+>= (2^16) < (2^24 - 1)  4 byte
+>= (2^24)               9 byte
+======================  ======
 
 The 1-byte values from 251 to 255 have a special meaning and aren't used for integers:
 
-  * 0xfb -> 251 - NULL
-  * 0xfc -> 252 - next is a 2-byte integer
-  * 0xfd -> 253 - next is a 3-byte integer
-  * 0xfe -> 254 - next is a 8-byte integer or a EOF packet
-  * 0xff -> 255 - ERR packet
+===  ===  ===========
+hex  dec  description
+===  ===  ===========
+fb   251  NULL
+fc   252  next is a 2-byte integer
+fd   253  next is a 3-byte integer
+fe   254  next is a 8-byte integer or first byte of a `EOF packet`_
+ff   255  first by of a `ERR packet`_
+===  ===  ===========
 
-The auth phase
---------------
+They also send least significant byte first.
 
-  * auth-challenge
-  * auth-response
-  * old-password
-  * ok, err
+String
+------
 
-The command phase
------------------
+Strings appear in a few forms in the protocol:
 
-In the command phase the client sends a command packet with the sequence-id 0:
+* fixed length
+* variable length, 0-terminated
+* variable length, length encoded
+
+Length Encoded String
+.....................
+
+A length encoded string is a string that is prefixed with `length encoded integer`_ describing the length of the string.
+
+The Auth Phase
+==============
+
+A simple MySQL 4.1+ auth starts with:
+
+1. the client connecting to the server
+2. the server responds with the `Auth Challenge Packet`_
+3. the client sends the `Auth Response Packet`_
+4. the server responds with `OK Packet`_
+
+If the auth fails, it sends a `ERR Packet`_ instead of a `OK Packet`_ and closes the connection:
+
+1. the client connecting to the server
+2. the server responds with the `Auth Challenge Packet`_
+3. the client sends the `Auth Response Packet`_
+4. the server responds with `ERR Packet`_ and closes connection
+
+or the server denies the client right away if for example its IP is deny:
+
+1. the client connecting to the server
+2. the server responds with the `ERR Packet`_ and closes connection
+
+MySQL 4.1+ server also may respond at step 4 with a `Old Password Auth Challenge Packet`_:
+
+1. the client connecting to the server
+2. the server responds with the `Auth Challenge Packet`_
+3. the client sends the `Auth Response Packet`_
+4. the server responds with the `Old Password Auth Challenge Packet`_
+5. the client sends the `Old Password Auth Response Packet`_
+6. the server responds with `OK Packet`_ or `ERR Packet`_ and closes the connection
+
+Auth Challenge Packet
+---------------------
+
+Auth Response Packet
+--------------------
+
+Old Password Auth Challenge Packet
+----------------------------------
+
+Old Password Auth Response Packet
+---------------------------------
+
+
+
+The Command Phase
+=================
+
+In the command phase the client sends a command packet with the sequence-id 0::
 
    13 00 00 00 03 53 ... 
    01 00 00 00 01 
@@ -158,12 +232,46 @@ In the command phase the client sends a command packet with the sequence-id 0:
 
 The first byte of the payload describes the command-type like:
 
-* COM_QUERY
-* COM_QUIT 
-* ...
+===  ======================
+hex  constant name 
+===  ======================
+00   COM_SLEEP
+01   `COM_QUIT`_
+02   COM_INIT_DB
+03   `COM_QUERY`_
+04   COM_FIELD_LIST
+05   COM_CREATE_DB
+06   COM_DROP_DB
+07   COM_REFRESH
+08   COM_SHUTDOWN
+09   COM_STATISTICS
+0a   COM_PROCESS_INFO
+0b   COM_CONNECT
+0c   COM_PROCESS_KILL
+0d   COM_DEBUG
+0e   COM_PING
+0f   COM_TIME
+10   COM_DELAYED_INSERT
+11   COM_CHANGE_USER
+12   COM_BINLOG_DUMP
+13   COM_TABLE_DUMP
+14   COM_CONNECT_OUT
+15   COM_REGISTER_SLAVE
+16   `COM_STMT_PREPARE`_
+17   `COM_STMT_EXECUTE`_
+18   COM_STMT_SEND_LONG_DATA
+19   `COM_STMT_CLOSE`_
+1a   COM_STMT_RESET
+1b   COM_SET_OPTION
+1c   COM_STMT_FETCH
+1d   COM_DAEMON
+===  ======================
+ 
 
 COM_QUIT
 --------
+
+::
 
   COM_QUIT
     tells the server that the client wants to close the connection
@@ -181,29 +289,37 @@ COM_QUIT
 COM_QUERY
 ---------
 
+A COM_QUERY is used to send the server a text-based query that is executed immediately.
+
+The server replies to a COM_QUERY packet with a `COM_QUERY Response`_.
+
+::
+
   COM_QUERY
     tells the server to execute a text-based query
 
     direction: client -> server
-    response: a query-response packet
     
     payload:
       1          command-byte: COM_QUERY
       n          the query the server shall execute
 
     Example:
+      21 00 00 00 03 73 65 6c    65 63 74 20 40 40 76 65    !....select @@ve
+      72 73 69 6f 6e 5f 63 6f    6d 6d 65 6e 74 20 6c 69    rsion_comment li
+      6d 69 74 20 31                                        mit 1           
 
-Query-Response packet
----------------------
+COM_QUERY Response
+------------------
 
 The query-response packet is a meta packet which can be one of
 
-  * a ERR packet
-  * a OK packet
-  * a LOCAL INFILE packet
-  * a resultset
+* a `ERR packet`_
+* a `OK packet`_
+* a LOCAL INFILE packet
+* a `Text Resultset`_
 
-The type of the packet is defined by the type-identifier:
+The type of the packet is defined by the type-identifier::
 
   COM_QUERY response
     response to a COM_QUERY packet
@@ -211,12 +327,129 @@ The type of the packet is defined by the type-identifier:
     payload
       lenenc-int     number of columns in the resultset
 
-If the number of columns in the resultset is 0, this is a OK packet.
+If the number of columns in the resultset is 0, this is a `OK packet`_.
 
-If it is not a valid lenenc-int (ERR, EOF) it is a either a ERR packet or a LOCAL INFILE packet. 
+If it is not a valid `length encoded integers` it is a either a `ERR packet`_ or a LOCAL INFILE packet. 
+
+Text Resultset
+--------------
+
+A Text Resultset is a possible `COM_QUERY Response`_. 
+
+It is made up of a two parts:
+
+* the column definition
+* the rows
+
+which consists of a sequence of packets.
+
+The column defintion is starts with a packet containing the column-count and is
+followed by as many `Column Definition`_ packets as we have columns and is terminated
+by a `EOF packet`.
+
+Each row is a packet too. The rows are terminated by another `EOF packet`_. In case 
+the query could generate the column-definition, but generating the rows afterwards
+failed a `ERR packet`_ may be sent instead of the last `EOF packet`_.
+
+* a packet containing a `length encoded integer`_ column-count
+* column-count * `Column Definition`_ packets
+* `EOF packet`_
+* row-count * packets as in `Text Resultset Row`_ format
+* `EOF packet`_
+
+In the example we use `|` to show the packet borders::
+  
+  01 00 00 01 01|27 00 00    02 03 64 65 66 00 00 00    .....'....def...
+  11 40 40 76 65 72 73 69    6f 6e 5f 63 6f 6d 6d 65    .@@version_comme
+  6e 74 00 0c 08 00 1c 00    00 00 fd 00 00 1f 00 00|   nt..............
+  05 00 00 03 fe 00 00 02    00|1d 00 00 04 1c 4d 79    ..............My
+  53 51 4c 20 43 6f 6d 6d    75 6e 69 74 79 20 53 65    SQL Community Se
+  72 76 65 72 20 28 47 50    4c 29|05 00 00 05 fe 00    rver (GPL)......
+  00 02 00                                              ...             
+
+It has one column (`01 00 00 01 01`) and a field named `@@version_comment` whichs is a `MYSQL_TYPE_VAR_STRING`_ [fd].
+It has one row and its one value is `MySQL Community Server (GPL)`.
+
+It may also be resultset with an closing `ERR packet`_:
+
+* a packet containing a `length encoded integer`_ column-count
+* column-count * `Column Definition`_ packets
+* `EOF packet`_
+* `ERR packet`_
+
+which is generated for queries like `EXPLAIN SELECT * FROM dual`.
+
+Column Types
+............
+
+===  ======================
+hex  constant name 
+===  ======================
+00   _`MYSQL_TYPE_DECIMAL`
+01   _`MYSQL_TYPE_TINY`
+02   _`MYSQL_TYPE_SHORT`
+03   _`MYSQL_TYPE_LONG`
+04   _`MYSQL_TYPE_FLOAT`
+05   _`MYSQL_TYPE_DOUBLE`
+06   _`MYSQL_TYPE_NULL`
+07   _`MYSQL_TYPE_TIMESTAMP`
+08   _`MYSQL_TYPE_LONGLONG`
+09   _`MYSQL_TYPE_INT24`
+0a   _`MYSQL_TYPE_DATE`
+0b   _`MYSQL_TYPE_TIME`
+0c   _`MYSQL_TYPE_DATETIME`
+0d   _`MYSQL_TYPE_YEAR`
+0e   _`MYSQL_TYPE_NEWDATE`
+0f   _`MYSQL_TYPE_VARCHAR`
+10   _`MYSQL_TYPE_BIT`
+f6   _`MYSQL_TYPE_NEWDECIMAL`
+f7   _`MYSQL_TYPE_ENUM`
+f8   _`MYSQL_TYPE_SET`
+f9   _`MYSQL_TYPE_TINY_BLOB`
+fa   _`MYSQL_TYPE_MEDIUM_BLOB`
+fb   _`MYSQL_TYPE_LONG_BLOB`
+fc   _`MYSQL_TYPE_BLOB`
+fd   _`MYSQL_TYPE_VAR_STRING`
+fe   _`MYSQL_TYPE_STRING`
+ff   _`MYSQL_TYPE_GEOMETRY`
+===  ======================
+
+Column Definition
+.................
+
+::
+
+  Column Definition
+
+    payload:
+      lenenc-string  catalog
+      lenenc-string  schema
+      lenenc-string  table
+      lenenc-string  org_table
+      lenenc-string  name
+      lenenc-string  org_name
+      1              filler [00]
+      2              character set
+      4              column length
+      1              type
+      2              flags
+      1              decimals
+      2              filler [00] [00]
+
+Text Resultset Row
+..................
+
+A row with the data for each column. 
+
+* Integers are sent as `length encoded integer`_.
+* everything else sent as `length encoded string`_. 
+
+If a field is NULL `0xfb` is sent as described in `length encoded integer`_.
  
 OK packet
 ---------
+
+::
 
   OK
     
@@ -235,6 +468,8 @@ OK packet
 
 ERR packet
 ----------
+
+::
 
   ERR
     
@@ -257,6 +492,8 @@ ERR packet
 EOF packet
 ----------
 
+::
+
   EOF
   
     direction: server -> client
@@ -275,7 +512,169 @@ The server-status is a bit-field:
   * _AUTOCOMMIT == 2
 
 The prepare statement protocol
-------------------------------
+==============================
+
+The prepared statement protocol was introduced in MySQL 4.1 and adds a few new commands:
+
+* `COM_STMT_PREPARE`_
+* `COM_STMT_EXECUTE`_
+* `COM_STMT_CLOSE`_
+* COM_STMT_RESET
+* COM_STMT_SEND_LONG_DATA
+
+It also defines a more compact resultset format that is used instead of the `Text Resultset`_ to
+return resultsets.
+
+Binary Protocol Resultset
+-------------------------
+
+Binary Protocol Resultset is similar the `Text Resultset`_. It just contains the rows in 
+`Binary Protocol Resultset Row`_ format.
+
+
+* lenenc column-count
+* column-count * `Column Definition`_
+* `EOF packet`_
+* n * rows as in `Binary Protocol Resultset Row`_
+* `EOF packet`_
+
+Example::
+
+    01 00 00 01 01|1a 00 00    02 03 64 65 66 00 00 00    ..........def...
+    04 63 6f 6c 31 00 0c 08    00 06 00 00 00 fd 00 00    .col1...........
+    1f 00 00|05 00 00 03 fe    00 00 02 00|09 00 00 04    ................
+    00 00 06 66 6f 6f 62 61    72|05 00 00 05 fe 00 00    ...foobar.......
+    02 00                                                 ..     
+
+Binary Protocol Resultset Row
+-----------------------------
+
+A Binary Protocol Resultset Row is made up of the bit-mask containing as many bits as we have columns in the
+resultset + 2 and the values for columns that are not NULL in the `Binary Protocol Value`_ format.
+
+::
+
+  Binary Protocol Resultset Row
+    row of a binary resultset (COM_STMT_EXECUTE)
+
+    payload:
+      1              packet header [00]
+      (params+9)/8   nul-bit-mask
+      n              values
+
+    example:
+      09 00 00 04 00 00 06 66 6f 6f 62 61 72
+
+Binary Protocol Value 
+----------------------
+
+* Strings like `MYSQL_TYPE_STRING`_ `MYSQL_TYPE_BLOB`_ and `MYSQL_TYPE_DECIMAL`_::
+
+    lenenc-int       length of the string
+    string<len>      string
+
+    example:
+      03 66 6f 6f -- string = "foo"
+
+* `MYSQL_TYPE_LONGLONG`_::
+
+    8                integer least significant byte first
+
+    example:
+      01 00 00 00 00 00 00 00 -- int64 = 1
+
+* `MYSQL_TYPE_LONG`_ and `MYSQL_TYPE_INT24`_::
+
+    4                integer least significant byte first
+
+    example:
+      01 00 00 00 -- int32 = 1
+
+* `MYSQL_TYPE_SHORT`_::
+
+    2                integer least significant byte first
+
+    example:
+      01 00 -- int16 = 1
+
+* `MYSQL_TYPE_TINY`_::
+
+    1                integer
+
+    example:
+      01 -- int8 = 1
+
+* `MYSQL_TYPE_DOUBLE`_::
+
+    8                double
+
+    example:
+      66 66 66 66 66 66 24 40 -- double = 10.2
+
+* `MYSQL_TYPE_FLOAT`_::
+
+    4                float
+
+    example:
+      33 33 23 41 -- float = 10.2
+
+* `MYSQL_TYPE_DATE`_::
+
+    1               length == [04]
+    2               year
+    1               month
+    1               day
+  
+    example: 
+      04 da 07 0a 11 -- date = 2010-10-17
+
+* `MYSQL_TYPE_DATETIME`_::
+
+    1               length == [0b]
+    2               year
+    1               month
+    1               day
+    1               hour
+    1               minutes
+    1               seconds
+    4               nseconds
+  
+    example: 
+      0b da 07 0a 11 13 1b 1e 01 00 00 00 -- datetime 2010-10-17 19:27:30.000 000 001
+
+* `MYSQL_TYPE_TIME`_::
+
+    1               length == [0c]
+    1               sign (1 if minus, 0 for plus)
+    4               days
+    1               hour
+    1               minutes
+    1               seconds
+    4               nseconds
+  
+    example: 
+      0c 01 78 00 00 00 13 1b 1e 01 00 00 00 -- time  -120d 19:27:30.000 000 001
+
+* `MYSQL_TYPE_TIMESTAMP`_::
+
+     1               length == [0b]
+     2               year
+     1               month
+     1               day
+     1               hour
+     1               minutes
+     1               seconds
+     4               nseconds
+
+     example: 
+       0b da 07 0a 11 13 1b 1e 01 00 00 00 -- timestamp 
+  
+
+
+COM_STMT_PREPARE
+----------------
+
+::
 
   COM_STMT_PREPARE
     create a prepared statement 
@@ -293,10 +692,17 @@ COM_STMT_PREPARE response
 -------------------------
 
 * COM_STMT_PREPARE OK
-* num-params * <param-defs> <EOF packet> if num-params > 0
-* num-colums * <column-defs> <EOF packet> if num-columns > 0
+* if num-params > 0
 
-Example:
+  * num-params * `Column Definition`_
+  * `EOF packet`_
+
+* if num-columns > 0
+
+  * num-colums * `Column Definition`_
+  * `EOF packet`_
+
+Example::
   
    0c 00 00 01 00 01 00 00    00 01 00 02 00 00 00 00|   ................
    17 00 00 02 03 64 65 66    00 00 00 01 3f 00 0c 3f    .....def....?..?
@@ -307,12 +713,14 @@ Example:
    0c 3f 00 00 00 00 00 fd    80 00 1f 00 00|05 00 00    .?..............
    06 fe 00 00 02 00                                     ...... 
   
-for a query without parameters and resultset like "DO 1" it is:
+for a query without parameters and resultset like "DO 1" it is::
   
    0c 00 00 01 00 01 00 00    00 00 00 00 00 00 00 00
 
 COM_STMT_PREPARE OK packet
 --------------------------   
+
+::
 
   COM_STMT_PREPARE OK
     OK response to a COM_STMT_PREPARE packet 
@@ -321,15 +729,28 @@ COM_STMT_PREPARE OK packet
 
     payload:
       4              statement-id
-      2              num columns
-      2              num params
+      2              num-columns
+      2              num-params
       1              filler
       2              warning count
 
 
 COM_STMT_EXECUTE
 ----------------
-  
+
+COM_STMT_EXECUTE asks the server to execute a prepared statement as identified by `stmt-id`.
+
+It sends the values for the placeholders of the prepared statement if it contained any in
+`Binary Protocol Value`_ form. The type of each parameter is made up of two bytes:
+
+* the type as in `Column Types`
+* a flag byte which has the highest bit set if the type is unsigned [80]
+
+The `num-params` used for this packet has to match the `num-params` of the `COM_STMT_PREPARE OK packet`_
+of the corresponding prepared statement.
+
+::
+ 
   COM_STMT_EXECUTE
     execute a prepared statement
 
@@ -340,130 +761,24 @@ COM_STMT_EXECUTE
       4              stmt-id
       1              flags
       4              iteration-count
-      nul-bit-map
+        if num-params > 0:
+      (num-params+7)/8 nul-bit-map
       1              new-params-bound-flag
         if new-params-bound-flag == 1:
-      param-count*2  type of each parameter               
-      data<n>        value of each parameter, see Binary Resultset value format
+      num-params*2  type of each parameter               
+      n              value of each parameter
  
     example: 
-
-Binary Resultset value format
----------------------------
-
-  Strings
-    lenenc-int       length of the string
-    string<len>      string
-
-    example:
-      03 66 6f 6f -- string = "foo"
-
-  int64
-    8                integer least significant byte first
-
-    example:
-      01 00 00 00 00 00 00 00 -- int64 = 1
-
-  int32
-    4                integer least significant byte first
-
-    example:
-      01 00 00 00 -- int32 = 1
-
-  int16
-    2                integer least significant byte first
-
-    example:
-      01 00 -- int16 = 1
-
-  int8
-    1                integer
-
-    example:
-      01 -- int8 = 1
-
-   double
-    8                double
-
-    example:
-      66 66 66 66 66 66 24 40 -- double = 10.2
-
-   float
-    4                float
-
-    example:
-      33 33 23 41 -- float = 10.2
-
-   date
-     1               length == [04]
-     2               year
-     1               month
-     1               day
-
-     example: 
-       04 da 07 0a 11 -- date = 2010-10-17
-
-   datetime
-     1               length == [0b]
-     2               year
-     1               month
-     1               day
-     1               hour
-     1               minutes
-     1               seconds
-     4               nseconds
-
-     example: 
-       0b da 07 0a 11 13 1b 1e 01 00 00 00 -- datetime 2010-10-17 19:27:30.000 000 001
-
-   time
-     1               length == [0c]
-     1               sign (1 if minus, 0 for plus)
-     4               days
-     1               hour
-     1               minutes
-     1               seconds
-     4               nseconds
-
-     example: 
-       0c 01 78 00 00 00 13 1b 1e 01 00 00 00 -- time  -120d 19:27:30.000 000 001
-
-   timestamp
-     1               length == [0b]
-     2               year
-     1               month
-     1               day
-     1               hour
-     1               minutes
-     1               seconds
-     4               nseconds
-
-     example: 
-       0b da 07 0a 11 13 1b 1e 01 00 00 00 -- timestamp 
-  
-COM_STMT_EXECUTE resultset
---------------------------
-
-COM_STMT_EXECUTE resultset is similar the COM_QUERY resulset. It just contains the rows in 
-Binary Row Format.
-
-    lenenc field-count
-    field-count * fielddef
-    <EOF>
-    <rows>
-    <EOF>
-
-  example:
-    01 00 00 01 01|1a 00 00    02 03 64 65 66 00 00 00    ..........def...
-    04 63 6f 6c 31 00 0c 08    00 06 00 00 00 fd 00 00    .col1...........
-    1f 00 00|05 00 00 03 fe    00 00 02 00|09 00 00 04    ................
-    00 00 06 66 6f 6f 62 61    72|05 00 00 05 fe 00 00    ...foobar.......
-    02 00                                                 ..     
-
+      12 00 00 00 17 01 00 00    00 00 01 00 00 00 00 01    ................
+      0f 00 03 66 6f 6f                                     ...foo
 
 COM_STMT_CLOSE
 --------------
-  
+
+a COM_STMT_CLOSE deallocates a prepared statement
+
+::
+
   COM_STMT_CLOSE
     payload:
       1              [19]
