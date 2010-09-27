@@ -1,96 +1,332 @@
-/**
+==========================
+scripting the proxy plugin
+==========================
 
-@page page-scripting Lua Scripting
+.. contents::
 
-The @ref page-plugin-proxy exposes the internals of the MySQL Protocol into a scripting layer allowing you to 
-change the behaviour of the proxy with a few lines of code without having to understand all the internals.
+Hooks
+=====
 
-@li @subpage page-examples
-@li @subpage page-lua-classes
+connect_server
+--------------
 
-@page page-lua-classes Classes
+read_auth
+---------
 
-All structures structures are exposes as tables into Lua. If you want to know the clients username in the @c read_query() function
-you can check
+read_auth_result
+----------------
 
-@verbatim
-  print(proxy.connection.client.username)
-@endverbatim
+read_query
+----------
 
-Please check the class-diagram below:
+read_query_result
+-----------------
 
-@li @c r if it is readable
-@li @c w if it is writable
-@li @c x if it is a function
+disconnect_client
+-----------------
 
-@dotfile doc/lua-classes.dot
+Modules
+=======
 
-@page page-examples Tutorial
+mysql.proto
+-----------
 
-@li @subpage page-examples-basic
-@li @subpage page-examples-exectime
-@li @subpage page-examples-rewrite
-@li @subpage page-examples-warnings
-@li @subpage page-examples-resultset
-@li @subpage page-examples-union
-@li @subpage page-examples-inject
-@li @subpage page-examples-states
-@li @subpage page-examples-packets
-@li @subpage page-examples-tokenize
-@li @subpage page-examples-scramble
-
-@page page-examples-basic a Minimal Example
-
-@include examples/tutorial-basic.lua
+The ``mysql.proto`` module provides encoders and decoders for the packets exchanged between client and server
 
 
+from_err_packet
+...............
 
-@page page-examples-exectime Execution Time
+Decodes a ERR-packet into a table.
 
-@include examples/tutorial-query-time.lua
+Parameters:
 
-
-@page page-examples-rewrite Rewriting Queries
-
-@include examples/tutorial-rewrite.lua
-
-
-@page page-examples-warnings Logging all warnings
-
-@include examples/tutorial-warnings.lua
+``packet``
+  (string) mysql packet
 
 
-@page page-examples-resultset Creating resultsets
+On success it returns a table containing:
 
-@include examples/tutorial-resultset.lua
+``errmsg``
+  (string)
+
+``sqlstate``
+  (string)
+
+``errcode``
+  (int)
+
+Otherwise it raises an error.
+
+to_err_packet
+.............
+
+Encode a table containing a ERR packet into a MySQL packet.
+
+Parameters:
+
+``err``
+  (table)
+  
+  ``errmsg``
+    (string)
+  
+  ``sqlstate``
+    (string)
+  
+  ``errcode``
+    (int)
+
+into a MySQL packet.
+
+Returns a string.
+
+from_ok_packet
+..............
+
+Decodes a OK-packet
+
+``packet``
+  (string) mysql packet
 
 
-@page page-examples-union Merging resultsets
+On success it returns a table containing:
 
-@include examples/tutorial-union.lua
+``server_status``
+  (int) bit-mask of the connection status
 
+``insert_id``
+  (int) last used insert id
 
-@page page-examples-inject Query Injection
+``warnings``
+  (int) number of warnings for the last executed statement
 
-@include examples/tutorial-inject.lua
+``affected_rows``
+  (int) rows affected by the last statement
 
-
-@page page-examples-states States
-
-@include examples/tutorial-states.lua
-
-
-@page page-examples-packets Exploring the Packets content
-
-@include examples/tutorial-packets.lua
+Otherwise it raises an error.
 
 
-@page page-examples-tokenize Tokenizing Queries
+to_ok_packet
+............
 
-@include examples/tutorial-tokenize.lua
+Encode a OK packet
+
+from_eof_packet
+...............
+
+Decodes a EOF-packet
+
+Parameters:
+
+``packet``
+  (string) mysql packet
 
 
-@page page-examples-scramble Using the scramble functions
+On success it returns a table containing:
 
-@include examples/tutorial-scramble.lua
-*/
+``server_status``
+  (int) bit-mask of the connection status
+
+``warnings``
+  (int)
+
+Otherwise it raises an error.
+
+
+to_eof_packet
+.............
+
+from_challenge_packet
+.....................
+
+Decodes a auth-challenge-packet
+
+Parameters:
+
+``packet``
+  (string) mysql packet
+
+On success it returns a table containing:
+
+``protocol_version``
+  (int) version of the mysql protocol, usually 10
+
+``server_version``
+  (int) version of the server as integer: 50506 is MySQL 5.5.6
+
+``thread_id``
+  (int) connection id
+
+``capabilities``
+  (int) bit-mask of the server capabilities
+
+``charset``
+  (int) server default character-set
+
+``server_status``
+  (int) bit-mask of the connection-status
+
+``challenge``
+  (string) password challenge
+
+
+to_challenge_packet
+...................
+
+Encode a auth-response-packet
+
+from_response_packet
+....................
+
+Decodes a auth-response-packet
+
+Parameters:
+
+``packet``
+  (string) mysql packet
+
+
+to_response_packet
+..................
+
+from_masterinfo_string
+......................
+
+Decodes the content of the ``master.info`` file.
+
+
+to_masterinfo_string
+....................
+
+from_stmt_prepare_packet
+........................
+
+Decodes a COM_STMT_PREPARE-packet
+
+Parameters:
+
+``packet``
+  (string) mysql packet
+
+
+On success it returns a table containing:
+
+``stmt_text``
+  (string)
+  text of the prepared statement
+
+Otherwise it raises an error.
+
+from_stmt_prepare_ok_packet
+...........................
+
+Decodes a COM_STMT_PACKET OK-packet
+
+Parameters:
+
+``packet``
+  (string) mysql packet
+
+
+On success it returns a table containing:
+
+``stmt_id``
+  (int) statement-id
+
+``num_columns``
+  (int) number of columns in the resultset
+
+``num_params``
+  (int) number of parameters
+
+``warnings``
+  (int) warnings generated by the prepare statement
+
+Otherwise it raises an error.
+
+
+from_stmt_execute_packet
+........................
+
+Decodes a COM_STMT_EXECUTE-packet
+
+Parameters:
+
+``packet``
+  (string) mysql packet
+
+``num_params``
+  (int) number of parameters of the corresponding prepared statement
+
+On success it returns a table containing:
+
+``stmt_id``
+  (int) statemend-id
+
+``flags``
+  (int) flags describing the kind of cursor used
+
+``iteration_count``
+  (int) iteration count: always 1
+
+``new_params_bound``
+  (bool) 
+
+``params``
+  (nil, table) 
+  number-index array of parameters if ``new_params_bound`` is ``true``
+
+Each param is a table of:
+
+``type``
+  (int)
+  MYSQL_TYPE_INT, MYSQL_TYPE_STRING ... and so on
+
+``value``
+  (nil, number, string)
+  if the value is a NULL, it ``nil``
+  if it is a number (_INT, _DOUBLE, ...) it is a ``number``
+  otherwise it is a ``string``
+
+If decoding fails it raises an error.
+
+To get the ``num_params`` for this function, you have to track the track the number of parameters as returned
+by the `from_stmt_prepare_ok_packet`_. Use `stmt_id_from_stmt_execute_packet`_ to get the ``statement-id`` from
+the COM_STMT_EXECUTE packet and lookup your tracked information.
+
+stmt_id_from_stmt_execute_packet
+................................
+
+Decodes statement-id from a COM_STMT_EXECUTE-packet
+
+Parameters:
+
+``packet``
+  (string) mysql packet
+
+
+On success it returns the ``statement-id`` as ``int``.
+
+Otherwise it raises an error.
+
+from_stmt_close_packet
+......................
+
+Decodes a COM_STMT_CLOSE-packet
+
+Parameters:
+
+``packet``
+  (string) mysql packet
+
+
+On success it returns a table containing:
+
+``stmt_id``
+  (int)
+  statement-id that shall be closed
+
+Otherwise it raises an error.
+
+
