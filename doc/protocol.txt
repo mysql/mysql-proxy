@@ -359,7 +359,7 @@ The client answers with a `Auth Response Packet`_.
       1              [00] filler
       2              capability flags
       1              character set
-      2              server status
+      2              status flags
       string[13]     reserved
         if capabilities & SECURE_CONNECTION:
       string[12]     challenge-part-2
@@ -370,7 +370,37 @@ The client answers with a `Auth Response Packet`_.
       00 00 64 76 48 40 49 2d    43 4a 00 ff f7 08 02 00    ..dvH@I-CJ......
       00 00 00 00 00 00 00 00    00 00 00 00 00 2a 34 64    .............*4d
       7c 63 5a 77 6b 34 5e 5d    3a 00                      |cZwk4^]:.      
-     
+
+`status flags` is defined as the `Status Flags`_ of the `OK packet`_.
+
+Capability flags
+................
+
+The capability flags are used by the client and server to indicate which features
+they support and want to use.
+
+====== ==============================  ==================================
+flags    constant name                   description
+====== ==============================  ==================================
+0x0001 CLIENT_LONG_PASSWORD            new more secure passwords
+0x0002 CLIENT_FOUND_ROWS               Found instead of affected rows
+0x0004 CLIENT_LONG_FLAG                Get all column flags
+0x0008 CLIENT_CONNECT_WITH_DB          One can specify db on connect
+0x0010 CLIENT_NO_SCHEMA                Don't allow database.table.column
+0x0020 CLIENT_COMPRESS                 Can use compression protocol
+0x0040 CLIENT_ODBC                     Odbc client
+0x0080 _`CLIENT_LOCAL_FILES`           Can use LOAD DATA LOCAL
+0x0100 CLIENT_IGNORE_SPACE             Ignore spaces before '('
+0x0200 _`CLIENT_PROTOCOL_41`           New 4.1 protocol
+0x0400 CLIENT_INTERACTIVE              This is an interactive client
+0x0800 CLIENT_SSL                      Switch to SSL after handshake
+0x1000 CLIENT_IGNORE_SIGPIPE           IGNORE sigpipes
+0x2000 CLIENT_TRANSACTIONS             Client knows about transactions
+0x4000 CLIENT_RESERVED                 Old flag for 4.1 protocol 
+0x8000 CLIENT_SECURE_CONNECTION        New 4.1 authentication
+====== ==============================  ==================================
+
+
 
 Auth Response Packet
 --------------------
@@ -380,7 +410,7 @@ The client answers the `Auth Challenge Packet`_ with:
 * its capability flags
 * its password hashed with challenge
 
-If the capabilities have a CLIENT_PROTOCOL_41 flag set the response packet is::
+If the capabilities have a `CLIENT_PROTOCOL_41`_ flag set the response packet is::
 
   Auth Response Packet 4.1+
     payload:
@@ -404,6 +434,20 @@ If not, it is::
       3              max-packet size
       string         username
       string         auth-response
+
+`capability flags` are the same as define in the `Capability flags`_ of the `Auth Challenge Packet`_ plus:
+
+========== ==============================  ==================================
+flags      constant name                   description
+========== ==============================  ==================================
+0x00010000 _`CLIENT_MULTI_STATEMENTS`      Enable/disable multi-stmt support
+0x00020000 _`CLIENT_MULTI_RESULTS`         Enable/disable multi-results
+0x00040000 _`CLIENT_PS_MULTI_RESULTS`      Multi-results in PS-protocol
+0x40000000 CLIENT_SSL_VERIFY_SERVER_CERT
+0x80000000 CLIENT_REMEMBER_OPTIONS
+========== ==============================  ==================================
+
+
 
 Old Password Auth Challenge Packet
 ----------------------------------
@@ -753,9 +797,11 @@ If the client wants to LOAD DATA from a LOCAL file into the server it sends::
 The LOCAL keyword triggers the server to send a LOAD INFILE packet asks the client
 to send the file via a `LOCAL INFILE data`_ response.
 
+The client has to set the `CLIENT_LOCAL_FILES`_ capability.
+
 ::
 
-  LOAD INFILE packet
+  LOCAL INFILE packet
 
     direction: server -> client
     response: LOCAL INFILE data
@@ -1394,6 +1440,9 @@ In MySQL 5.0 the protocol was extended to handle:
 * multi-resultsets
 * multi-statements
 
+Multi-resultset
+---------------
+
 Multi-resultsets are sent up stored procedures if more than one resultset was generated inside of it::
 
   CREATE TEMPORARY TABLE ins ( id INT );
@@ -1441,14 +1490,23 @@ the last statement. In our case we INSERTed 2 rows, but only the `affected_rows`
 last INSERT statement is returned as part of the `OK packet`_. If the last statement is a SELECT
 the affected rows is 0.
 
+The client has to announce that it wants multi-resultsets by either setting the `CLIENT_MULTI_RESULTS`_ or 
+`CLIENT_PS_MULTI_RESULTS`_ capability.
+
+Multi-statement
+---------------
+
 A multi-statement is allowing COM_QUERY to send more than one query to the server, separated by a ';'.
+
+The client has to announce that it wants multi-statements by either setting the `CLIENT_MULTI_STATEMENTS`_ capability
+or by using `COM_SET_OPTION`_.
 
 COM_SET_OPTION
 --------------
 
 Allows to enable and disable:
 
-* CLIENT_MULTI_STATEMENTS 
+* `CLIENT_MULTI_STATEMENTS`_
 
 for the current connection. The option operation is one of:
 
@@ -1491,6 +1549,6 @@ COM_STMT_FETCH response
 
 A fetch may result:
 
-* a multi-resultset
+* a `multi-resultset`_
 * a `ERR packet`_
 
