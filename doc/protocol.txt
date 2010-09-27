@@ -152,26 +152,27 @@ length encoded integer
 
 In other places integers have a variable size of 1, 3, 4 or 9 bytes depending on their value:
 
-======================  ======
-value                   bytes
-======================  ======
-< 251                   1 byte
->= 251 < (2^16 - 1)     3 byte
->= (2^16) < (2^24 - 1)  4 byte
->= (2^24)               9 byte
-======================  ======
+==========================  ======
+value                       bytes
+==========================  ======
+``< 251``                   1
+``>= 251 < (2^16 - 1)``     3
+``>= (2^16) < (2^24 - 1)``  4
+``>= (2^24)``               9
+==========================  ======
 
-The 1-byte values from 251 to 255 have a special meaning and aren't used for integers:
+The 1-byte values from 251 to 255 have a special meaning and aren't used for integers. Instead they
+signal special packets or the 3 other variable length integer types:
 
-===  ===  ===========
-hex  dec  description
-===  ===  ===========
-fb   251  NULL
-fc   252  next is a 2-byte integer
-fd   253  next is a 3-byte integer
-fe   254  next is a 8-byte integer or first byte of a `EOF packet`_
-ff   255  first by of a `ERR packet`_
-===  ===  ===========
+========  ===  ===========
+hex       dec  description
+========  ===  ===========
+``0xfb``  251  NULL in the `Text Resultset Row`_
+``0xfc``  252  indicator for a 2-byte integer
+``0xfd``  253  indicator for a 3-byte integer
+``0xfe``  254  indicator for a 8-byte integer or first byte of a `EOF packet`_
+``0xff``  255  first byte of a `ERR packet`_
+========  ===  ===========
 
 They also send least significant byte first.
 
@@ -180,15 +181,17 @@ String
 
 Strings appear in a few forms in the protocol:
 
-* fixed length
-* variable length, 0-terminated
-* variable length, length encoded
-* variable length, packet length
+_`Fixed Length String`
+  Fixed length strings have a known, hardcoded length. An example is the `sql-state` of the `ERR packet`_ which is always 5 byte long.
 
-Length Encoded String
-.....................
+_`NUL-terminated String`
+  Strings that are terminated by a [00] byte.
 
-A length encoded string is a string that is prefixed with `length encoded integer`_ describing the length of the string.
+_`Length Encoded String`
+  A length encoded string is a string that is prefixed with `length encoded integer`_ describing the length of the string.
+
+_`End-of-packet String`
+  If a string is the last component of a packet, its length can be calculated from the overall-packet length minus the current position.
 
 Describing packets
 ------------------
@@ -218,15 +221,16 @@ type           description
 4              4 byte `fixed length integer`_
 8              8 byte `fixed length integer`_
 lenenc-int     `length encoded integer`_
-string         0-terminated `string`_
-string[p]      packet length dependent `string`_
+string         `NUL-terminated string`_
+string[p]      `End-of-packet string`_
 string[`<n>`]  fixed length string with the length `<n>`
 lenenc-str     `length encoded string`_
 n              a byte sequence of any length
 ============== ===========
 
-Some packets have option fields or a different layout depending on the capability flags that are sent as part of the
-`Auth Response Packet`_.
+.. attention::
+  Some packets have optional fields or a different layout depending on the `capability flags`_ that are sent as part of the
+  `Auth Response Packet`_.
 
 If a field has a fixed value its description will show it as hex value in brackets like `[00]`.
 
@@ -435,7 +439,7 @@ If not, it is::
       string         username
       string         auth-response
 
-`capability flags` are the same as define in the `Capability flags`_ of the `Auth Challenge Packet`_ plus:
+`capability flags` are the same as defined in the `Capability flags`_ of the `Auth Challenge Packet`_ plus:
 
 ========== ==============================  ==================================
 flags      constant name                   description
@@ -485,11 +489,12 @@ Old Password Auth Response Packet
 The Command Phase
 =================
 
-In the command phase the client sends a command packet with the sequence-id 0::
+In the command phase the client sends a command packet with the sequence-id [00]::
 
    13 00 00 00 03 53 ... 
    01 00 00 00 01 
-            ^^
+               ^^- command-byte
+            ^^---- sequence-id == 0
 
 The first byte of the payload describes the command-type like:
 
@@ -1341,7 +1346,7 @@ COM_STMT_EXECUTE
 
 COM_STMT_EXECUTE asks the server to execute a prepared statement as identified by `stmt-id`.
 
-It sends the values for the placeholders of the prepared statement if it contained any in
+It sends the values for the placeholders of the prepared statement (if it contained any) in
 `Binary Protocol Value`_ form. The type of each parameter is made up of two bytes:
 
 * the type as in `Column Types`_
@@ -1375,6 +1380,20 @@ The server returns a `COM_STMT_EXECUTE Response`_.
     example: 
       12 00 00 00 17 01 00 00    00 00 01 00 00 00 00 01    ................
       0f 00 03 66 6f 6f                                     ...foo
+
+The `iteration-count` is always `1`.
+
+The `flags` are:
+
+===== =============
+flags constant name
+===== =============
+0x00  CURSOR_TYPE_NO_CURSOR
+0x01  CURSOR_TYPE_READ_ONLY
+0x02  CURSOR_TYPE_FOR_UPDATE
+0x04  CURSOR_TYPE_SCROLLABLE
+===== =============
+
 
 COM_STMT_EXECUTE Response
 .........................
