@@ -447,7 +447,7 @@ hex  constant name
 0e   `COM_PING`_
 0f   `COM_TIME`_
 10   `COM_DELAYED_INSERT`_
-11   COM_CHANGE_USER
+11   `COM_CHANGE_USER`_
 12   COM_BINLOG_DUMP
 13   `COM_TABLE_DUMP`_
 14   `COM_CONNECT_OUT`_
@@ -983,6 +983,35 @@ COM_PING
     payload:
       1              [0e] COM_PING
 
+COM_CHANGE_USER
+---------------
+
+COM_CHANGE_USER changes the user of the current connection and reset the connection state.
+
+* user variables
+* temp tables
+* prepared statemants
+* ... and others
+
+::
+
+  COM_CHANGE_USER
+    change the user of the current connection
+
+    direction: client -> server
+    response: EOF or ERR
+
+    payload:
+      1              [11] COM_CHANGE_USER
+      string         user
+        if capabilities & SECURE_CONNECTION:
+      lenenc-str     auth-response
+        else:
+      string         auth-response
+        all:
+      string         schema-name
+        if more bytes in packet:
+      2              character-set
 
 The prepare statement protocol
 ==============================
