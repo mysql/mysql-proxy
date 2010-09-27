@@ -1,9 +1,3 @@
-==========================
-scripting the proxy plugin
-==========================
-
-.. contents::
-
 Hooks
 =====
 
