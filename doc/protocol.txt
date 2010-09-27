@@ -437,13 +437,13 @@ hex  constant name
 04   `COM_FIELD_LIST`_
 05   `COM_CREATE_DB`_
 06   `COM_DROP_DB`_
-07   COM_REFRESH
-08   COM_SHUTDOWN
-09   COM_STATISTICS
+07   `COM_REFRESH`_
+08   `COM_SHUTDOWN`_
+09   `COM_STATISTICS`_
 0a   `COM_PROCESS_INFO`_
 0b   `COM_CONNECT`_
 0c   `COM_PROCESS_KILL`_
-0d   COM_DEBUG
+0d   `COM_DEBUG`_
 0e   `COM_PING`_
 0f   `COM_TIME`_
 10   `COM_DELAYED_INSERT`_
@@ -825,6 +825,90 @@ COM_DROP_DB
     example:
       05 00 00 00 06 74 65 73    74                         .....test     
 
+COM_REFRESH
+-----------
+
+a low-level version of several `FLUSH ...` and `RESET ...` commands.
+
+====  ===============  ===========
+flag  constant name    description
+====  ===============  ===========
+0x01  REFRESH_GRANT    Refresh grant tables `FLUSH PRIVILEGES`
+0x02  REFRESH_LOG      Start on new log file `FLUSH LOGS`
+0x04  REFRESH_TABLES   close all tables `FLUSH TABLES`
+0x08  REFRESH_HOSTS    Flush host cache `FLUSH HOSTS`
+0x10  REFRESH_STATUS   Flush status variables `FLUSH STATUS`
+0x20  REFRESH_THREADS  Flush thread cache
+0x40  REFRESH_SLAVE    Reset master info and restart slave thread `RESET SLAVE`
+0x80  REFRESH_MASTER   Remove all bin logs in the index and truncate the index `RESET MASTER`
+====  ===============  ===========
+
+::
+
+  COM_REFRESH
+    get a list of active threads
+
+    direction: client -> server
+    response: OK or ERR
+
+    payload:
+      1              [07] COM_REFRESH
+      1              flags
+
+COM_SHUTDOWN
+------------
+
+COM_SHUTDOWN is used to shutdown the mysql-server. 
+
+Even if several shutdown types are define, right now only one is use: SHUTDOWN_WAIT_ALL_BUFFERS
+
+==== ============================== ===========
+type constant name                  description
+==== ============================== ===========
+0x00 SHUTDOWN_DEFAULT               defaults to SHUTDOWN_WAIT_ALL_BUFFERS
+0x01 SHUTDOWN_WAIT_CONNECTIONS      wait for existing connections to finish
+0x02 SHUTDOWN_WAIT_TRANSACTIONS     wait for existing trans to finish
+0x08 SHUTDOWN_WAIT_UPDATES          wait for existing updates to finish (=> no partial MyISAM update)
+0x10 SHUTDOWN_WAIT_ALL_BUFFERS      flush InnoDB buffers and other storage engines' buffers
+0x11 SHUTDOWN_WAIT_CRITICAL_BUFFERS don't flush InnoDB buffers, flush other storage engines' buffers
+0xfe KILL_QUERY
+0xff KILL_CONNECTION
+==== ============================== ===========
+
+`SHUTDOWN` privilege is required.
+
+::
+
+  COM_SHUTDOWN
+    get a list of active threads
+
+    direction: client -> server
+    response: EOF or ERR
+
+    payload:
+      1              [08] COM_SHUTDOWN
+        if shutdown type != 0x00:
+      1              shutdown type
+
+Clients before 4.1.3 don't send the `shutdown type`. `0x00` is assumed in that case.
+
+COM_STATISTICS
+--------------
+
+Get a human readable string of internal statistics.
+
+::
+
+  COM_STATISTICS
+    get a list of active threads
+
+    direction: client -> server
+    response: string[p]
+
+    payload:
+      1              [09] COM_STATISTICS
+
+
 COM_PROCESS_INFO
 ----------------
 
@@ -833,9 +917,7 @@ The COM_PROCESS_INFO command is deprecated. `SHOW PROCESSLIST` should be used in
 It either returns a:
 
 * `Text Resultset`_ or
-* no response on error.
-
-Yep, "no response". In case the client doesn't have the `PROCESS` privilege, nothing, not even a `ERR packet`_, will be returned.
+* `ERR packet`_.
 
 ::
 
@@ -843,7 +925,7 @@ Yep, "no response". In case the client doesn't have the `PROCESS` privilege, not
     get a list of active threads
 
     direction: client -> server
-    response: resultset or nothing
+    response: resultset or ERR
 
     payload:
       1              [0a] COM_PROCCESS_INFO
@@ -864,6 +946,25 @@ Same as `KILL <id>`.
     payload:
       1              [0c] COM_PROCCESS_KILL
       4              connection id
+
+
+COM_DEBUG
+---------
+
+COM_DEBUG triggers a dump on internal debug info to stdout of the mysql-server. 
+
+The `SUPER` privilege is required for this operation.
+
+::
+
+  COM_DEBUG
+    dump debug info to stdout
+
+    direction: client -> server
+    response: EOF or ERR
+
+    payload:
+      1              [0d] COM_DEBUG
 
 
 COM_PING
