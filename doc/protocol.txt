@@ -536,6 +536,18 @@ hex  constant name
 .. _COM_TABLE_DUMP: `unhandled commands`_
 .. _COM_DAEMON: `unhandled commands`_
 
+The commands belong to 
+
+* the `Old Commands`_
+* the `Prepared Statements`_ Commands
+* the `Stored Procedures`_ Commands
+* or the Replication Commands
+
+Old Commands
+============
+
+The old commands are supported for all MySQL Server versions from 3.23 upwards (and perhaps older).
+
 unhandled commands
 ------------------
 
@@ -612,7 +624,7 @@ API call: `mysql_query() <http://dev.mysql.com/doc/refman/5.1/en/mysql-query.htm
 
 
 COM_QUERY Response
-------------------
+..................
 
 The query-response packet is a meta packet which can be one of
 
@@ -634,7 +646,7 @@ If the number of columns in the resultset is 0, this is a `OK packet`_.
 If it is not a valid `length encoded integer`_ it is a either a `ERR packet`_ or a `LOCAL INFILE request`_. 
 
 Text Resultset
---------------
+**************
 
 A Text Resultset is a possible `COM_QUERY Response`_. 
 
@@ -685,7 +697,7 @@ It may also be resultset with an closing `ERR packet`_:
 which is generated for queries like `EXPLAIN SELECT * FROM dual`.
 
 Column Types
-............
+,,,,,,,,,,,,
 
 ===  ======================
 hex  constant name 
@@ -720,7 +732,7 @@ ff   _`MYSQL_TYPE_GEOMETRY`
 ===  ======================
 
 Column Definition
-.................
+,,,,,,,,,,,,,,,,,
 
 If the PROTOCOL_41 capability is set::
 
@@ -761,7 +773,7 @@ If not ::
       1              decimals
 
 Text Resultset Row
-..................
+,,,,,,,,,,,,,,,,,,
 
 A row with the data for each column. 
 
@@ -771,7 +783,7 @@ A row with the data for each column.
 If a field is NULL `0xfb` is sent as described in `length encoded integer`_.
 
 EOF packet
-..........
+,,,,,,,,,,
 
 ::
 
@@ -791,7 +803,7 @@ EOF packet
 The status flags are a bit-field as defined in the `Status Flags`_ of the `OK packet`_.
 
 LOCAL INFILE request
-....................
+********************
 
 If the client wants to LOAD DATA from a LOCAL file into the server it sends::
 
@@ -817,7 +829,7 @@ The client has to set the `CLIENT_LOCAL_FILES`_ capability.
       0c 00 00 01 fb 2f 65 74    63 2f 70 61 73 73 77 64    ...../etc/passwd
 
 LOCAL INFILE data
-.................
+,,,,,,,,,,,,,,,,,
 
 The client sends its file data AS IS to the server in response to a `LOCAL INFILE request`_.
 
@@ -1082,8 +1094,8 @@ COM_CHANGE_USER changes the user of the current connection and reset the connect
         if more bytes in packet:
       2              character-set
 
-The prepare statement protocol
-==============================
+Prepared Statements
+===================
 
 The prepared statement protocol was introduced in MySQL 4.1 and adds a few new commands:
 
@@ -1270,7 +1282,7 @@ used to identify the prepared statement.
 
 
 COM_STMT_PREPARE response
--------------------------
+.........................
 
 If the `COM_STMT_PREPARE`_ succeeded, it sends:
 
@@ -1306,7 +1318,7 @@ As LOAD DATA isn't supported by `COM_STMT_PREPARE`_ yet, no is `LOCAL INFILE req
 Compare this to `COM_QUERY response`_.
 
 COM_STMT_PREPARE OK packet
---------------------------   
+**************************
 
 The `COM_STMT_PREPARE response`_ starts a packet which contains the meta-information for the following packets::
 
@@ -1365,7 +1377,7 @@ The server returns a `COM_STMT_EXECUTE Response`_.
       0f 00 03 66 6f 6f                                     ...foo
 
 COM_STMT_EXECUTE Response
--------------------------
+.........................
 
 Similar to the `COM_QUERY Response`_ a `COM_STMT_EXECUTE`_ either returns:
 
