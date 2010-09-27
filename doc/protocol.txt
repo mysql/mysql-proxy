@@ -458,7 +458,7 @@ hex  constant name
 19   `COM_STMT_CLOSE`_
 1a   `COM_STMT_RESET`_
 1b   `COM_SET_OPTION`_
-1c   COM_STMT_FETCH
+1c   `COM_STMT_FETCH`_
 1d   `COM_DAEMON`_
 ===  ======================
 
@@ -721,7 +721,22 @@ EOF packet
       
 The server-status is a bit-field:
 
-  * _AUTOCOMMIT == 2
+====== =============
+flag   constant name
+====== =============
+0x0001 SERVER_STATUS_IN_TRANS
+0x0002 SERVER_STATUS_AUTOCOMMIT
+0x0008 _`SERVER_MORE_RESULTS_EXISTS`
+0x0010 SERVER_STATUS_NO_GOOD_INDEX_USED
+0x0020 SERVER_STATUS_NO_INDEX_USED
+0x0040 SERVER_STATUS_CURSOR_EXISTS
+0x0080 SERVER_STATUS_LAST_ROW_SENT
+0x0100 SERVER_STATUS_DB_DROPPED
+0x0200 SERVER_STATUS_NO_BACKSLASH_ESCAPES
+0x0400 SERVER_STATUS_METADATA_CHANGED
+0x0800 SERVER_QUERY_WAS_SLOW
+0x1000 SERVER_PS_OUT_PARAMS
+====== =============
 
 LOCAL INFILE request
 ....................
@@ -1369,10 +1384,59 @@ The server will send a `OK packet`_ if the statement could be reset, a `ERR pack
 Store Procedures
 ================
 
-In MySQL 5.0 the protocol was expected to handle:
+In MySQL 5.0 the protocol was extended to handle:
 
-* multi-statements
 * multi-resultsets
+* multi-statements
+
+Multi-resultsets are sent up stored procedures if more than one resultset was generated inside of it::
+
+  CREATE TEMPORARY TABLE ins ( id INT );
+  DROP PROCEDURE IF EXISTS multi;
+  DELIMITER $$
+  CREATE PROCEDURE multi() BEGIN
+    SELECT 1;
+    SELECT 1;
+    INSERT INTO ins VALUES (1);
+    INSERT INTO ins VALUES (2);
+  END$$
+  DELIMITER ;
+
+  CALL multi();
+  DROP TABLE ins; 
+
+results in:
+
+* a resultset::
+
+    01 00 00 01 01 17 00 00    02 03 64 65 66 00 00 00    ..........def...
+    01 31 00 0c 3f 00 01 00    00 00 08 81 00 00 00 00    .1..?...........
+    05 00 00 03 fe 00 00 0a    00 02 00 00 04 01 31 05    ..............1.
+    00 00 05 fe 00 00 0a 00                               ........        
+
+  * see the `EOF packet`_: `05 00 00 03 fe 00 00 0a 00` with its status-flag being `0a`
+
+* the 2nd resultset::
+
+    01 00 00 06 01 17 00 00    07 03 64 65 66 00 00 00    ..........def...
+    01 31 00 0c 3f 00 01 00    00 00 08 81 00 00 00 00    .1..?...........
+    05 00 00 08 fe 00 00 0a    00 02 00 00 09 01 31 05    ..............1.
+    00 00 0a fe 00 00 0a 00                               ........        
+
+  * see the `EOF packet`_: `05 00 00 0a fe 00 00 0a 00` with its status-flag being `0a`
+
+* ... and a closing empty resultset, a `OK packet`_::
+
+    07 00 00 0b 00 01 00 02    00 00 00                   ...........     
+
+`SERVER_MORE_RESULTS_EXISTS`_ is set to indicate that more resultsets will follow.
+
+The trailing `OK packet`_ is the response to the CALL statement and contains the affected rows of
+the last statement. In our case we INSERTed 2 rows, but only the `affected_rows` of the 
+last INSERT statement is returned as part of the `OK packet`_. If the last statement is a SELECT
+the affected rows is 0.
+
+A multi-statement is allowing COM_QUERY to send more than one query to the server, separated by a ';'.
 
 COM_SET_OPTION
 --------------
@@ -1400,6 +1464,28 @@ On success it returns a `EOF packet`_ otherwise a `ERR packet`_.
     response: EOF or ERR
 
     payload:
-      1              [..] COM_SET_OPTION
+      1              [1b] COM_SET_OPTION
       2              option operation
+
+COM_STMT_FETCH
+--------------
+
+::
+
+  COM_STMT_FETCH
+
+    response: binary rows or ERR
+
+    payload:
+      1              [1c] COM_STMT_FETCH
+      4              stmt-id
+      4              num rows
+
+COM_STMT_FETCH response
+.......................
+
+A fetch may result:
+
+* a multi-resultset
+* a `ERR packet`_
 
