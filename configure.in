@@ -432,7 +432,8 @@ AC_CONFIG_FILES([scripts/mysql-binlog-dump:scripts/mysql-proxy-binwrapper.in], [
 AC_CONFIG_FILES([scripts/mysql-proxy:scripts/mysql-proxy-binwrapper.in], [chmod +x scripts/mysql-proxy])
 AC_CONFIG_FILES([mysql-proxy.pc])
 AC_CONFIG_FILES([mysql-chassis.pc])
-
+AC_CONFIG_FILES([doc/Makefile])
+AC_CONFIG_FILES([doc/chapter/Makefile])
 AC_OUTPUT
 
 
