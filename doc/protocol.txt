@@ -440,11 +440,11 @@ hex  constant name
 07   COM_REFRESH
 08   COM_SHUTDOWN
 09   COM_STATISTICS
-0a   COM_PROCESS_INFO
+0a   `COM_PROCESS_INFO`_
 0b   COM_CONNECT
-0c   COM_PROCESS_KILL
+0c   `COM_PROCESS_KILL`_
 0d   COM_DEBUG
-0e   COM_PING
+0e   `COM_PING`_
 0f   COM_TIME
 10   COM_DELAYED_INSERT
 11   COM_CHANGE_USER
@@ -812,6 +812,62 @@ COM_DROP_DB
 
     example:
       05 00 00 00 06 74 65 73    74                         .....test     
+
+COM_PROCESS_INFO
+----------------
+
+The COM_PROCESS_INFO command is deprecated. `SHOW PROCESSLIST` should be used instead.
+
+It either returns a:
+
+* `Text Resultset`_ or
+* no response on error.
+
+Yep, "no response". In case the client doesn't have the `PROCESS` privilege, nothing, not even a `ERR packet`_, will be returned.
+
+::
+
+  COM_PROCESS_INFO
+    get a list of active threads
+
+    direction: client -> server
+    response: resultset or nothing
+
+    payload:
+      1              [0a] COM_PROCCESS_INFO
+
+COM_PROCESS_KILL
+----------------
+
+Same as `KILL <id>`.
+
+::
+
+  COM_PROCESS_KILL
+    ask the server to terminate a connection
+
+    direction: client -> server
+    response: OK or ERR
+
+    payload:
+      1              [0c] COM_PROCCESS_KILL
+      4              connection id
+
+
+COM_PING
+--------
+
+::
+
+  COM_PING
+    check if the server is alive
+
+    direction: client -> server
+    response: OK
+
+    payload:
+      1              [0e] COM_PING
+
 
 The prepare statement protocol
 ==============================
