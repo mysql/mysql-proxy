@@ -672,6 +672,9 @@ In the example we use `|` to show the packet borders::
 It has one column (`01 00 00 01 01`) and a field named `@@version_comment` whichs is a `MYSQL_TYPE_VAR_STRING`_ [fd].
 It has one row and its one value is `MySQL Community Server (GPL)`.
 
+If the `SERVER_MORE_RESULTS_EXISTS`_ flag is set in the last `EOF packet`_ a `multi-resultset`_ is sent.
+
+
 It may also be resultset with an closing `ERR packet`_:
 
 * a packet containing a `length encoded integer`_ column-count
@@ -1087,8 +1090,8 @@ The prepared statement protocol was introduced in MySQL 4.1 and adds a few new c
 * `COM_STMT_PREPARE`_
 * `COM_STMT_EXECUTE`_
 * `COM_STMT_CLOSE`_
-* COM_STMT_RESET
-* COM_STMT_SEND_LONG_DATA
+* `COM_STMT_RESET`_
+* `COM_STMT_SEND_LONG_DATA`_
 
 It also defines a more compact resultset format that is used instead of the `Text Resultset`_ to
 return resultsets.
@@ -1432,13 +1435,13 @@ The server will send a `OK packet`_ if the statement could be reset, a `ERR pack
       05 00 00 00 1a 01 00 00    00                         ......... 
 
   
-Store Procedures
-================
+Stored Procedures
+=================
 
 In MySQL 5.0 the protocol was extended to handle:
 
-* multi-resultsets
-* multi-statements
+* `multi-resultset`_
+* `multi-statement`_
 
 Multi-resultset
 ---------------
