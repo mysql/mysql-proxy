@@ -449,8 +449,8 @@ hex  constant name
 10   `COM_DELAYED_INSERT`_
 11   COM_CHANGE_USER
 12   COM_BINLOG_DUMP
-13   COM_TABLE_DUMP
-14   COM_CONNECT_OUT
+13   `COM_TABLE_DUMP`_
+14   `COM_CONNECT_OUT`_
 15   COM_REGISTER_SLAVE
 16   `COM_STMT_PREPARE`_
 17   `COM_STMT_EXECUTE`_
@@ -466,6 +466,8 @@ hex  constant name
 .. _COM_CONNECT: `unhandled commands`_
 .. _COM_TIME: `unhandled commands`_
 .. _COM_DELAYED_INSERT: `unhandled commands`_
+.. _COM_CONNECT_OUT: `unhandled commands`_
+.. _COM_TABLE_DUMP: `unhandled commands`_
 .. _COM_DAEMON: `unhandled commands`_
 
 unhandled commands
