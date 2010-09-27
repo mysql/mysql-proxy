@@ -434,7 +434,7 @@ hex  constant name
 01   `COM_QUIT`_
 02   `COM_INIT_DB`_
 03   `COM_QUERY`_
-04   COM_FIELD_LIST
+04   `COM_FIELD_LIST`_
 05   `COM_CREATE_DB`_
 06   `COM_DROP_DB`_
 07   COM_REFRESH
@@ -527,6 +527,9 @@ The server replies to a COM_QUERY packet with a `COM_QUERY Response`_.
       6d 69 74 20 31                                        mit 1           
 
 The length of the query-string is a taken from the packet length - 1.
+
+API call: `mysql_query() <http://dev.mysql.com/doc/refman/5.1/en/mysql-query.html>`_
+
 
 COM_QUERY Response
 ------------------
@@ -744,6 +747,35 @@ The client sends its file data AS IS to the server in response to a `LOCAL INFIL
      payload:
        n             the filedata
 
+COM_FIELD_LIST
+--------------
+
+::
+
+  COM_FIELD_LIST
+    get the column definition of a tables
+
+    direction: client -> server
+    response: 
+
+    payload:
+      1              [04] COM_FIELD_LIST
+      string         table
+      string[p]      field wildcard
+
+API call: `mysql_list_fields() <http://dev.mysql.com/doc/refman/5.1/en/mysql-list-fields.html>`_
+
+COM_FIELD_LIST response
+.......................
+
+The response to a `COM_FIELD_LIST`_ can either be a
+
+* a `ERR packet`_ or the
+* first half of a `Text Resultset`_
+
+  * a packet containing a `length encoded integer`_ column-count
+  * column-count * `Column Definition`_ packets
+  * `EOF packet`_
 
 COM_CREATE_DB
 -------------
