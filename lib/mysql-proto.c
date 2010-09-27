@@ -30,6 +30,7 @@
 
 #include "network-mysqld-proto.h"
 #include "network-mysqld-packet.h"
+#include "network_mysqld_type.h"
 #include "network-mysqld-masterinfo.h"
 #include "glib-ext.h"
 #include "lua-env.h"
@@ -55,6 +56,10 @@
 
 #define LUA_EXPORT_INT(x, y) \
 	lua_pushinteger(L, x->y); \
+	lua_setfield(L, -2, G_STRINGIFY(y)); 
+
+#define LUA_EXPORT_BOOL(x, y) \
+	lua_pushboolean(L, x->y); \
 	lua_setfield(L, -2, G_STRINGIFY(y)); 
 
 #define LUA_EXPORT_STR(x, y) \
@@ -466,6 +471,266 @@ static int lua_proto_append_challenge_packet (lua_State *L) {
 	return 1;
 }
 
+static int lua_proto_get_stmt_prepare_packet (lua_State *L) {
+	size_t packet_len;
+	const char *packet_str = luaL_checklstring(L, 1, &packet_len);
+	network_mysqld_stmt_prepare_packet_t *cmd;
+	network_packet packet;
+	GString s;
+	int err = 0;
+
+	s.str = (char *)packet_str;
+	s.len = packet_len;
+
+	packet.data = &s;
+	packet.offset = 0;
+
+	cmd = network_mysqld_stmt_prepare_packet_new();
+
+	err = err || network_mysqld_proto_get_stmt_prepare_packet(&packet, cmd);
+	if (err) {
+		network_mysqld_stmt_prepare_packet_free(cmd);
+
+		luaL_error(L, "%s: network_mysqld_proto_get_stmt_prepare_packet() failed", G_STRLOC);
+		return 0;
+	}
+
+	lua_newtable(L);
+
+	LUA_EXPORT_STR(cmd, stmt_text);
+
+	network_mysqld_stmt_prepare_packet_free(cmd);
+
+	return 1;
+}
+
+/**
+ * transform the OK packet of a COM_STMT_PREPARE result into a table
+ */
+static int lua_proto_get_stmt_prepare_ok_packet (lua_State *L) {
+	size_t packet_len;
+	const char *packet_str = luaL_checklstring(L, 1, &packet_len);
+	network_mysqld_stmt_prepare_ok_packet_t *cmd;
+	network_packet packet;
+	GString s;
+	int err = 0;
+
+	s.str = (char *)packet_str;
+	s.len = packet_len;
+
+	packet.data = &s;
+	packet.offset = 0;
+
+	cmd = network_mysqld_stmt_prepare_ok_packet_new();
+
+	err = err || network_mysqld_proto_get_stmt_prepare_ok_packet(&packet, cmd);
+	if (err) {
+		network_mysqld_stmt_prepare_ok_packet_free(cmd);
+
+		luaL_error(L, "%s: network_mysqld_proto_get_stmt_prepare_ok_packet() failed", G_STRLOC);
+		return 0;
+	}
+
+	lua_newtable(L);
+
+	LUA_EXPORT_INT(cmd, stmt_id);
+	LUA_EXPORT_INT(cmd, num_columns);
+	LUA_EXPORT_INT(cmd, num_params);
+	LUA_EXPORT_INT(cmd, warnings);
+
+	network_mysqld_stmt_prepare_ok_packet_free(cmd);
+
+	return 1;
+}
+
+/**
+ * get the stmt-id from the com-stmt-execute packet 
+ */
+static int lua_proto_get_stmt_execute_packet (lua_State *L) {
+	size_t packet_len;
+	const char *packet_str = luaL_checklstring(L, 1, &packet_len);
+	int param_count = luaL_checkint(L, 2);
+	network_mysqld_stmt_execute_packet_t *cmd;
+	network_packet packet;
+	GString s;
+	int err = 0;
+
+	s.str = (char *)packet_str;
+	s.len = packet_len;
+
+	packet.data = &s;
+	packet.offset = 0;
+
+	cmd = network_mysqld_stmt_execute_packet_new();
+
+	err = err || network_mysqld_proto_get_stmt_execute_packet(&packet, cmd, param_count);
+	if (err) {
+		network_mysqld_stmt_execute_packet_free(cmd);
+
+		luaL_error(L, "%s: network_mysqld_proto_get_stmt_execute_packet() failed", G_STRLOC);
+		return 0;
+	}
+
+	lua_newtable(L);
+
+	LUA_EXPORT_INT(cmd, stmt_id);
+	LUA_EXPORT_INT(cmd, flags);
+	LUA_EXPORT_INT(cmd, iteration_count);
+	LUA_EXPORT_BOOL(cmd, new_params_bound);
+
+	if (cmd->new_params_bound) {
+		guint i;
+
+		lua_newtable(L);
+		for (i = 0; i < cmd->params->len; i++) {
+			network_mysqld_type_t *param = g_ptr_array_index(cmd->params, i);
+
+			lua_newtable(L);
+			lua_pushnumber(L, param->type);
+			lua_setfield(L, -2, "type");
+
+			if (param->is_null) {
+				lua_pushnil(L);
+			} else {
+				const char *const_s;
+				char *_s;
+				gsize s_len;
+				guint64 _i;
+				gboolean is_unsigned;
+				double d;
+
+				switch (param->type) {
+				case MYSQL_TYPE_BLOB:
+				case MYSQL_TYPE_MEDIUM_BLOB:
+				case MYSQL_TYPE_LONG_BLOB:
+				case MYSQL_TYPE_STRING:
+				case MYSQL_TYPE_VARCHAR:
+				case MYSQL_TYPE_VAR_STRING:
+					if (0 != network_mysqld_type_get_string_const(param, &const_s, &s_len)) {
+						return luaL_error(L, "%s: _get_string_const() failed for type = %d",
+								G_STRLOC,
+								param->type);
+					}
+
+					lua_pushlstring(L, const_s, s_len);
+					break;
+				case MYSQL_TYPE_TINY:
+				case MYSQL_TYPE_SHORT:
+				case MYSQL_TYPE_LONG:
+				case MYSQL_TYPE_LONGLONG:
+					if (0 != network_mysqld_type_get_int(param, &_i, &is_unsigned)) {
+						return luaL_error(L, "%s: _get_int() failed for type = %d",
+								G_STRLOC,
+								param->type);
+					}
+
+					lua_pushinteger(L, _i);
+					break;
+				case MYSQL_TYPE_DOUBLE:
+				case MYSQL_TYPE_FLOAT:
+					if (0 != network_mysqld_type_get_double(param, &d)) {
+						return luaL_error(L, "%s: _get_double() failed for type = %d",
+								G_STRLOC,
+								param->type);
+					}
+
+					lua_pushnumber(L, d);
+					break;
+				case MYSQL_TYPE_DATETIME:
+				case MYSQL_TYPE_TIMESTAMP:
+				case MYSQL_TYPE_DATE:
+				case MYSQL_TYPE_TIME:
+					_s = NULL;
+					s_len = 0;
+
+					if (0 != network_mysqld_type_get_string(param, &_s, &s_len)) {
+						return luaL_error(L, "%s: _get_string() failed for type = %d",
+								G_STRLOC,
+								param->type);
+					}
+
+					lua_pushlstring(L, _s, s_len);
+
+					if (NULL != _s) g_free(_s);
+					break;
+				default:
+					luaL_error(L, "%s: can't decode type %d yet",
+							G_STRLOC,
+							param->type); /* we don't have that value yet */
+					break;
+				}
+			}
+			lua_setfield(L, -2, "value");
+			lua_rawseti(L, -2, i + 1);
+		}
+		lua_setfield(L, -2, "params"); 
+	}
+
+	network_mysqld_stmt_execute_packet_free(cmd);
+
+	return 1;
+}
+
+static int lua_proto_get_stmt_execute_packet_stmt_id (lua_State *L) {
+	size_t packet_len;
+	const char *packet_str = luaL_checklstring(L, 1, &packet_len);
+	network_packet packet;
+	GString s;
+	int err = 0;
+	guint32 stmt_id;
+
+	s.str = (char *)packet_str;
+	s.len = packet_len;
+
+	packet.data = &s;
+	packet.offset = 0;
+
+	err = err || network_mysqld_proto_get_stmt_execute_packet_stmt_id(&packet, &stmt_id);
+	if (err) {
+		luaL_error(L, "%s: network_mysqld_proto_get_stmt_execute_packet_stmt_id() failed", G_STRLOC);
+		return 0;
+	}
+
+	lua_pushinteger(L, stmt_id);
+
+	return 1;
+}
+
+
+static int lua_proto_get_stmt_close_packet (lua_State *L) {
+	size_t packet_len;
+	const char *packet_str = luaL_checklstring(L, 1, &packet_len);
+	network_mysqld_stmt_close_packet_t *cmd;
+	network_packet packet;
+	GString s;
+	int err = 0;
+
+	s.str = (char *)packet_str;
+	s.len = packet_len;
+
+	packet.data = &s;
+	packet.offset = 0;
+
+	cmd = network_mysqld_stmt_close_packet_new();
+
+	err = err || network_mysqld_proto_get_stmt_close_packet(&packet, cmd);
+	if (err) {
+		network_mysqld_stmt_close_packet_free(cmd);
+
+		luaL_error(L, "%s: network_mysqld_proto_get_stmt_close_packet() failed", G_STRLOC);
+		return 0;
+	}
+
+	lua_newtable(L);
+
+	LUA_EXPORT_INT(cmd, stmt_id);
+
+	network_mysqld_stmt_close_packet_free(cmd);
+
+	return 1;
+}
+
+
 
 
 /*
@@ -497,6 +762,11 @@ static const struct luaL_reg mysql_protolib[] = {
 	{"to_response_packet", lua_proto_append_response_packet},
 	{"from_masterinfo_string", lua_proto_get_masterinfo_string},
         {"to_masterinfo_string", lua_proto_append_masterinfo_string},
+	{"from_stmt_prepare_packet", lua_proto_get_stmt_prepare_packet},
+	{"from_stmt_prepare_ok_packet", lua_proto_get_stmt_prepare_ok_packet},
+	{"from_stmt_execute_packet", lua_proto_get_stmt_execute_packet},
+	{"stmt_id_from_stmt_execute_packet", lua_proto_get_stmt_execute_packet_stmt_id},
+	{"from_stmt_close_packet", lua_proto_get_stmt_close_packet},
 	{NULL, NULL},
 };
 

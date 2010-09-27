@@ -43,6 +43,13 @@ AC_PROG_SED
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
 
+if test x$RST2HTML = x; then
+	AM_MISSING_PROG(RST2HTMLMISSING, rst2html.py)
+	RST2HTML=$RST2HTMLMISSING
+fi
+AC_SUBST(RST2HTML)
+
+
 dnl more automake stuff
 AM_C_PROTOTYPES
 
@@ -432,7 +439,8 @@ AC_CONFIG_FILES([scripts/mysql-binlog-dump:scripts/mysql-proxy-binwrapper.in], [
 AC_CONFIG_FILES([scripts/mysql-proxy:scripts/mysql-proxy-binwrapper.in], [chmod +x scripts/mysql-proxy])
 AC_CONFIG_FILES([mysql-proxy.pc])
 AC_CONFIG_FILES([mysql-chassis.pc])
-
+AC_CONFIG_FILES([doc/Makefile])
+AC_CONFIG_FILES([doc/chapter/Makefile])
 AC_OUTPUT
 
 

@@ -19,7 +19,7 @@
  $%ENDLICENSE%$ --]]
 local proto = assert(require("mysql.proto"))
 local password = assert(require("mysql.password"))
-
+require("proxy.test")
 ---
 -- err packet
 
@@ -264,4 +264,73 @@ local response   = "09876543210987654321"
 assert(password.unscramble(challenge, response, dbl_hashed) ~= hashed)
 
 assert(false == password.check(challenge, response, dbl_hashed))
+
+---
+-- prepared stmt decoders
+--
+
+-- EXECUTE packet, no params
+local packet = "\023\001\000\000\000\000\001\000\000\000"
+local execute = proto.from_stmt_execute_packet(packet, 0)
+assert(execute)
+assertEquals(execute.stmt_id, 1)
+assertEquals(execute.flags, 0)
+assertEquals(execute.iteration_count, 1)
+assertEquals(execute.new_params_bound, false)
+
+-- EXECUTE packet with 14 params
+local packet = "\023" ..
+	"\001\000\000\000" ..
+	"\000" ..
+	"\001\000\000\000" ..
+	"\003\000" ..
+	"\001" ..
+	"\254\000\006\000\254\000\008\000\008\128\003\000\002\000\001\000\005\000\004\000\010\000\012\000\007\000\011\000" ..
+	"\003\102\111\111" ..
+	"\001\000\000\000\000\000\000\000" ..
+	"\001\000\000\000\000\000\000\000" ..
+	"\001\000\000\000" ..
+	"\001\000" ..
+	"\001" ..
+	"\102\102\102\102\102\102\036\064" ..
+	"\000\000\036\065" ..
+	"\004\218\007\010\017" ..
+	"\011\218\007\010\017\019\027\030\001\000\000\000" ..
+	"\011\218\007\010\017\019\027\030\001\000\000\000" ..
+	"\012\001\120\000\000\000\019\027\030\001\000\000\000"
+
+local execute = proto.from_stmt_execute_packet(packet, 14)
+assert(execute)
+assertEquals(execute.stmt_id, 1)
+assertEquals(execute.flags, 0)
+assertEquals(execute.iteration_count, 1)
+assertEquals(execute.new_params_bound, true)
+
+local params = execute.params
+assert(params)
+assertEquals(#params, 14)
+
+local expected_params = {
+	{ type = 254, value = nil },
+	{ type = 6, value = nil },
+	{ type = 254, value = "foo" },
+	{ type = 8, value = 1 },
+	{ type = 8, value = 1 },
+	{ type = 3, value = 1 },
+	{ type = 2, value = 1 },
+	{ type = 1, value = 1 },
+	{ type = 5, value = 10.2 }, --[[ double ]]--
+	{ type = 4, value = 10.25 }, --[[ float ]]--
+	{ type = 10, value = "2010-10-17" }, --[[ date ]]--
+	{ type = 12, value = "2010-10-17 19:27:30.000000001" }, --[[ datetime ]]--
+	{ type = 7, value = "2010-10-17 19:27:30.000000001" }, --[[ timestamp ]]--
+	{ type = 11, value = "-120 19:27:30.000000001" }, --[[ time ]]--
+}
+
+for ndx, expected_param in ipairs(expected_params) do
+	local param = params[ndx]
+	assert(param)
+	assertEquals(param.type, expected_param.type)
+	assertEquals(param.value, expected_param.value)
+end
 

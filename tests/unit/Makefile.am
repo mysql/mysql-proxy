@@ -32,6 +32,7 @@ TESTS=\
 	t_network_backend \
 	t_network_injection \
 	t_network_mysqld_packet \
+	t_network_mysqld_type \
 	t_network_mysqld_masterinfo \
 	t_chassis_timings \
 	t_chassis_shutdown_hooks \
@@ -81,10 +82,21 @@ check_mysqld_proto_SOURCES  = \
 check_mysqld_proto_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS)
 check_mysqld_proto_LDADD    = $(GLIB_LIBS)
 
+t_network_mysqld_type_SOURCES  = \
+	t_network_mysqld_type.c \
+	$(top_srcdir)/src/network_mysqld_type.c \
+	$(top_srcdir)/src/glib-ext.c
+
+t_network_mysqld_type_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(LUA_CFLAGS)
+t_network_mysqld_type_LDADD    = $(GLIB_LIBS) $(LUA_LIBS) $(EVENT_LIBS)
+
+
 t_network_mysqld_packet_SOURCES  = \
 	t_network_mysqld_packet.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
+	$(top_srcdir)/src/network_mysqld_type.c \
+	$(top_srcdir)/src/network_mysqld_proto_binary.c \
 	$(top_srcdir)/src/network-queue.c \
 	$(top_srcdir)/src/network-socket.c \
 	$(top_srcdir)/src/network-address.c \
@@ -126,6 +138,8 @@ t_network_socket_SOURCES  = \
 	$(top_srcdir)/src/glib-ext.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
+	$(top_srcdir)/src/network_mysqld_type.c \
+	$(top_srcdir)/src/network_mysqld_proto_binary.c \
 	$(top_srcdir)/src/network-address.c \
 	$(top_srcdir)/src/network-queue.c \
 	$(top_srcdir)/src/network-socket.c
@@ -177,6 +191,8 @@ t_network_backend_SOURCES  = \
 	$(top_srcdir)/src/network-backend.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
+	$(top_srcdir)/src/network_mysqld_type.c \
+	$(top_srcdir)/src/network_mysqld_proto_binary.c \
 	$(top_srcdir)/src/network-conn-pool.c \
 	$(top_srcdir)/src/network-address.c \
 	$(top_srcdir)/src/network-queue.c \
@@ -204,6 +220,8 @@ t_network_injection_SOURCES  = \
 	$(top_srcdir)/src/glib-ext.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
+	$(top_srcdir)/src/network_mysqld_type.c \
+	$(top_srcdir)/src/network_mysqld_proto_binary.c \
 	$(top_srcdir)/src/network-injection.c \
 	$(top_srcdir)/src/my_rdtsc.c \
 	$(top_srcdir)/src/chassis-timings.c
