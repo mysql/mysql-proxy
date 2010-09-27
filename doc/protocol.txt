@@ -441,12 +441,12 @@ hex  constant name
 08   COM_SHUTDOWN
 09   COM_STATISTICS
 0a   `COM_PROCESS_INFO`_
-0b   COM_CONNECT
+0b   `COM_CONNECT`_
 0c   `COM_PROCESS_KILL`_
 0d   COM_DEBUG
 0e   `COM_PING`_
-0f   COM_TIME
-10   COM_DELAYED_INSERT
+0f   `COM_TIME`_
+10   `COM_DELAYED_INSERT`_
 11   COM_CHANGE_USER
 12   COM_BINLOG_DUMP
 13   COM_TABLE_DUMP
@@ -459,13 +459,25 @@ hex  constant name
 1a   `COM_STMT_RESET`_
 1b   COM_SET_OPTION
 1c   COM_STMT_FETCH
-1d   COM_DAEMON
+1d   `COM_DAEMON`_
 ===  ======================
 
-COM_SLEEP
----------
+.. _COM_SLEEP: `unhandled commands`_
+.. _COM_CONNECT: `unhandled commands`_
+.. _COM_TIME: `unhandled commands`_
+.. _COM_DELAYED_INSERT: `unhandled commands`_
+.. _COM_DAEMON: `unhandled commands`_
 
-This command is only used internally by the server. Sending it to the server always results in a 
+unhandled commands
+------------------
+
+* COM_SLEEP
+* COM_CONNECT
+* COM_TIME
+* COM_DELAYED_INSERT
+* COM_DAEMON
+
+These commands are only used internally by the server or are deprecated. Sending the to the server always results in a 
 `ERR packet`_.
 
 COM_QUIT
