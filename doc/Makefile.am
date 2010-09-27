@@ -13,13 +13,18 @@ EXTRA_DIST = \
 	     scripting.txt \
 	     lifecycle.msc
 
+clean-local:
+	rm -f *.html
+
+html-local: book.html protocol.html scripting.html
+
 ## we use http://docutils.sourceforge.net/rst.html to generate the docs
 book.html: book.txt chapter/scripting.txt chapter/protocol.txt
-	rst2html.py $< $@
+	${RST2HTML} $< $@
 
 protocol.html: protocol.txt chapter/protocol.txt
-	rst2html.py $< $@
+	${RST2HTML} $< $@
 
 scripting.html: scripting.txt chapter/scripting.txt
-	rst2html.py $< $@
+	${RST2HTML} $< $@
 
