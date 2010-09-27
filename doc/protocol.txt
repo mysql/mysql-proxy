@@ -457,7 +457,7 @@ hex  constant name
 18   `COM_STMT_SEND_LONG_DATA`_
 19   `COM_STMT_CLOSE`_
 1a   `COM_STMT_RESET`_
-1b   COM_SET_OPTION
+1b   `COM_SET_OPTION`_
 1c   COM_STMT_FETCH
 1d   `COM_DAEMON`_
 ===  ======================
@@ -1234,5 +1234,40 @@ The server will send a `OK packet`_ if the statement could be reset, a `ERR pack
       05 00 00 00 1a 01 00 00    00                         ......... 
 
   
+Store Procedures
+================
 
+In MySQL 5.0 the protocol was expected to handle:
+
+* multi-statements
+* multi-resultsets
+
+COM_SET_OPTION
+--------------
+
+Allows to enable and disable:
+
+* CLIENT_MULTI_STATEMENTS 
+
+for the current connection. The option operation is one of:
+
+=== =============
+op  constant name
+=== =============
+0   MYSQL_OPTION_MULTI_STATEMENTS_ON
+1   MYSQL_OPTION_MULTI_STATEMENTS_OFF
+=== =============
+
+On success it returns a `EOF packet`_ otherwise a `ERR packet`_.
+
+::
+
+  COM_SET_OPTION
+    set options for the current connection
+
+    response: EOF or ERR
+
+    payload:
+      1              [..] COM_SET_OPTION
+      2              option operation
 
