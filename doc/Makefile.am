@@ -14,13 +14,12 @@ EXTRA_DIST = \
 	     lifecycle.msc
 
 ## we use http://docutils.sourceforge.net/rst.html to generate the docs
-
-%.html: %.txt
+book.html: book.txt chapter/scripting.txt chapter/protocol.txt
 	rst2html.py $< $@
 
-book.html: book.txt chapter/scripting.txt chapter/protocol.txt
-
 protocol.html: protocol.txt chapter/protocol.txt
+	rst2html.py $< $@
 
 scripting.html: scripting.txt chapter/scripting.txt
+	rst2html.py $< $@
 
