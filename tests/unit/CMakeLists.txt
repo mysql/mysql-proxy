@@ -114,6 +114,7 @@ ADD_EXECUTABLE(t_network_injection
 	../../src/network-mysqld-proto.c 
 	../../src/network-mysqld-packet.c 
 	../../src/network_mysqld_type.c 
+	../../src/network_mysqld_proto_binary.c 
 	../../src/chassis-timings.c
 	../../src/my_rdtsc.c
 )
@@ -134,6 +135,7 @@ ADD_EXECUTABLE(t_network_backend
 	../../src/network-mysqld-proto.c
 	../../src/network-mysqld-packet.c
 	../../src/network_mysqld_type.c 
+	../../src/network_mysqld_proto_binary.c 
 	../../src/network-address.c
 )
 
