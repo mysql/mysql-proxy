@@ -337,7 +337,7 @@ static int network_mysqld_type_data_date_get_string(network_mysqld_type_t *type,
 			if (*dst_len < NETWORK_MYSQLD_TYPE_DATE_MIN_BUF_LEN) {
 				return -1; /* ... but it is too small .. we could return the right size here */
 			}
-			*dst_len = snprintf(*dst, *dst_len, "%04u-%02u-%02u",
+			*dst_len = g_snprintf(*dst, *dst_len, "%04u-%02u-%02u",
 					src->year,
 					src->month,
 					src->day);
@@ -348,7 +348,7 @@ static int network_mysqld_type_data_date_get_string(network_mysqld_type_t *type,
 			if (*dst_len < NETWORK_MYSQLD_TYPE_DATETIME_MIN_BUF_LEN) {
 				return -1; /* ... but it is too small .. we could return the right size here */
 			}
-			*dst_len = snprintf(*dst, *dst_len, "%04u-%02u-%02u %02u:%02u:%02u.%09u",
+			*dst_len = g_snprintf(*dst, *dst_len, "%04u-%02u-%02u %02u:%02u:%02u.%09u",
 					src->year,
 					src->month,
 					src->day,
@@ -456,7 +456,7 @@ static int network_mysqld_type_data_time_get_string(network_mysqld_type_t *type,
 		if (*dst_len < NETWORK_MYSQLD_TYPE_TIME_MIN_BUF_LEN) {
 			return -1; /* ... but it is too small .. we could return the right size here */
 		}
-		*dst_len = snprintf(*dst, *dst_len, "%s%d %02u:%02u:%02u.%09u",
+		*dst_len = g_snprintf(*dst, *dst_len, "%s%d %02u:%02u:%02u.%09u",
 				src->sign ? "-" : "",
 				src->days,
 				src->hour,
