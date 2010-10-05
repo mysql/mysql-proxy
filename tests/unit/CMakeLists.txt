@@ -159,17 +159,15 @@ TARGET_LINK_LIBRARIES(t_network_queue
 	${WINSOCK_LIBRARIES}
 )
 
-ADD_EXECUTABLE(t_chassis_frontend
-	t_chassis_frontend.c
-	../../src/chassis-frontend.c
-	../../src/glib-ext.c
-)
+ADD_EXECUTABLE(t_chassis_frontend t_chassis_frontend.c)
 
 TARGET_LINK_LIBRARIES(t_chassis_frontend
-	${GLIB_LIBRARIES}
-	${GTHREAD_LIBRARIES}
+	mysql-chassis
 	${EVENT_LIBRARIES}
 	${WINSOCK_LIBRARIES}
+	${GLIB_LIBRARIES}
+	${GTHREAD_LIBRARIES}
+	${GMODULE_LIBRARIES} 
 )
 
 
