@@ -36,6 +36,7 @@ TESTS=\
 	t_network_mysqld_masterinfo \
 	t_chassis_timings \
 	t_chassis_shutdown_hooks \
+	t_chassis_frontend \
 	check_chassis_filemode \
 	check_chassis_path
 
@@ -50,6 +51,15 @@ t_chassis_shutdown_hooks_CPPFLAGS = \
 	$(MYSQL_CFLAGS)
 
 t_chassis_shutdown_hooks_LDADD = $(GLIB_LIBS) $(GTHREAD_LIBS)
+
+
+t_chassis_frontend_SOURCES = t_chassis_frontend.c 
+
+t_chassis_frontend_CPPFLAGS = \
+	-I$(top_srcdir)/src/ $(GLIB_CFLAGS) -I$(top_srcdir) \
+	$(MYSQL_CFLAGS)
+
+t_chassis_frontend_LDADD = $(top_builddir)/src/libmysql-chassis.la
 
 
 check_chassis_filemode_SOURCES = check_chassis_filemode.c \
