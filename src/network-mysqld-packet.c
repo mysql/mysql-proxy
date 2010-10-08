@@ -1707,8 +1707,10 @@ int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_p
 	guint i;
 	guint nul_bytes_len;
 	GString *nul_bytes;
+	guint8 ok;
 
-	err = err || network_mysqld_proto_skip(packet, 1); /* the packet header which seems to be always 0 */
+	err = err || network_mysqld_proto_get_int8(packet, &ok); /* the packet header which seems to be always 0 */
+	err = err || (ok != 0);
 
 	nul_bytes_len = (coldefs->len + 7 + 2) / 8; /* the first 2 bits are reserved */
 	nul_bytes = g_string_sized_new(nul_bytes_len);
@@ -1720,7 +1722,8 @@ int network_mysqld_proto_get_binary_row(network_packet *packet, network_mysqld_p
 
 		param = network_mysqld_type_new(coldef->type);
 		if (NULL == param) {
-			g_critical("%s: coulnd't create type = %d", G_STRLOC, coldef->type);
+			g_debug("%s: coulnd't create type = %d",
+					G_STRLOC, coldef->type);
 
 			err = -1;
 			break;
