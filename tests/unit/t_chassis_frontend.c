@@ -24,7 +24,7 @@
 
 #include <glib.h>
 
-#include "network-socket.h"
+#include "chassis-frontend.h"
 
 /**
  * test if we build the LUA_PATH correctly
