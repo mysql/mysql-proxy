@@ -74,7 +74,7 @@ void t_chassis_frontend_set_lua_cpath(void) {
 		NULL, BASEDIR, lua_subdirs));
 
 #ifdef _WIN32
-	g_assert_cmpstr("C:\\absdir\\bin\\?.dll", ==, getenv("LUA_CPATH"));
+	g_assert_cmpstr("C:\\absdir\\bin\\lua-?.dll", ==, getenv("LUA_CPATH"));
 #else
 	g_assert_cmpstr("/absdir/lib/foo/lua/?."G_MODULE_SUFFIX";/absdir/lib/bar/lua/?."G_MODULE_SUFFIX, ==, getenv("LUA_CPATH"));
 #endif
