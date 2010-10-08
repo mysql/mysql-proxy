@@ -109,15 +109,22 @@ static int network_mysqld_proto_binary_get_double_type(network_packet *packet, n
 	int err = 0;
 	union {
 		double d;
-		char d_char_shadow[sizeof(double) + 1];
+		guint8 d_char_shadow[sizeof(double)];
 	} double_copy;
+	unsigned long i;
 
-	GString s;
-	s.str = double_copy.d_char_shadow;
-	s.len = 0;
-	s.allocated_len = sizeof(double_copy.d_char_shadow);
+#ifdef WORDS_BIGENDIAN
+	/* big endian: ppc, ... */
+	for (i = 0; 0 == err && i < sizeof(double); i++) {
+		err = err || network_mysqld_proto_get_int8(packet, &(double_copy.d_char_shadow[sizeof(double) - 1 - i]));
+	}
+#else
+	/* little endian: x86: network == system byte-order */
+	for (i = 0; 0 == err && i < sizeof(double); i++) {
+		err = err || network_mysqld_proto_get_int8(packet, &(double_copy.d_char_shadow[i]));
+	}
+#endif
 
-	err = err || network_mysqld_proto_get_gstring_len(packet, sizeof(double), &s);
 	err = err || network_mysqld_type_set_double(type, double_copy.d);
 
 	return err ? -1 : 0;
@@ -126,14 +133,25 @@ static int network_mysqld_proto_binary_get_double_type(network_packet *packet, n
 static int network_mysqld_proto_binary_append_double_type(GString *packet, network_mysqld_type_t *type) {
 	union {
 		double d;
-		char d_char_shadow[sizeof(double)];
+		guint8 d_char_shadow[sizeof(double)];
 	} double_copy;
 	int err = 0;
+	unsigned long i;
 
 	err = err || network_mysqld_type_get_double(type, &double_copy.d);
 	if (0 != err) return -1;
 
-	g_string_append_len(packet, double_copy.d_char_shadow, sizeof(double));
+#ifdef WORDS_BIGENDIAN
+	/* big endian: ppc, ... */
+	for (i = 0; 0 == err && i < sizeof(double); i++) {
+		err = err || network_mysqld_proto_append_int8(packet, double_copy.d_char_shadow[sizeof(double) - 1 - i]);
+	}
+#else
+	/* little endian: x86: network == system byte-order */
+	for (i = 0; 0 == err && i < sizeof(double); i++) {
+		err = err || network_mysqld_proto_append_int8(packet, double_copy.d_char_shadow[i]);
+	}
+#endif
 
 	return err ? -1 : 0;
 }
@@ -142,38 +160,56 @@ static int network_mysqld_proto_binary_append_double_type(GString *packet, netwo
 static int network_mysqld_proto_binary_get_float_type(network_packet *packet, network_mysqld_type_t *type) {
 	int err = 0;
 	union {
-		float d;
-		char d_char_shadow[sizeof(float) + 1];
+		float f;
+		guint8 f_char_shadow[sizeof(float)];
 	} float_copy;
+	unsigned long i;
+	double d;
 
-	GString s;
-	s.str = float_copy.d_char_shadow;
-	s.len = 0;
-	s.allocated_len = sizeof(float_copy.d_char_shadow);
+#ifdef WORDS_BIGENDIAN
+	/* big endian: ppc, ... */
+	for (i = 0; 0 == err && i < sizeof(float); i++) {
+		err = err || network_mysqld_proto_get_int8(packet, &(float_copy.f_char_shadow[sizeof(float) - 1 - i]));
+	}
+#else
+	/* little endian: x86: network == system byte-order */
+	for (i = 0; 0 == err && i < sizeof(float); i++) {
+		err = err || network_mysqld_proto_get_int8(packet, &(float_copy.f_char_shadow[i]));
+	}
+#endif
 
-	err = err || network_mysqld_proto_get_gstring_len(packet, sizeof(float), &s);
-	err = err || network_mysqld_type_set_double(type, (double)float_copy.d);
+	d = float_copy.f;
+
+	err = err || network_mysqld_type_set_double(type, d);
 
 	return err ? -1 : 0;
 }
 
 static int network_mysqld_proto_binary_append_float_type(GString *packet, network_mysqld_type_t *type) {
+	union {
+		float f;
+		guint8 f_char_shadow[sizeof(float)];
+	} float_copy;
 	double d;
 	int err = 0;
+	unsigned long i;
 
-	err = err || network_mysqld_type_get_double(type, &d); /* get our float as double */
+	err = err || network_mysqld_type_get_double(type, &d);
+	if (0 != err) return -1;
 
-	if (0 == err) {
-		/* copy the float directly without switching byte-order */
-		union {
-			float f;
-			char f_char_shadow[sizeof(float)];
-		} float_copy; /* shadow the float with a equally sized char to be able to copy it without extra type-casting */
+	float_copy.f = d;
 
-		float_copy.f = (float)d;
-
-		g_string_append_len(packet, float_copy.f_char_shadow, sizeof(float));
+#ifdef WORDS_BIGENDIAN
+	/* big endian: ppc, ... */
+	for (i = 0; 0 == err && i < sizeof(float); i++) {
+		err = err || network_mysqld_proto_append_int8(packet, float_copy.f_char_shadow[sizeof(float) - 1 - i]);
 	}
+#else
+	/* little endian: x86: network == system byte-order */
+	for (i = 0; 0 == err && i < sizeof(float); i++) {
+		err = err || network_mysqld_proto_append_int8(packet, float_copy.f_char_shadow[i]);
+	}
+#endif
 
 	return err ? -1 : 0;
 }

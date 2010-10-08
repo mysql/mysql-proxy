@@ -1,10 +1,16 @@
 #ifndef __NETWORK_MYSQLD_TYPE_H__
 #define __NETWORK_MYSQLD_TYPE_H__
 
+#ifdef _WIN32
+/* mysql.h needs SOCKET defined */
+#include <winsock2.h>
+#endif
 #include <mysql.h>
 #include <glib.h>
 
 #include "network-mysqld-proto.h"
+
+#include "network-exports.h"
 
 /**
  * struct for the MYSQL_TYPE_DATE and friends

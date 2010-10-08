@@ -52,6 +52,7 @@ AC_SUBST(RST2HTML)
 
 dnl more automake stuff
 AM_C_PROTOTYPES
+AC_C_BIGENDIAN
 
 dnl libtool
 
