@@ -675,6 +675,12 @@ int network_mysqld_proto_get_fielddef(network_packet *packet, network_mysqld_pro
 	int err = 0;
 
 	if (capabilities & CLIENT_PROTOCOL_41) {
+		guint16 field_charsetnr;
+		guint32 field_length;
+		guint8 field_type;
+		guint16 field_flags;
+		guint8 field_decimals;
+
 		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->catalog, NULL);
 		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->db, NULL);
 		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->table, NULL);
@@ -684,15 +690,25 @@ int network_mysqld_proto_get_fielddef(network_packet *packet, network_mysqld_pro
         
 		err = err || network_mysqld_proto_skip(packet, 1); /* filler */
         
-		err = err || network_mysqld_proto_get_int16(packet, (guint16 *)&field->charsetnr);
-		err = err || network_mysqld_proto_get_int32(packet, (guint32 *)&field->length);
-		err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->type);
-		err = err || network_mysqld_proto_get_int16(packet, (guint16 *)&field->flags);
-		err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->decimals);
+		err = err || network_mysqld_proto_get_int16(packet, &field_charsetnr);
+		err = err || network_mysqld_proto_get_int32(packet, &field_length);
+		err = err || network_mysqld_proto_get_int8(packet,  &field_type);
+		err = err || network_mysqld_proto_get_int16(packet, &field_flags);
+		err = err || network_mysqld_proto_get_int8(packet,  &field_decimals);
         
 		err = err || network_mysqld_proto_skip(packet, 2); /* filler */
+		if (!err) {
+			field->charsetnr = field_charsetnr;
+			field->length    = field_length;
+			field->type      = field_type;
+			field->flags     = field_flags;
+			field->decimals  = field_decimals;
+		}
 	} else {
 		guint8 len;
+		guint32 field_length;
+		guint8  field_type;
+		guint8  field_decimals;
 
 		/* see protocol.cc Protocol::send_fields */
 
@@ -700,22 +716,33 @@ int network_mysqld_proto_get_fielddef(network_packet *packet, network_mysqld_pro
 		err = err || network_mysqld_proto_get_lenenc_string(packet, &field->name, NULL);
 		err = err || network_mysqld_proto_get_int8(packet, &len);
 		err = err || (len != 3);
-		err = err || network_mysqld_proto_get_int24(packet, (guint32 *)&field->length);
+		err = err || network_mysqld_proto_get_int24(packet, &field_length);
 		err = err || network_mysqld_proto_get_int8(packet, &len);
 		err = err || (len != 1);
-		err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->type);
+		err = err || network_mysqld_proto_get_int8(packet, &field_type);
 		err = err || network_mysqld_proto_get_int8(packet, &len);
 		if (len == 3) { /* the CLIENT_LONG_FLAG is set */
-			err = err || network_mysqld_proto_get_int16(packet, (guint16 *)&field->flags);
-			err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->decimals);
-		} else if (len == 2) {
-			guint8 flags = 0;
-			err = err || network_mysqld_proto_get_int8(packet, &flags);
-			err = err || network_mysqld_proto_get_int8(packet, (guint8 *)&field->decimals);
+			guint16 field_flags;
 
-			if (!err) field->flags = flags;
+			err = err || network_mysqld_proto_get_int16(packet, &field_flags);
+
+			if (!err) field->flags = field_flags;
+		} else if (len == 2) {
+			guint8 field_flags;
+
+			err = err || network_mysqld_proto_get_int8(packet, &field_flags);
+
+			if (!err) field->flags = field_flags;
 		} else {
-			/* well */
+			err = -1;
+		}
+		err = err || network_mysqld_proto_get_int8(packet, &field_decimals);
+
+		if (!err) {
+			field->charsetnr = 0x08 /* latin1_swedish_ci */;
+			field->length    = field_length;
+			field->type      = field_type;
+			field->decimals  = field_decimals;
 		}
 	}
 

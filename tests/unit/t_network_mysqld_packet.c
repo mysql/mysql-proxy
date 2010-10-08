@@ -566,6 +566,9 @@ typedef struct {
 	size_t s_len;
 } strings;
 
+/**
+ * test that we can decode a 4.1 resultset header 
+ */
 void t_resultset_fields_works(void) {
 	strings packets[] = {
 		{ C("\1\0\0\1\2") }, /* 2 fields */
@@ -579,6 +582,7 @@ void t_resultset_fields_works(void) {
 	int i;
 	network_queue *q;
 	GPtrArray *fields;
+	network_mysqld_proto_fielddef_t *coldef;
 
 	q = network_queue_new();
 
@@ -588,6 +592,37 @@ void t_resultset_fields_works(void) {
 
 	fields = g_ptr_array_new();
 	g_assert(NULL != network_mysqld_proto_get_fielddefs(q->chunks->head, fields));
+	g_assert_cmpint(fields->len, ==, 2);
+
+	coldef = g_ptr_array_index(fields, 0);
+	g_assert_cmpstr(coldef->catalog, ==, "def");
+	g_assert_cmpstr(coldef->db, ==, NULL);
+	g_assert_cmpstr(coldef->table, ==, "STATUS");
+	g_assert_cmpstr(coldef->org_table, ==, NULL);
+	g_assert_cmpstr(coldef->name, ==, "Variable_name");
+	g_assert_cmpstr(coldef->org_name, ==, "Variable_name");
+
+	g_assert_cmpint(coldef->charsetnr, ==, 0x08);
+	g_assert_cmpint(coldef->length, ==, 80);
+	g_assert_cmpint(coldef->type, ==, 0xfd);
+	g_assert_cmpint(coldef->flags, ==, 0x01);
+	g_assert_cmpint(coldef->decimals, ==, 0x00);
+
+	coldef = g_ptr_array_index(fields, 1);
+	g_assert_cmpstr(coldef->catalog, ==, "def");
+	g_assert_cmpstr(coldef->db, ==, NULL);
+	g_assert_cmpstr(coldef->table, ==, "STATUS");
+	g_assert_cmpstr(coldef->org_table, ==, NULL);
+	g_assert_cmpstr(coldef->name, ==, "Value");
+	g_assert_cmpstr(coldef->org_name, ==, "Value");
+
+	g_assert_cmpint(coldef->charsetnr, ==, 0x08);
+	g_assert_cmpint(coldef->length, ==, 512);
+	g_assert_cmpint(coldef->type, ==, 0xfd);
+	g_assert_cmpint(coldef->flags, ==, 0x01);
+	g_assert_cmpint(coldef->decimals, ==, 0x00);
+
+	network_mysqld_proto_fielddefs_free(fields);
 
 	network_queue_free(q);
 }
