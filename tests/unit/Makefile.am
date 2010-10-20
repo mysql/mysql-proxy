@@ -60,6 +60,8 @@ t_chassis_frontend_CPPFLAGS = \
 	$(MYSQL_CFLAGS)
 
 t_chassis_frontend_LDADD = $(top_builddir)/src/libmysql-chassis.la
+# a hack for HP/UX ia64 to add a explicit -L to the location of the above lib 
+t_chassis_frontend_LDFLAGS = -L$(top_builddir)/src/.libs
 
 
 check_chassis_filemode_SOURCES = check_chassis_filemode.c \
