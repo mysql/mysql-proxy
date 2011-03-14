@@ -255,6 +255,23 @@ static int chassis_log_write(chassis_log *log, int log_level, GString *str) {
 const char *chassis_log_skip_topsrcdir(const char *message) {
 	const char *my_filename = __FILE__;
 	int ndx;
+	gboolean is_current_dir_mode = (0 == strcmp("chassis-log.c", __FILE__)); /* check __FILE__ only has the filename without the path that leads to it */
+
+	/* depending on the build-system, compiler options and the way the build is done __FILE__ is either:
+	 *
+	 * - relative filename like:
+	 *   ../trunk/src/chassis-log.c (automake with builddir != srcdir)
+	 * - absolute filename like:
+	 *   /foo/bar/src/chassis-log.c (automake with builddir == srcdir)
+	 * - or local filename like
+	 *   chassis-log.c (cmake)
+	 *
+	 * we want to strip everything that is before the src/ in the above example. If we don't get the srcdir name passed down
+	 * as part of the __FILE__, don't try to parse it out
+	 */
+	if (is_current_dir_mode) {
+		return message;
+	}
 
 	/* usually the message start with G_STRLOC which may contain a rather long, absolute path. If
 	 * it matches the TOP_SRCDIR, we filter it out

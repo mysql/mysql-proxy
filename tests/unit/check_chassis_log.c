@@ -60,6 +60,53 @@ START_TEST(test_log_compress) {
 /*@}*/
 
 /**
+ * @test Test that we strip filenames from the log-messages if there is any
+ */
+static void test_log_skip_topsrcdir(void) {
+	chassis_log *l;
+	GLogFunc old_log_func;
+	gboolean is_current_dir_mode = (0 == strcmp("check_chassis_log.c", __FILE__)); /* check __FILE__ only has the filename without the path that leads to it */
+
+	l = chassis_log_new();
+
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* disable the FATAL handling of critical messages in testing */
+
+	old_log_func = g_log_set_default_handler(chassis_log_func, l);
+
+	/* if there is no prefix, make sure it is unchanged */
+	g_critical("no prefix");
+	g_assert_cmpstr("no prefix", ==, l->last_msg->str);
+
+	/* if there is a prefix, ... 
+	 */
+	g_critical("%s: with G_STRLOC", G_STRLOC);
+	if (is_current_dir_mode) {
+		/* ... it shouldn't be touched */
+		g_assert_cmpstr("check_chassis_log.c:82: with G_STRLOC", ==, l->last_msg->str);
+	} else {
+		/* ... it should be stripped */
+		g_assert_cmpstr("tests/unit/check_chassis_log.c:82: with G_STRLOC", ==, l->last_msg->str);
+	}
+
+	/* Bug#58941
+	 *
+	 * in is_current_dir_mode don't strip filenames
+	 *
+	 * especially don't strip them if they start with the same characters as the reference-filename 'chassis-log.c'
+	 */
+	g_critical("chassis-log.c: name");
+	g_assert_cmpstr("chassis-log.c: name", ==, l->last_msg->str);
+
+	g_critical("charm");
+	g_assert_cmpstr("charm", ==, l->last_msg->str);
+
+	g_log_set_default_handler(old_log_func, NULL);
+
+	chassis_log_free(l);
+}
+/*@}*/
+
+/**
  * @test Test log timestamp resolution
  */
 START_TEST(test_log_timestamp) {
@@ -99,6 +146,7 @@ int main(int argc, char **argv) {
 
 	g_test_add_func("/core/log_compress", test_log_compress);
 	g_test_add_func("/core/log_timestamp", test_log_timestamp);
+	g_test_add_func("/core/log_strip_absfilename", test_log_skip_topsrcdir);
 
 	return g_test_run();
 }
