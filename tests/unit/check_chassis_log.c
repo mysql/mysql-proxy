@@ -82,7 +82,13 @@ static void test_log_skip_topsrcdir(void) {
 	g_critical("%s: with G_STRLOC", G_STRLOC);
 	if (is_current_dir_mode) {
 		/* ... it shouldn't be touched */
+#ifdef _WIN32
+		/* cmake + win32 does __FILE__ == .\\check_chassis_log.c */
+		g_assert_cmpstr(".\\check_chassis_log.c:82: with G_STRLOC", ==, l->last_msg->str);
+#else
+		/* automake/libtool does __FILE__ == check_chassis_log.c */
 		g_assert_cmpstr("check_chassis_log.c:82: with G_STRLOC", ==, l->last_msg->str);
+#endif
 	} else {
 		/* ... it should be stripped */
 		g_assert_cmpstr("tests/unit/check_chassis_log.c:82: with G_STRLOC", ==, l->last_msg->str);
