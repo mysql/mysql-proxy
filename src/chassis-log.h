@@ -70,6 +70,7 @@ CHASSIS_API int chassis_log_set_event_log(chassis_log *log, const char *app_name
 CHASSIS_API const char *chassis_log_skip_topsrcdir(const char *message);
 CHASSIS_API void chassis_set_logtimestamp_resolution(chassis_log *log, int res);
 CHASSIS_API int chassis_get_logtimestamp_resolution(chassis_log *log);
+CHASSIS_API gboolean chassis_log_gstrloc_has_filename_only(void);
 /*@}*/
 
 #endif

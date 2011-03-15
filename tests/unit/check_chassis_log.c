@@ -65,7 +65,7 @@ START_TEST(test_log_compress) {
 static void test_log_skip_topsrcdir(void) {
 	chassis_log *l;
 	GLogFunc old_log_func;
-	gboolean is_current_dir_mode = (0 == strcmp("check_chassis_log.c", __FILE__)); /* check __FILE__ only has the filename without the path that leads to it */
+	gboolean is_current_dir_mode = chassis_log_gstrloc_has_filename_only();
 
 	l = chassis_log_new();
 
