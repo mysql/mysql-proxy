@@ -137,9 +137,9 @@ check_plugin_SOURCES  = check_plugin.c $(top_srcdir)/src/chassis-plugin.c
 check_plugin_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS)
 check_plugin_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS)
 
-check_chassis_log_SOURCES  = check_chassis_log.c $(top_srcdir)/src/chassis-log.c
+check_chassis_log_SOURCES  = check_chassis_log.c 
 check_chassis_log_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS)
-check_chassis_log_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS)
+check_chassis_log_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(top_builddir)/src/libmysql-chassis.la
 
 check_loadscript_SOURCES  = check_loadscript.c $(top_srcdir)/src/lua-scope.c $(top_srcdir)/src/lua-load-factory.c $(top_srcdir)/src/chassis-stats.c
 check_loadscript_CPPFLAGS = -I$(top_srcdir)/src/ $(LUA_CFLAGS) $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS)
