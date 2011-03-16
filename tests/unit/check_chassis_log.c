@@ -65,7 +65,6 @@ START_TEST(test_log_compress) {
 static void test_log_skip_topsrcdir(void) {
 	chassis_log *l;
 	GLogFunc old_log_func;
-	gboolean is_current_dir_mode = chassis_log_gstrloc_has_filename_only();
 
 	l = chassis_log_new();
 
@@ -77,26 +76,17 @@ static void test_log_skip_topsrcdir(void) {
 	g_critical("no prefix");
 	g_assert_cmpstr("no prefix", ==, l->last_msg->str);
 
-	/* if there is a prefix, ... 
-	 */
-	g_critical("%s: with G_STRLOC", G_STRLOC);
-	if (is_current_dir_mode) {
-		/* ... it shouldn't be touched */
-#ifdef _WIN32
-		/* cmake + win32 does __FILE__ == .\\check_chassis_log.c */
-		g_assert_cmpstr(".\\check_chassis_log.c:82: with G_STRLOC", ==, l->last_msg->str);
-#else
-		/* automake/libtool does __FILE__ == check_chassis_log.c */
-		g_assert_cmpstr("check_chassis_log.c:82: with G_STRLOC", ==, l->last_msg->str);
-#endif
+	/* if we are built with absolute source filenames, make sure they are stripped */ 
+	g_critical("%s: with G_STRLOC", G_STRLOC); g_assert_cmpint(__LINE__, ==, 80); /* keep this in one line as the next ones are referencing it */
+	if (g_path_is_absolute(__FILE__)) {
+		g_assert_cmpstr("tests" G_DIR_SEPARATOR_S "unit" G_DIR_SEPARATOR_S "check_chassis_log.c:80: with G_STRLOC", ==, l->last_msg->str);
 	} else {
-		/* ... it should be stripped */
-		g_assert_cmpstr("tests/unit/check_chassis_log.c:82: with G_STRLOC", ==, l->last_msg->str);
+		g_assert_cmpstr(__FILE__ ":80: with G_STRLOC", ==, l->last_msg->str);
 	}
 
 	/* Bug#58941
 	 *
-	 * in is_current_dir_mode don't strip filenames
+	 * if __FILE__ isn't absolute don't try to strip filenames
 	 *
 	 * especially don't strip them if they start with the same characters as the reference-filename 'chassis-log.c'
 	 */
