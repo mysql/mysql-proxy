@@ -228,35 +228,52 @@ int network_mysqld_proto_field_get(network_packet *packet,
 	return err ? -1 : 0;
 }
 
+/**
+ * get the field-definitions of columns that are included in this log-event
+ */
 GPtrArray *network_mysqld_proto_fields_new_full(
 		GPtrArray *fielddefs,
+		gchar *used_cols_bits,
+		guint G_GNUC_UNUSED used_cols_bits_len,
 		gchar *null_bits,
 		guint G_GNUC_UNUSED null_bits_len) {
 	GPtrArray *fields;
-	guint i;
+	guint col;
+	guint null_bit;
 
 	fields = g_ptr_array_new();
 
-	for (i = 0; i < fielddefs->len; i++) {
-		MYSQL_FIELD *fielddef = fielddefs->pdata[i];
-		network_mysqld_proto_field *field = network_mysqld_proto_field_new();
+	for (col = 0, null_bit = 0; col < fielddefs->len; col++) {
+		MYSQL_FIELD *fielddef = fielddefs->pdata[col];
 
-		guint byteoffset = i / 8;
-		guint bitoffset = i % 8;
+		guint col_byteoffset = col / 8;
+		guint col_bitoffset = col % 8;
 
-		field->fielddef = fielddef;
-		field->is_null = (null_bits[byteoffset] >> bitoffset) & 0x1;
+		/* check if we have data for this columns in the row-log-event */
+		if ((used_cols_bits[col_byteoffset] >> col_bitoffset) & 0x1) {
+			network_mysqld_proto_field *field = network_mysqld_proto_field_new();
 
-		/* the field is defined as NOT NULL, so the null-bit shouldn't be set */
-		if ((fielddef->flags & NOT_NULL_FLAG) != 0) {
-			if (field->is_null) {
-				g_error("%s: [%d] field is defined as NOT NULL, but nul-bit is set",
-						G_STRLOC,
-						i
-						);
+			guint null_byteoffset = null_bit / 8;
+			guint null_bitoffset = null_bit % 8;
+
+			field->fielddef = fielddef;
+			field->is_null = (null_bits[null_byteoffset] >> null_bitoffset) & 0x1;
+
+			/* the field is defined as NOT NULL, so the null-bit shouldn't be set */
+			if ((fielddef->flags & NOT_NULL_FLAG) != 0) {
+				if (field->is_null) {
+					g_critical("%s: field [%d] is defined as NOT NULL, but nul-bit is set",
+							G_STRLOC,
+							col);
+
+					return NULL;
+				}
 			}
+
+			null_bit++;
+
+			g_ptr_array_add(fields, field);
 		}
-		g_ptr_array_add(fields, field);
 	}
 
 	return fields;
@@ -524,9 +541,16 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 
 			if (err) break;
 
-			pre_fields = network_mysqld_proto_fields_new_full(tbl->fields, 
+			pre_fields = network_mysqld_proto_fields_new_full(tbl->fields,
+					event->event.row_event.used_columns,
+					event->event.row_event.used_columns_len,
 					pre_bits, 
 					event->event.row_event.null_bits_len);
+
+			if (NULL == pre_fields) {
+				err = 1;
+				break;
+			}
 
 			if (network_mysqld_proto_fields_get(&row_packet, pre_fields)) {
 				break;
@@ -539,8 +563,14 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						event->event.row_event.null_bits_len);
 		
 				post_fields = network_mysqld_proto_fields_new_full(tbl->fields, 
+					event->event.row_event.used_columns,
+					event->event.row_event.used_columns_len,
 					post_bits, 
 					event->event.row_event.null_bits_len);
+				if (NULL == post_fields) {
+					err = 1;
+					break;
+				}
 				network_mysqld_proto_fields_get(&row_packet, post_fields);
 			}
 
@@ -634,9 +664,25 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 				}
 				break;
 			case WRITE_ROWS_EVENT:
-				g_string_append_printf(out, "INSERT INTO %s.%s VALUES\n  (",
+				g_string_append_printf(out, "INSERT INTO %s.%s ",
 						tbl->db_name->str,
 						tbl->table_name->str);
+
+				/* ... get the column-index right */
+				g_string_append(out, "(");
+				for (i = 0; i < tbl->fields->len; i++) {
+					guint col_byteoffset = i / 8;
+					guint col_bitoffset = i % 8;
+
+					if ((event->event.row_event.used_columns[col_byteoffset] >> col_bitoffset) & 0x1) {
+						if (out->str[out->len - 1] != '(') g_string_append(out, ", ");
+
+						g_string_append_printf(out, "field_%d", i);
+					}
+				}
+				g_string_append(out, ")");
+
+				g_string_append(out, " VALUES\n  (");
 
 				for (i = 0; i < pre_fields->len; i++) {
 					network_mysqld_proto_field *field = pre_fields->pdata[i];
@@ -741,7 +787,9 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 			if (post_bits) g_free(post_bits);
 		} while (row_packet.data->len > row_packet.offset);
 
-		g_assert_cmpint(row_packet.data->len, ==, row_packet.offset);
+		if (0 == err) {
+			g_assert_cmpint(row_packet.data->len, ==, row_packet.offset);
+		}
 
 		break; }
 	default:

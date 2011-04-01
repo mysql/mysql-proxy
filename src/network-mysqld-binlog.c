@@ -289,7 +289,9 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 		break;
 	case DELETE_ROWS_EVENT: /* 25 */
 	case UPDATE_ROWS_EVENT: /* 24 */
-	case WRITE_ROWS_EVENT:  /* 23 */
+	case WRITE_ROWS_EVENT: { /* 23 */
+		guint col, cols_present;
+
 		err = err || network_mysqld_proto_get_int48(packet,
 				&event->event.row_event.table_id); /* 6 bytes */
 		err = err || network_mysqld_proto_get_int16(packet,
@@ -310,8 +312,18 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 			err = err || network_mysqld_proto_skip(packet, event->event.row_event.used_columns_len);
 		}
 
+		/* we only have as many NULL-bits as we have columns that can be nullable */
+		for (col = 0, cols_present = 0; col < event->event.row_event.columns_len; col++) {
+			int byte_ndx = col / 8;
+			int bit_ndx  = col % 8;
+
+			if ((event->event.row_event.used_columns[byte_ndx] >> bit_ndx) & 1) {
+				cols_present++;
+			}
+		}
+
 		/* null-bits for all the columns */
-		event->event.row_event.null_bits_len = (int)((event->event.row_event.columns_len+7)/8);
+		event->event.row_event.null_bits_len = (int)((cols_present+7)/8);
 
 		/* the null-bits + row,
 		 *
@@ -324,7 +336,7 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 				&event->event.row_event.row,
 				event->event.row_event.row_len);
 		
-		break;
+		break; }
 	case INTVAR_EVENT:
 		err = err || network_mysqld_proto_get_int8(packet,
 				&event->event.intvar.type);
