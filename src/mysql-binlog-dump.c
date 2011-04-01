@@ -72,6 +72,7 @@ void network_mysqld_proto_field_free(network_mysqld_proto_field *field) {
 	case MYSQL_TYPE_SHORT:
 	case MYSQL_TYPE_INT24:
 	case MYSQL_TYPE_LONG:
+	case MYSQL_TYPE_LONGLONG:
 
 	case MYSQL_TYPE_DECIMAL:
 	case MYSQL_TYPE_NEWDECIMAL:
@@ -367,6 +368,7 @@ struct {
 	{ MYSQL_TYPE_SHORT, "SMALLINT" },
 	{ MYSQL_TYPE_INT24, "MEDIUMINT" },
 	{ MYSQL_TYPE_LONG, "INT" },
+	{ MYSQL_TYPE_LONGLONG, "BIGINT" },
 	{ MYSQL_TYPE_NEWDECIMAL, "DECIMAL" },
 
 	{ MYSQL_TYPE_ENUM, "ENUM" },
@@ -413,6 +415,7 @@ void network_mysqld_table_print(network_mysqld_table *tbl) {
 		case MYSQL_TYPE_SHORT:
 		case MYSQL_TYPE_INT24:
 		case MYSQL_TYPE_LONG:
+		case MYSQL_TYPE_LONGLONG:
 			g_string_append_printf(out, "  field_%d %s %s NULL",
 					i,
 					network_mysqld_proto_field_get_typestring(field->type),
@@ -599,6 +602,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						case MYSQL_TYPE_SHORT:
 						case MYSQL_TYPE_INT24:
 						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_LONGLONG:
 						case MYSQL_TYPE_ENUM:
 							g_string_append_printf(out, "field_%d = %"G_GUINT64_FORMAT, i, field->data.i);
 							break;
@@ -640,6 +644,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						case MYSQL_TYPE_SHORT:
 						case MYSQL_TYPE_INT24:
 						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_LONGLONG:
 						case MYSQL_TYPE_ENUM:
 							g_string_append_printf(out, "field_%d = %"G_GUINT64_FORMAT, i, field->data.i);
 							break;
@@ -701,6 +706,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						case MYSQL_TYPE_SHORT:
 						case MYSQL_TYPE_INT24:
 						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_LONGLONG:
 						case MYSQL_TYPE_ENUM:
 							g_string_append_printf(out, "%"G_GUINT64_FORMAT, field->data.i);
 							break;
@@ -748,6 +754,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						case MYSQL_TYPE_SHORT:
 						case MYSQL_TYPE_INT24:
 						case MYSQL_TYPE_LONG:
+						case MYSQL_TYPE_LONGLONG:
 						case MYSQL_TYPE_ENUM:
 							g_string_append_printf(out, "field_%d = %"G_GUINT64_FORMAT, i, field->data.i);
 							break;

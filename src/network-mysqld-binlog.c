@@ -575,6 +575,7 @@ int network_mysqld_binlog_event_tablemap_get(
 		case MYSQL_TYPE_SHORT:
 		case MYSQL_TYPE_INT24:
 		case MYSQL_TYPE_LONG:
+		case MYSQL_TYPE_LONGLONG:
 			field->type = col_type;
 			break;
 		default:
