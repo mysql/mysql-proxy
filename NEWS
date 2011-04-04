@@ -1,4 +1,9 @@
-0.8.1
+0.8.2 - 
+
+  * added support for decoding _all_ datatypes of the RBR protocol
+  * fixed handling a "used columns" in the RBR protocol
+
+0.8.1 - 
 
   * remove unix-socket on shutdown
   * fixed handling of LOAD DATA LOCAL INFILE (#51864)
