@@ -499,12 +499,15 @@ int network_mysqld_binlog_event_tablemap_get(
 					&byte0);
 			err = err || network_mysqld_proto_get_int8(&metadata_packet, 
 					&byte1);
-			field->max_length = byte1;
-
-			if (!err && ((byte0 & 0x30) != 0x30)) {
-				/* a long CHAR() field */
-				field->max_length |= (((byte0 & 0x30) ^ 0x30) << 4);
-				field->type = byte0 | 0x30; /* see #37426 */
+			if (!err) {
+				if ((byte0 & 0x30) != 0x30) {
+					/* a long CHAR() field */
+					field->max_length |= (((byte0 & 0x30) ^ 0x30) << 4);
+					field->type = byte0 | 0x30; /* see #37426 */
+				} else {
+					field->max_length = byte1;
+					field->type       = byte0;
+				}
 			}
 
 			break;
@@ -519,16 +522,45 @@ int network_mysqld_binlog_event_tablemap_get(
 				field->max_length = varchar_length;
 			}
 			break;
+		case MYSQL_TYPE_GEOMETRY: /* 255 */
 		case MYSQL_TYPE_BLOB: /* 252 */
-			field->type = col_type;
-
 			/* the packlength (1 .. 4) */
 			err = err || network_mysqld_proto_get_int8(&metadata_packet, &byte0);
 
-			field->max_length = byte0;
+			if (!err) {
+				field->type = (guchar)col_type;
+				field->max_length = byte0;
+
+				/* fix the field-type */
+				if (field->type == MYSQL_TYPE_BLOB) {
+					switch (field->max_length) {
+					case 1:
+						field->type = MYSQL_TYPE_TINY_BLOB;
+						break;
+					case 2:
+						field->type = MYSQL_TYPE_BLOB;
+						break;
+					case 3:
+						field->type = MYSQL_TYPE_MEDIUM_BLOB;
+						break;
+					case 4:
+						field->type = MYSQL_TYPE_LONG_BLOB;
+						break;
+					default:
+						err = 1;
+						break;
+					}
+				} else if (field->type == MYSQL_TYPE_GEOMETRY) {
+					if (field->max_length != 4) {
+						err = 1;
+					}
+				} else {
+					g_assert_not_reached();
+				}
+			}
+
 			break;
 		case MYSQL_TYPE_NEWDECIMAL:
-		case MYSQL_TYPE_DECIMAL:
 			field->type = col_type;
 			/**
 			 * byte 0: precisions
@@ -565,11 +597,28 @@ int network_mysqld_binlog_event_tablemap_get(
 			}
 			break;
 		case MYSQL_TYPE_BIT:
-			err = err || network_mysqld_proto_skip(&metadata_packet, 2);
+			/*
+			 * [0] - bitlength % 8
+			 * [1] - bitlength / 8
+			 */
+			field->type = col_type;
+
+			err = err || network_mysqld_proto_get_int8(&metadata_packet, &byte0);
+			err = err || network_mysqld_proto_get_int8(&metadata_packet, &byte1);
+
+			if (!err) {
+				field->max_length = byte1 + (byte0 == 0 ? 0 : 1);
+			}
+
 			break;
-		case MYSQL_TYPE_DATE:
+
+		/* no metadata */
+		case MYSQL_TYPE_DECIMAL:
+		case MYSQL_TYPE_DATE: 
 		case MYSQL_TYPE_DATETIME:
+		case MYSQL_TYPE_TIME:
 		case MYSQL_TYPE_TIMESTAMP:
+		case MYSQL_TYPE_YEAR:
 
 		case MYSQL_TYPE_TINY:
 		case MYSQL_TYPE_SHORT:
