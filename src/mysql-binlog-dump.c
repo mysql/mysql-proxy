@@ -870,7 +870,8 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 int replicate_binlog_dump_file(
 		const char *filename, 
 		gint startpos,
-		gboolean find_startpos
+		gboolean find_startpos,
+		gint stoppos
 		) {
 	int fd;
 	char binlog_header[4];
@@ -983,7 +984,7 @@ int replicate_binlog_dump_file(
 	packet->offset = 0;
 
 	/* next are the events, without the mysql packet header */
-	while (19 == (packet->data->len = read(fd, packet->data->str, 19))) {
+	while (19 == (packet->data->len = read(fd, packet->data->str, 19)) && (stoppos <= 0 || binlog_pos < stoppos)) {
 		gssize len;
 		packet->data->str[packet->data->len] = '\0'; /* term the string */
 
@@ -1072,6 +1073,7 @@ int main(int argc, char **argv) {
 	GKeyFile *keyfile = NULL;
 	chassis_log *log;
 	gint binlog_start_pos = 0;
+	gint binlog_stop_pos = 0;
 	gboolean binlog_find_start_pos = FALSE;
 
 	/* can't appear in the configfile */
@@ -1091,6 +1093,7 @@ int main(int argc, char **argv) {
 		
 		{ "binlog-file",              0, 0, G_OPTION_ARG_FILENAME, NULL, "binlog filename", NULL },
 		{ "binlog-start-pos",         0, 0, G_OPTION_ARG_INT, NULL, "binlog start position", NULL },
+		{ "binlog-stop-pos",          0, 0, G_OPTION_ARG_INT, NULL, "binlog stop position", NULL },
 		{ "binlog-find-start-pos",    0, 0, G_OPTION_ARG_NONE, NULL, "find binlog start position", NULL },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
@@ -1153,6 +1156,7 @@ int main(int argc, char **argv) {
 	main_entries[i++].arg_data  = &(log->use_syslog);
 	main_entries[i++].arg_data  = &(binlog_filename);
 	main_entries[i++].arg_data  = &(binlog_start_pos);
+	main_entries[i++].arg_data  = &(binlog_stop_pos);
 	main_entries[i++].arg_data  = &(binlog_find_start_pos);
 
 	option_ctx = g_option_context_new("- MySQL Binlog Dump");
@@ -1248,7 +1252,8 @@ int main(int argc, char **argv) {
 	replicate_binlog_dump_file(
 			binlog_filename,
 			binlog_start_pos,
-			binlog_find_start_pos
+			binlog_find_start_pos,
+			binlog_stop_pos
 			);
 
 exit_nicely:
