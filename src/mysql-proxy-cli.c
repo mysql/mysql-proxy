@@ -614,8 +614,6 @@ exit_nicely:
 	if (chassis_win32_is_service()) chassis_win32_service_set_state(SERVICE_STOP_PENDING, 0);
 #endif
 
-	chassis_frontend_free(frontend);	
-	
 	if (gerr) g_error_free(gerr);
 	if (option_ctx) g_option_context_free(option_ctx);
 	if (srv) chassis_free(srv);
@@ -635,6 +633,7 @@ exit_nicely:
 		sigaction(SIGSEGV, &sigsegv_sa, NULL);
 	}
 #endif
+	chassis_frontend_free(frontend);	
 
 	return exit_code;
 }
