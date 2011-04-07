@@ -38,30 +38,28 @@
  *
  * FIXME? this function currently ignores ACLs
  */
-int
-chassis_filemode_check(const gchar *filename)
-{
+int chassis_filemode_check(const gchar *filename, int required_filemask, GError **gerr) {
 #ifndef _WIN32
 	struct stat stbuf;
 	mode_t		fmode;
 	
 	if (stat(filename, &stbuf) == -1) {
-		g_critical("%s: cannot stat %s: %s", G_STRLOC, filename, 
-				strerror(errno));
+		g_set_error(gerr, G_FILE_ERROR, g_file_error_from_errno(errno),
+				"cannot stat(%s): %s", filename,
+				g_strerror(errno));
 		return -1;
 	}
 
 	fmode = stbuf.st_mode;
 	if ((fmode & S_IFMT) != S_IFREG) {
-		g_critical("%s: %s is not a regular file", G_STRLOC, filename);
+		g_set_error(gerr, G_FILE_ERROR, G_FILE_ERROR_INVAL,
+				"%s isn't a regular file", filename);
 		return -1;
 	}
 
-#define MASK (S_IROTH|S_IWOTH|S_IXOTH)
-
-	if ((fmode & MASK) != 0) {
-		g_critical("%s: %s permissions not secure (0660 or stricter required)",
-		    G_STRLOC, filename);
+	if ((fmode & required_filemask) != 0) {
+		g_set_error(gerr, G_FILE_ERROR, G_FILE_ERROR_PERM,
+				"permissions of %s aren't secure (0660 or stricter required)", filename);
 		return 1;
 	}
 	

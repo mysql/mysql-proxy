@@ -3,6 +3,7 @@
   * added support for decoding _all_ datatypes of the RBR protocol
   * fixed handling a "used columns" in the RBR protocol
   * fixed possible crash if run under valgrind
+  * fixed crash if --defaults-file doesn't exist (#59790)
   * removed the "admin" plugin from the list of plugins loaded by default
 
 0.8.1 - 

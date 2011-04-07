@@ -55,11 +55,14 @@ void test_file_permissions(void)
 	char filename[MAXPATHLEN] = "/tmp/permsXXXXXX";
 	int	 fd;
 	int ret;
+	GError *gerr = NULL;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK);
 
 	/* 1st test: non-existent file */
-	g_assert_cmpint(chassis_filemode_check("/tmp/a_non_existent_file"), ==, -1);
+	g_assert_cmpint(chassis_filemode_check("/tmp/a_non_existent_file", CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, -1);
+	g_assert_cmpint(gerr->code, ==, G_FILE_ERROR_NOENT);
+	g_clear_error(&gerr);
 
 	fd = mkstemp(filename);
 	if (fd < 0) {
@@ -79,7 +82,9 @@ void test_file_permissions(void)
 				g_strerror(errno), errno);
 	}
 	g_assert_cmpint(ret, ==, 0);
-	g_assert_cmpint(chassis_filemode_check(filename), ==, 1);
+	g_assert_cmpint(chassis_filemode_check(filename, CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, 1);
+	g_assert_cmpint(gerr->code, ==, G_FILE_ERROR_PERM);
+	g_clear_error(&gerr);
 
 	/* 3rd test: OK */
 	ret = chmod(filename, GOOD_PERMS);
@@ -90,7 +95,8 @@ void test_file_permissions(void)
 				g_strerror(errno), errno);
 	}
 	g_assert_cmpint(ret, ==, 0);
-	g_assert_cmpint(chassis_filemode_check(filename), ==, 0);
+	g_assert_cmpint(chassis_filemode_check(filename, CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, 0);
+	g_assert(gerr == NULL);
 
 	/* 4th test: non-regular file */
 	close(fd);
@@ -103,7 +109,9 @@ void test_file_permissions(void)
 				g_strerror(errno), errno);
 	}
 	g_assert_cmpint(ret, ==, 0);
-	g_assert_cmpint(chassis_filemode_check(filename), ==, -1);
+	g_assert_cmpint(chassis_filemode_check(filename, CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, -1);
+	g_assert_cmpint(gerr->code, ==, G_FILE_ERROR_INVAL);
+	g_clear_error(&gerr);
 
 	/* clean up */
 	ret = rmdir(filename);
