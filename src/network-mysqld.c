@@ -949,7 +949,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			 * let's keep it open for reuse */
 
 			plugin_call_cleanup(srv, con);
-
+#ifdef NETWORK_MYSQLD_WANT_CON_TRACK_TIME 
 			/* dump the timestamps of this connection */
 			if (srv->log->min_lvl == G_LOG_LEVEL_DEBUG) {
 				GList *node;
@@ -991,6 +991,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 
 			}
+#endif
 
 			network_mysqld_con_free(con);
 

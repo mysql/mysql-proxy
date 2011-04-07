@@ -6,6 +6,7 @@
   * fixed crash if --defaults-file doesn't exist (#59790)
   * fixed stripping first characters of log-messages (#58941)
   * fixed mem-leak if connection-pooling is used (#56620)
+  * removed bogus timestamp log if state-tracking isn't compiled in
   * removed the "admin" plugin from the list of plugins loaded by default
 
 0.8.1 - 
