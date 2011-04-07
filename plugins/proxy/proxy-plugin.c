@@ -897,6 +897,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	 */
 	g_string_assign_len(recv_sock->default_db, S(send_sock->default_db));
 
+	if (con->server->response) {
+		/* in case we got the connection from the pool it has the response from the previous auth */
+		network_mysqld_auth_response_free(con->server->response);
+		con->server->response = NULL;
+	}
 	con->server->response = network_mysqld_auth_response_copy(con->client->response);
 
 	/**
