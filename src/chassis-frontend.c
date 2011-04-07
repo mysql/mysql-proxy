@@ -442,7 +442,7 @@ int chassis_frontend_init_base_options(GOptionContext *option_ctx,
 GKeyFile *chassis_frontend_open_config_file(const char *filename, GError **gerr) {
 	GKeyFile *keyfile;
 
-	if (chassis_filemode_check(filename, CHASSIS_FILEMODE_SECURE_MASK, gerr) != 0) {
+	if (chassis_filemode_check_full(filename, CHASSIS_FILEMODE_SECURE_MASK, gerr) != 0) {
 		return NULL;
 	}
 	keyfile = g_key_file_new();

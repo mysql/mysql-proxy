@@ -27,6 +27,10 @@
 
 #include "chassis-filemode.h"
 
+int chassis_filemode_check(const gchar *filename) {
+	return chassis_filemode_check_full(filename, CHASSIS_FILEMODE_SECURE_MASK, NULL);
+}
+
 /*
  * check whether the given filename points to a file the permissions
  * of which are 0 for group and other (ie read/writable only by owner).
@@ -38,7 +42,7 @@
  *
  * FIXME? this function currently ignores ACLs
  */
-int chassis_filemode_check(const gchar *filename, int required_filemask, GError **gerr) {
+int chassis_filemode_check_full(const gchar *filename, int required_filemask, GError **gerr) {
 #ifndef _WIN32
 	struct stat stbuf;
 	mode_t		fmode;

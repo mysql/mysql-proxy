@@ -32,6 +32,7 @@
 #include <sys/stat.h>
 #define CHASSIS_FILEMODE_SECURE_MASK (S_IROTH|S_IWOTH|S_IXOTH)
 #endif
-CHASSIS_API int chassis_filemode_check(const gchar *filename, int required_filemask, GError **gerr);
+CHASSIS_API int chassis_filemode_check(const gchar *filename) G_GNUC_DEPRECATED; /* use chassis_filemode_check_full instead */
+CHASSIS_API int chassis_filemode_check_full(const gchar *filename, int required_filemask, GError **gerr);
 
 #endif

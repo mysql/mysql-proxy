@@ -60,7 +60,7 @@ void test_file_permissions(void)
 	g_log_set_always_fatal(G_LOG_FATAL_MASK);
 
 	/* 1st test: non-existent file */
-	g_assert_cmpint(chassis_filemode_check("/tmp/a_non_existent_file", CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, -1);
+	g_assert_cmpint(chassis_filemode_check_full("/tmp/a_non_existent_file", CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, -1);
 	g_assert_cmpint(gerr->code, ==, G_FILE_ERROR_NOENT);
 	g_clear_error(&gerr);
 
@@ -82,7 +82,7 @@ void test_file_permissions(void)
 				g_strerror(errno), errno);
 	}
 	g_assert_cmpint(ret, ==, 0);
-	g_assert_cmpint(chassis_filemode_check(filename, CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, 1);
+	g_assert_cmpint(chassis_filemode_check_full(filename, CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, 1);
 	g_assert_cmpint(gerr->code, ==, G_FILE_ERROR_PERM);
 	g_clear_error(&gerr);
 
@@ -95,7 +95,7 @@ void test_file_permissions(void)
 				g_strerror(errno), errno);
 	}
 	g_assert_cmpint(ret, ==, 0);
-	g_assert_cmpint(chassis_filemode_check(filename, CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, 0);
+	g_assert_cmpint(chassis_filemode_check_full(filename, CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, 0);
 	g_assert(gerr == NULL);
 
 	/* 4th test: non-regular file */
@@ -109,7 +109,7 @@ void test_file_permissions(void)
 				g_strerror(errno), errno);
 	}
 	g_assert_cmpint(ret, ==, 0);
-	g_assert_cmpint(chassis_filemode_check(filename, CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, -1);
+	g_assert_cmpint(chassis_filemode_check_full(filename, CHASSIS_FILEMODE_SECURE_MASK, &gerr), ==, -1);
 	g_assert_cmpint(gerr->code, ==, G_FILE_ERROR_INVAL);
 	g_clear_error(&gerr);
 
