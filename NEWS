@@ -2,6 +2,7 @@
 
   * added support for decoding _all_ datatypes of the RBR protocol
   * fixed handling a "used columns" in the RBR protocol
+  * removed the "admin" plugin from the list of plugins loaded by default
 
 0.8.1 - 
 

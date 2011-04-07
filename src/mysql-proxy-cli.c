@@ -453,11 +453,10 @@ int main_cmdline(int argc, char **argv) {
 	 * the MySQL Proxy should load 'admin' and 'proxy' plugins
 	 */
 	if (!frontend->plugin_names) {
-		frontend->plugin_names = g_new(char *, 3);
+		frontend->plugin_names = g_new(char *, 2);
 
-		frontend->plugin_names[0] = g_strdup("admin");
-		frontend->plugin_names[1] = g_strdup("proxy");
-		frontend->plugin_names[2] = NULL;
+		frontend->plugin_names[0] = g_strdup("proxy");
+		frontend->plugin_names[1] = NULL;
 	}
 
 	if (chassis_frontend_load_plugins(srv->modules,
