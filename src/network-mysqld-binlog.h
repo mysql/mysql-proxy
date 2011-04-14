@@ -82,6 +82,9 @@ enum Log_event_type
     Something out of the ordinary happened on the master
    */
   INCIDENT_EVENT= 26,
+  HEARTBEAT_LOG_EVENT= 27,
+  IGNORABLE_LOG_EVENT= 28,
+  ROWS_QUERY_LOG_EVENT= 29,
 
 
   /*
@@ -111,6 +114,12 @@ NETWORK_API network_mysqld_table *network_mysqld_table_new();
 NETWORK_API void network_mysqld_table_free(network_mysqld_table *tbl);
 NETWORK_API guint64 *guint64_new(guint64 i);
 
+typedef enum {
+	NETWORK_MYSQLD_BINLOG_CHECKSUM_OFF   = 0,
+	NETWORK_MYSQLD_BINLOG_CHECKSUM_CRC32 = 1,
+	NETWORK_MYSQLD_BINLOG_CHECKSUM_UNDEF = 255
+} network_mysqld_binlog_checksum;
+
 typedef struct {
 	gchar *filename;
 
@@ -120,6 +129,8 @@ typedef struct {
 
 	/* ... and the table-ids */
 	GHashTable *rbr_tables; /* hashed by table-id -> network_mysqld_table */
+
+	network_mysqld_binlog_checksum checksum;
 } network_mysqld_binlog;
 
 NETWORK_API network_mysqld_binlog *network_mysqld_binlog_new();
@@ -211,6 +222,10 @@ typedef struct {
 		struct {
 			guint64 xid_id;
 		} xid;
+		struct {
+			guint8 query_len; /* don't use */
+			gchar *query;
+		} rows_query;
 	} event;
 } network_mysqld_binlog_event;
 

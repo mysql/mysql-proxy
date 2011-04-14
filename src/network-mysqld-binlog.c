@@ -24,6 +24,9 @@
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
+
+#include <stdio.h>
+
 /**
  * replication 
  */
@@ -143,6 +146,12 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 		network_mysqld_binlog_event *event) {
 
 	int err = 0;
+	int maj, min, pat;
+
+	if (binlog->checksum == NETWORK_MYSQLD_BINLOG_CHECKSUM_CRC32) {
+		/* patch the packet-len for the decoders as if there would be no checksum */
+		packet->data->len -= 4;
+	}
 
 	switch ((guchar)event->event_type) {
 	case QUERY_EVENT:
@@ -197,12 +206,43 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 		err = err || network_mysqld_proto_get_int8(packet, &event->event.format_event.log_header_len);
 		g_assert_cmpint(event->event.format_event.log_header_len, ==, 19);
 
-		/* there is some funky event-permutation going on */
-		event->event.format_event.perm_events_len = packet->data->len - packet->offset;
+		/* decode the server-version string into a integer */
+		err = err || (3 != sscanf(event->event.format_event.master_version, "%d.%d.%d%*s", &maj, &min, &pat));
+		err = err || (maj > 100 || maj < 0);
+		err = err || (min > 100 || min < 0);
+		err = err || (pat > 100 || pat < 0);
+
+		if ((maj << 16) + (min << 8) + (pat << 0) >= 0x050602) {
+			event->event.format_event.perm_events_len = packet->data->len - packet->offset;
+			g_assert_cmpint(event->event.format_event.perm_events_len, ==, ENUM_END_EVENT - 1 + 1 + 4);
+
+			event->event.format_event.perm_events_len -= 1 + 4; /* FIXME: check how it is implemented without CRC32 */
+		} else {
+			event->event.format_event.perm_events_len = packet->data->len - packet->offset;
+		}
+		/* event-length, one byte for each event */
 		err = err || network_mysqld_proto_get_string_len(
 				packet, 
 				&event->event.format_event.perm_events,
-				packet->data->len - packet->offset);
+				event->event.format_event.perm_events_len);
+
+		/* check if we have checksums */
+		if ((maj << 16) + (min << 8) + (pat << 0) >= 0x050602) {
+			guint8 checksum;
+
+			g_assert_cmpint(packet->data->len - packet->offset, ==, 1 + 4);
+
+			err = err || network_mysqld_proto_get_int8(packet, &checksum);
+
+			binlog->checksum = checksum;
+
+			/* leave the last 4 bytes (CRC32 checksum) in the buffer */
+		}
+
+		if (binlog->checksum == NETWORK_MYSQLD_BINLOG_CHECKSUM_CRC32) {
+			/* patch the packet len to only cover the event without the CRC32 checksum */
+			packet->data->len -= 4;
+		}
 		
 		break;
 	case USER_VAR_EVENT:
@@ -348,6 +388,13 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 		err = err || network_mysqld_proto_get_int64(packet,
 				&event->event.xid.xid_id);
 		break;
+	case ROWS_QUERY_LOG_EVENT:
+		err = err || network_mysqld_proto_get_int8(packet, &event->event.rows_query.query_len); /* a length byte */
+		err = err || network_mysqld_proto_get_string_len(
+				packet, 
+				&event->event.rows_query.query,
+				packet->data->len - packet->offset);
+		break;
 	default:
 		g_critical("%s: unhandled binlog-event: %d", 
 				G_STRLOC, 
@@ -355,7 +402,23 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 		return -1;
 	}
 
-	/* FIXME: we should check if we have handled all bytes */
+	if (binlog->checksum == NETWORK_MYSQLD_BINLOG_CHECKSUM_CRC32) {
+		/* patch the packet-len back */
+		packet->data->len += 4;
+
+		/* the next 4 bytes are CRC32 if checksum is CRC32 */
+		err = err || network_mysqld_proto_skip(packet, 4);
+	}
+
+	/* check if we have handled all bytes */
+	if (packet->offset != packet->data->len) {
+		g_debug("%s: event_type %d: offset = %d, length = %"G_GSIZE_FORMAT,
+				G_STRLOC,
+				event->event_type,
+				packet->offset,
+				packet->data->len);
+		return -1;
+	}
 
 	return err ? -1 : 0;
 }
@@ -391,6 +454,9 @@ void network_mysqld_binlog_event_free(network_mysqld_binlog_event *event) {
 	case WRITE_ROWS_EVENT:
 		if (event->event.row_event.used_columns) g_free(event->event.row_event.used_columns);
 		if (event->event.row_event.row) g_free(event->event.row_event.row);
+		break;
+	case ROWS_QUERY_LOG_EVENT:
+		if (event->event.rows_query.query) g_free(event->event.rows_query.query);
 		break;
 	default:
 		break;

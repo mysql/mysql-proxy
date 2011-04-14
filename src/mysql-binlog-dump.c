@@ -419,6 +419,9 @@ struct {
 	{ V(UPDATE_ROWS_EVENT ) },
 	{ V(DELETE_ROWS_EVENT ) },
 	{ V(INCIDENT_EVENT) },
+	{ V(HEARTBEAT_LOG_EVENT) },
+	{ V(IGNORABLE_LOG_EVENT) },
+	{ V(ROWS_QUERY_LOG_EVENT) },
 
 #undef V
 	{ 0, NULL }
@@ -664,6 +667,11 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 		network_mysqld_table_print(tbl);
 		break; 
 	case FORMAT_DESCRIPTION_EVENT: /* 15 */
+		g_print("-- format-description:\n");
+		g_print("--   file-version: %d\n", event->event.format_event.binlog_version);
+		g_print("--   writer-version: %s\n", event->event.format_event.master_version);
+		g_print("--   created: %d\n", event->event.format_event.created_ts);
+		g_print("--   no. of known events: %"G_GSIZE_FORMAT"\n", event->event.format_event.perm_events_len);
 		break;
 	case INTVAR_EVENT: /* 5 */
 	 	break;
@@ -671,6 +679,7 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 		g_print("COMMIT /* xid = %"G_GUINT64_FORMAT" */\n", event->event.xid.xid_id);
 		break;
 	case ROTATE_EVENT: /* 4 */
+		g_print("-- rotating to %s, pos %u\n", event->event.rotate_event.binlog_file,  event->event.rotate_event.binlog_pos);
 		break;
 	case WRITE_ROWS_EVENT:
 	case UPDATE_ROWS_EVENT:
@@ -729,6 +738,8 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						&row_packet, 
 						&post_bits,
 						event->event.row_event.null_bits_len);
+
+				if (err) break;
 		
 				post_fields = network_mysqld_proto_fields_new_full(tbl->fields, 
 					event->event.row_event.used_columns,
@@ -739,7 +750,9 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 					err = 1;
 					break;
 				}
-				network_mysqld_proto_fields_get(&row_packet, post_fields);
+				if (network_mysqld_proto_fields_get(&row_packet, post_fields)) {
+					break;
+				}
 			}
 
 			/* call lua */
@@ -838,9 +851,8 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 			default:
 				break;
 			}
-#if 1
-			g_print("-- %s:\n%s\n\n", G_STRLOC, out->str);
-#endif
+
+			g_print("%s\n\n", out->str);
 
 			g_string_free(out, TRUE);
 
@@ -851,10 +863,20 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 		} while (row_packet.data->len > row_packet.offset);
 
 		if (0 == err) {
-			g_assert_cmpint(row_packet.data->len, ==, row_packet.offset);
+			if (row_packet.offset != row_packet.data->len) {
+				g_debug("%s: event_type %d: offset = %d, length = %"G_GSIZE_FORMAT,
+						G_STRLOC,
+						event->event_type,
+						row_packet.offset,
+						row_packet.data->len);
+			}
 		}
 
 		break; }
+	case ROWS_QUERY_LOG_EVENT:
+		g_print("-- next RBR query: %s\n", event->event.rows_query.query);
+		break;
+
 	default:
 		g_message("%s: unknown event-type: %d",
 				G_STRLOC,
@@ -1003,8 +1025,7 @@ int replicate_binlog_dump_file(
 			break;
 		}
 
-		g_print("-- %s: (--binlog-start-pos=%ld (next event at %"G_GUINT32_FORMAT")) event = %s (%d)\n",
-				G_STRLOC,
+		g_print("-- (--binlog-start-pos=%ld (next event at %"G_GUINT32_FORMAT")) event = %s (%d)\n",
 				binlog_pos,
 				event->log_pos,
 				network_mysqld_binlog_get_eventname(event->event_type),
