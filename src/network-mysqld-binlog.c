@@ -330,7 +330,7 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 	case DELETE_ROWS_EVENT: /* 25 */
 	case UPDATE_ROWS_EVENT: /* 24 */
 	case WRITE_ROWS_EVENT: { /* 23 */
-		guint col, cols_present;
+		guint col, cols_before_present, cols_after_present;
 
 		err = err || network_mysqld_proto_get_int48(packet,
 				&event->event.row_event.table_id); /* 6 bytes */
@@ -341,29 +341,41 @@ int network_mysqld_proto_get_binlog_event(network_packet *packet,
 				&event->event.row_event.columns_len);
 
 		/* a bit-mask of used-fields (m_cols.bitmap) */
-		event->event.row_event.used_columns_len = (int)((event->event.row_event.columns_len+7)/8);
+		event->event.row_event.used_columns_before_len = (int)((event->event.row_event.columns_len+7)/8);
 		err = err || network_mysqld_proto_get_string_len(
 				packet,
-				&event->event.row_event.used_columns,
-				event->event.row_event.used_columns_len);
+				&event->event.row_event.used_columns_before,
+				event->event.row_event.used_columns_before_len);
 
 		if (event->event_type == UPDATE_ROWS_EVENT) {
-			/* the before image */
-			err = err || network_mysqld_proto_skip(packet, event->event.row_event.used_columns_len);
+			/* used columns in the after image */
+			event->event.row_event.used_columns_after_len = (int)((event->event.row_event.columns_len+7)/8);
+			err = err || network_mysqld_proto_get_string_len(
+					packet,
+					&event->event.row_event.used_columns_after,
+					event->event.row_event.used_columns_after_len);
 		}
 
 		/* we only have as many NULL-bits as we have columns that can be nullable */
-		for (col = 0, cols_present = 0; col < event->event.row_event.columns_len; col++) {
+		for (col = 0, cols_before_present = 0, cols_after_present = 0;
+				col < event->event.row_event.columns_len;
+				col++) {
 			int byte_ndx = col / 8;
 			int bit_ndx  = col % 8;
 
-			if ((event->event.row_event.used_columns[byte_ndx] >> bit_ndx) & 1) {
-				cols_present++;
+			if ((event->event.row_event.used_columns_before[byte_ndx] >> bit_ndx) & 1) {
+				cols_before_present++;
+			}
+			if (event->event_type == UPDATE_ROWS_EVENT) {
+				if ((event->event.row_event.used_columns_after[byte_ndx] >> bit_ndx) & 1) {
+					cols_after_present++;
+				}
 			}
 		}
 
 		/* null-bits for all the columns */
-		event->event.row_event.null_bits_len = (int)((cols_present+7)/8);
+		event->event.row_event.null_bits_before_len = (int)((cols_before_present+7)/8);
+		event->event.row_event.null_bits_after_len = (int)((cols_after_present+7)/8);
 
 		/* the null-bits + row,
 		 *
@@ -452,7 +464,8 @@ void network_mysqld_binlog_event_free(network_mysqld_binlog_event *event) {
 	case DELETE_ROWS_EVENT:
 	case UPDATE_ROWS_EVENT:
 	case WRITE_ROWS_EVENT:
-		if (event->event.row_event.used_columns) g_free(event->event.row_event.used_columns);
+		if (event->event.row_event.used_columns_before) g_free(event->event.row_event.used_columns_before);
+		if (event->event.row_event.used_columns_after) g_free(event->event.row_event.used_columns_after);
 		if (event->event.row_event.row) g_free(event->event.row_event.row);
 		break;
 	case ROWS_QUERY_LOG_EVENT:

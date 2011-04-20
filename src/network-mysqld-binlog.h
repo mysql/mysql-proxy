@@ -202,10 +202,15 @@ typedef struct {
 			
 			guint64 columns_len;
 
-			guint32 used_columns_len;
-			gchar *used_columns;
+			/* before image */
+			guint32 used_columns_before_len; /* bytes of the used columns bit-mask */
+			gchar *used_columns_before;   /* bit-mask of the columns stored the row */
+			guint32 null_bits_before_len; /* bytes used to store the NULL-bits in the row */
 
-			guint32 null_bits_len;
+			/* after image */
+			guint32 used_columns_after_len;
+			gchar *used_columns_after;    /* bit-mask of the columns stored the row */
+			guint32 null_bits_after_len;  /* bytes used to store the NULL-bits in the row */
 			
 			guint32 row_len;
 			gchar *row;      /* raw row-buffer in the format:
