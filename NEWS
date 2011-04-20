@@ -1,5 +1,6 @@
 0.8.2 - 
 
+  * added support for binlog checksums
   * added support for decoding _all_ datatypes of the RBR protocol
   * fixed handling a "used columns" in the RBR protocol
   * fixed possible crash if run under valgrind
