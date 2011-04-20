@@ -846,17 +846,22 @@ int network_mysqld_binlog_event_print(network_mysqld_binlog *binlog,
 						tbl->db_name->str,
 						tbl->table_name->str);
 
-				for (i = 0; i < pre_fields->len; i++) {
-					network_mysqld_proto_field *field = pre_fields->pdata[i];
-					if (i > 0) {
-						g_string_append_printf(out, " AND ");
-					}
-					g_string_append_printf(out, "field_%d ", i);
-					if (field->is_null) {
-						g_string_append(out, "IS NULL");
-					} else {
-						g_string_append(out, "= ");
-						network_mysqld_proto_field_append_to_string(out, field);
+				for (i = 0, field_ndx = 0; i < tbl->fields->len; i++) {
+					guint col_byteoffset = i / 8;
+					guint col_bitoffset = i % 8;
+
+					if ((event->event.row_event.used_columns_before[col_byteoffset] >> col_bitoffset) & 0x1) {
+						network_mysqld_proto_field *field = pre_fields->pdata[field_ndx++];
+						if (field_ndx > 1) {
+							g_string_append_printf(out, " AND ");
+						}
+						g_string_append_printf(out, "field_%d ", i);
+						if (field->is_null) {
+							g_string_append(out, "IS NULL");
+						} else {
+							g_string_append(out, "= ");
+							network_mysqld_proto_field_append_to_string(out, field);
+						}
 					}
 				}
 				break;
