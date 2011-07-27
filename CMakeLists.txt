@@ -15,7 +15,6 @@ INCLUDE(CheckTypeSize)
 INCLUDE(ChassisPlugin)
 INCLUDE(ChassisInstall)
 INCLUDE(CTest)
-INCLUDE(InstallRequiredSystemLibraries)
 INCLUDE(Tar)
 
 ENABLE_TESTING()
@@ -306,14 +305,6 @@ IF(WIN32)
 	INSTALL(PROGRAMS
 		${EVENT_DLL}
 		DESTINATION bin
-	)
-	# copy the VS2008 runtime libaries as part of the install
-	# find the absolute path 
-	MESSAGE(STATUS "looking for redist in $ENV{VCINSTALLDIR}/redist/x86/Microsoft.VC90.CRT")
-	FIND_PATH(VC_REDIST_PATH NAMES msvcr90.dll PATHS "$ENV{VCINSTALLDIR}/redist/x86/Microsoft.VC90.CRT" NO_DEFAULT_PATH)
-	INSTALL(
-        DIRECTORY ${VC_REDIST_PATH}
-        DESTINATION bin
 	)
 ENDIF(WIN32)
 
