@@ -7,6 +7,7 @@ EXTRA_DIST = \
 		bug_46141.result \
 		bug_43078.result \
 		bug_55459.result \
+		bug_61998.result \
 		change_user.result \
 		client_address.result \
 		chain1.result \

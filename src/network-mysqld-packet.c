@@ -149,6 +149,8 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 		case MYSQLD_PACKET_EOF:
 			/**
 			 * in 5.0 we have CURSORs which have no rows, just a field definition
+			 *
+			 * TODO: find a test-case for it, is it COM_STMT_EXECUTE only?
 			 */
 			if (packet->data->len == 9) {
 				eof_packet = network_mysqld_eof_packet_new();
@@ -157,7 +159,15 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 
 				if (!err) {
 #if MYSQL_VERSION_ID >= 50000
-					if (eof_packet->server_status & SERVER_STATUS_CURSOR_EXISTS) {
+					/* 5.5 may send a SERVER_MORE_RESULTS_EXISTS as part of the first 
+					 * EOF together with SERVER_STATUS_CURSOR_EXISTS. In that case,
+					 * we aren't finished. (#61998)
+					 *
+					 * Only if _CURSOR_EXISTS is set alone, we have a field-definition-only
+					 * resultset
+					 */
+					if (eof_packet->server_status & SERVER_STATUS_CURSOR_EXISTS &&
+					    !(eof_packet->server_status & SERVER_MORE_RESULTS_EXISTS)) {
 						is_finished = 1;
 					} else {
 						query->state = PARSE_COM_QUERY_RESULT;

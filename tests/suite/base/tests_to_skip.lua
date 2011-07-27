@@ -34,6 +34,7 @@ tests_to_skip = {
         ['client_address_socket'] = 'waiting for bug#38416',
         ['change_user'] = 'works, but needs to run as root and configured with a valid user',
 	['bug_45167'] = 'works, but mysqltest cant handle errors in change_user',
+	['bug_61998'] = 'works, but needs a real mysql-server',
 }
 
 local build_os = os.getenv("BUILD_OS")
