@@ -2,6 +2,8 @@
 
   * added support for binlog checksums
   * added support for decoding _all_ datatypes of the RBR protocol
+  * added support for OUT params in prepared statements in SPs with MySQL 5.5.x
+  * fixed handling of SPs with cursors with MySQL 5.5.x (#61998)
   * fixed handling a "used columns" in the RBR protocol
   * fixed possible crash if run under valgrind
   * fixed crash if --defaults-file doesn't exist (#59790)

@@ -175,6 +175,8 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 #else
 					query->state = PARSE_COM_QUERY_RESULT;
 #endif
+					/* track the server_status of the 1st EOF packet */
+					query->server_status = eof_packet->server_status;
 				}
 
 				network_mysqld_eof_packet_free(eof_packet);
@@ -199,7 +201,24 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 
 				if (!err) {
 					query->was_resultset = 1;
-					query->server_status = eof_packet->server_status;
+
+#ifndef SERVER_PS_OUT_PARAMS
+#define SERVER_PS_OUT_PARAMS 4096
+#endif
+					/**
+					 * a PS_OUT_PARAMS is set if a COM_STMT_EXECUTE executes a CALL sp(?) where sp is a PROCEDURE with OUT params 
+					 *
+					 * ...
+					 * 05 00 00 12 fe 00 00 0a 10 -- end column-def (auto-commit, more-results, ps-out-params)
+					 * ...
+					 * 05 00 00 14 fe 00 00 02 00 -- end of rows (auto-commit), see the missing (more-results, ps-out-params)
+					 * 07 00 00 15 00 00 00 02 00 00 00 -- OK for the CALL
+					 *
+					 * for all other resultsets we trust the status-flags of the 2nd EOF packet
+					 */
+					if (!(query->server_status & SERVER_PS_OUT_PARAMS)) {
+						query->server_status = eof_packet->server_status;
+					}
 					query->warning_count = eof_packet->warnings;
 
 					if (query->server_status & SERVER_MORE_RESULTS_EXISTS) {
