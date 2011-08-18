@@ -1,4 +1,4 @@
-0.8.2 - 
+0.8.2 - 2011-08-18
 
   * added support for binlog checksums
   * added support for decoding _all_ datatypes of the RBR protocol
@@ -12,7 +12,7 @@
   * removed bogus timestamp log if state-tracking isn't compiled in
   * removed the "admin" plugin from the list of plugins loaded by default
 
-0.8.1 - 
+0.8.1 - 2010-09-13
 
   * remove unix-socket on shutdown
   * fixed handling of LOAD DATA LOCAL INFILE (#51864)
