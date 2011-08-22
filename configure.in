@@ -7,9 +7,13 @@ AC_CONFIG_SRCDIR([src/mysql-proxy-cli.c])
 AC_CANONICAL_TARGET
 
 dnl require 1.10 to get abs_top_builddir and docdir
-AM_INIT_AUTOMAKE(1.10 gnits)
+AM_INIT_AUTOMAKE([1.10 gnits -Wall])
+
+dnl enable silent rules if they are available (automake 1.11+)
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 AC_CONFIG_HEADER([config.h])
+AC_CONFIG_MACRO_DIR([m4])
 
 AM_MAINTAINER_MODE
 
