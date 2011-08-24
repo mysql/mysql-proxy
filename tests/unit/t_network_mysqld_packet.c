@@ -273,6 +273,72 @@ static void test_mysqld_handshake(void) {
 	g_string_free(packet.data, TRUE);
 }
 
+static void test_mysqld_handshake_plugin_auth(void) {
+	const char raw_packet[] = 
+		"\x50\x00\x00\x00"
+		"\x0a"
+		"\x35\x2e\x36\x2e\x32\x2d\x6d\x35\x2d\x6c\x6f\x67\x00"
+		"\x4d\x00\x00\x00"
+		"\x3d\x25\x3d\x43\x76\x4d\x5e\x6d\x00"
+		"\xff\xff" /* capabilities - part 1 */
+		"\x08"     /* charset */
+		"\x02\x00" /* status */
+		"\x0f\xc0" /* capabilities - part 2 */
+		"\x15" /* auth-plugin-part-len */
+		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" /* fillers */
+		"\x2d\x37\x69\x2d\x41\x3f\x58\x7c\x2c\x5f\x7d\x75\x00" /* auth-plugin-part-2 */
+		"\x6d\x79\x73\x71\x6c\x5f\x6e\x61\x74\x69\x76\x65\x5f\x70\x61\x73\x73\x77\x6f\x72\x64\x00" /* mysql_native_password\0 */
+		;
+
+	network_mysqld_auth_challenge *shake;
+	network_packet packet;
+
+	shake = network_mysqld_auth_challenge_new();
+	
+	packet.data = g_string_new(NULL);
+	packet.offset = 0;
+	g_string_append_len(packet.data, C(raw_packet));
+
+	g_assert_cmpint(packet.data->len, ==, 84);
+
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_get_auth_challenge(&packet, shake));
+
+	g_assert_cmpint(shake->server_version, ==, 50602);
+	g_assert_cmpint(shake->thread_id, ==, 77);
+	g_assert_cmpint(shake->server_status, ==,
+			SERVER_STATUS_AUTOCOMMIT);
+	g_assert_cmpint(shake->charset, ==, 8);
+	g_assert_cmphex(shake->capabilities, &,
+			(CLIENT_CONNECT_WITH_DB |
+			CLIENT_LONG_FLAG |
+
+			CLIENT_COMPRESS |
+
+			CLIENT_PROTOCOL_41 |
+
+			CLIENT_TRANSACTIONS |
+			CLIENT_SECURE_CONNECTION |
+			CLIENT_PLUGIN_AUTH));
+
+	g_assert_cmpint(shake->auth_plugin_data->len, ==, 21);
+	g_assert_cmpint(0, == ,memcmp(shake->auth_plugin_data->str, "=%=CvM^m-7i-A?X|,_}u\0", shake->auth_plugin_data->len));
+
+	/* ... and back */
+	g_string_truncate(packet.data, 0);
+	g_string_append_len(packet.data, C("P\0\0\0")); /* prepend length and sequence-id */
+	network_mysqld_proto_append_auth_challenge(packet.data, shake);
+
+	g_assert_cmpint(packet.data->len, ==, sizeof(raw_packet) - 1);
+
+	g_debug_hexdump(G_STRLOC, S(packet.data));
+	g_assert(0 == memcmp(packet.data->str, raw_packet, packet.data->len));
+
+	network_mysqld_auth_challenge_free(shake);
+	g_string_free(packet.data, TRUE);
+}
+
+
 static void test_mysqld_auth_empty_pw(void) {
 	const char raw_packet[] = 
 		"&\0\0\1\205\246\3\0\0\0\0\1\10\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0root\0\0"
@@ -1366,6 +1432,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/err-packet-append", t_err_packet_append);
 
 	g_test_add_func("/core/mysqld-proto-handshake", test_mysqld_handshake);
+	g_test_add_func("/core/mysqld-proto-handshake-plugin-auth", test_mysqld_handshake_plugin_auth);
 
 	g_test_add_func("/core/mysqld-proto-pw-empty", test_mysqld_auth_empty_pw);
 	g_test_add_func("/core/mysqld-proto-pw", test_mysqld_auth_with_pw);

@@ -1191,16 +1191,26 @@ int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysq
 		shake->capabilities = capabilities1 | (capabilities2 << 16);
 	
 		if (shake->capabilities & CLIENT_PLUGIN_AUTH) {
+			guint8 auth_plugin_data2_len = 0;
+
 			/* CLIENT_PLUGIN_AUTH enforces auth_plugin_data_len
 			 *
 			 * we have at least 12 bytes */
-			err = err || network_mysqld_proto_get_string_len(packet, &auth_plugin_data_2, MIN(12, auth_plugin_data_len));
+
+			if (auth_plugin_data_len > 8) {
+				auth_plugin_data2_len = auth_plugin_data_len - 8;
+			}
+
+			err = err || network_mysqld_proto_get_string_len(packet, &auth_plugin_data_2, auth_plugin_data2_len);
+			err = err || network_mysqld_proto_skip(packet, 12 - MIN(12, auth_plugin_data2_len));
 			err = err || network_mysqld_proto_get_gstring(packet, shake->auth_plugin_name);
 		} else if (shake->capabilities & CLIENT_SECURE_CONNECTION) {
 			err = err || network_mysqld_proto_get_string_len(packet, &auth_plugin_data_2, 12);
 			err = err || network_mysqld_proto_skip(packet, 1);
 		}
 	}
+
+	g_debug("%s: packet structure parsed %s", G_STRLOC, err ? "failed" : "ok");
 
 	if (!err) {
 		/* process the data */
@@ -1238,22 +1248,34 @@ int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysq
 		g_string_truncate(shake->auth_plugin_data, 0);
 
 		if (shake->capabilities & CLIENT_PLUGIN_AUTH) {
-			g_string_append_len(shake->auth_plugin_data, auth_plugin_data_1, MAX(8, auth_plugin_data_len));
+			g_string_assign_len(shake->auth_plugin_data, auth_plugin_data_1, MIN(8, auth_plugin_data_len));
 			if (auth_plugin_data_len > 8) {
 				g_string_append_len(shake->auth_plugin_data, auth_plugin_data_2, auth_plugin_data_len - 8);
 			}
 		} else if (shake->capabilities & CLIENT_SECURE_CONNECTION) {
-			g_string_append_len(shake->auth_plugin_data, auth_plugin_data_1, 8);
+			g_string_assign_len(shake->auth_plugin_data, auth_plugin_data_1, 8);
 			g_string_append_len(shake->auth_plugin_data, auth_plugin_data_2, 12);
 		} else {
 			/* we have at least the old password scramble */
-			g_string_append_len(shake->auth_plugin_data, auth_plugin_data_1, 8);
+			g_string_assign_len(shake->auth_plugin_data, auth_plugin_data_1, 8);
 		}
 
 		/* some final assertions */
-		if ((shake->capabilities & CLIENT_SECURE_CONNECTION) &&
-		    shake->auth_plugin_data->len != 20) {
-			err = 1;
+		if (shake->capabilities & CLIENT_PLUGIN_AUTH) {
+			if (shake->auth_plugin_data->len != auth_plugin_data_len) {
+				err = 1;
+			}
+		} else if (shake->capabilities & CLIENT_SECURE_CONNECTION) {
+			if (shake->auth_plugin_data->len != 20) {
+				g_debug("%s: secure auth enabled, but auth_plugin_data->len != 20: %"G_GSIZE_FORMAT"", G_STRLOC, shake->auth_plugin_data->len);
+				err = 1;
+			}
+		} else {
+			/* old auth */
+			if (shake->auth_plugin_data->len != 8) {
+				g_debug("%s: old auth enabled, but auth_plugin_data->len != 8: %"G_GSIZE_FORMAT"", G_STRLOC, shake->auth_plugin_data->len);
+				err = 1;
+			}
 		}
 	}
 
@@ -1307,7 +1329,9 @@ int network_mysqld_proto_append_auth_challenge(GString *packet, network_mysqld_a
 	if (shake->capabilities & CLIENT_PLUGIN_AUTH) {
 		g_assert_cmpint(shake->auth_plugin_data->len, >=, 8);
 		g_string_append_len(packet, shake->auth_plugin_data->str + 8, shake->auth_plugin_data->len - 8);
+
 		g_string_append_len(packet, S(shake->auth_plugin_name));
+		g_string_append_c(packet, 0x00);
 	} else if (shake->capabilities & CLIENT_SECURE_CONNECTION) {
 		/* if we only have SECURE_CONNECTION it is 0-terminated */
 		if (shake->auth_plugin_data->len) {
