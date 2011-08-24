@@ -263,7 +263,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 		con->state = CON_STATE_SEND_ERROR; /* close the connection after we have sent this packet */
 	} else if (network_mysqld_proto_password_hash(hashed_password, con->config->admin_password, strlen(con->config->admin_password))) {
 	} else if (network_mysqld_proto_password_scramble(excepted_response,
-				S(recv_sock->challenge->challenge),
+				S(recv_sock->challenge->auth_plugin_data),
 				S(hashed_password))) {
 		network_mysqld_con_send_error_full(send_sock, C("scrambling failed"), 1045, "28000");
 		

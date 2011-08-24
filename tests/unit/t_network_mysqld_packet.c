@@ -257,8 +257,8 @@ void test_mysqld_handshake(void) {
 			CLIENT_TRANSACTIONS |
 			CLIENT_SECURE_CONNECTION));
 
-	g_assert(shake->challenge->len == 20);
-	g_assert(0 == memcmp(shake->challenge->str, "\"L;!3|8@vV,s#PLjSA+Q", shake->challenge->len));
+	g_assert(shake->auth_plugin_data->len == 20);
+	g_assert(0 == memcmp(shake->auth_plugin_data->str, "\"L;!3|8@vV,s#PLjSA+Q", shake->auth_plugin_data->len));
 
 	/* ... and back */
 	g_string_truncate(packet.data, 0);

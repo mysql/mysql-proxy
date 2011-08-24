@@ -158,10 +158,11 @@ struct network_mysqld_auth_challenge {
 	gchar    *server_version_str;
 	guint32   server_version;
 	guint32   thread_id;
-	GString  *challenge;
-	guint16   capabilities;
+	GString  *auth_plugin_data;
+	guint32   capabilities;
 	guint8    charset;
 	guint16   server_status;
+	GString  *auth_plugin_name;
 };
 
 NETWORK_API network_mysqld_auth_challenge *network_mysqld_auth_challenge_new(void);

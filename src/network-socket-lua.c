@@ -69,7 +69,10 @@ static int proxy_socket_get(lua_State *L) {
 			lua_pushinteger(L, sock->challenge->thread_id);
 			return 1;
 		} else if (strleq(key, keysize, C("scramble_buffer"))) {
-			lua_pushlstring(L, S(sock->challenge->challenge));
+			lua_pushlstring(L, S(sock->challenge->auth_plugin_data));
+			return 1;
+		} else if (strleq(key, keysize, C("auth_plugin_name"))) {
+			lua_pushlstring(L, S(sock->challenge->auth_plugin_name));
 			return 1;
 		}
 	}
