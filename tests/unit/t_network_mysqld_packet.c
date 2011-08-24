@@ -40,7 +40,7 @@
  */
 
 /*@{*/
-void t_ok_packet_new(void) {
+static void t_ok_packet_new(void) {
 	network_mysqld_ok_packet_t *ok_packet;
 
 	ok_packet = network_mysqld_ok_packet_new();
@@ -49,7 +49,7 @@ void t_ok_packet_new(void) {
 	network_mysqld_ok_packet_free(ok_packet);
 }
 
-void t_ok_packet_append(void) {
+static void t_ok_packet_append(void) {
 	network_mysqld_ok_packet_t *ok_packet;
 	network_packet *packet;
 
@@ -100,7 +100,7 @@ void t_ok_packet_append(void) {
 	network_packet_free(packet);
 }
 
-void t_err_packet_new(void) {
+static void t_err_packet_new(void) {
 	network_mysqld_err_packet_t *err_packet;
 
 	err_packet = network_mysqld_err_packet_new();
@@ -109,7 +109,7 @@ void t_err_packet_new(void) {
 	network_mysqld_err_packet_free(err_packet);
 }
 
-void t_err_packet_append(void) {
+static void t_err_packet_append(void) {
 	network_mysqld_err_packet_t *err_packet;
 	network_packet *packet;
 
@@ -158,7 +158,7 @@ void t_err_packet_append(void) {
 	network_packet_free(packet);
 }
 
-void t_eof_packet_new(void) {
+static void t_eof_packet_new(void) {
 	network_mysqld_eof_packet_t *eof_packet;
 
 	eof_packet = network_mysqld_eof_packet_new();
@@ -167,7 +167,7 @@ void t_eof_packet_new(void) {
 	network_mysqld_eof_packet_free(eof_packet);
 }
 
-void t_eof_packet_append(void) {
+static void t_eof_packet_append(void) {
 	network_mysqld_eof_packet_t *eof_packet;
 	network_packet *packet;
 
@@ -214,7 +214,7 @@ void t_eof_packet_append(void) {
 	network_packet_free(packet);
 }
 
-void test_mysqld_handshake(void) {
+static void test_mysqld_handshake(void) {
 	const char raw_packet[] = "J\0\0\0"
 		"\n"
 		"5.0.45-Debian_1ubuntu3.3-log\0"
@@ -273,7 +273,7 @@ void test_mysqld_handshake(void) {
 	g_string_free(packet.data, TRUE);
 }
 
-void test_mysqld_auth_empty_pw(void) {
+static void test_mysqld_auth_empty_pw(void) {
 	const char raw_packet[] = 
 		"&\0\0\1\205\246\3\0\0\0\0\1\10\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0root\0\0"
 		;
@@ -323,7 +323,7 @@ void test_mysqld_auth_empty_pw(void) {
 	g_string_free(packet, TRUE);
 }
 
-void test_mysqld_auth_with_pw(void) {
+static void test_mysqld_auth_with_pw(void) {
 	const char raw_packet[] = 
 		":\0\0\1"
 		"\205\246\3\0"
@@ -393,7 +393,7 @@ void test_mysqld_auth_with_pw(void) {
  *   network_mysqld_auth_response_new() and network_mysqld_auth_response_free() 
  *   don't cause a crash 
  */
-void t_auth_response_new() {
+static void t_auth_response_new() {
 	network_mysqld_auth_response *shake;
 
 	shake = network_mysqld_auth_response_new();
@@ -408,7 +408,7 @@ void t_auth_response_new() {
  *   network_mysqld_proto_append_auth_response() can encode the result
  *     of the network_mysqld_proto_get_auth_response() 
  */
-void t_mysqld_get_auth_response(void) {
+static void t_mysqld_get_auth_response(void) {
 	const char raw_packet[] = 
 		"\205\246\3\0"
 		"\0\0\0\1"
@@ -476,7 +476,7 @@ void t_mysqld_get_auth_response(void) {
  *   network_mysqld_proto_append_auth_response() can encode the result
  *     of the network_mysqld_proto_get_auth_response() 
  */
-void t_mysqld_get_auth_response_pre_41(void) {
+static void t_mysqld_get_auth_response_pre_41(void) {
 	const char raw_packet[] = 
 		"\205$"
 		"\0\0\0"
@@ -535,7 +535,7 @@ void t_mysqld_get_auth_response_pre_41(void) {
  * @test
  *   network_mysqld_proto_get_auth_response() can decode a broken pre-4.0 packet
  */
-void t_mysqld_get_auth_response_no_term(void) {
+static void t_mysqld_get_auth_response_no_term(void) {
 	const char raw_packet[] = 
 		"\205$"
 		"\0\0\0"
@@ -569,7 +569,7 @@ typedef struct {
 /**
  * test that we can decode a 4.1 resultset header 
  */
-void t_resultset_fields_works(void) {
+static void t_resultset_fields_works(void) {
 	strings packets[] = {
 		{ C("\1\0\0\1\2") }, /* 2 fields */
 		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
@@ -627,7 +627,7 @@ void t_resultset_fields_works(void) {
 	network_queue_free(q);
 }
 
-void t_resultset_fields_parse_err(void) {
+static void t_resultset_fields_parse_err(void) {
 	strings packets[] = {
 		{ C("\1\0\0\1\377") }, /* err-packet */
 		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
@@ -653,7 +653,7 @@ void t_resultset_fields_parse_err(void) {
 	network_queue_free(q);
 }
 
-void t_resultset_fields_parse_null(void) {
+static void t_resultset_fields_parse_null(void) {
 	strings packets[] = {
 		{ C("\1\0\0\1\373") }, /* NULL */
 		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
@@ -679,7 +679,7 @@ void t_resultset_fields_parse_null(void) {
 	network_queue_free(q);
 }
 
-void t_resultset_fields_parse_low(void) {
+static void t_resultset_fields_parse_low(void) {
 	strings packets[] = {
 		{ C("\1\0\0\1\2") }, /* 2 fields */
 		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
@@ -704,7 +704,7 @@ void t_resultset_fields_parse_low(void) {
 	network_queue_free(q);
 }
 
-void t_resultset_fields_parse_high(void) {
+static void t_resultset_fields_parse_high(void) {
 	strings packets[] = {
 		{ C("\1\0\0\1\2") }, /* 2 fields */
 		{ C("6\0\0\2\3def\0\6STATUS\0\rVariable_name\rVariable_name\f\10\0P\0\0\0\375\1\0\0\0\0") },
