@@ -355,6 +355,25 @@ int network_mysqld_proto_get_int32(network_packet *packet, guint32 *v) {
 }
 
 /**
+ * peek a 32-bit integer from the network packet
+ *
+ * @param packet the MySQL network packet
+ * @param v      dest for the number
+ * @return 0 on success, non-0 on error
+ * @see network_mysqld_proto_peek_int_len()
+ */
+int network_mysqld_proto_peek_int32(network_packet *packet, guint32 *v) {
+	guint64 v64;
+
+	if (network_mysqld_proto_peek_int_len(packet, &v64, 4)) return -1;
+
+	*v = v64 & 0xffffffff;
+
+	return 0;
+}
+
+
+/**
  * get a 6-byte integer from the network packet
  *
  * @param packet the MySQL network packet
