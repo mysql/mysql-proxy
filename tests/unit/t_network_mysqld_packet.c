@@ -323,6 +323,7 @@ static void test_mysqld_handshake_plugin_auth(void) {
 
 	g_assert_cmpint(shake->auth_plugin_data->len, ==, 21);
 	g_assert_cmpint(0, == ,memcmp(shake->auth_plugin_data->str, "=%=CvM^m-7i-A?X|,_}u\0", shake->auth_plugin_data->len));
+	g_assert_cmpstr(shake->auth_plugin_name->str, ==, "mysql_native_password");
 
 	/* ... and back */
 	g_string_truncate(packet.data, 0);
@@ -331,7 +332,6 @@ static void test_mysqld_handshake_plugin_auth(void) {
 
 	g_assert_cmpint(packet.data->len, ==, sizeof(raw_packet) - 1);
 
-	g_debug_hexdump(G_STRLOC, S(packet.data));
 	g_assert(0 == memcmp(packet.data->str, raw_packet, packet.data->len));
 
 	network_mysqld_auth_challenge_free(shake);
@@ -426,7 +426,7 @@ static void test_mysqld_auth_with_pw(void) {
 	g_string_append_len(challenge, raw_challenge, sizeof(raw_challenge) - 1);
 
 	network_mysqld_proto_password_hash(hashed_password, C("123"));
-	network_mysqld_proto_password_scramble(auth->response, S(challenge), S(hashed_password));
+	network_mysqld_proto_password_scramble(auth->auth_plugin_data, S(challenge), S(hashed_password));
 
 	g_string_free(hashed_password, TRUE);
 	
@@ -626,6 +626,147 @@ static void t_mysqld_get_auth_response_no_term(void) {
 	g_string_free(packet.data, TRUE);
 }
 
+/**
+ * @test
+ *   test if CLIENT_PLUGIN_AUTH is handled correctly
+ */
+static void t_mysqld_get_auth_response_plugin_auth(void) {
+	const char raw_packet[] = 
+		"\x50\x00\x00\x01"
+		"\x85\xa6\x0f\x00" /* capabilities */
+		"\x00\x00\x00\x01" /* max packet len */
+		"\x08"             /* charset */
+		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" /* reserved */
+		"\x72\x6f\x6f\x74\x00" /* username = root */
+		"\x14\xb6\x26\xcc\x53\x02\x62\x4d\xbf\x2c\xe8\xb4\x1e\x1d\xbf\x7d\xd6\x65\x3b\x8d\x60" /* len = 0x14 + ... */
+		"\x6d\x79\x73\x71\x6c\x5f\x6e\x61\x74\x69\x76\x65\x5f\x70\x61\x73\x73\x77\x6f\x72\x64\x00" /* mysql_native_password */
+		;
+
+	network_mysqld_auth_response *auth;
+	network_packet packet;
+	int err = 0;
+
+	auth = network_mysqld_auth_response_new();
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+	
+	err = err || network_mysqld_proto_skip_network_header(&packet);
+	err = err || network_mysqld_proto_get_auth_response(&packet, auth);
+
+	g_assert_cmpint(err, ==, 0);
+
+	g_assert(auth->username);
+	g_assert_cmpint(auth->username->len, ==, 4);
+	g_assert_cmpstr(auth->username->str, ==, "root");
+
+	g_assert_cmphex(auth->capabilities, ==,
+		CLIENT_LONG_PASSWORD |
+	       	CLIENT_LONG_FLAG |
+		CLIENT_LOCAL_FILES | 
+		CLIENT_PROTOCOL_41 |
+		CLIENT_INTERACTIVE |
+		CLIENT_TRANSACTIONS |
+		CLIENT_SECURE_CONNECTION |
+		CLIENT_MULTI_STATEMENTS |
+		CLIENT_MULTI_RESULTS|
+		CLIENT_PS_MULTI_RESULTS|
+		CLIENT_PLUGIN_AUTH); 
+	g_assert_cmpuint(auth->max_packet_size, ==, 1 << 24);
+	g_assert_cmpuint(auth->charset        , ==, 8);
+	g_assert_cmpuint(auth->auth_plugin_name->len, >, 0);
+	g_assert_cmpstr(auth->auth_plugin_name->str, ==, "mysql_native_password");
+
+	g_string_truncate(packet.data, 0);
+	packet.offset = 0;
+
+	g_string_append_len(packet.data, C("\x50\x00\x00\x01"));
+	err = err || network_mysqld_proto_append_auth_response(packet.data, auth);
+	g_assert_cmpint(err, ==, 0);
+
+	g_assert_cmpint(packet.data->len, ==, sizeof(raw_packet) - 1);
+	g_assert_cmpint(TRUE, ==, g_memeq(S(packet.data), raw_packet, packet.data->len));
+
+	network_mysqld_auth_response_free(auth);
+
+	g_string_free(packet.data, TRUE);
+}
+
+static const char* capability_flag_name(guint32 flag) {
+#define F(x) case x: return G_STRINGIFY(x);
+	switch (flag) {
+	case CLIENT_LONG_PASSWORD: return "_LONG_PASSWORD";
+	case CLIENT_FOUND_ROWS: return "_FOUND_ROWS";
+	case CLIENT_LONG_FLAG: return "_LONG_FLAG";
+	case CLIENT_CONNECT_WITH_DB: return "_CONNECT_WITH_DB";
+	case CLIENT_NO_SCHEMA: return "_NO_SCHEMA";
+	case CLIENT_COMPRESS: return "_COMPRESS";
+	case CLIENT_ODBC: return "_ODBC";
+	case CLIENT_LOCAL_FILES: return "_LOCAL_FILES";
+	case CLIENT_IGNORE_SPACE: return "_IGNORE_SPACE";
+	case CLIENT_PROTOCOL_41: return "_PROTOCOL_41";
+	case CLIENT_INTERACTIVE: return "_INTERACTIVE";
+	case CLIENT_SSL: return "_SSL";
+	case CLIENT_IGNORE_SIGPIPE: return "_IGNORE_SIGPIPE";
+	case CLIENT_TRANSACTIONS: return "_TRANSACTIONS";
+	case CLIENT_RESERVED: return "_RESERVED";
+	case CLIENT_SECURE_CONNECTION: return "_SECURE_CONNECTIOn";
+	case CLIENT_MULTI_STATEMENTS: return "_MULTI_STATEMENTS";
+	case CLIENT_MULTI_RESULTS: return "_MULTI_RESULTS";
+	case CLIENT_PS_MULTI_RESULTS: return "_PS_MULTI_RESULTS";
+	case CLIENT_PLUGIN_AUTH: return "_PLUGIN_AUTH";
+	case CLIENT_SSL_VERIFY_SERVER_CERT: return "_SSL_VERIFY_SERVER_CERT";
+	case CLIENT_REMEMBER_OPTIONS: return "_REMEMBER_OPTIONS";
+	}
+	return "unknown flag";
+}
+
+static void capability_flags_name(guint32 flags) {
+	int i;
+
+	for (i = 0; i < 32; i++) {
+		guint32 flag = flags & (1 << i);
+
+		if (flag) g_debug("  %s", capability_flag_name(flag));
+	}
+}
+
+static void t_mysqld_get_auth_response_hmm(void) {
+	guint32 capabilities;
+	const char raw_packet[] = 
+		"\x26\x00\x00\x01"
+		"\x8d\xa2\x0f\x80" /* _LONG_PASSWORD, _LONG_FLAG, _CONNECT_WITH_DB,
+				      _LOCAL_FILES,
+				      _PROTOCOL_41,
+				      _TRANSACTIONS, _SECURE_CONNECTIONS,
+				      _MULTI_STATEMENTS, _MULTI_RESULTS, _PS_MULTI_STATEMENTS, _PLUGIN_AUTH, 
+				      ...
+				      */
+
+		"\x00\x00\x00\x40"
+		"\x08"
+		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+		"\x72\x6f\x6f\x74\x00"
+		"\x00";
+
+	network_mysqld_auth_response *auth;
+	network_packet packet;
+	int err = 0;
+
+	auth = network_mysqld_auth_response_new();
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+	
+	err = err || network_mysqld_proto_skip_network_header(&packet);
+	err = err || network_mysqld_proto_peek_int32(&packet, &capabilities);
+	capability_flags_name(capabilities);
+	err = err || network_mysqld_proto_get_auth_response(&packet, auth);
+
+	g_assert_cmpint(err, ==, 0);
+
+	network_mysqld_auth_response_free(auth);
+
+	g_string_free(packet.data, TRUE);
+}
 
 typedef struct {
 	const char *s;
@@ -1441,6 +1582,8 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/mysqld-proto-get-auth-response", t_mysqld_get_auth_response);
 	g_test_add_func("/core/mysqld-proto-get-auth-response-pre-4.1", t_mysqld_get_auth_response_pre_41);
 	g_test_add_func("/core/mysqld-proto-get-auth-response-no-term", t_mysqld_get_auth_response_no_term);
+	g_test_add_func("/core/mysqld-proto-get-auth-response-plugin-auth", t_mysqld_get_auth_response_plugin_auth);
+	g_test_add_func("/core/mysqld-proto-get-auth-response-hmm", t_mysqld_get_auth_response_hmm);
 	
 	g_test_add_func("/core/resultset-fields", t_resultset_fields_works);
 	g_test_add_func("/core/resultset-fields-broken-proto-err", t_resultset_fields_parse_err);

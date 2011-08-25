@@ -268,7 +268,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(server_read_auth) {
 		network_mysqld_con_send_error_full(send_sock, C("scrambling failed"), 1045, "28000");
 		
 		con->state = CON_STATE_SEND_ERROR; /* close the connection after we have sent this packet */
-	} else if (!g_string_equal(excepted_response, auth->response)) {
+	} else if (!g_string_equal(excepted_response, auth->auth_plugin_data)) {
 		network_mysqld_con_send_error_full(send_sock, C("password doesn't match"), 1045, "28000");
 		
 		con->state = CON_STATE_SEND_ERROR; /* close the connection after we have sent this packet */

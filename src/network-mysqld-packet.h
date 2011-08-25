@@ -176,8 +176,9 @@ struct network_mysqld_auth_response {
 	guint32  max_packet_size;
 	guint8   charset;
 	GString *username;
-	GString *response;
+	GString *auth_plugin_data;
 	GString *database;
+	GString *auth_plugin_name;
 };
 
 NETWORK_API network_mysqld_auth_response *network_mysqld_auth_response_new(void);

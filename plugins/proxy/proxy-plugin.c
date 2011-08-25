@@ -697,10 +697,10 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 				g_string_append_c(com_change_user, COM_CHANGE_USER);
 				g_string_append_len(com_change_user, con->client->response->username->str, con->client->response->username->len + 1); /* nul-term */
 
-				g_assert_cmpint(con->client->response->response->len, <, 250);
+				g_assert_cmpint(con->client->response->auth_plugin_data->len, <, 250);
 
-				g_string_append_c(com_change_user, (con->client->response->response->len & 0xff));
-				g_string_append_len(com_change_user, S(con->client->response->response));
+				g_string_append_c(com_change_user, (con->client->response->auth_plugin_data->len & 0xff));
+				g_string_append_len(com_change_user, S(con->client->response->auth_plugin_data));
 
 				g_string_append_len(com_change_user, con->client->default_db->str, con->client->default_db->len + 1);
 				
@@ -729,7 +729,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 				con->state = CON_STATE_SEND_AUTH_RESULT;
 
 				if (!g_string_equal(con->client->response->username, con->server->response->username) ||
-				    !g_string_equal(con->client->response->response, con->server->response->response)) {
+				    !g_string_equal(con->client->response->auth_plugin_data, con->server->response->auth_plugin_data)) {
 					network_mysqld_err_packet_t *err_packet;
 
 					err_packet = network_mysqld_err_packet_new();

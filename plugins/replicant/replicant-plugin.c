@@ -238,7 +238,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 		hashed_password = g_string_new(NULL);
 		network_mysqld_proto_password_hash(hashed_password, config->mysqld_password, strlen(config->mysqld_password));
 
-		network_mysqld_proto_password_scramble(auth->response, S(shake->auth_plugin_data), S(hashed_password));
+		network_mysqld_proto_password_scramble(auth->auth_plugin_data, S(shake->auth_plugin_data), S(hashed_password));
 	}
 
 	network_mysqld_proto_append_auth_response(auth_packet, auth);

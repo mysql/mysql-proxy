@@ -366,7 +366,8 @@ static int lua_proto_get_response_packet (lua_State *L) {
 	LUA_EXPORT_INT(auth_response, charset);
 
 	LUA_EXPORT_STR(auth_response, username);
-	LUA_EXPORT_STR(auth_response, response);
+	LUA_EXPORT_STR_FROM(auth_response, auth_plugin_data, "response");
+	LUA_EXPORT_STR(auth_response, auth_plugin_name);
 	LUA_EXPORT_STR(auth_response, database);
 
 	network_mysqld_auth_response_free(auth_response);
@@ -377,26 +378,44 @@ static int lua_proto_get_response_packet (lua_State *L) {
 static int lua_proto_append_response_packet (lua_State *L) {
 	GString *packet;
 	network_mysqld_auth_response *auth_response;
+	gboolean needs_auto_capabilities = TRUE;
 
 	luaL_checktype(L, 1, LUA_TTABLE);
 
 	packet = g_string_new(NULL);	
 	auth_response = network_mysqld_auth_response_new();
 
-	LUA_IMPORT_INT(auth_response, capabilities);
+	lua_getfield_literal(L, -1, C("capabilities"));
+	if (!lua_isnil(L, -1)) {
+		auth_response->capabilities = lua_tointeger(L, -1);
+		needs_auto_capabilities = FALSE;
+	}
+	lua_pop(L, 1);
+
 	LUA_IMPORT_INT(auth_response, max_packet_size);
 	LUA_IMPORT_INT(auth_response, charset);
 
 	LUA_IMPORT_STR(auth_response, username);
-	LUA_IMPORT_STR(auth_response, response);
+	LUA_IMPORT_STR_TO(auth_response, auth_plugin_data, "response");
+	LUA_IMPORT_STR(auth_response, auth_plugin_name);
 	LUA_IMPORT_STR(auth_response, database);
+
+	if (needs_auto_capabilities) {
+		if (auth_response->database->len > 0) {
+			auth_response->capabilities |= CLIENT_CONNECT_WITH_DB;
+		}
+
+		if (auth_response->auth_plugin_name->len > 0) {
+			auth_response->capabilities |= CLIENT_PLUGIN_AUTH;
+		}
+	}
 
 	if (network_mysqld_proto_append_auth_response(packet, auth_response)) {
 		network_mysqld_auth_response_free(auth_response);
 		g_string_free(packet, TRUE);
 
 		luaL_error(L, "to_response_packet() failed");
-        g_string_free(packet, TRUE);
+		g_string_free(packet, TRUE);
 		return 0;
 	}
 	

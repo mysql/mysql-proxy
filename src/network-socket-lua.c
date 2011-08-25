@@ -56,7 +56,10 @@ static int proxy_socket_get(lua_State *L) {
 			lua_pushlstring(L, S(sock->response->username));
 			return 1;
 		} else if (strleq(key, keysize, C("scrambled_password"))) {
-			lua_pushlstring(L, S(sock->response->response));
+			lua_pushlstring(L, S(sock->response->auth_plugin_data));
+			return 1;
+		} else if (strleq(key, keysize, C("auth_plugin_name"))) {
+			lua_pushlstring(L, S(sock->response->auth_plugin_name));
 			return 1;
 		}
 	}
