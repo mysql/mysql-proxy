@@ -170,9 +170,11 @@ NETWORK_API void network_mysqld_auth_challenge_free(network_mysqld_auth_challeng
 NETWORK_API int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysqld_auth_challenge *shake);
 NETWORK_API int network_mysqld_proto_append_auth_challenge(GString *packet, network_mysqld_auth_challenge *shake);
 NETWORK_API void network_mysqld_auth_challenge_set_challenge(network_mysqld_auth_challenge *shake);
+NETWORK_API network_mysqld_auth_challenge *network_mysqld_auth_challenge_copy(network_mysqld_auth_challenge *src);
 
 struct network_mysqld_auth_response {
-	guint32  capabilities;
+	guint32  client_capabilities;
+	guint32  server_capabilities;
 	guint32  max_packet_size;
 	guint8   charset;
 	GString *username;
@@ -181,7 +183,7 @@ struct network_mysqld_auth_response {
 	GString *auth_plugin_name;
 };
 
-NETWORK_API network_mysqld_auth_response *network_mysqld_auth_response_new(void);
+NETWORK_API network_mysqld_auth_response *network_mysqld_auth_response_new(guint server_capabilities);
 NETWORK_API void network_mysqld_auth_response_free(network_mysqld_auth_response *auth);
 NETWORK_API int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_auth_response *auth);
 NETWORK_API int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysqld_auth_response *auth);

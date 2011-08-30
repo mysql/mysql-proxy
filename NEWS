@@ -1,3 +1,16 @@
+0.8.3 - 
+
+  * added support for extracting the pluggable auth protocol information
+    - Lua-API added:
+      - con.client.challenge.auth_plugin_name
+      - con.client.response.auth_plugin_name
+  * fixed handling capability flags in the client auth response
+    - C-API change: network_mysqld_auth_response_new() needs the server-side capabilities
+    - Lua-API added:
+      - con.client.challenge (mirrors con.server.challenge)
+      - con.client.response.server_capabilties 
+      - con.server.challenge.server_capabilities 
+
 0.8.2 - 2011-08-18
 
   * added support for binlog checksums

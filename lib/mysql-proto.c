@@ -38,41 +38,52 @@
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
 
-#define LUA_IMPORT_INT(x, y) \
-	lua_getfield_literal(L, -1, C(G_STRINGIFY(y))); \
+#define LUA_IMPORT_INT_FROM(_struct, _struct_field, _lua_field) \
+	lua_getfield_literal(L, -1, C(_lua_field)); \
 	if (!lua_isnil(L, -1)) { \
-		x->y = lua_tointeger(L, -1); \
+		_struct->_struct_field = lua_tointeger(L, -1); \
 	} \
 	lua_pop(L, 1);
 
-#define LUA_IMPORT_STR_TO(_struct, _field, _name) \
-	lua_getfield_literal(L, -1, C(_name)); \
+#define LUA_IMPORT_INT(_struct, _struct_field) \
+	LUA_IMPORT_INT_FROM(_struct, _struct_field, G_STRINGIFY(_struct_field))
+
+#define LUA_IMPORT_STR_FROM(_struct, _struct_field, _lua_field) \
+	lua_getfield_literal(L, -1, C(_lua_field)); \
 	if (!lua_isnil(L, -1)) { \
 		size_t s_len; \
 		const char *s = lua_tolstring(L, -1, &s_len); \
-		g_string_assign_len(_struct->_field, s, s_len); \
+		g_string_assign_len(_struct->_struct_field, s, s_len); \
 	} \
 	lua_pop(L, 1);
 
-#define LUA_IMPORT_STR(_struct, _field) \
-	LUA_IMPORT_STR_TO(_struct, _field, G_STRINGIFY(_field))
+#define LUA_IMPORT_STR(_struct, _struct_field) \
+	LUA_IMPORT_STR_FROM(_struct, _struct_field, G_STRINGIFY(_struct_field))
 
-#define LUA_EXPORT_INT(x, y) \
-	lua_pushinteger(L, x->y); \
-	lua_setfield(L, -2, G_STRINGIFY(y)); 
+/* and export them */
 
-#define LUA_EXPORT_BOOL(x, y) \
-	lua_pushboolean(L, x->y); \
-	lua_setfield(L, -2, G_STRINGIFY(y)); 
+#define LUA_EXPORT_INT_TO(_struct, _struct_field, _lua_field) \
+	lua_pushinteger(L, _struct->_struct_field); \
+	lua_setfield(L, -2, _lua_field); 
 
-#define LUA_EXPORT_STR_FROM(_struct, _field, _name) \
-	if (_struct->_field->len) { \
-		lua_pushlstring(L, S(_struct->_field)); \
-		lua_setfield(L, -2, _name); \
+#define LUA_EXPORT_INT(_struct, _struct_field) \
+	LUA_EXPORT_INT_TO(_struct, _struct_field, G_STRINGIFY(_struct_field))
+
+#define LUA_EXPORT_BOOL_TO(_struct, _struct_field, _lua_field) \
+	lua_pushboolean(L, _struct->_struct_field); \
+	lua_setfield(L, -2, _lua_field); 
+
+#define LUA_EXPORT_BOOL(_struct, _struct_field) \
+	LUA_EXPORT_BOOL_TO(_struct, _struct_field, G_STRINGIFY(_struct_field))
+
+#define LUA_EXPORT_STR_TO(_struct, _struct_field, _lua_field) \
+	if (_struct->_struct_field->len) { \
+		lua_pushlstring(L, S(_struct->_struct_field)); \
+		lua_setfield(L, -2, _lua_field); \
 	}
 
-#define LUA_EXPORT_STR(_struct, _field) \
-	LUA_EXPORT_STR_FROM(_struct, _field, G_STRINGIFY(_field))
+#define LUA_EXPORT_STR(_struct, _struct_field) \
+	LUA_EXPORT_STR_TO(_struct, _struct_field, G_STRINGIFY(_struct_field))
 
 static int lua_proto_get_err_packet (lua_State *L) {
 	size_t packet_len;
@@ -339,6 +350,7 @@ static int lua_proto_append_eof_packet (lua_State *L) {
 static int lua_proto_get_response_packet (lua_State *L) {
 	size_t packet_len;
 	const char *packet_str = luaL_checklstring(L, 1, &packet_len);
+	guint32 server_capabilities = luaL_checkint(L, 2);
 	network_mysqld_auth_response *auth_response;
 	network_packet packet;
 	GString s;
@@ -350,7 +362,7 @@ static int lua_proto_get_response_packet (lua_State *L) {
 	packet.data = &s;
 	packet.offset = 0;
 
-	auth_response = network_mysqld_auth_response_new();
+	auth_response = network_mysqld_auth_response_new(server_capabilities);
 
 	err = err || network_mysqld_proto_get_auth_response(&packet, auth_response);
 	if (err) {
@@ -361,12 +373,13 @@ static int lua_proto_get_response_packet (lua_State *L) {
 	}
 
 	lua_newtable(L);
-	LUA_EXPORT_INT(auth_response, capabilities);
+	LUA_EXPORT_INT_TO(auth_response, client_capabilities, "capabilities");
+	LUA_EXPORT_INT(auth_response, server_capabilities);
 	LUA_EXPORT_INT(auth_response, max_packet_size);
 	LUA_EXPORT_INT(auth_response, charset);
 
 	LUA_EXPORT_STR(auth_response, username);
-	LUA_EXPORT_STR_FROM(auth_response, auth_plugin_data, "response");
+	LUA_EXPORT_STR_TO(auth_response, auth_plugin_data, "response");
 	LUA_EXPORT_STR(auth_response, auth_plugin_name);
 	LUA_EXPORT_STR(auth_response, database);
 
@@ -379,15 +392,27 @@ static int lua_proto_append_response_packet (lua_State *L) {
 	GString *packet;
 	network_mysqld_auth_response *auth_response;
 	gboolean needs_auto_capabilities = TRUE;
+	guint32 server_capabilities;
 
 	luaL_checktype(L, 1, LUA_TTABLE);
 
+	/* extract the server_capabilities first as we need them to create the struct */
+	lua_getfield_literal(L, -1, C("server_capabilities"));
+	if (lua_isnil(L, -1)) {
+		return luaL_error(L, ".server_capabilities has to be set");
+	} else if (lua_isnumber(L, -1)) {
+		server_capabilities = lua_tointeger(L, -1);
+	} else {
+		return luaL_error(L, ".server_capabilities has to be a number");
+	}
+	lua_pop(L, 1);
+
 	packet = g_string_new(NULL);	
-	auth_response = network_mysqld_auth_response_new();
+	auth_response = network_mysqld_auth_response_new(server_capabilities);
 
 	lua_getfield_literal(L, -1, C("capabilities"));
 	if (!lua_isnil(L, -1)) {
-		auth_response->capabilities = lua_tointeger(L, -1);
+		auth_response->client_capabilities = lua_tointeger(L, -1);
 		needs_auto_capabilities = FALSE;
 	}
 	lua_pop(L, 1);
@@ -396,19 +421,9 @@ static int lua_proto_append_response_packet (lua_State *L) {
 	LUA_IMPORT_INT(auth_response, charset);
 
 	LUA_IMPORT_STR(auth_response, username);
-	LUA_IMPORT_STR_TO(auth_response, auth_plugin_data, "response");
+	LUA_IMPORT_STR_FROM(auth_response, auth_plugin_data, "response");
 	LUA_IMPORT_STR(auth_response, auth_plugin_name);
 	LUA_IMPORT_STR(auth_response, database);
-
-	if (needs_auto_capabilities) {
-		if (auth_response->database->len > 0) {
-			auth_response->capabilities |= CLIENT_CONNECT_WITH_DB;
-		}
-
-		if (auth_response->auth_plugin_name->len > 0) {
-			auth_response->capabilities |= CLIENT_PLUGIN_AUTH;
-		}
-	}
 
 	if (network_mysqld_proto_append_auth_response(packet, auth_response)) {
 		network_mysqld_auth_response_free(auth_response);
@@ -460,7 +475,7 @@ static int lua_proto_get_challenge_packet (lua_State *L) {
 	LUA_EXPORT_INT(auth_challenge, charset);
 	LUA_EXPORT_INT(auth_challenge, server_status);
 
-	LUA_EXPORT_STR_FROM(auth_challenge, auth_plugin_data, "challenge");
+	LUA_EXPORT_STR_TO(auth_challenge, auth_plugin_data, "challenge");
 	LUA_EXPORT_STR(auth_challenge, auth_plugin_name);
 
 	network_mysqld_auth_challenge_free(auth_challenge);
@@ -483,7 +498,7 @@ static int lua_proto_append_challenge_packet (lua_State *L) {
 	LUA_IMPORT_INT(auth_challenge, charset);
 	LUA_IMPORT_INT(auth_challenge, server_status);
 
-	LUA_IMPORT_STR_TO(auth_challenge, auth_plugin_data, "challenge");
+	LUA_IMPORT_STR_FROM(auth_challenge, auth_plugin_data, "challenge");
 
 	packet = g_string_new(NULL);	
 	network_mysqld_proto_append_auth_challenge(packet, auth_challenge);

@@ -1123,6 +1123,26 @@ void network_mysqld_auth_challenge_free(network_mysqld_auth_challenge *shake) {
 	g_free(shake);
 }
 
+network_mysqld_auth_challenge *network_mysqld_auth_challenge_copy(network_mysqld_auth_challenge *src) {
+	network_mysqld_auth_challenge *dst;
+
+	if (!src) return NULL;
+
+	dst = network_mysqld_auth_challenge_new();
+	dst->protocol_version = src->protocol_version;
+	dst->server_version  = src->server_version;
+	dst->thread_id       = src->thread_id;
+	dst->capabilities    = src->capabilities;
+	dst->charset         = src->charset;
+	dst->server_status   = src->server_status;
+	dst->server_version_str = g_strdup(src->server_version_str);
+	g_string_assign_len(dst->auth_plugin_data, S(src->auth_plugin_data));
+	g_string_assign_len(dst->auth_plugin_name, S(src->auth_plugin_name));
+
+	return dst;
+}
+
+
 void network_mysqld_auth_challenge_set_challenge(network_mysqld_auth_challenge *shake) {
 	guint i;
 
@@ -1342,7 +1362,7 @@ int network_mysqld_proto_append_auth_challenge(GString *packet, network_mysqld_a
 	return 0;
 }
 
-network_mysqld_auth_response *network_mysqld_auth_response_new() {
+network_mysqld_auth_response *network_mysqld_auth_response_new(guint32 server_capabilities) {
 	network_mysqld_auth_response *auth;
 
 	auth = g_new0(network_mysqld_auth_response, 1);
@@ -1354,7 +1374,8 @@ network_mysqld_auth_response *network_mysqld_auth_response_new() {
 	auth->auth_plugin_name = g_string_new(NULL);
 	auth->username = g_string_new("");
 	auth->database = g_string_new("");
-	auth->capabilities = CLIENT_SECURE_CONNECTION | CLIENT_PROTOCOL_41;
+	auth->client_capabilities = CLIENT_SECURE_CONNECTION | CLIENT_PROTOCOL_41;
+	auth->server_capabilities = server_capabilities;
 
 	return auth;
 }
@@ -1403,26 +1424,26 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 	if (err) return -1;
 
 	if (l_cap & CLIENT_PROTOCOL_41) {
-		err = err || network_mysqld_proto_get_int32(packet, &auth->capabilities);
+		err = err || network_mysqld_proto_get_int32(packet, &auth->client_capabilities);
 		err = err || network_mysqld_proto_get_int32(packet, &auth->max_packet_size);
 		err = err || network_mysqld_proto_get_int8(packet, &auth->charset);
 
 		err = err || network_mysqld_proto_skip(packet, 23);
 	
 		err = err || network_mysqld_proto_get_gstring(packet, auth->username);
-		if ((auth->capabilities & CLIENT_SECURE_CONNECTION) ||
-		    (auth->capabilities & CLIENT_PLUGIN_AUTH)) {
+		if ((auth->server_capabilities & CLIENT_SECURE_CONNECTION) ||
+		    (auth->server_capabilities & CLIENT_PLUGIN_AUTH)) {
 			err = err || network_mysqld_proto_get_lenenc_gstring(packet, auth->auth_plugin_data);
 		} else {
 			/* old auth stores it as NUL-term-string */
 			err = err || network_mysqld_proto_get_gstring(packet, auth->auth_plugin_data);
 		}
 
-		if (auth->capabilities & CLIENT_CONNECT_WITH_DB) {
+		if (auth->server_capabilities & CLIENT_CONNECT_WITH_DB) {
 			err = err || network_mysqld_proto_get_gstring(packet, auth->database);
 		}
 
-		if (auth->capabilities & CLIENT_PLUGIN_AUTH) {
+		if (auth->server_capabilities & CLIENT_PLUGIN_AUTH) {
 			/* parse out the plugin name */
 			err = err || network_mysqld_proto_get_gstring(packet, auth->auth_plugin_name);
 		}
@@ -1436,7 +1457,7 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 		}
 
 		if (!err) {
-			auth->capabilities = l_cap;
+			auth->client_capabilities = l_cap;
 		}
 	}
 
@@ -1449,8 +1470,8 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_auth_response *auth) {
 	int i;
 
-	if (!(auth->capabilities & CLIENT_PROTOCOL_41)) {
-		network_mysqld_proto_append_int16(packet, auth->capabilities);
+	if (!(auth->client_capabilities & CLIENT_PROTOCOL_41)) {
+		network_mysqld_proto_append_int16(packet, auth->client_capabilities);
 		network_mysqld_proto_append_int24(packet, auth->max_packet_size); /* max-allowed-packet */
 
 		if (auth->username->len) g_string_append_len(packet, S(auth->username));
@@ -1461,7 +1482,7 @@ int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_au
 			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
 		}
 	} else {
-		network_mysqld_proto_append_int32(packet, auth->capabilities);
+		network_mysqld_proto_append_int32(packet, auth->client_capabilities);
 		network_mysqld_proto_append_int32(packet, auth->max_packet_size); /* max-allowed-packet */
 		
 		network_mysqld_proto_append_int8(packet, auth->charset); /* charset */
@@ -1476,13 +1497,13 @@ int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_au
 		/* scrambled password */
 		network_mysqld_proto_append_lenenc_string_len(packet, S(auth->auth_plugin_data));
 
-		if (auth->capabilities & CLIENT_CONNECT_WITH_DB &&
+		if (auth->server_capabilities & CLIENT_CONNECT_WITH_DB &&
 		    auth->database->len > 0) {
 			g_string_append_len(packet, S(auth->database));
 			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
 		}
 
-		if (auth->capabilities & CLIENT_PLUGIN_AUTH) {
+		if (auth->server_capabilities & CLIENT_PLUGIN_AUTH) {
 			g_string_append_len(packet, S(auth->auth_plugin_name));
 			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
 		}
@@ -1497,8 +1518,8 @@ network_mysqld_auth_response *network_mysqld_auth_response_copy(network_mysqld_a
 
 	if (!src) return NULL;
 
-	dst = network_mysqld_auth_response_new();
-	dst->capabilities    = src->capabilities;
+	dst = network_mysqld_auth_response_new(src->server_capabilities);
+	dst->client_capabilities    = src->client_capabilities;
 	dst->max_packet_size = src->max_packet_size;
 	dst->charset         = src->charset;
 	g_string_assign_len(dst->username, S(src->username));

@@ -223,9 +223,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(repclient_read_handshake) {
 	/* build the auth packet */
 	auth_packet = g_string_new(NULL);
 
-	auth = network_mysqld_auth_response_new();
+	auth = network_mysqld_auth_response_new(shake->capabilities);
 
-	auth->capabilities = shake->capabilities;
+	auth->client_capabilities = shake->capabilities;
 	auth->charset      = shake->charset;
 
 	if (config->mysqld_username) {

@@ -64,7 +64,7 @@ static int proxy_socket_get(lua_State *L) {
 		}
 	}
 
-	if (sock->challenge) { /* only the server-side has mysqld_version set */
+	if (sock->challenge) {
 		if (strleq(key, keysize, C("mysqld_version"))) {
 			lua_pushinteger(L, sock->challenge->server_version);
 			return 1;

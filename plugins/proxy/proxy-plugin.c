@@ -507,7 +507,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	default:
 		g_error("%s.%d: ...", __FILE__, __LINE__);
 		break;
-	} 
+	}
 
 	challenge_packet = g_string_sized_new(packet.data->len); /* the packet we generate will be likely as large as the old one. should save some reallocs */
 	network_mysqld_proto_append_auth_challenge(challenge_packet, challenge);
@@ -519,6 +519,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_handshake) {
 	g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
 
 	/* copy the pack to the client */
+	g_assert(con->client->challenge == NULL);
+	con->client->challenge = network_mysqld_auth_challenge_copy(challenge);
+	
 	con->state = CON_STATE_SEND_HANDSHAKE;
 
 	return NETWORK_SOCKET_SUCCESS;
@@ -632,7 +635,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 	if (err) return NETWORK_SOCKET_ERROR;
 
-	auth = network_mysqld_auth_response_new();
+	auth = network_mysqld_auth_response_new(con->client->challenge->capabilities);
 
 	err = err || network_mysqld_proto_get_auth_response(&packet, auth);
 
@@ -640,7 +643,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		network_mysqld_auth_response_free(auth);
 		return NETWORK_SOCKET_ERROR;
 	}
-	if (!(auth->capabilities & CLIENT_PROTOCOL_41)) {
+	if (!(auth->client_capabilities & CLIENT_PROTOCOL_41)) {
 		/* should use packet-id 0 */
 		network_mysqld_queue_append(con->client, con->client->send_queue, C("\xff\xd7\x07" "4.0 protocol is not supported"));
 		network_mysqld_auth_response_free(auth);
@@ -1456,6 +1459,34 @@ static network_mysqld_lua_stmt_ret proxy_lua_connect_server(network_mysqld_con *
 		
 				/* send packet-id 0 */
 				network_mysqld_con_send_error(con->client, C("(lua) handling proxy.response failed, check error-log"));
+			} else {
+				network_queue *q;
+				network_packet packet;
+				int err = 0;
+				guint8 packet_type;
+
+				/* we should have a auth-packet or a err-packet in the queue */
+				q = con->client->send_queue;
+
+				packet.data = g_queue_peek_head(q->chunks);
+				packet.offset = 0;
+
+				err = err || network_mysqld_proto_skip_network_header(&packet);
+				err = err || network_mysqld_proto_peek_int8(&packet, &packet_type);
+				if (!err && packet_type == 0x0a) {
+					network_mysqld_auth_challenge *challenge;
+
+					challenge = network_mysqld_auth_challenge_new();
+
+					err = err || network_mysqld_proto_get_auth_challenge(&packet, challenge);
+
+					if (!err) {
+						g_assert(con->client->challenge == NULL); /* make sure we don't leak memory */
+						con->client->challenge = challenge;
+					} else {
+						network_mysqld_auth_challenge_free(challenge);
+					}
+				}
 			}
 
 			break;
@@ -1669,6 +1700,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 				S(auth_packet));
 
 		g_string_free(auth_packet, TRUE);
+
+		g_assert(con->client->challenge == NULL);
+		con->client->challenge = network_mysqld_auth_challenge_copy(con->server->challenge);
 		
 		con->state = CON_STATE_SEND_HANDSHAKE;
 

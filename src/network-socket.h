@@ -92,8 +92,6 @@ typedef struct {
 	
 	/**
 	 * data extracted from the handshake  
-	 *
-	 * all server-side only
 	 */
 	network_mysqld_auth_challenge *challenge;
 	network_mysqld_auth_response  *response;

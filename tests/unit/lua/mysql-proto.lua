@@ -20,6 +20,12 @@
 local proto = assert(require("mysql.proto"))
 local password = assert(require("mysql.password"))
 require("proxy.test")
+
+local protocol_41_default_capabilities = 
+			8 +     -- _CONNECT_WITH_DB
+			512 +   -- _PROTOCOL_41
+			32768   -- _SECURE_CONNECTION
+
 ---
 -- err packet
 
@@ -143,6 +149,35 @@ assert(type(tbl) == "table")
 assert(tbl.server_status == 2, ("expected 2, got %d"):format(tbl.server_status))
 assert(tbl.server_version == 50034, ("expected 50034, got %d"):format(tbl.server_version))
 
+-- decode a pluggable auth handshake packet
+-- should decode nicely
+local plugin_auth_response_packet = 
+	"\010" ..
+	"\053\046\054\046\050\045\109\053\045\108\111\103\000" ..
+	"\077\000\000\000" ..
+	"\061\037\061\067\118\077\094\109\000" ..
+	"\255\255" ..
+	"\008" ..
+	"\002\000" ..
+	"\015\192" ..
+	"\021" ..
+	"\000\000\000\000\000\000\000\000\000\000" ..
+	"\045\055\105\045\065\063\088\124\044\095\125\117\000" ..
+	"\109\121\115\113\108\095\110\097\116\105\118\101\095\112\097\115\115\119\111\114\100\000"
+
+-- decoding worked
+assert(true == pcall(
+	function () 
+		proto.from_challenge_packet(plugin_auth_response_packet)
+	end
+))
+
+-- fields get extracted nicely
+local tbl = proto.from_challenge_packet(plugin_auth_response_packet)
+assertEquals(tbl.auth_plugin_name, "mysql_native_password")
+assertEquals(tbl.challenge, "=%=CvM^m-7i-A?X|,_}u\000")
+
+
 ---
 -- response packet
 
@@ -162,26 +197,28 @@ assert(false == pcall(
 ))
 
 -- should decode nicely
-assert(true == pcall(
+assert(pcall(
 	function () 
 		proto.from_response_packet(
-			"\000\000\000\000".. 
-			"\000\000\000\000".. 
-			"\000" ..
-			("\000"):rep(23) ..
-			"01234567" ..  "\000" ..
+			"\000\000\000\000"..  -- capabilities
+			"\000\000\000\000"..  -- max packet size
+			"\000" ..             -- charset
+			("\000"):rep(23) ..   -- reserved
+			"01234567" ..  "\000" .. -- scramble
 			"\020"..("."):rep(20) ..
 			"\000" ..
-			"foobar" .. "\000"
-
-			)
+			"foobar" .. "\000",   -- username
+			protocol_41_default_capabilities)
 	end
 ))
 
-local response_packet = proto.to_response_packet({ username = "foobar", database = "db" })
+local response_packet = proto.to_response_packet({
+	server_capabilities = protocol_41_default_capabilities,
+	username = "foobar",
+	database = "db" })
 assert(type(response_packet) == "string")
 assert(#response_packet == 43, ("expected 43, got %d"):format(#response_packet))
-local tbl = proto.from_response_packet(response_packet)
+local tbl = proto.from_response_packet(response_packet, protocol_41_default_capabilities)
 assert(type(tbl) == "table")
 assert(tbl.username == "foobar", ("expected 'foobar', got %s"):format(tostring(tbl.username)))
 assert(tbl.database == "db", ("expected 'db', got %s"):format(tostring(tbl.database)))
