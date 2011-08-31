@@ -1431,9 +1431,11 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 		err = err || network_mysqld_proto_skip(packet, 23);
 	
 		err = err || network_mysqld_proto_get_gstring(packet, auth->username);
-		if ((auth->server_capabilities & CLIENT_SECURE_CONNECTION) ||
-		    (auth->server_capabilities & CLIENT_PLUGIN_AUTH)) {
-			err = err || network_mysqld_proto_get_lenenc_gstring(packet, auth->auth_plugin_data);
+		if (auth->server_capabilities & CLIENT_SECURE_CONNECTION) {
+			guint8 len;
+			/* new auth is 1-byte-len + data */
+			err = err || network_mysqld_proto_get_int8(packet, &len);
+			err = err || network_mysqld_proto_get_gstring_len(packet, len, auth->auth_plugin_data);
 		} else {
 			/* old auth stores it as NUL-term-string */
 			err = err || network_mysqld_proto_get_gstring(packet, auth->auth_plugin_data);
@@ -1495,7 +1497,19 @@ int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_au
 		network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
 
 		/* scrambled password */
-		network_mysqld_proto_append_lenenc_string_len(packet, S(auth->auth_plugin_data));
+		if (auth->server_capabilities & CLIENT_SECURE_CONNECTION) {
+			/* server supports the secure-auth (4.1+) which is 255 bytes max
+			 *
+			 * if ->len is longer than 255, wrap around ... should be reported back
+			 * to the upper layers
+			 */
+			network_mysqld_proto_append_int8(packet, auth->auth_plugin_data->len);
+			g_string_append_len(packet, auth->auth_plugin_data->str, auth->auth_plugin_data->len & 0xff);
+		} else {
+			/* server only supports the old protocol which allows any length, but no \0 in the auth-plugin-data */
+			g_string_append_len(packet, auth->auth_plugin_data->str, auth->auth_plugin_data->len);
+			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
+		}
 
 		if (auth->server_capabilities & CLIENT_CONNECT_WITH_DB &&
 		    auth->database->len > 0) {

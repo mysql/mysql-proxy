@@ -10,6 +10,7 @@
       - con.client.challenge (mirrors con.server.challenge)
       - con.client.response.server_capabilties 
       - con.server.challenge.server_capabilities 
+  * fixed length of auth-plugin-data in the client auth response packet
 
 0.8.2 - 2011-08-18
 
