@@ -34,6 +34,14 @@
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
 
+#ifndef CLIENT_PLUGIN_AUTH
+#define CLIENT_PLUGIN_AUTH (1UL << 19)
+#endif
+
+#ifndef CLIENT_PS_MULTI_RESULTS
+#define CLIENT_PS_MULTI_RESULTS (1UL << 18)
+#endif
+
 /**
  * Tests for the MySQL Protocol Codec functions
  * @ingroup proto
