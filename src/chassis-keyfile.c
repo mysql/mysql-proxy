@@ -22,15 +22,42 @@
 #include "chassis-path.h"
 #include "chassis-keyfile.h"
 
+/**
+ * map options from the keyfile to the config-options
+ *
+ * @return -1 on error, 0 on success
+ * @deprecated in 0.8.3
+ * @see chassis_keyfile_to_options_with_error
+ */
 int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, GOptionEntry *config_entries) {
+	/* flip the return value as _with_error is gboolean based */
+	return chassis_keyfile_to_options_with_error(keyfile, ini_group_name, config_entries, NULL) == TRUE ? 0 : -1;
+}
+
+/**
+ * map options from the keyfile to the config-options
+ *
+ * @returns FALSE on error, TRUE on success
+ * @added in 0.8.3
+ */
+gboolean chassis_keyfile_to_options_with_error(GKeyFile *keyfile, const gchar *ini_group_name, GOptionEntry *config_entries,
+		GError **_gerr) {
 	GError *gerr = NULL;
-	int ret = 0;
+	gboolean ret = TRUE;
 	int i, j;
 	
-	/* all the options are in the group for "mysql-proxy" */
+	if (NULL == keyfile) {
+		g_set_error_literal(_gerr, 
+				G_FILE_ERROR,
+				G_FILE_ERROR_INVAL,
+				"keyfile has to be set");
+		return FALSE;
+	}
 
-	if (!keyfile) return -1;
-	if (!g_key_file_has_group(keyfile, ini_group_name)) return 0;
+	if (!g_key_file_has_group(keyfile, ini_group_name)) {
+		/* the group doesn't exist, no config-entries to map */
+		return TRUE;
+	}
 
 	/* set the defaults */
 	for (i = 0; config_entries[i].long_name; i++) {
@@ -93,12 +120,16 @@ int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, G
 		}
 
 		if (gerr) {
-			if (gerr->code != G_KEY_FILE_ERROR_KEY_NOT_FOUND) {
-				g_message("%s", gerr->message);
-				ret = -1;
-			}
+			if (gerr->code == G_KEY_FILE_ERROR_KEY_NOT_FOUND) {
+				/* ignore if this key isn't set in the config-file */
+				g_error_free(gerr);
+			} else {
+				/* otherwise propage the error the higher level */
+				g_propagate_error(_gerr, gerr);
+				ret = FALSE;
 
-			g_error_free(gerr);
+				break;
+			}
 			gerr = NULL;
 		}
 	}
@@ -106,7 +137,8 @@ int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *ini_group_name, G
 	return ret;
 }
 
-/* check for relative paths among the newly added options
+/**
+ * check for relative paths among the newly added options
  * and resolve them to an absolute path if we have --basedir
  */
 int chassis_keyfile_resolve_path(const char *base_dir, GOptionEntry *config_entries) {

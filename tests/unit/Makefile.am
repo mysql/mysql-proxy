@@ -40,8 +40,6 @@ TESTS=\
 	check_chassis_filemode \
 	check_chassis_path
 
-check_PROGRAMS=$(TESTS)
-
 t_chassis_shutdown_hooks_SOURCES = t_chassis_shutdown_hooks.c \
 	$(top_srcdir)/src/chassis-shutdown-hooks.c \
 	$(top_srcdir)/src/glib-ext.c
@@ -244,6 +242,16 @@ if USE_SUNCC_ASSEMBLY
 t_network_injection_CPPFLAGS += \
 	${top_srcdir}/src/my_timer_cycles.il
 endif
+
+TESTS += t_chassis_keyfile
+t_chassis_keyfile_SOURCES = \
+	t_chassis_keyfile.c \
+	$(top_srcdir)/src/chassis-keyfile.c \
+	$(top_srcdir)/src/chassis-path.c
+t_chassis_keyfile_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
+t_chassis_keyfile_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)
+
+check_PROGRAMS=$(TESTS)
 
 EXTRA_DIST = CMakeLists.txt
 

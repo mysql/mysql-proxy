@@ -397,7 +397,7 @@ int chassis_frontend_init_plugins(GPtrArray *plugins,
 			}
 	
 			if (keyfile) {
-				if (chassis_keyfile_to_options(keyfile, keyfile_section_name, config_entries)) {
+				if (FALSE == chassis_keyfile_to_options_with_error(keyfile, keyfile_section_name, config_entries, gerr)) {
 					return -1;
 				}
 			}

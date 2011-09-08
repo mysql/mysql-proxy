@@ -11,6 +11,9 @@
       - con.client.response.server_capabilties 
       - con.server.challenge.server_capabilities 
   * fixed length of auth-plugin-data in the client auth response packet
+  * fixed crash if configfile value contained invalid characters (#12951686)
+    - C-API added: chassis_keyfile_to_options_with_error()
+    - C-API deprected: chassis_keyfile_to_options()
 
 0.8.2 - 2011-08-18
 

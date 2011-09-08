@@ -32,7 +32,8 @@
  * parse the configfile options into option entries
  *
  */
-CHASSIS_API int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *groupname, GOptionEntry *config_entries);
+CHASSIS_API gboolean chassis_keyfile_to_options_with_error(GKeyFile *keyfile, const gchar *groupname, GOptionEntry *config_entries, GError **gerr);
+CHASSIS_API int chassis_keyfile_to_options(GKeyFile *keyfile, const gchar *groupname, GOptionEntry *config_entries) G_GNUC_DEPRECATED;
 CHASSIS_API int chassis_keyfile_resolve_path(const char *base_dir, GOptionEntry *config_entries);
 
 /*@}*/

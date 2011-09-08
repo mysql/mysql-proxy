@@ -1259,7 +1259,9 @@ int main(int argc, char **argv) {
 	}
 
 	if (keyfile) {
-		if (chassis_keyfile_to_options(keyfile, "mysql-myisam-dump", main_entries)) {
+		if (FALSE == chassis_keyfile_to_options_with_error(keyfile, "mysql-myisam-dump", main_entries, &gerr)) {
+			g_critical("%s", gerr->message);
+
 			exit_code = EXIT_FAILURE;
 			goto exit_nicely;
 		}

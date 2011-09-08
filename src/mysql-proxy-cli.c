@@ -359,7 +359,9 @@ int main_cmdline(int argc, char **argv) {
 	}
 
 	if (frontend->keyfile) {
-		if (chassis_keyfile_to_options(frontend->keyfile, "mysql-proxy", main_entries)) {
+		if (FALSE == chassis_keyfile_to_options_with_error(frontend->keyfile, "mysql-proxy", main_entries, &gerr)) {
+			g_critical("%s", gerr->message);
+
 			GOTO_EXIT(EXIT_FAILURE);
 		}
 	}
