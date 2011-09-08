@@ -47,7 +47,7 @@ gboolean chassis_keyfile_to_options_with_error(GKeyFile *keyfile, const gchar *i
 	int i, j;
 	
 	if (NULL == keyfile) {
-		g_set_error_literal(_gerr, 
+		g_set_error(_gerr, 
 				G_FILE_ERROR,
 				G_FILE_ERROR_INVAL,
 				"keyfile has to be set");
