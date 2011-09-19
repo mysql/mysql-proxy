@@ -1441,7 +1441,7 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 			err = err || network_mysqld_proto_get_gstring(packet, auth->auth_plugin_data);
 		}
 
-		if (auth->server_capabilities & CLIENT_CONNECT_WITH_DB) {
+		if (auth->server_capabilities & CLIENT_CONNECT_WITH_DB && auth->client_capabilities & CLIENT_CONNECT_WITH_DB) {
 			err = err || network_mysqld_proto_get_gstring(packet, auth->database);
 		}
 
