@@ -721,17 +721,34 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 
 			packet_len = network_mysqld_proto_get_packet_len(packet.data);
 
-			/* move the packet to the send-queue
-			 */
-			network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
-					g_queue_pop_head(recv_sock->recv_queue->chunks));
-
 			if ((strleq(S(con->auth_switch_to_method), C("authentication_windows_client"))) &&
 			    (con->auth_switch_to_round == 0) &&
 			    (packet_len == 255)) {
+#if 1
+				/**
+				 * FIXME: the 2-packet win-auth protocol enhancements aren't properly tested yet.
+				 * therefore they are disabled for now.
+				 */
+				g_string_free(g_queue_pop_head(recv_sock->recv_queue->chunks), TRUE);
+
+				network_mysqld_con_send_error(recv_sock, C("long packets for windows-authentication aren't completely handled yet. Please use another auth-method for now."));
+
+				con->state = CON_STATE_SEND_ERROR;
+#else
 				con->auth_switch_to_round++;
+				/* move the packet to the send-queue
+				 */
+				network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
+						g_queue_pop_head(recv_sock->recv_queue->chunks));
+
 				/* stay in this state and read the next packet too */
+#endif
 			} else {
+				/* move the packet to the send-queue
+				 */
+				network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
+						g_queue_pop_head(recv_sock->recv_queue->chunks));
+
 				con->state = CON_STATE_SEND_AUTH_OLD_PASSWORD;
 			}
 		}

@@ -671,8 +671,21 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 		    (auth->client_capabilities & CLIENT_PLUGIN_AUTH) &&
 		    (strleq(S(auth->auth_plugin_name), C("authentication_windows_client"))) &&
 		    (auth->auth_plugin_data->len == 255)) {
+#if 1
+			/**
+			 * FIXME: the 2-packet win-auth protocol enhancements aren't properly tested yet.
+			 * therefore they are disabled for now.
+			 */
+			g_string_free(g_queue_pop_head(con->client->recv_queue->chunks), TRUE);
+
+			network_mysqld_con_send_error(con->client, C("long packets for windows-authentication aren't completely handled yet. Please use another auth-method for now."));
+
+			return NETWORK_SOCKET_ERROR;
+#else
+
 			got_all_data = FALSE; /* strip the last byte as it is used for extra signaling that we should ignore */
 			g_string_truncate(auth->auth_plugin_data, auth->auth_plugin_data->len - 1);
+#endif
 		} else {
 			got_all_data = TRUE;
 		}
