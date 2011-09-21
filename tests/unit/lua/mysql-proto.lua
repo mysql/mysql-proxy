@@ -214,6 +214,7 @@ assert(pcall(
 
 local response_packet = proto.to_response_packet({
 	server_capabilities = protocol_41_default_capabilities,
+	capabilities = protocol_41_default_capabilities,
 	username = "foobar",
 	database = "db" })
 assert(type(response_packet) == "string")
