@@ -152,6 +152,11 @@ typedef int socklen_t;
 #define C(x) x, sizeof(x) - 1
 #define S(x) x->str, x->len
 
+/* backward compat with MySQL pre-5.5.7 */
+#ifndef CLIENT_PLUGIN_AUTH
+#define CLIENT_PLUGIN_AUTH (1 << 19)
+#endif
+
 #define HASH_INSERT(hash, key, expr) \
 		do { \
 			GString *hash_value; \
