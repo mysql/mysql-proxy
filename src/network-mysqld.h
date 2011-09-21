@@ -173,6 +173,8 @@ typedef struct {
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_local_infile_data);
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_local_infile_result);
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_local_infile_result);
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_auth_old_password);
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_auth_old_password);
 
 } network_mysqld_hooks;
 
@@ -308,6 +310,11 @@ struct network_mysqld_con {
 	 * This is used to differentiate between the old, pre-4.1 authentication and the new, 4.1+ one based on the response.
 	 */
 	guint8 auth_result_state;
+
+	/* track the auth-method-switch state */
+	GString *auth_switch_to_method;
+	GString *auth_switch_to_data;
+	guint32  auth_switch_to_round;
 
 	/** Flag indicating if we the plugin doesn't need the resultset itself.
 	 * 

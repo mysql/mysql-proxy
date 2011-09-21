@@ -205,6 +205,9 @@ network_mysqld_con *network_mysqld_con_new() {
 	con = g_new0(network_mysqld_con, 1);
 	con->timestamps = chassis_timestamps_new();
 	con->parse.command = -1;
+	con->auth_switch_to_method = g_string_new(NULL);
+	con->auth_switch_to_round  = 0;
+	con->auth_switch_to_data   = g_string_new(NULL);;
 
 	return con;
 }
@@ -231,6 +234,9 @@ void network_mysqld_con_free(network_mysqld_con *con) {
 
 	if (con->server) network_socket_free(con->server);
 	if (con->client) network_socket_free(con->client);
+
+	g_string_free(con->auth_switch_to_method, TRUE);
+	g_string_free(con->auth_switch_to_data, TRUE);
 
 	/* we are still in the conns-array */
 
@@ -664,6 +670,11 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 			case MYSQLD_PACKET_ERR:
 				con->state = CON_STATE_ERROR;
 				break;
+			case 0x01: /* more auth data */
+				/**
+				 * FIXME: we should track that the server only sends us a 0x01 reply if
+				 * we first went through "switch auth packet"
+				 */
 			case MYSQLD_PACKET_EOF:
 				/**
 				 * the MySQL 4.0 hash in a MySQL 4.1+ connection
@@ -671,47 +682,60 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 				con->state = CON_STATE_READ_AUTH_OLD_PASSWORD;
 				break;
 			default:
-				g_error("%s.%d: unexpected state for SEND_AUTH_RESULT: %02x", 
+				g_debug("%s.%d: unexpected state for SEND_AUTH_RESULT: %02x", 
 						__FILE__, __LINE__,
 						con->auth_result_state);
+				con->state = CON_STATE_ERROR;
+				break;
 			}
 		}
 		break;
-	case CON_STATE_READ_AUTH_OLD_PASSWORD: {
-		/** move the packet to the send queue */
-		GString *packet;
-		GList *chunk;
-		network_socket *recv_sock, *send_sock;
+	case CON_STATE_READ_AUTH_OLD_PASSWORD:
+		func = con->plugins.con_read_auth_old_password;
 
-		recv_sock = con->client;
-		send_sock = con->server;
+		if (!func) {
+			network_socket *recv_sock, *send_sock;
+			network_packet packet;
+			guint32 packet_len;
 
-		if (NULL == con->server) {
-			/**
-			 * we have to auth against same backend as we did before
-			 * but the user changed it
+			/* move the packet to the send queue */
+
+			recv_sock = con->client;
+			send_sock = con->server;
+
+			if (NULL == con->server) {
+				/**
+				 * we have to auth against same backend as we did before
+				 * but the user changed it
+				 */
+
+				g_message("%s.%d: (lua) read-auth-old-password failed as backend_ndx got reset.", __FILE__, __LINE__);
+
+				network_mysqld_con_send_error(con->client, C("(lua) read-auth-old-password failed as backend_ndx got reset."));
+				con->state = CON_STATE_SEND_ERROR;
+				break;
+			}
+
+			packet.data = g_queue_peek_head(recv_sock->recv_queue->chunks);
+			packet.offset = 0;
+
+			packet_len = network_mysqld_proto_get_packet_len(packet.data);
+
+			/* move the packet to the send-queue
 			 */
+			network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
+					g_queue_pop_head(recv_sock->recv_queue->chunks));
 
-			g_message("%s.%d: (lua) read-auth-old-password failed as backend_ndx got reset.", __FILE__, __LINE__);
-
-			network_mysqld_con_send_error(con->client, C("(lua) read-auth-old-password failed as backend_ndx got reset."));
-			con->state = CON_STATE_SEND_ERROR;
-			break;
+			if ((strleq(S(con->auth_switch_to_method), C("authentication_windows_client"))) &&
+			    (con->auth_switch_to_round == 0) &&
+			    (packet_len == 255)) {
+				con->auth_switch_to_round++;
+				/* stay in this state and read the next packet too */
+			} else {
+				con->state = CON_STATE_SEND_AUTH_OLD_PASSWORD;
+			}
 		}
-
-		chunk = recv_sock->recv_queue->chunks->head;
-		packet = chunk->data;
-
-		/* we aren't finished yet */
-		network_queue_append(send_sock->send_queue, packet);
-
-		g_queue_delete_link(recv_sock->recv_queue->chunks, chunk);
-
-		/**
-		 * send it out to the client 
-		 */
-		con->state = CON_STATE_SEND_AUTH_OLD_PASSWORD;
-		break; }
+		break;
 	case CON_STATE_SEND_AUTH_OLD_PASSWORD:
 		/**
 		 * data is at the server, read the response next 
@@ -827,6 +851,44 @@ const char *network_mysqld_con_state_get_name(network_mysqld_con_state_t state) 
 	}
 
 	return "unknown";
+}
+
+static int network_mysqld_con_track_auth_result_state(network_mysqld_con *con) {
+	network_packet packet;
+	guint8 state;
+	int err = 0;
+
+	/**
+	 * depending on the result-set we have different exit-points
+	 * - OK  -> READ_QUERY
+	 * - EOF -> (read old password hash) 
+	 * - ERR -> ERROR
+	 */
+	packet.data = g_queue_peek_head(con->server->recv_queue->chunks);
+	packet.offset = 0;
+
+	err = err || network_mysqld_proto_skip_network_header(&packet);
+	err = err || network_mysqld_proto_peek_int8(&packet, &state);
+
+	if (err) return -1;
+
+	con->auth_result_state = state;
+
+	if (state == 0xfe) {
+		/* a long auth-switch packet */
+		err = err || network_mysqld_proto_skip(&packet, 1);
+
+		if (packet.data->len - packet.offset > 0) {
+			err = err || network_mysqld_proto_get_gstring(&packet, con->auth_switch_to_method);
+			err = err || network_mysqld_proto_get_gstring_len(&packet, packet.data->len - packet.offset, con->auth_switch_to_data);
+		} else {
+			/* just in case we get here switch ... which shouldn't happen ... */
+			g_string_truncate(con->auth_switch_to_method, 0);
+			g_string_truncate(con->auth_switch_to_data, 0);
+		}
+		con->auth_switch_to_round = 0;
+	}
+	return err ? -1 : 0;
 }
 
 /**
@@ -1220,8 +1282,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		case CON_STATE_READ_AUTH_RESULT: {
 			/* read the auth result from the server */
 			network_socket *recv_sock;
-			GList *chunk;
-			GString *packet;
+
 			recv_sock = con->server;
 
 			g_assert(events == 0 || event_fd == recv_sock->fd);
@@ -1241,18 +1302,10 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 			}
 			if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
-			/**
-			 * depending on the result-set we have different exit-points
-			 * - OK  -> READ_QUERY
-			 * - EOF -> (read old password hash) 
-			 * - ERR -> ERROR
-			 */
-			chunk = recv_sock->recv_queue->chunks->head;
-			packet = chunk->data;
-			g_assert(packet);
-			g_assert(packet->len > NET_HEADER_SIZE);
-
-			con->auth_result_state = packet->str[NET_HEADER_SIZE];
+			if (0 != network_mysqld_con_track_auth_result_state(con)) {
+				con->state = CON_STATE_ERROR;
+				break;
+			}
 
 			switch (plugin_call(srv, con, con->state)) {
 			case NETWORK_SOCKET_SUCCESS:

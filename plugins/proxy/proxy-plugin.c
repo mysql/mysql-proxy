@@ -625,6 +625,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	int err = 0;
 	gboolean free_client_packet = TRUE;
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
+	gboolean got_all_data = TRUE;
 
 	recv_sock = con->client;
 	send_sock = con->server;
@@ -635,148 +636,194 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 	err = err || network_mysqld_proto_skip_network_header(&packet);
 	if (err) return NETWORK_SOCKET_ERROR;
 
-	auth = network_mysqld_auth_response_new(con->client->challenge->capabilities);
-
-	err = err || network_mysqld_proto_get_auth_response(&packet, auth);
-
-	if (err) {
-		network_mysqld_auth_response_free(auth);
-		return NETWORK_SOCKET_ERROR;
-	}
-	if (!(auth->client_capabilities & CLIENT_PROTOCOL_41)) {
-		/* should use packet-id 0 */
-		network_mysqld_queue_append(con->client, con->client->send_queue, C("\xff\xd7\x07" "4.0 protocol is not supported"));
-		network_mysqld_auth_response_free(auth);
-		return NETWORK_SOCKET_ERROR;
-	}
-
- 	con->client->response = auth;
-
-	g_string_assign_len(con->client->default_db, S(auth->database));
-
-	/**
-	 * looks like we finished parsing, call the lua function
+	/* assume that we may get called twice:
+	 *
+	 * 1. for the initial packet
+	 * 2. for the win-auth extra data
+	 *
+	 * this is detected by con->client->response being NULL
 	 */
-	switch (proxy_lua_read_auth(con)) {
-	case PROXY_SEND_RESULT:
-		con->state = CON_STATE_SEND_AUTH_RESULT;
 
-		break;
-	case PROXY_SEND_INJECTION: {
-		injection *inj;
+	if (con->client->response == NULL) {
+		auth = network_mysqld_auth_response_new(con->client->challenge->capabilities);
 
-		/* replace the client challenge that is sent to the server */
-		inj = g_queue_pop_head(st->injected.queries);
+		err = err || network_mysqld_proto_get_auth_response(&packet, auth);
 
-		network_mysqld_queue_append(send_sock, send_sock->send_queue, S(inj->query));
+		if (err) {
+			network_mysqld_auth_response_free(auth);
+			return NETWORK_SOCKET_ERROR;
+		}
+		if (!(auth->client_capabilities & CLIENT_PROTOCOL_41)) {
+			/* should use packet-id 0 */
+			network_mysqld_queue_append(con->client, con->client->send_queue, C("\xff\xd7\x07" "4.0 protocol is not supported"));
+			network_mysqld_auth_response_free(auth);
+			return NETWORK_SOCKET_ERROR;
+		}
 
-		injection_free(inj);
+ 		con->client->response = auth;
 
-		con->state = CON_STATE_SEND_AUTH;
+		g_string_assign_len(con->client->default_db, S(auth->database));
 
-		break; }
-	case PROXY_NO_DECISION:
-		/* if we don't have a backend (con->server), we just ack the client auth
+		/* client and server support auth-plugins and the client uses
+		 * win-auth, we may have more data to read from the client
 		 */
-		if (!con->server) {
+		if ((auth->server_capabilities & CLIENT_PLUGIN_AUTH) &&
+		    (auth->client_capabilities & CLIENT_PLUGIN_AUTH) &&
+		    (strleq(S(auth->auth_plugin_name), C("authentication_windows_client"))) &&
+		    (auth->auth_plugin_data->len == 255)) {
+			got_all_data = FALSE; /* strip the last byte as it is used for extra signaling that we should ignore */
+			g_string_truncate(auth->auth_plugin_data, auth->auth_plugin_data->len - 1);
+		} else {
+			got_all_data = TRUE;
+		}
+	} else {
+		GString *auth_data;
+		gsize auth_data_len;
+
+		/* this is the 2nd round. We don't expect more data */
+		got_all_data = TRUE;
+
+		/* get all the data from the packet and append it to the auth_plugin_data */
+		auth_data_len = packet.data->len - 4;
+		auth_data = g_string_sized_new(auth_data_len);
+		network_mysqld_proto_get_gstring_len(&packet, auth_data_len, auth_data);
+
+		g_string_append_len(con->client->response->auth_plugin_data, S(auth_data));
+
+		g_string_free(auth_data, TRUE);
+	}
+
+	if (got_all_data) {
+		/**
+		 * looks like we finished parsing, call the lua function
+		 */
+		switch (proxy_lua_read_auth(con)) {
+		case PROXY_SEND_RESULT:
 			con->state = CON_STATE_SEND_AUTH_RESULT;
 
-			network_mysqld_con_send_ok(recv_sock);
-
 			break;
-		}
-		/* if the server-side of the connection is already up and authed
-		 * we send a COM_CHANGE_USER to reauth the connection and remove
-		 * all temp-tables and session-variables
-		 *
-		 * for performance reasons this extra reauth can be disabled. But
-		 * that leaves temp-tables on the connection.
-		 */
-		if (con->server->is_authed) {
-			if (config->pool_change_user) {
-				GString *com_change_user = g_string_new(NULL);
+		case PROXY_SEND_INJECTION: {
+			injection *inj;
 
-				/* copy incl. the nul */
-				g_string_append_c(com_change_user, COM_CHANGE_USER);
-				g_string_append_len(com_change_user, con->client->response->username->str, con->client->response->username->len + 1); /* nul-term */
+			/* replace the client challenge that is sent to the server */
+			inj = g_queue_pop_head(st->injected.queries);
 
-				g_assert_cmpint(con->client->response->auth_plugin_data->len, <, 250);
+			network_mysqld_queue_append(send_sock, send_sock->send_queue, S(inj->query));
 
-				g_string_append_c(com_change_user, (con->client->response->auth_plugin_data->len & 0xff));
-				g_string_append_len(com_change_user, S(con->client->response->auth_plugin_data));
+			injection_free(inj);
 
-				g_string_append_len(com_change_user, con->client->default_db->str, con->client->default_db->len + 1);
-				
-				network_mysqld_queue_append(
-						send_sock,
-						send_sock->send_queue, 
-						S(com_change_user));
-
-				/**
-				 * the server is already authenticated, the client isn't
-				 *
-				 * transform the auth-packet into a COM_CHANGE_USER
-				 */
-
-				g_string_free(com_change_user, TRUE);
-			
-				con->state = CON_STATE_SEND_AUTH;
-			} else {
-				GString *auth_resp;
-
-				/* check if the username and client-scramble are the same as in the previous authed
-				 * connection */
-
-				auth_resp = g_string_new(NULL);
-
-				con->state = CON_STATE_SEND_AUTH_RESULT;
-
-				if (!g_string_equal(con->client->response->username, con->server->response->username) ||
-				    !g_string_equal(con->client->response->auth_plugin_data, con->server->response->auth_plugin_data)) {
-					network_mysqld_err_packet_t *err_packet;
-
-					err_packet = network_mysqld_err_packet_new();
-					g_string_assign_len(err_packet->errmsg, C("(proxy-pool) login failed"));
-					g_string_assign_len(err_packet->sqlstate, C("28000"));
-					err_packet->errcode = ER_ACCESS_DENIED_ERROR;
-
-					network_mysqld_proto_append_err_packet(auth_resp, err_packet);
-
-					network_mysqld_err_packet_free(err_packet);
-				} else {
-					network_mysqld_ok_packet_t *ok_packet;
-
-					ok_packet = network_mysqld_ok_packet_new();
-					ok_packet->server_status = SERVER_STATUS_AUTOCOMMIT;
-
-					network_mysqld_proto_append_ok_packet(auth_resp, ok_packet);
-					
-					network_mysqld_ok_packet_free(ok_packet);
-				}
-
-				network_mysqld_queue_append(recv_sock, recv_sock->send_queue, 
-						S(auth_resp));
-
-				g_string_free(auth_resp, TRUE);
-			}
-		} else {
-			network_mysqld_queue_append_raw(send_sock, send_sock->send_queue, packet.data);
 			con->state = CON_STATE_SEND_AUTH;
 
-			free_client_packet = FALSE; /* the packet.data is now part of the send-queue, don't free it further down */
+			break; }
+		case PROXY_NO_DECISION:
+			/* if we don't have a backend (con->server), we just ack the client auth
+			 */
+			if (!con->server) {
+				con->state = CON_STATE_SEND_AUTH_RESULT;
+
+				network_mysqld_con_send_ok(recv_sock);
+
+				break;
+			}
+			/* if the server-side of the connection is already up and authed
+			 * we send a COM_CHANGE_USER to reauth the connection and remove
+			 * all temp-tables and session-variables
+			 *
+			 * for performance reasons this extra reauth can be disabled. But
+			 * that leaves temp-tables on the connection.
+			 */
+			if (con->server->is_authed) {
+				if (config->pool_change_user) {
+					GString *com_change_user = g_string_new(NULL);
+
+					/* copy incl. the nul */
+					g_string_append_c(com_change_user, COM_CHANGE_USER);
+					g_string_append_len(com_change_user, con->client->response->username->str, con->client->response->username->len + 1); /* nul-term */
+
+					g_assert_cmpint(con->client->response->auth_plugin_data->len, <, 250);
+
+					g_string_append_c(com_change_user, (con->client->response->auth_plugin_data->len & 0xff));
+					g_string_append_len(com_change_user, S(con->client->response->auth_plugin_data));
+
+					g_string_append_len(com_change_user, con->client->default_db->str, con->client->default_db->len + 1);
+					
+					network_mysqld_queue_append(
+							send_sock,
+							send_sock->send_queue, 
+							S(com_change_user));
+
+					/**
+					 * the server is already authenticated, the client isn't
+					 *
+					 * transform the auth-packet into a COM_CHANGE_USER
+					 */
+
+					g_string_free(com_change_user, TRUE);
+				
+					con->state = CON_STATE_SEND_AUTH;
+				} else {
+					GString *auth_resp;
+
+					/* check if the username and client-scramble are the same as in the previous authed
+					 * connection */
+
+					auth_resp = g_string_new(NULL);
+
+					con->state = CON_STATE_SEND_AUTH_RESULT;
+
+					if (!g_string_equal(con->client->response->username, con->server->response->username) ||
+					    !g_string_equal(con->client->response->auth_plugin_data, con->server->response->auth_plugin_data)) {
+						network_mysqld_err_packet_t *err_packet;
+
+						err_packet = network_mysqld_err_packet_new();
+						g_string_assign_len(err_packet->errmsg, C("(proxy-pool) login failed"));
+						g_string_assign_len(err_packet->sqlstate, C("28000"));
+						err_packet->errcode = ER_ACCESS_DENIED_ERROR;
+
+						network_mysqld_proto_append_err_packet(auth_resp, err_packet);
+
+						network_mysqld_err_packet_free(err_packet);
+					} else {
+						network_mysqld_ok_packet_t *ok_packet;
+
+						ok_packet = network_mysqld_ok_packet_new();
+						ok_packet->server_status = SERVER_STATUS_AUTOCOMMIT;
+
+						network_mysqld_proto_append_ok_packet(auth_resp, ok_packet);
+						
+						network_mysqld_ok_packet_free(ok_packet);
+					}
+
+					network_mysqld_queue_append(recv_sock, recv_sock->send_queue, 
+							S(auth_resp));
+
+					g_string_free(auth_resp, TRUE);
+				}
+			} else {
+				network_mysqld_queue_append_raw(send_sock, send_sock->send_queue, packet.data);
+				con->state = CON_STATE_SEND_AUTH;
+
+				free_client_packet = FALSE; /* the packet.data is now part of the send-queue, don't free it further down */
+			}
+
+			break;
+		default:
+			g_assert_not_reached();
+			break;
 		}
 
-		break;
-	default:
-		g_assert_not_reached();
-		break;
-	}
-
-	if (free_client_packet) {
-		g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
+		if (free_client_packet) {
+			g_string_free(g_queue_pop_tail(recv_sock->recv_queue->chunks), TRUE);
+		} else {
+			/* just remove the link to the packet, the packet itself is part of the next queue already */
+			g_queue_pop_tail(recv_sock->recv_queue->chunks);
+		}
 	} else {
-		/* just remove the link to the packet, the packet itself is part of the next queue already */
-		g_queue_pop_tail(recv_sock->recv_queue->chunks);
+		/* move the packet from the recv-queue to the send-queue AS IS */
+
+		network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
+				g_queue_pop_tail(recv_sock->recv_queue->chunks));
+		/* stay in this state and read the next packet */
 	}
 
 	return NETWORK_SOCKET_SUCCESS;
