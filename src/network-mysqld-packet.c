@@ -1431,7 +1431,8 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 		err = err || network_mysqld_proto_skip(packet, 23);
 	
 		err = err || network_mysqld_proto_get_gstring(packet, auth->username);
-		if (auth->server_capabilities & CLIENT_SECURE_CONNECTION) {
+		if ((auth->server_capabilities & CLIENT_SECURE_CONNECTION) &&
+		    (auth->server_capabilities & CLIENT_SECURE_CONNECTION)) {
 			guint8 len;
 			/* new auth is 1-byte-len + data */
 			err = err || network_mysqld_proto_get_int8(packet, &len);
@@ -1441,11 +1442,13 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 			err = err || network_mysqld_proto_get_gstring(packet, auth->auth_plugin_data);
 		}
 
-		if (auth->server_capabilities & CLIENT_CONNECT_WITH_DB && auth->client_capabilities & CLIENT_CONNECT_WITH_DB) {
+		if ((auth->server_capabilities & CLIENT_CONNECT_WITH_DB) &&
+		    (auth->client_capabilities & CLIENT_CONNECT_WITH_DB)) {
 			err = err || network_mysqld_proto_get_gstring(packet, auth->database);
 		}
 
-		if (auth->server_capabilities & CLIENT_PLUGIN_AUTH) {
+		if ((auth->server_capabilities & CLIENT_PLUGIN_AUTH) &&
+		    (auth->client_capabilities & CLIENT_PLUGIN_AUTH)) {
 			/* parse out the plugin name */
 			err = err || network_mysqld_proto_get_gstring(packet, auth->auth_plugin_name);
 		}
@@ -1511,13 +1514,14 @@ int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_au
 			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
 		}
 
-		if (auth->server_capabilities & CLIENT_CONNECT_WITH_DB &&
-		    auth->database->len > 0) {
+		if ((auth->server_capabilities & CLIENT_CONNECT_WITH_DB) &&
+		    (auth->database->len > 0)) {
 			g_string_append_len(packet, S(auth->database));
 			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
 		}
 
-		if (auth->server_capabilities & CLIENT_PLUGIN_AUTH) {
+		if ((auth->client_capabilities & CLIENT_PLUGIN_AUTH) &&
+		    (auth->server_capabilities & CLIENT_PLUGIN_AUTH)) {
 			g_string_append_len(packet, S(auth->auth_plugin_name));
 			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
 		}
