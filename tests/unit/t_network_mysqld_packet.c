@@ -610,7 +610,7 @@ static void t_mysqld_get_auth_response_pre_41(void) {
 
 /**
  * @test
- *   network_mysqld_proto_get_auth_response() can decode a broken pre-4.0 packet
+ *   network_mysqld_proto_get_auth_response() can decode a pre-4.0 packet
  */
 static void t_mysqld_get_auth_response_no_term(void) {
 	const char raw_packet[] = 
@@ -629,8 +629,10 @@ static void t_mysqld_get_auth_response_no_term(void) {
 	packet.offset = 0;
 
 	err = err || network_mysqld_proto_get_auth_response(&packet, auth);
+	g_assert_cmpint(err, ==, 0);
 
-	g_assert_cmpint(err, !=, 0);
+	g_assert_cmpstr(auth->username->str, ==, "root");
+	g_assert_cmpstr(auth->auth_plugin_data->str, ==, "foo");
 
 	network_mysqld_auth_response_free(auth);
 

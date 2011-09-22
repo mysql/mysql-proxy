@@ -1456,9 +1456,9 @@ int network_mysqld_proto_get_auth_response(network_packet *packet, network_mysql
 		err = err || network_mysqld_proto_get_int16(packet, &l_cap);
 		err = err || network_mysqld_proto_get_int24(packet, &auth->max_packet_size);
 		err = err || network_mysqld_proto_get_gstring(packet, auth->username);
-		/* there may be no password sent */
 		if (packet->data->len != packet->offset) {
-			err = err || network_mysqld_proto_get_gstring(packet, auth->auth_plugin_data);
+			/* if there is more, it is the password without a terminating \0 */
+			err = err || network_mysqld_proto_get_gstring_len(packet, packet->data->len - packet->offset, auth->auth_plugin_data);
 		}
 
 		if (!err) {
@@ -1483,8 +1483,7 @@ int network_mysqld_proto_append_auth_response(GString *packet, network_mysqld_au
 		network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
 
 		if (auth->auth_plugin_data->len) {
-			g_string_append_len(packet, S(auth->auth_plugin_data));
-			network_mysqld_proto_append_int8(packet, 0x00); /* trailing \0 */
+			g_string_append_len(packet, S(auth->auth_plugin_data)); /* no trailing \0 */
 		}
 	} else {
 		network_mysqld_proto_append_int32(packet, auth->client_capabilities);
