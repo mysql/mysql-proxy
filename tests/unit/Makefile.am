@@ -86,6 +86,7 @@ DISTCLEANFILES = \
 check_mysqld_proto_SOURCES  = \
 	check_mysqld_proto.c \
 	$(top_srcdir)/src/network-mysqld-binlog.c \
+	$(top_srcdir)/src/network-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/glib-ext.c
 
@@ -104,6 +105,7 @@ t_network_mysqld_type_LDADD    = $(GLIB_LIBS) $(LUA_LIBS) $(EVENT_LIBS)
 t_network_mysqld_packet_SOURCES  = \
 	t_network_mysqld_packet.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
+	$(top_srcdir)/src/network-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network_mysqld_type.c \
 	$(top_srcdir)/src/network_mysqld_proto_binary.c \
@@ -146,6 +148,7 @@ check_loadscript_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(LUA_L
 t_network_socket_SOURCES  = \
 	t_network_socket.c \
 	$(top_srcdir)/src/glib-ext.c \
+	$(top_srcdir)/src/network-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network_mysqld_type.c \
@@ -199,6 +202,7 @@ t_network_backend_SOURCES  = \
 	$(top_srcdir)/src/chassis-timings.c \
 	$(top_srcdir)/src/glib-ext.c \
 	$(top_srcdir)/src/network-backend.c \
+	$(top_srcdir)/src/network-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network_mysqld_type.c \
@@ -219,6 +223,7 @@ endif
 t_network_mysqld_masterinfo_SOURCES  = \
 	t_network_mysqld_masterinfo.c \
 	$(top_srcdir)/src/glib-ext.c \
+	$(top_srcdir)/src/network-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-masterinfo.c 
 
@@ -228,6 +233,7 @@ t_network_mysqld_masterinfo_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LI
 t_network_injection_SOURCES  = \
 	t_network_injection.c \
 	$(top_srcdir)/src/glib-ext.c \
+	$(top_srcdir)/src/network-packet.c \
 	$(top_srcdir)/src/network-mysqld-proto.c \
 	$(top_srcdir)/src/network-mysqld-packet.c \
 	$(top_srcdir)/src/network_mysqld_type.c \
@@ -250,6 +256,28 @@ t_chassis_keyfile_SOURCES = \
 	$(top_srcdir)/src/chassis-path.c
 t_chassis_keyfile_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS) $(GMODULE_CFLAGS) $(EVENT_CFLAGS) $(LUA_CFLAGS)
 t_chassis_keyfile_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) $(EVENT_LIBS) $(LUA_LIBS)
+
+TESTS += t_network_spnego
+t_network_spnego_SOURCES = \
+	t_network_spnego.c \
+	$(top_srcdir)/src/network-spnego.c \
+	$(top_srcdir)/src/network-asn1.c \
+	$(top_srcdir)/src/network-packet.c \
+	$(top_srcdir)/src/network-mysqld-proto.c \
+	$(top_srcdir)/src/glib-ext.c
+t_network_spnego_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS)
+t_network_spnego_LDADD    = $(GLIB_LIBS)
+
+TESTS += t_network_asn1
+t_network_asn1_SOURCES = \
+	t_network_asn1.c \
+	$(top_srcdir)/src/network-asn1.c \
+	$(top_srcdir)/src/network-packet.c \
+	$(top_srcdir)/src/network-mysqld-proto.c \
+	$(top_srcdir)/src/glib-ext.c
+t_network_asn1_CPPFLAGS = -I$(top_srcdir)/src/ $(GLIB_CFLAGS) $(MYSQL_CFLAGS)
+t_network_asn1_LDADD    = $(GLIB_LIBS)
+
 
 check_PROGRAMS=$(TESTS)
 

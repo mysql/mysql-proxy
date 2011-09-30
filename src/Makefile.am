@@ -104,6 +104,7 @@ libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMOD
 
 lib_LTLIBRARIES += libmysql-proxy.la
 libmysql_proxy_la_SOURCES = \
+	network-packet.c \
 	network-mysqld.c \
 	network-mysqld-lua.c \
 	network-mysqld-proto.c \
@@ -115,6 +116,8 @@ libmysql_proxy_la_SOURCES = \
 	network-conn-pool.c  \
 	network-conn-pool-lua.c  \
 	network-queue.c \
+	network-asn1.c \
+	network-spnego.c \
 	network-socket.c \
 	network-socket-lua.c \
 	network-address.c \
@@ -149,6 +152,9 @@ include_HEADERS=\
 	network-socket-lua.h \
 	network-address.h \
 	network-address-lua.h \
+	network-asn1.h \
+	network-spnego.h \
+	network-packet.h \
 	sys-pedantic.h \
 	chassis-plugin.h \
 	chassis-log.h \
