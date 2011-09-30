@@ -59,14 +59,7 @@
 
 #define PACKET_LEN_MAX     (0x00ffffff)
 
-typedef struct {
-	GString *data;
-
-	guint offset;
-} network_packet;
-
-NETWORK_API network_packet *network_packet_new(void);
-NETWORK_API void network_packet_free(network_packet *packet);
+#include "network-packet.h" /* for backward compat, as network_packet_new() was previously defined here */
 
 typedef enum {
 	NETWORK_MYSQLD_LENENC_TYPE_INT,

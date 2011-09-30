@@ -1112,21 +1112,6 @@ gboolean network_mysqld_proto_password_check(
 	return is_same;
 }
 
-
-network_packet *network_packet_new(void) {
-	network_packet *packet;
-
-	packet = g_new0(network_packet, 1);
-
-	return packet;
-}
-
-void network_packet_free(network_packet *packet) {
-	if (!packet) return;
-
-	g_free(packet);
-}
-
 int network_mysqld_proto_skip_network_header(network_packet *packet) {
 	return network_mysqld_proto_skip(packet, NET_HEADER_SIZE);
 }
