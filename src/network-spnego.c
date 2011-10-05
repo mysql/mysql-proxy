@@ -13,11 +13,70 @@
 #define C(x) (x), sizeof(x) - 1
 #define S(x) (x)->str, (x)->len
 
+network_spnego_init_token *
+network_spnego_init_token_new(void) {
+	network_spnego_init_token *token;
+
+	token = g_slice_new(network_spnego_init_token);
+	token->mechToken = g_string_new(NULL);
+	token->mechTypes = g_ptr_array_new();
+
+	return token;
+}
+
+void
+network_spnego_init_token_free(network_spnego_init_token *token) {
+	guint i;
+
+	g_string_free(token->mechToken, TRUE);
+	for (i = 0; i < token->mechTypes->len; i++) {
+		g_string_free(token->mechTypes->pdata[i], TRUE);
+	}
+	g_ptr_array_free(token->mechTypes, TRUE);
+	g_slice_free(network_spnego_init_token, token);
+}
+
+network_spnego_response_token *
+network_spnego_response_token_new(void) {
+	network_spnego_response_token *token;
+
+	token = g_slice_new(network_spnego_response_token);
+	token->responseToken = g_string_new(NULL);
+	token->supportedMech = g_string_new(NULL);
+
+	return token;
+}
+
+void
+network_spnego_response_token_free(network_spnego_response_token *token) {
+	g_string_free(token->responseToken, TRUE);
+	g_string_free(token->supportedMech, TRUE);
+	g_slice_free(network_spnego_response_token, token);
+}
+
 gboolean
-network_spnego_proto_get_negtokeninit(network_packet *packet, gpointer _udata, GError **gerr) {
+network_spnego_proto_get_init_token(network_packet *packet, network_spnego_init_token *token, GError **gerr) {
 	ASN1Identifier seq_id;
 	ASN1Length seq_len;
 	gsize end_offset;
+	ASN1Identifier spnego_id;
+	ASN1Length spnego_len;
+
+	if (FALSE == network_asn1_proto_get_header(packet, &spnego_id, &spnego_len, gerr)) {
+		return FALSE;
+	}
+
+	if (spnego_id.klass != ASN1_IDENTIFIER_KLASS_CONTEXT_SPECIFIC ||
+	    spnego_id.value != 0) {
+		g_set_error(gerr,
+			NETWORK_ASN1_ERROR,
+			NETWORK_ASN1_ERROR_INVALID,
+			"expected a init-token, got klass=%d, value=%"G_GUINT64_FORMAT,
+			spnego_id.klass,
+			spnego_id.value);
+
+		return FALSE;
+	}
 
 	if (FALSE == network_asn1_proto_get_header(packet, &seq_id, &seq_len, gerr)) {
 		return FALSE;
@@ -101,7 +160,7 @@ network_spnego_proto_get_negtokeninit(network_packet *packet, gpointer _udata, G
 					g_string_free(oid, TRUE);
 					return FALSE;
 				}
-				g_string_free(oid, TRUE);
+				g_ptr_array_add(token->mechTypes, oid);
 			}
 
 			break;
@@ -146,10 +205,28 @@ network_spnego_proto_get_negtokeninit(network_packet *packet, gpointer _udata, G
 }
 
 gboolean
-network_spnego_proto_get_negtokenresponse(network_packet *packet, gpointer _udata, GError **gerr) {
+network_spnego_proto_get_response_token(network_packet *packet, network_spnego_response_token *token, GError **gerr) {
 	ASN1Identifier seq_id;
 	ASN1Length seq_len;
 	gsize end_offset;
+	ASN1Identifier spnego_id;
+	ASN1Length spnego_len;
+
+	if (FALSE == network_asn1_proto_get_header(packet, &spnego_id, &spnego_len, gerr)) {
+		return FALSE;
+	}
+
+	if (spnego_id.klass != ASN1_IDENTIFIER_KLASS_CONTEXT_SPECIFIC ||
+	    spnego_id.value != 1) {
+		g_set_error(gerr,
+			NETWORK_ASN1_ERROR,
+			NETWORK_ASN1_ERROR_INVALID,
+			"expected a response-token, got klass=%d, value=%"G_GUINT64_FORMAT,
+			spnego_id.klass,
+			spnego_id.value);
+
+		return FALSE;
+	}
 
 	if (FALSE == network_asn1_proto_get_header(packet, &seq_id, &seq_len, gerr)) {
 		return FALSE;
@@ -215,8 +292,29 @@ network_spnego_proto_get_negtokenresponse(network_packet *packet, gpointer _udat
 
 				return FALSE;
 			}
-			g_debug("%s: negState = %d",
-					G_STRLOC, negState);
+
+			switch (negState) {
+			case 0:
+				token->negState = SPNEGO_RESPONSE_STATE_ACCEPT_COMPLETED;
+				break;
+			case 1:
+				token->negState = SPNEGO_RESPONSE_STATE_ACCEPT_INCOMPLETE;
+				break;
+			case 2:
+				token->negState = SPNEGO_RESPONSE_STATE_ACCEPT_INCOMPLETE;
+				break;
+			case 3:
+				token->negState = SPNEGO_RESPONSE_STATE_ACCEPT_INCOMPLETE;
+				break;
+			default:
+				g_set_error(gerr,
+						NETWORK_ASN1_ERROR,
+						NETWORK_ASN1_ERROR_INVALID,
+						"%s: ...", 
+						G_STRLOC);
+
+				return FALSE;
+			}
 
 			break;
 		case 1: /* supportedMech */
@@ -235,13 +333,7 @@ network_spnego_proto_get_negtokenresponse(network_packet *packet, gpointer _udat
 				return FALSE;
 			}
 
-			if (FALSE == network_packet_skip(packet, sub_len)) {
-				g_set_error(gerr,
-						NETWORK_ASN1_ERROR,
-						NETWORK_ASN1_ERROR_INVALID,
-						"%s: ...", 
-						G_STRLOC);
-
+			if (FALSE == network_asn1_proto_get_oid(packet, sub_len, token->supportedMech, gerr)) {
 				return FALSE;
 			}
 
@@ -262,16 +354,19 @@ network_spnego_proto_get_negtokenresponse(network_packet *packet, gpointer _udat
 				return FALSE;
 			}
 
-			if (FALSE == network_packet_skip(packet, sub_len)) {
+			g_string_set_size(token->responseToken, sub_len);
+			if (FALSE == network_packet_get_data(packet, token->responseToken->str, sub_len)) {
 				g_set_error(gerr,
 						NETWORK_ASN1_ERROR,
 						NETWORK_ASN1_ERROR_INVALID,
-						"%s: ...", 
-						G_STRLOC);
+						"%s: getting supportedMech data failed: size of %"G_GSIZE_FORMAT, 
+						G_STRLOC,
+						sub_len);
 
 				return FALSE;
 			}
-
+			token->responseToken->str[sub_len] = '\0'; /* terminate the string */
+			token->responseToken->len = sub_len;
 
 			break;
 		default:
@@ -285,31 +380,6 @@ network_spnego_proto_get_negtokenresponse(network_packet *packet, gpointer _udat
 	}
 
 	return TRUE;
-}
-
-/**
- * get the inner token of a SPNEGO message
- */
-gboolean
-network_spnego_proto_get_init_token_inner(network_packet *packet, gpointer _udata, GError **gerr) {
-	ASN1Identifier spnego_id;
-	ASN1Length spnego_len;
-
-	if (FALSE == network_asn1_proto_get_header(packet, &spnego_id, &spnego_len, gerr)) {
-		return FALSE;
-	}
-
-	if (spnego_id.klass == ASN1_IDENTIFIER_KLASS_CONTEXT_SPECIFIC &&
-	    spnego_id.value == 0) {
-		/* NegTokenInit */
-		return network_spnego_proto_get_negtokeninit(packet, _udata, gerr);
-	} else if (spnego_id.klass == ASN1_IDENTIFIER_KLASS_CONTEXT_SPECIFIC &&
-	    spnego_id.value == 1) {
-		/* NegTokenResponse */
-		return network_spnego_proto_get_negtokenresponse(packet, _udata, gerr);
-	} else {
-		return FALSE;
-	}
 }
 
 gboolean

@@ -31,6 +31,7 @@ t_spnego_decode_init(void) {
 	network_packet packet;
 	GError *gerr = NULL;
 	GString *oid;
+	network_spnego_init_token *token;
 
 	packet.data = g_string_new_len(C(raw_packet));
 	packet.offset = 0;
@@ -42,7 +43,7 @@ t_spnego_decode_init(void) {
 				G_STRLOC,
 				gerr->message);
 	}
-	g_assert_cmpstr(oid->str, ==, "1.3.6.1.5.5.2");
+	g_assert_cmpstr(oid->str, ==, SPNEGO_OID);
 	g_string_free(oid, TRUE);
 
 	if (FALSE == network_asn1_is_valid(&packet, &gerr)) {
@@ -51,11 +52,18 @@ t_spnego_decode_init(void) {
 				gerr->message);
 	}
 
-	if (FALSE == network_spnego_proto_get_init_token_inner(&packet, NULL, &gerr)) {
+	token = network_spnego_init_token_new();
+	if (FALSE == network_spnego_proto_get_init_token(&packet, token, &gerr)) {
 		g_error("%s: %s",
 				G_STRLOC,
 				gerr->message);
 	}
+	g_assert_cmpint(4, ==, token->mechTypes->len);
+	g_assert_cmpstr(((GString *)token->mechTypes->pdata[0])->str, ==, SPNEGO_OID_NTLM);
+	g_assert_cmpstr(((GString *)token->mechTypes->pdata[1])->str, ==, "1.2.840.48018.1.2.2");
+	g_assert_cmpstr(((GString *)token->mechTypes->pdata[2])->str, ==, "1.2.840.113554.1.2.2");
+	g_assert_cmpstr(((GString *)token->mechTypes->pdata[3])->str, ==, "1.3.6.1.4.1.311.2.2.30");
+	network_spnego_init_token_free(token);
 }
 
 
@@ -85,6 +93,7 @@ t_spnego_decode_response(void) {
 
 	network_packet packet;
 	GError *gerr = NULL;
+	network_spnego_response_token *token;
 
 	packet.data = g_string_new_len(C(raw_packet));
 	packet.offset = 0;
@@ -97,11 +106,15 @@ t_spnego_decode_response(void) {
 				gerr->message);
 	}
 
-	if (FALSE == network_spnego_proto_get_init_token_inner(&packet, NULL, &gerr)) {
+	token = network_spnego_response_token_new();
+	if (FALSE == network_spnego_proto_get_response_token(&packet, token, &gerr)) {
 		g_error("%s: %s",
 				G_STRLOC,
 				gerr->message);
 	}
+	g_assert_cmpint(token->negState, ==, 1);
+	g_assert_cmpstr(token->supportedMech->str, ==, SPNEGO_OID_NTLM);
+	network_spnego_response_token_free(token);
 }
 
 int

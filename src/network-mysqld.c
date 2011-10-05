@@ -675,6 +675,12 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 				 * FIXME: we should track that the server only sends us a 0x01 reply if
 				 * we first went through "switch auth packet"
 				 */
+
+				/**
+				 * if we switched to win-auth and SPNEGO is used, check if the response packet contains:
+				 * 
+				 *   negState = accept-succeeded.
+				 */
 			case MYSQLD_PACKET_EOF:
 				/**
 				 * the MySQL 4.0 hash in a MySQL 4.1+ connection
