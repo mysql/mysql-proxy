@@ -28,6 +28,7 @@ typedef struct {
 	GString *supportedMech;
 
 	GString *responseToken;
+	GString *mechListMIC;
 } network_spnego_response_token;
 
 typedef struct {

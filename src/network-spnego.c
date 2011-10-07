@@ -43,12 +43,14 @@ network_spnego_response_token_new(void) {
 	token = g_slice_new(network_spnego_response_token);
 	token->responseToken = g_string_new(NULL);
 	token->supportedMech = g_string_new(NULL);
+	token->mechListMIC = g_string_new(NULL);
 
 	return token;
 }
 
 void
 network_spnego_response_token_free(network_spnego_response_token *token) {
+	g_string_free(token->mechListMIC, TRUE);
 	g_string_free(token->responseToken, TRUE);
 	g_string_free(token->supportedMech, TRUE);
 	g_slice_free(network_spnego_response_token, token);
@@ -359,7 +361,7 @@ network_spnego_proto_get_response_token(network_packet *packet, network_spnego_r
 				g_set_error(gerr,
 						NETWORK_ASN1_ERROR,
 						NETWORK_ASN1_ERROR_INVALID,
-						"%s: getting supportedMech data failed: size of %"G_GSIZE_FORMAT, 
+						"%s: getting responseToken data failed: size of %"G_GSIZE_FORMAT, 
 						G_STRLOC,
 						sub_len);
 
@@ -369,6 +371,38 @@ network_spnego_proto_get_response_token(network_packet *packet, network_spnego_r
 			token->responseToken->len = sub_len;
 
 			break;
+		case 3: /* mechListMIC */
+			if (FALSE == network_asn1_proto_get_header(packet, &sub_id, &sub_len, gerr)) {
+				return FALSE;
+			}
+
+			if (sub_id.klass != ASN1_IDENTIFIER_KLASS_UNIVERSAL ||
+			    sub_id.value != ASN1_IDENTIFIER_UNIVERSAL_OCTET_STREAM) {
+				g_set_error(gerr,
+						NETWORK_ASN1_ERROR,
+						NETWORK_ASN1_ERROR_INVALID,
+						"%s: ...", 
+						G_STRLOC);
+
+				return FALSE;
+			}
+
+			g_string_set_size(token->mechListMIC, sub_len);
+			if (FALSE == network_packet_get_data(packet, token->mechListMIC->str, sub_len)) {
+				g_set_error(gerr,
+						NETWORK_ASN1_ERROR,
+						NETWORK_ASN1_ERROR_INVALID,
+						"%s: getting mechListMIC data failed: size of %"G_GSIZE_FORMAT, 
+						G_STRLOC,
+						sub_len);
+
+				return FALSE;
+			}
+			token->mechListMIC->str[sub_len] = '\0'; /* terminate the string */
+			token->mechListMIC->len = sub_len;
+
+			break;
+
 		default:
 			g_set_error(gerr,
 					NETWORK_ASN1_ERROR,

@@ -68,7 +68,7 @@ t_spnego_decode_init(void) {
 
 
 static void
-t_spnego_decode_response(void) {
+t_spnego_decode_response_accept_incomplete(void) {
 	const char raw_packet[] = 
 		"\x36\x01\x00\x04\x01\xa1\x82\x01\x31\x30\x82\x01\x2d\xa0\x03\x0a"
 		"\x01\x01\xa1\x0c\x06\x0a\x2b\x06\x01\x04\x01\x82\x37\x02\x02\x0a"
@@ -112,10 +112,47 @@ t_spnego_decode_response(void) {
 				G_STRLOC,
 				gerr->message);
 	}
-	g_assert_cmpint(token->negState, ==, 1);
+	g_assert_cmpint(token->negState, ==, SPNEGO_RESPONSE_STATE_ACCEPT_INCOMPLETE);
 	g_assert_cmpstr(token->supportedMech->str, ==, SPNEGO_OID_NTLM);
 	network_spnego_response_token_free(token);
 }
+
+static void
+t_spnego_decode_response_accept_complete(void) {
+	const char raw_packet[] = 
+		"\x1e\x00\x00\x06\x01\xa1\x1b\x30\x19\xa0\x03\x0a\x01\x00\xa3\x12"
+		"\x04\x10\x01\x00\x00\x00\x43\x87\xe0\x88\xc1\x36\xe3\xa9\x00\x00"
+		"\x00\x00";
+
+	network_packet packet;
+	GError *gerr = NULL;
+	network_spnego_response_token *token;
+
+	packet.data = g_string_new_len(C(raw_packet));
+	packet.offset = 0;
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip_network_header(&packet));
+	g_assert_cmpint(0, ==, network_mysqld_proto_skip(&packet, 1));
+
+	if (FALSE == network_asn1_is_valid(&packet, &gerr)) {
+		g_error("%s: %s",
+				G_STRLOC,
+				gerr->message);
+	}
+
+	token = network_spnego_response_token_new();
+	if (FALSE == network_spnego_proto_get_response_token(&packet, token, &gerr)) {
+		g_error("%s: %s",
+				G_STRLOC,
+				gerr->message);
+	}
+	g_assert_cmpint(token->negState, ==, SPNEGO_RESPONSE_STATE_ACCEPT_COMPLETED);
+#define MECHLISTMIC "\x01\x00\x00\x00\x43\x87\xe0\x88\xc1\x36\xe3\xa9\x00\x00\x00\x00"
+	g_assert_cmpint(sizeof(MECHLISTMIC) - 1, ==, token->mechListMIC->len);
+	g_assert_cmpint(0, ==, memcmp(token->mechListMIC->str, MECHLISTMIC, token->mechListMIC->len));
+#undef MECHLISTMIC
+	network_spnego_response_token_free(token);
+}
+
 
 int
 main(int argc, char **argv) {
@@ -123,7 +160,8 @@ main(int argc, char **argv) {
 	g_test_bug_base("http://bugs.mysql.com/");
 
 	g_test_add_func("/spnego/decode_init", t_spnego_decode_init);
-	g_test_add_func("/spnego/decode_response", t_spnego_decode_response);
+	g_test_add_func("/spnego/decode_response_accept_incomplete", t_spnego_decode_response_accept_incomplete);
+	g_test_add_func("/spnego/decode_response_accept_complete", t_spnego_decode_response_accept_complete);
 
 	return g_test_run();
 
