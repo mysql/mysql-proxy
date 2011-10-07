@@ -72,6 +72,8 @@
 #include "chassis-event-thread.h"
 #include "lua-scope.h"
 #include "glib-ext.h"
+#include "network-asn1.h"
+#include "network-spnego.h"
 
 #if defined(HAVE_SYS_SDT_H) && defined(ENABLE_DTRACE)
 #include <sys/sdt.h>
@@ -659,15 +661,25 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 	case CON_STATE_READ_AUTH_RESULT:
 		func = con->plugins.con_read_auth_result;
 		break;
-	case CON_STATE_SEND_AUTH_RESULT:
+	case CON_STATE_SEND_AUTH_RESULT: 
+		/* called after the auth data is sent to the client */
 		func = con->plugins.con_send_auth_result;
 
-		if (!func) { /* default implementation */
+		if (!func) {
+			/*
+			 * figure out what to do next:
+			 * - switch to 'read command from client'
+			 * - close connection
+			 * - read auth-data from client
+			 * - read another auth-result packet from server
+			 */
 			switch (con->auth_result_state) {
 			case MYSQLD_PACKET_OK:
+				/* OK, delivered to client, switch to command phase */
 				con->state = CON_STATE_READ_QUERY;
 				break;
 			case MYSQLD_PACKET_ERR:
+				/* ERR delivered to client, close the connection now */
 				con->state = CON_STATE_ERROR;
 				break;
 			case 0x01: /* more auth data */
@@ -681,9 +693,15 @@ network_socket_retval_t plugin_call(chassis *srv, network_mysqld_con *con, int s
 				 * 
 				 *   negState = accept-succeeded.
 				 */
+				if ((strleq(S(con->auth_switch_to_method), C("authentication_windows_client"))) &&
+				    con->auth_next_packet_is_from_server) {
+					/* we either have SPNEGO or NTLM */
+					con->state = CON_STATE_READ_AUTH_RESULT;
+					break;
+				}
 			case MYSQLD_PACKET_EOF:
-				/**
-				 * the MySQL 4.0 hash in a MySQL 4.1+ connection
+				/*
+				 * next, read the auth data from the client
 				 */
 				con->state = CON_STATE_READ_AUTH_OLD_PASSWORD;
 				break;
@@ -910,6 +928,39 @@ static int network_mysqld_con_track_auth_result_state(network_mysqld_con *con) {
 			g_string_truncate(con->auth_switch_to_data, 0);
 		}
 		con->auth_switch_to_round = 0;
+		con->auth_next_packet_is_from_server = FALSE;
+	} else if (state == 0x01) {
+		if ((strleq(S(con->auth_switch_to_method), C("authentication_windows_client")))) {
+			GError *gerr = NULL;
+
+			/* if the packet comes from the server, has a 0x01, is SPNEGO and has 'accept-completed' set,
+			 * the next packet comes from the server too 
+			 */
+			if (0 != network_mysqld_proto_skip(&packet, 1)) {
+				/* hmm ... what to do now ? */
+				err = 1;
+			} else if (FALSE == network_asn1_is_valid(&packet, &gerr)) {
+				g_debug("%s: ASN1 packet is invalid: %s", G_STRLOC, gerr->message);
+				g_clear_error(&gerr);
+				err = 1;
+			} else {
+				network_spnego_response_token *token;
+
+				token = network_spnego_response_token_new();
+
+				if (TRUE == network_spnego_proto_get_response_token(&packet, token, &gerr)) {
+					if (token->negState != SPNEGO_RESPONSE_STATE_ACCEPT_INCOMPLETE) {
+						con->auth_next_packet_is_from_server = TRUE;
+					}
+				} else {
+					g_debug("%s: parsing spnego failed: %s", G_STRLOC, gerr->message);
+					/* do we care why it failed ? */
+					g_clear_error(&gerr);
+				}
+
+				network_spnego_response_token_free(token);
+			}
+		}
 	}
 	return err ? -1 : 0;
 }

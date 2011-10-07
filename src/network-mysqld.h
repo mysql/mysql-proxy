@@ -315,6 +315,7 @@ struct network_mysqld_con {
 	GString *auth_switch_to_method;
 	GString *auth_switch_to_data;
 	guint32  auth_switch_to_round;
+	gboolean auth_next_packet_is_from_server;
 
 	/** Flag indicating if we the plugin doesn't need the resultset itself.
 	 * 
