@@ -85,6 +85,9 @@ SET(proxy_sources
 	network-injection-lua.c
 	network-backend.c
 	network-backend-lua.c
+	network-packet.c 
+	network-asn1.c 
+	network-spnego.c 
 	lua-env.c
 )
 
@@ -220,6 +223,9 @@ INSTALL(FILES
 	network-socket-lua.h
 	network-address.h
 	network-address-lua.h
+	network-packet.h
+	network-asn1.h
+	network-spnego.h
 	sys-pedantic.h
 	chassis-plugin.h
 	chassis-log.h
