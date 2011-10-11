@@ -40,6 +40,7 @@ TARGET_LINK_LIBRARIES(check_plugin
 ADD_EXECUTABLE(check_mysqld_proto 
 	check_mysqld_proto.c 
 	../../src/glib-ext.c
+	../../src/network-packet.c 
 	../../src/network-mysqld-proto.c
 	../../src/network-mysqld-binlog.c
 )
@@ -111,6 +112,7 @@ ADD_EXECUTABLE(t_network_injection
 	t_network_injection.c 
 	../../src/network-injection.c 
 	../../src/glib-ext.c 
+	../../src/network-packet.c 
 	../../src/network-mysqld-proto.c 
 	../../src/network-mysqld-packet.c 
 	../../src/network_mysqld_type.c 
@@ -132,6 +134,7 @@ ADD_EXECUTABLE(t_network_backend
 	../../src/network-socket.c
 	../../src/network-queue.c
 	../../src/glib-ext.c
+	../../src/network-packet.c 
 	../../src/network-mysqld-proto.c
 	../../src/network-mysqld-packet.c
 	../../src/network_mysqld_type.c 
