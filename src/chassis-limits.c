@@ -35,6 +35,7 @@
 #include <stdio.h> /* for _getmaxstdio() */
 #endif
 #include <errno.h>
+#include <stdlib.h>
 
 #include "chassis-limits.h"
 
