@@ -29,6 +29,43 @@
 
 #include <windows.h>
 #include <winsock2.h>
+#include <stdlib.h>
+
+void
+chassis_win32_invalid_parameter_handler_ignore(
+		const wchar_t * expression,
+		const wchar_t * function, 
+		const wchar_t * file, 
+		int line,
+		uintptr_t pReserved) {
+	/* do nothing */
+}
+
+void
+chassis_win32_invalid_parameter_handler_log(
+		const wchar_t * expression,
+		const wchar_t * function, 
+		const wchar_t * file, 
+		int line,
+		uintptr_t pReserved) {
+#ifdef _DEBUG
+	/* only if we linked against the debug-MSVCRT.dll we have useful information */
+	_invalid_parameter_handler old_inval_handler;
+
+	old_inval_handler = _set_invalid_parameter_handler(chassis_win32_invalid_parameter_handler_ignore); /* make sure we don't get recursive */
+	g_debug("Invalid parameter detected in function %s() File: %s Line: %d. Expression was %s",
+			function ? function : "<unknown>",
+			file ? file : "<unknown>",
+			line,
+			expression ? expression : "<unknown>");
+	_set_invalid_parameter_handler(old_inval_handler);
+#endif
+}
+
+_invalid_parameter_handler
+chassis_win32_invalid_parameter_handler_set(_invalid_parameter_handler new_handler) {
+	return _set_invalid_parameter_handler(new_handler);
+}
 
 static char **shell_argv;
 static int shell_argc;

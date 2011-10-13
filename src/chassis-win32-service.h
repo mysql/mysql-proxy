@@ -23,6 +23,7 @@
 
 #ifdef _WIN32
 #include <windows.h> /* for the DWORD */
+#include <stdlib.h> /* for _invalid_parameter_handler */
 #endif
 
 #include <glib.h>
@@ -33,6 +34,25 @@ CHASSIS_API gboolean chassis_win32_is_service(void);
 CHASSIS_API int main_win32(int argc, char **argv, int (*main_cmdline)(int , char **));
 #ifdef _WIN32
 CHASSIS_API void chassis_win32_service_set_state(DWORD new_state, int wait_msec);
+
+void
+chassis_win32_invalid_parameter_handler_ignore(
+		const wchar_t * expression,
+		const wchar_t * function, 
+		const wchar_t * file, 
+		int line,
+		uintptr_t pReserved);
+void
+chassis_win32_invalid_parameter_handler_log(
+		const wchar_t * expression,
+		const wchar_t * function, 
+		const wchar_t * file, 
+		int line,
+		uintptr_t pReserved);
+
+_invalid_parameter_handler
+chassis_win32_invalid_parameter_handler_set(_invalid_parameter_handler new_handler);
+
 #endif
 
 #endif

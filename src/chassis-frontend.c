@@ -51,6 +51,7 @@
 #include "chassis-keyfile.h"
 #include "chassis-filemode.h"
 #include "chassis-options.h"
+#include "chassis-win32-service.h"
 
 #include "string-len.h"
 
@@ -106,6 +107,7 @@ int chassis_frontend_init_win32() {
 
 		return -1;
 	}
+	chassis_win32_invalid_parameter_handler_set(chassis_win32_invalid_parameter_handler_log);
 
 	return 0;
 #else
