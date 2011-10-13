@@ -60,6 +60,32 @@ int chassis_set_fdlimit(int max_files_number) {
 	return chassis_fdlimit_set(max_files_number);
 }
 
+#ifdef _WIN32
+static void
+chassis_fdlimit_invalide_parameter_handler_ignore(
+		const wchar_t * expression,
+		const wchar_t * function, 
+		const wchar_t * file, 
+		int line,
+		uintptr_t pReserved) {
+	/* do nothing */
+}
+
+static void
+chassis_fdlimit_invalide_parameter_handler_log(
+		const wchar_t * expression,
+		const wchar_t * function, 
+		const wchar_t * file, 
+		int line,
+		uintptr_t pReserved) {
+	_invalid_parameter_handler old_inval_handler;
+
+	old_inval_handler = _set_invalid_parameter_handler(chassis_fdlimit_invalide_parameter_handler_ignore); /* make sure we don't get recursive */
+	g_debug("Invalid parameter detected in function %s() File: %s Line: %d. Expression was %s", function, file, line, expression);
+	_set_invalid_parameter_handler(old_inval_handler);
+}
+#endif
+
 /**
  * set the upper limit of open files
  *
@@ -68,13 +94,26 @@ int chassis_set_fdlimit(int max_files_number) {
 int chassis_fdlimit_set(gint64 max_files_number) {
 #ifdef _WIN32
 	int max_files_number_set;
+	_invalid_parameter_handler old_inval_handler;
 
+	/* set the invalid parameter handler to our log function to not trigger an assertion, but get a proper errno instead */
+	old_inval_handler = _set_invalid_parameter_handler(chassis_fdlimit_invalide_parameter_handler_log);
 	max_files_number_set = _setmaxstdio(max_files_number);
+	_set_invalid_parameter_handler(old_inval_handler);
 
 	if (-1 == max_files_number_set) {
+		g_critical("%s: failed to set the maximum number of open files to %"G_GINT64_FORMAT" for stdio: %s (%d)",
+				G_STRLOC,
+				max_files_number,
+				g_strerror(errno),
+				errno);
 		return -1;
 	} else if (max_files_number_set != max_files_number) {
-		g_critical("%s: failed to increase the maximum number of open files for stdio: %s (%d)", G_STRLOC, g_strerror(errno), errno);
+		g_critical("%s: failed to increase the maximum number of open files to %"G_GINT64_FORMAT" for stdio: %s (%d)",
+				G_STRLOC,
+				max_files_number,
+				g_strerror(errno),
+				errno);
 		return -1;
 	}
 
