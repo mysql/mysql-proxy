@@ -82,7 +82,11 @@ chassis_fdlimit_invalide_parameter_handler_log(
 	_invalid_parameter_handler old_inval_handler;
 
 	old_inval_handler = _set_invalid_parameter_handler(chassis_fdlimit_invalide_parameter_handler_ignore); /* make sure we don't get recursive */
-	g_debug("Invalid parameter detected in function %s() File: %s Line: %d. Expression was %s", function, file, line, expression);
+	g_debug("Invalid parameter detected in function %s() File: %s Line: %d. Expression was %s",
+			function ? function : "<unknown>",
+			file ? file : "<unknown>",
+			line,
+			expression ? expression : "<unknown>");
 	_set_invalid_parameter_handler(old_inval_handler);
 }
 #endif
