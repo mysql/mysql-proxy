@@ -1223,7 +1223,17 @@ int network_mysqld_proto_get_auth_challenge(network_packet *packet, network_mysq
 
 			err = err || network_mysqld_proto_get_string_len(packet, &auth_plugin_data_2, auth_plugin_data2_len);
 			err = err || network_mysqld_proto_skip(packet, 12 - MIN(12, auth_plugin_data2_len));
-			err = err || network_mysqld_proto_get_gstring(packet, shake->auth_plugin_name);
+			if (!err) {
+				/* Bug#59453 ... MySQL 5.5.7-9 and 5.6.0-1 don't send a trailing \0
+				 *
+				 * if there is no trailing \0, get the rest of the packet
+				 */
+				if (0 != network_mysqld_proto_get_gstring(packet, shake->auth_plugin_name)) {
+					err = err || network_mysqld_proto_get_gstring_len(packet,
+							packet->data->len - packet->offset,
+							shake->auth_plugin_name);
+				}
+			}
 		} else if (shake->capabilities & CLIENT_SECURE_CONNECTION) {
 			err = err || network_mysqld_proto_get_string_len(packet, &auth_plugin_data_2, 12);
 			err = err || network_mysqld_proto_skip(packet, 1);
@@ -1347,7 +1357,10 @@ int network_mysqld_proto_append_auth_challenge(GString *packet, network_mysqld_a
 		g_string_append_len(packet, shake->auth_plugin_data->str + 8, shake->auth_plugin_data->len - 8);
 
 		g_string_append_len(packet, S(shake->auth_plugin_name));
-		g_string_append_c(packet, 0x00);
+		if ((shake->server_version >= 50510 && shake->server_version < 50600) ||
+		    (shake->server_version >= 50602)) {
+			g_string_append_c(packet, 0x00);
+		}
 	} else if (shake->capabilities & CLIENT_SECURE_CONNECTION) {
 		/* if we only have SECURE_CONNECTION it is 0-terminated */
 		if (shake->auth_plugin_data->len) {
