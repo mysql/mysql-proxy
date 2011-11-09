@@ -111,60 +111,66 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 		return -1;
 	}
 
-	memset(&addr->addr.ipv4, 0, sizeof(struct sockaddr_in));
-
 	if (NULL == address ||
-	    strlen(address) == 0 || 
+	    address[0] == '\0' || 
 	    0 == strcmp("0.0.0.0", address)) {
 		/* no ip */
+		memset(&addr->addr.ipv4, 0, sizeof(struct sockaddr_in));
+
 		addr->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
 		addr->addr.ipv4.sin_family = AF_INET; /* "default" family */
+		addr->addr.ipv4.sin_port = htons(port);
+		addr->len = sizeof(struct sockaddr_in);
 	} else {
 #ifdef HAVE_GETADDRINFO
-		struct addrinfo *ai = NULL, hint;
-		int				rc, family;
+		struct addrinfo *first_ai = NULL;
+		struct addrinfo hint;
+		struct addrinfo *ai;
+		int ret;
 		
-		memset(&hint, 0, sizeof (hint));
-		/*
-		 * FIXME: when we add support for IPv6, we'll have to do one
-		 * PF_INET* after the other
-		 */
-		hint.ai_family = PF_INET;
-		if ((rc = getaddrinfo(address, NULL, &hint, &ai)) != 0) {
-			g_critical("getaddrinfo(%s) failed with %s", address, 
-					   gai_strerror(rc));
+		memset(&hint, 0, sizeof(hint));
+		hint.ai_family = PF_UNSPEC;
+		hint.ai_socktype = SOCK_STREAM;
+		hint.ai_protocol = 0;
+		hint.ai_flags = AI_ADDRCONFIG;
+		if ((ret = getaddrinfo(address, NULL, &hint, &first_ai)) != 0) {
+			g_critical("getaddrinfo(\"%s\") failed: %s", address, 
+					   gai_strerror(ret));
 			return -1;
 		}
 
-		do {
-			family = ai->ai_family;
-#if 0 /* keep this for when we do IPv6 */
+		ret = 0; /* bogus, just to make it explicit */
+
+		for (ai = first_ai; ai; ai = ai->ai_next) {
+			int family = ai->ai_family;
+
 			if (family == PF_INET6) {
 				memcpy(&addr->addr.ipv6,
 						(struct sockaddr_in6 *) ai->ai_addr,
 						sizeof (addr->addr.ipv6));
+				addr->addr.ipv6.sin6_port = htons(port);
+				addr->len = sizeof(struct sockaddr_in6);
+
 				break;
-			} 
-#endif /* 0 */
-			if (family == PF_INET) {
+			} else  if (family == PF_INET) {
 				memcpy(&addr->addr.ipv4,
 						(struct sockaddr_in *) ai->ai_addr, 
 						sizeof (addr->addr.ipv4));
+				addr->addr.ipv4.sin_port = htons(port);
+				addr->len = sizeof(struct sockaddr_in);
 				break;
 			}
-			ai = ai->ai_next;
-		} while (NULL != ai);
-
-		if (ai == NULL) {
-			/* the family we print here is the *last* ai's */
-			g_critical("address %s doesn't resolve to a valid/supported "
-					   "address family: %d expected, last found %d", address,
-					   PF_INET, family);
-			freeaddrinfo(ai);
-			return -1;
 		}
 
-		freeaddrinfo(ai);
+		if (ai == NULL) {
+			/* no matching address-info found */
+			g_debug("%s: %s:%d", G_STRLOC, address, port);
+			ret = -1;
+		}
+
+		freeaddrinfo(first_ai);
+
+		if (ret != 0) return ret;
 #else 
 		struct hostent	*he;
 		static GStaticMutex gh_mutex = G_STATIC_MUTEX_INIT;
@@ -183,11 +189,10 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 		memcpy(&(addr->addr.ipv4.sin_addr.s_addr), he->h_addr_list[0], he->h_length);
 		g_static_mutex_unlock(&gh_mutex);
 		addr->addr.ipv4.sin_family = AF_INET;
+		addr->addr.ipv4.sin_port = htons(port);
+		addr->len = sizeof(struct sockaddr_in);
 #endif /* HAVE_GETADDRINFO */
 	}
-
-	addr->addr.ipv4.sin_port = htons(port);
-	addr->len = sizeof(struct sockaddr_in);
 
 	(void) network_address_refresh_name(addr);
 
@@ -229,22 +234,40 @@ static gint network_address_set_address_un(network_address *addr, const gchar *a
  * @return 0 on success, -1 otherwise
  */
 gint network_address_set_address(network_address *addr, const gchar *address) {
-	gchar *s;
+	const gchar *port_part = NULL;
+	gchar *ip_part = NULL;
+	gint ret;
 
 	g_return_val_if_fail(addr, -1);
 
 	/* split the address:port */
-	if (address[0] == '/')
+	if (address[0] == '/') {
 		return network_address_set_address_un(addr, address);
-	
-	if (NULL != (s = strchr(address, ':'))) {
-		gint ret;
-		char *ip_address = g_strndup(address, s - address); /* may be NULL for strdup(..., 0) */
+	} else if (address[0] == '[') {
+		const gchar *s;
+		if (NULL == (s = strchr(address + 1, ']'))) {
+			return -1;
+		}
+		ip_part   = g_strndup(address + 1, s - (address + 1)); /* may be NULL for strdup(..., 0) */
+
+		if (*(s+1) == ':') {
+			port_part = s + 2;
+		}
+	} else if (NULL != (port_part = strchr(address, ':'))) {
+		ip_part = g_strndup(address, port_part - address); /* may be NULL for strdup(..., 0) */
+		port_part++;
+	} else {
+		ip_part = g_strdup(address);
+	}
+
+	/* if there is a colon, there should be a port number */
+	if (NULL != port_part) {
 		char *port_err = NULL;
+		guint port;
 
-		guint port = strtoul(s + 1, &port_err, 10);
+		port = strtoul(port_part, &port_err, 10);
 
-		if (*(s + 1) == '\0') {
+		if (*port_part == '\0') {
 			g_critical("%s: IP-address has to be in the form [<ip>][:<port>], is '%s'. No port number",
 					G_STRLOC, address);
 			ret = -1;
@@ -253,19 +276,22 @@ gint network_address_set_address(network_address *addr, const gchar *address) {
 					G_STRLOC, address, port_err);
 			ret = -1;
 		} else {
-			ret = network_address_set_address_ip(addr, ip_address, port);
+			ret = network_address_set_address_ip(addr, ip_part, port);
 		}
-
-		if (ip_address) g_free(ip_address);
-
-		return ret;
+	} else {
+		/* perhaps it is a plain IP address, lets add the default-port */
+		ret = network_address_set_address_ip(addr, ip_part, 3306);
 	}
-	/* perhaps it is a plain IP address, lets add the default-port */
-	return network_address_set_address_ip(addr, address, 3306);
+
+	if (ip_part) g_free(ip_part);
+
+	return ret;
 }
 
 
 gint network_address_refresh_name(network_address *addr) {
+	char buf[256];
+
 	/* resolve the peer-addr if we haven't done so yet */
 	if (addr->name->len > 0) return 0;
 
@@ -275,19 +301,26 @@ gint network_address_refresh_name(network_address *addr) {
 				inet_ntoa(addr->addr.ipv4.sin_addr),
 				ntohs(addr->addr.ipv4.sin_port));
 		break;
+	case AF_INET6:
+		g_string_printf(addr->name, "[%s]:%d", 
+				inet_ntop(AF_INET6, &addr->addr.ipv6.sin6_addr, 
+					buf, sizeof(buf)),
+				ntohs(addr->addr.ipv6.sin6_port));
+		break;
 #ifdef HAVE_SYS_UN_H
 	case AF_UNIX:
 		g_string_assign(addr->name, addr->addr.un.sun_path);
 		break;
 #endif
 	default:
-        if (addr->addr.common.sa_family > AF_MAX)
-            g_debug("%s.%d: ignoring invalid sa_family %d", __FILE__, __LINE__, addr->addr.common.sa_family);
-        else
-            g_warning("%s.%d: can't convert addr-type %d into a string",
-				      __FILE__, __LINE__, 
-				      addr->addr.common.sa_family);
-		return -1;
+		if (addr->addr.common.sa_family > AF_MAX) {
+			g_debug("%s.%d: ignoring invalid sa_family %d", __FILE__, __LINE__, addr->addr.common.sa_family);
+		} else {
+			g_warning("%s.%d: can't convert addr-type %d into a string",
+					      __FILE__, __LINE__, 
+					      addr->addr.common.sa_family);
+			return -1;
+		}
 	}
 
 	return 0;
@@ -334,6 +367,9 @@ gboolean network_address_is_local(network_address *dst_addr, network_address *sr
 				);
 
 		return (dst_addr->addr.ipv4.sin_addr.s_addr == src_addr->addr.ipv4.sin_addr.s_addr);
+	case AF_INET6:
+		/* as long as src and dst address are the same, we are fine */
+		return memcmp(dst_addr->addr.ipv6.sin6_addr.s6_addr, src_addr->addr.ipv6.sin6_addr.s6_addr, 16);
 #ifdef HAVE_SYS_UN_H
 	case AF_UNIX:
 		/* we are always local */

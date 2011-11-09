@@ -44,12 +44,15 @@ void t_network_address_set() {
 
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:3306"), ==, 0);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1"), ==, 0);
+	g_assert_cmpint(network_address_set_address(addr, "[::1]"), ==, 0);
+	g_assert_cmpint(network_address_set_address(addr, "[::1]:3306"), ==, 0);
 
 	g_log_set_always_fatal(G_LOG_FATAL_MASK);
 
 	/* should fail */	
 	g_assert_cmpint(network_address_set_address(addr, "500.0.0.1"), ==, -1);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:"), ==, -1);
+	g_assert_cmpint(network_address_set_address(addr, "[::1]:"), ==, -1);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:65536"), ==, -1);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:-1"), ==, -1);
 
@@ -80,6 +83,27 @@ void t_network_address_resolve() {
 	network_address_free(addr);
 }
 
+/**
+ * test if we convert addr->string correctly for IPv6
+ */
+void t_network_address_resolve_ipv6() {
+	network_address *addr;
+
+	addr = network_address_new();
+	network_address_set_address(addr, "[::1]");
+
+	/* _set_address() should set the port number */
+
+	/* reset the name to see that _refresh_name() updates to the right value */
+	g_string_truncate(addr->name, 0);
+
+	network_address_refresh_name(addr);
+
+	g_assert_cmpstr(addr->name->str, ==, "[::1]:3306");
+
+	network_address_free(addr);
+}
+
 
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
@@ -88,6 +112,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/network_address_new", t_network_address_new);
 	g_test_add_func("/core/network_address_set", t_network_address_set);
 	g_test_add_func("/core/network_address_resolve", t_network_address_resolve);
+	g_test_add_func("/core/network_address_resolve_ipv6", t_network_address_resolve_ipv6);
 
 	return g_test_run();
 }

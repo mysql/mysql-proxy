@@ -315,6 +315,38 @@ void t_network_socket_connect_udp(void) {
 	network_socket_free(server);
 }
 
+/**
+ * test if _is_local() works ipv6 sockets
+ */
+void t_network_socket_is_local_ipv6() {
+	network_socket *s_sock; /* the server side socket, listening for requests */
+	network_socket *c_sock; /* the client side socket, that connects */
+	network_socket *a_sock; /* the server side, accepted socket */
+
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
+
+	s_sock = network_socket_new();
+	network_address_set_address(s_sock->dst, "[::1]:13307");
+
+	c_sock = network_socket_new();
+	network_address_set_address(c_sock->dst, "[::1]:13307");
+
+	/* hack together a network_socket_accept() which we don't have in this tree yet */
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
+
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect(c_sock));
+
+	a_sock = network_socket_accept(s_sock);
+	g_assert(a_sock);
+
+	g_assert_cmpint(TRUE, ==, network_address_is_local(s_sock->dst, a_sock->dst));
+
+	network_socket_free(a_sock);
+	network_socket_free(c_sock);
+	network_socket_free(s_sock);
+}
+
+
 #ifndef WIN32
 
 /**
@@ -435,6 +467,8 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/network_queue_append", test_network_queue_append);
 	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
 	g_test_add_func("/core/network_queue_pop_string", test_network_queue_pop_string);
+	g_test_add_func("/core/network_socket_is_local_ipv6",t_network_socket_is_local_ipv6);
+
 #ifndef WIN32
 	g_test_add_func("/core/network_socket_is_local_unix",t_network_socket_is_local_unix);
 
