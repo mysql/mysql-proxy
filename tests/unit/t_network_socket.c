@@ -322,6 +322,7 @@ void t_network_socket_is_local_ipv6() {
 	network_socket *s_sock; /* the server side socket, listening for requests */
 	network_socket *c_sock; /* the client side socket, that connects */
 	network_socket *a_sock; /* the server side, accepted socket */
+	int ret;
 
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
 
@@ -334,7 +335,18 @@ void t_network_socket_is_local_ipv6() {
 	/* hack together a network_socket_accept() which we don't have in this tree yet */
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
 
-	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect(c_sock));
+	switch ((ret = network_socket_connect(c_sock))) {
+	case NETWORK_SOCKET_SUCCESS:
+	case NETWORK_SOCKET_ERROR_RETRY:
+		break;
+	default:
+		g_assert(ret);
+		break;
+	}
+
+	if (ret == NETWORK_SOCKET_ERROR_RETRY) {
+		g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect_finish(c_sock));
+	}
 
 	a_sock = network_socket_accept(s_sock);
 	g_assert(a_sock);
