@@ -131,7 +131,9 @@ void network_socket_free(network_socket *s) {
 	network_address_free(s->dst);
 	network_address_free(s->src);
 
-	event_del(&(s->event));
+	if (s->event.ev_base) { /* if .ev_base isn't set, the event never got added */
+		event_del(&(s->event));
+	}
 
 	if (s->fd != -1) {
 		closesocket(s->fd);
