@@ -1,5 +1,6 @@
 0.8.3 - 
 
+  * added IPv6 support
   * added initial support for the win-auth-method and its protocol extensions (MySQL 5.5.17)
   * added support for extracting the pluggable auth protocol information
     - Lua-API added:
