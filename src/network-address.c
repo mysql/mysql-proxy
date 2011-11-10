@@ -112,9 +112,28 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 	}
 
 	if (NULL == address ||
-	    address[0] == '\0' || 
-	    0 == strcmp("0.0.0.0", address)) {
+	    address[0] == '\0') {
 		/* no ip */
+#ifdef AF_INET6
+		struct in6_addr addr6 = IN6ADDR_ANY_INIT;
+
+		memset(&addr->addr.ipv6, 0, sizeof(struct sockaddr_in6));
+
+		addr->addr.ipv6.sin6_addr = addr6;
+		addr->addr.ipv6.sin6_family = AF_INET6;
+		addr->addr.ipv6.sin6_port = htons(port);
+		addr->len = sizeof(struct sockaddr_in6);
+
+#else
+		memset(&addr->addr.ipv4, 0, sizeof(struct sockaddr_in));
+
+		addr->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
+		addr->addr.ipv4.sin_family = AF_INET; /* "default" family */
+		addr->addr.ipv4.sin_port = htons(port);
+		addr->len = sizeof(struct sockaddr_in);
+#endif
+	} else if (0 == strcmp("0.0.0.0", address)) {
+		/* that's any IPv4 address, so bind to IPv4-any only */
 		memset(&addr->addr.ipv4, 0, sizeof(struct sockaddr_in));
 
 		addr->addr.ipv4.sin_addr.s_addr = htonl(INADDR_ANY);
