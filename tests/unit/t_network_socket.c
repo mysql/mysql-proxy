@@ -316,9 +316,9 @@ void t_network_socket_connect_udp(void) {
 }
 
 /**
- * test if _is_local() works ipv6 sockets
+ * test if _is_local() works ipv4 sockets
  */
-void t_network_socket_is_local_ipv6() {
+void t_network_socket_is_local_ipv4() {
 	network_socket *s_sock; /* the server side socket, listening for requests */
 	network_socket *c_sock; /* the client side socket, that connects */
 	network_socket *a_sock; /* the server side, accepted socket */
@@ -327,10 +327,10 @@ void t_network_socket_is_local_ipv6() {
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
 
 	s_sock = network_socket_new();
-	network_address_set_address(s_sock->dst, "[::1]:13307");
+	network_address_set_address(s_sock->dst, "127.0.0.1:13307");
 
 	c_sock = network_socket_new();
-	network_address_set_address(c_sock->dst, "[::1]:13307");
+	network_address_set_address(c_sock->dst, "127.0.0.1:13307");
 
 	/* hack together a network_socket_accept() which we don't have in this tree yet */
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
@@ -351,7 +351,52 @@ void t_network_socket_is_local_ipv6() {
 	a_sock = network_socket_accept(s_sock);
 	g_assert(a_sock);
 
-	g_assert_cmpint(TRUE, ==, network_address_is_local(s_sock->dst, a_sock->dst));
+	g_assert_cmpint(TRUE, ==, network_address_is_local(c_sock->dst, a_sock->dst));
+
+	network_socket_free(a_sock);
+	network_socket_free(c_sock);
+	network_socket_free(s_sock);
+}
+
+
+/**
+ * test if _is_local() works ipv6 sockets
+ */
+void t_network_socket_is_local_ipv6() {
+	network_socket *s_sock; /* the server side socket, listening for requests */
+	network_socket *c_sock; /* the client side socket, that connects */
+	network_socket *a_sock; /* the server side, accepted socket */
+	int ret;
+
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
+
+	s_sock = network_socket_new();
+	network_address_set_address(s_sock->dst, "[::1]:13307");
+
+	c_sock = network_socket_new();
+	network_address_set_address(c_sock->dst, "[::1]:13307");
+
+	g_assert_cmpint(TRUE, ==, network_address_is_local(c_sock->dst, s_sock->dst));
+
+	/* hack together a network_socket_accept() which we don't have in this tree yet */
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
+
+	switch ((ret = network_socket_connect(c_sock))) {
+	case NETWORK_SOCKET_SUCCESS:
+	case NETWORK_SOCKET_ERROR_RETRY:
+		break;
+	default:
+		g_assert(ret);
+		break;
+	}
+
+	if (ret == NETWORK_SOCKET_ERROR_RETRY) {
+		g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect_finish(c_sock));
+	}
+
+	a_sock = network_socket_accept(s_sock);
+	g_assert(a_sock);
+	g_assert_cmpint(TRUE, ==, network_address_is_local(c_sock->dst, a_sock->dst));
 
 	network_socket_free(a_sock);
 	network_socket_free(c_sock);
@@ -479,6 +524,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/network_queue_append", test_network_queue_append);
 	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
 	g_test_add_func("/core/network_queue_pop_string", test_network_queue_pop_string);
+	g_test_add_func("/core/network_socket_is_local_ipv4",t_network_socket_is_local_ipv4);
 	g_test_add_func("/core/network_socket_is_local_ipv6",t_network_socket_is_local_ipv6);
 
 #ifndef WIN32

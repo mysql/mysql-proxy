@@ -58,7 +58,7 @@ network_address *network_address_new() {
 	network_address *addr;
 
 	addr = g_new0(network_address, 1);
-	addr->len = sizeof(addr->addr.common);
+	addr->len = sizeof(addr->addr);
 	addr->name = g_string_new(NULL);
 
 	return addr;
@@ -349,6 +349,8 @@ gint network_address_refresh_name(network_address *addr) {
  * check if the host-part of the address is equal
  */
 gboolean network_address_is_local(network_address *dst_addr, network_address *src_addr) {
+	char addr_buf[256], addr_buf2[256];
+
 	if (src_addr->addr.common.sa_family != dst_addr->addr.common.sa_family) {
 #ifdef HAVE_SYS_UN_H
 		if (src_addr->addr.common.sa_family == AF_UNIX ||
@@ -371,24 +373,27 @@ gboolean network_address_is_local(network_address *dst_addr, network_address *sr
 
 	switch (src_addr->addr.common.sa_family) {
 	case AF_INET:
-		/* inet_ntoa() returns a pointer to a static buffer
-		 * we can't call it twice in the same function-call */
-
-		g_debug("%s: is-local src: %s(:%d) =? ...",
+		g_debug("%s: is-local-ipv4 src: %s(:%d) =? dst: %s(:%d)",
 				G_STRLOC,
-				inet_ntoa(src_addr->addr.ipv4.sin_addr),
-				ntohs(src_addr->addr.ipv4.sin_port));
+				inet_ntop(AF_INET, &src_addr->addr.ipv4.sin_addr, addr_buf, sizeof(addr_buf)),
+				ntohs(src_addr->addr.ipv4.sin_port),
+				inet_ntop(AF_INET, &dst_addr->addr.ipv4.sin_addr, addr_buf2, sizeof(addr_buf2)),
+				ntohs(dst_addr->addr.ipv4.sin_port));
 
-		g_debug("%s: is-local dst: %s(:%d)",
-				G_STRLOC,
-				inet_ntoa(dst_addr->addr.ipv4.sin_addr),
-				ntohs(dst_addr->addr.ipv4.sin_port)
-				);
-
-		return (dst_addr->addr.ipv4.sin_addr.s_addr == src_addr->addr.ipv4.sin_addr.s_addr);
+		return (0 == memcmp(&dst_addr->addr.ipv4.sin_addr.s_addr, &src_addr->addr.ipv4.sin_addr.s_addr, 4));
 	case AF_INET6:
+		/**
+		 * if the server bound to :: (aka any) our dst address will be reported as such. In IPv4 we get
+		 * a real IP address
+		 */
+		g_debug("%s: is-local-ipv6 src: %s(:%d) =? dst: %s(:%d)",
+				G_STRLOC,
+				inet_ntop(AF_INET6, &src_addr->addr.ipv6.sin6_addr, addr_buf, sizeof(addr_buf)),
+				ntohs(src_addr->addr.ipv6.sin6_port),
+				inet_ntop(AF_INET6, &dst_addr->addr.ipv6.sin6_addr, addr_buf2, sizeof(addr_buf2)),
+				ntohs(dst_addr->addr.ipv6.sin6_port));
 		/* as long as src and dst address are the same, we are fine */
-		return memcmp(dst_addr->addr.ipv6.sin6_addr.s6_addr, src_addr->addr.ipv6.sin6_addr.s6_addr, 16);
+		return (0 == memcmp(&dst_addr->addr.ipv6.sin6_addr.s6_addr, &src_addr->addr.ipv6.sin6_addr.s6_addr, 16));
 #ifdef HAVE_SYS_UN_H
 	case AF_UNIX:
 		/* we are always local */
