@@ -212,8 +212,8 @@ t_network_socket_bind_ipv6_port_0(void) {
 static void
 t_network_socket_bind_ipv4_rebind(void) {
 	network_socket *s_sock;
-	char *s_addr;
-	int s_port;
+	char *srv_addr;
+	int srv_port;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
@@ -222,25 +222,25 @@ t_network_socket_bind_ipv4_rebind(void) {
 	g_assert_cmpint(0, ==, network_address_set_address(s_sock->dst, "127.0.0.1:0"));
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
-	s_port = ntohs(s_sock->dst->addr.ipv4.sin_port);
-	s_addr = g_strdup_printf("127.0.0.1:%d", s_port);
+	srv_port = ntohs(s_sock->dst->addr.ipv4.sin_port);
+	srv_addr = g_strdup_printf("127.0.0.1:%d", srv_port);
 	g_debug("%s: bound to '%s'",
 			G_STRLOC,
-			s_addr);
+			srv_addr);
 
 	network_socket_free(s_sock);
 
 	/* bind again, to test if REUSEADDR works */
 	s_sock = network_socket_new();
 	
-	g_assert_cmpint(0, ==, network_address_set_address(s_sock->dst, s_addr));
+	g_assert_cmpint(0, ==, network_address_set_address(s_sock->dst, srv_addr));
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
 
 	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_bind(s_sock)); /* bind a socket that is already bound, should fail */
 
 	network_socket_free(s_sock);
-	g_free(s_addr);
+	g_free(srv_addr);
 }
 
 /**
@@ -259,8 +259,8 @@ void t_network_socket_connect(void) {
 	fd_set read_fds;
 	struct timeval timeout;
 	network_socket_retval_t ret;
-	int s_port;
-	char *s_addr;
+	int srv_port;
+	char *srv_addr;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
@@ -269,12 +269,12 @@ void t_network_socket_connect(void) {
 	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, "127.0.0.1:0"));
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
-	s_port = ntohs(sock->dst->addr.ipv4.sin_port);
-	s_addr = g_strdup_printf("127.0.0.1:%d", s_port);
+	srv_port = ntohs(sock->dst->addr.ipv4.sin_port);
+	srv_addr = g_strdup_printf("127.0.0.1:%d", srv_port);
 	
 	client = network_socket_new();
-	g_assert_cmpint(0, ==, network_address_set_address(client->dst, s_addr));
-	g_free(s_addr);
+	g_assert_cmpint(0, ==, network_address_set_address(client->dst, srv_addr));
+	g_free(srv_addr);
 
 	switch ((ret = network_socket_connect(client))) {
 	case NETWORK_SOCKET_ERROR_RETRY:
@@ -339,8 +339,8 @@ void t_network_socket_connect_udp(void) {
 	fd_set read_fds;
 	struct timeval timeout;
 	network_socket_retval_t ret;
-	int s_port;
-	char *s_addr;
+	int srv_port;
+	char *srv_addr;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
@@ -350,19 +350,19 @@ void t_network_socket_connect_udp(void) {
 	g_assert_cmpint(0, ==, network_address_set_address(server->src, "127.0.0.1:0")); /* our UDP port */
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(server));
-	s_port = ntohs(server->src->addr.ipv4.sin_port);
-	s_addr = g_strdup_printf("127.0.0.1:%d", s_port);
+	srv_port = ntohs(server->src->addr.ipv4.sin_port);
+	srv_addr = g_strdup_printf("127.0.0.1:%d", srv_port);
 
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_to_read(server));
 	g_assert_cmpint(0, ==, server->to_read);
 	
 	client = network_socket_new();
 	client->socket_type = SOCK_DGRAM;
-	g_assert_cmpint(0, ==, network_address_set_address(client->dst, s_addr)); /* the server's port */
+	g_assert_cmpint(0, ==, network_address_set_address(client->dst, srv_addr)); /* the server's port */
 	g_assert_cmpint(0, ==, network_address_set_address(client->src, TEST_ADDR_CLIENT_UDP)); /* a random port */
 
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(client));
-	g_free(s_addr);
+	g_free(srv_addr);
 
 	/* we are connected */
 
@@ -393,7 +393,7 @@ void t_network_socket_is_local_ipv4() {
 	network_socket *c_sock; /* the client side socket, that connects */
 	network_socket *a_sock; /* the server side, accepted socket */
 	int ret;
-	int s_port;
+	int srv_port;
 	gchar *c_addr;
 
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
@@ -404,8 +404,8 @@ void t_network_socket_is_local_ipv4() {
 	/* hack together a network_socket_accept() which we don't have in this tree yet */
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
 
-	s_port = ntohs(s_sock->dst->addr.ipv4.sin_port);
-	c_addr = g_strdup_printf("127.0.0.1:%d", s_port);
+	srv_port = ntohs(s_sock->dst->addr.ipv4.sin_port);
+	c_addr = g_strdup_printf("127.0.0.1:%d", srv_port);
 	g_debug("%s: connect(%s)",
 			G_STRLOC,
 			c_addr);
@@ -462,7 +462,7 @@ void t_network_socket_is_local_ipv6() {
 	network_socket *c_sock; /* the client side socket, that connects */
 	network_socket *a_sock; /* the server side, accepted socket */
 	int ret;
-	int s_port;
+	int srv_port;
 	gchar *c_addr;
 
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
@@ -473,8 +473,8 @@ void t_network_socket_is_local_ipv6() {
 	/* hack together a network_socket_accept() which we don't have in this tree yet */
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
 
-	s_port = ntohs(s_sock->dst->addr.ipv6.sin6_port);
-	c_addr = g_strdup_printf("[::1]:%d", s_port);
+	srv_port = ntohs(s_sock->dst->addr.ipv6.sin6_port);
+	c_addr = g_strdup_printf("[::1]:%d", srv_port);
 
 	c_sock = network_socket_new();
 	network_address_set_address(c_sock->dst, c_addr);
