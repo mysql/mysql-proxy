@@ -188,6 +188,9 @@ t_network_socket_bind_ipv4_port_0(void) {
 	network_socket_free(sock);
 }
 
+/**
+ * test if binding to port 0 updates the port number on success
+ */
 static void
 t_network_socket_bind_ipv6_port_0(void) {
 	network_socket *sock;
@@ -196,10 +199,18 @@ t_network_socket_bind_ipv6_port_0(void) {
 
 	sock = network_socket_new();
 
-	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, "[::1]:0")); /* should get a uniq-local port */
+	if (0 != network_address_set_address(sock->dst, "[::1]:0")) { /* should get a uniq-local port */
+		/* skip the test, if we can't bind to a IPv6 support */
+		network_socket_free(sock);
+		return;
+	}
 	g_assert_cmpint(0, ==, sock->dst->addr.ipv6.sin6_port); /* before bind it is 0 */
 	
-	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
+	if (NETWORK_SOCKET_SUCCESS != network_socket_bind(sock)) {
+		/* skip the test, if we can't bind to a IPv6 support */
+		network_socket_free(sock);
+		return;
+	}
 	g_assert_cmpint(0, !=, sock->dst->addr.ipv6.sin6_port); /* after bind() we update the port */
 	g_debug("%s: bound to port %d",
 			G_STRLOC,
@@ -468,10 +479,17 @@ void t_network_socket_is_local_ipv6() {
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
 
 	s_sock = network_socket_new();
-	network_address_set_address(s_sock->dst, "[::1]:0");
+	if (0 != network_address_set_address(s_sock->dst, "[::1]:0")) {
+		/* skip the test, if we can't bind to a IPv6 support */
+		network_socket_free(s_sock);
+		return;
+	}
 
-	/* hack together a network_socket_accept() which we don't have in this tree yet */
-	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
+	if (NETWORK_SOCKET_SUCCESS != network_socket_bind(s_sock)) {
+		/* skip the test, if we can't bind to a IPv6 support */
+		network_socket_free(s_sock);
+		return;
+	}
 
 	srv_port = ntohs(s_sock->dst->addr.ipv6.sin6_port);
 	c_addr = g_strdup_printf("[::1]:%d", srv_port);
