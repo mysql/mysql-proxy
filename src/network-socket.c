@@ -404,6 +404,34 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 			return NETWORK_SOCKET_ERROR;
 		}
 
+		if (con->dst->addr.common.sa_family == AF_INET &&
+		    con->dst->addr.ipv4.sin_port == 0) {
+			struct sockaddr_in a;
+			socklen_t          a_len = sizeof(a);
+
+			if (0 != getsockname(con->fd, (struct sockaddr *)&a, &a_len)) {
+				g_critical("%s: getsockname(%s) failed: %s (%d)", 
+						G_STRLOC,
+						con->dst->name->str,
+						g_strerror(errno), errno);
+				return NETWORK_SOCKET_ERROR;
+			}
+			con->dst->addr.ipv4.sin_port  = a.sin_port;
+		} else if (con->dst->addr.common.sa_family == AF_INET6 &&
+		           con->dst->addr.ipv6.sin6_port == 0) {
+			struct sockaddr_in6 a;
+			socklen_t          a_len = sizeof(a);
+
+			if (0 != getsockname(con->fd, (struct sockaddr *)&a, &a_len)) {
+				g_critical("%s: getsockname(%s) failed: %s (%d)", 
+						G_STRLOC,
+						con->dst->name->str,
+						g_strerror(errno), errno);
+				return NETWORK_SOCKET_ERROR;
+			}
+			con->dst->addr.ipv6.sin6_port  = a.sin6_port;
+		}
+
 		if (-1 == listen(con->fd, 128)) {
 			g_critical("%s: listen(%s, 128) failed: %s (%d)",
 					G_STRLOC,

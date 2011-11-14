@@ -153,35 +153,94 @@ void test_network_queue_pop_string() {
 	network_queue_free(q);
 }
 
-#define TEST_ADDR_IP "127.0.0.1:57684"
 #define TEST_ADDR_CLIENT_UDP "127.0.0.1:0"
+static void
+t_network_socket_bind_ipv4_no_address(void) {
+	network_socket *s_sock;
+	
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
-void t_network_socket_bind(void) {
+	s_sock = network_socket_new();
+
+	/* w/o a address set it should fail */
+	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_bind(s_sock)); /* should fail, no address */
+
+	network_socket_free(s_sock);
+}
+
+static void
+t_network_socket_bind_ipv4_port_0(void) {
 	network_socket *sock;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
 	sock = network_socket_new();
 
-	/* w/o a address set it should fail */
-	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_bind(sock)); /* should fail, no address */
-
-	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, TEST_ADDR_IP));
+	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, "127.0.0.1:0")); /* should get a uniq-local port */
+	g_assert_cmpint(0, ==, sock->dst->addr.ipv4.sin_port); /* before bind it is 0 */
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
+	g_assert_cmpint(0, !=, sock->dst->addr.ipv4.sin_port); /* after bind() we update the port */
+	g_debug("%s: bound to port %d",
+			G_STRLOC,
+			ntohs(sock->dst->addr.ipv4.sin_port));
 
 	network_socket_free(sock);
+}
+
+static void
+t_network_socket_bind_ipv6_port_0(void) {
+	network_socket *sock;
+	
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
+
+	sock = network_socket_new();
+
+	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, "[::1]:0")); /* should get a uniq-local port */
+	g_assert_cmpint(0, ==, sock->dst->addr.ipv6.sin6_port); /* before bind it is 0 */
+	
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
+	g_assert_cmpint(0, !=, sock->dst->addr.ipv6.sin6_port); /* after bind() we update the port */
+	g_debug("%s: bound to port %d",
+			G_STRLOC,
+			ntohs(sock->dst->addr.ipv6.sin6_port));
+
+	network_socket_free(sock);
+}
+
+
+static void
+t_network_socket_bind_ipv4_rebind(void) {
+	network_socket *s_sock;
+	char *s_addr;
+	int s_port;
+	
+	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
+
+	s_sock = network_socket_new();
+
+	g_assert_cmpint(0, ==, network_address_set_address(s_sock->dst, "127.0.0.1:0"));
+	
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
+	s_port = ntohs(s_sock->dst->addr.ipv4.sin_port);
+	s_addr = g_strdup_printf("127.0.0.1:%d", s_port);
+	g_debug("%s: bound to '%s'",
+			G_STRLOC,
+			s_addr);
+
+	network_socket_free(s_sock);
 
 	/* bind again, to test if REUSEADDR works */
-	sock = network_socket_new();
+	s_sock = network_socket_new();
 	
-	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, TEST_ADDR_IP));
+	g_assert_cmpint(0, ==, network_address_set_address(s_sock->dst, s_addr));
 	
-	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
+	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
 
-	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_bind(sock)); /* bind a socket that is already bound, should fail */
+	g_assert_cmpint(NETWORK_SOCKET_ERROR, ==, network_socket_bind(s_sock)); /* bind a socket that is already bound, should fail */
 
-	network_socket_free(sock);
+	network_socket_free(s_sock);
+	g_free(s_addr);
 }
 
 /**
@@ -200,17 +259,22 @@ void t_network_socket_connect(void) {
 	fd_set read_fds;
 	struct timeval timeout;
 	network_socket_retval_t ret;
+	int s_port;
+	char *s_addr;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
 	sock = network_socket_new();
 
-	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, TEST_ADDR_IP));
+	g_assert_cmpint(0, ==, network_address_set_address(sock->dst, "127.0.0.1:0"));
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(sock));
+	s_port = ntohs(sock->dst->addr.ipv4.sin_port);
+	s_addr = g_strdup_printf("127.0.0.1:%d", s_port);
 	
 	client = network_socket_new();
-	g_assert_cmpint(0, ==, network_address_set_address(client->dst, TEST_ADDR_IP));
+	g_assert_cmpint(0, ==, network_address_set_address(client->dst, s_addr));
+	g_free(s_addr);
 
 	switch ((ret = network_socket_connect(client))) {
 	case NETWORK_SOCKET_ERROR_RETRY:
@@ -275,24 +339,30 @@ void t_network_socket_connect_udp(void) {
 	fd_set read_fds;
 	struct timeval timeout;
 	network_socket_retval_t ret;
+	int s_port;
+	char *s_addr;
 	
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* we log g_critical() which is fatal for the test-suite */
 
 	server = network_socket_new();
 	server->socket_type = SOCK_DGRAM;
 
-	g_assert_cmpint(0, ==, network_address_set_address(server->src, TEST_ADDR_IP)); /* our UDP port */
+	g_assert_cmpint(0, ==, network_address_set_address(server->src, "127.0.0.1:0")); /* our UDP port */
 	
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(server));
+	s_port = ntohs(server->src->addr.ipv4.sin_port);
+	s_addr = g_strdup_printf("127.0.0.1:%d", s_port);
+
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_to_read(server));
 	g_assert_cmpint(0, ==, server->to_read);
 	
 	client = network_socket_new();
 	client->socket_type = SOCK_DGRAM;
-	g_assert_cmpint(0, ==, network_address_set_address(client->dst, TEST_ADDR_IP)); /* the server's port */
+	g_assert_cmpint(0, ==, network_address_set_address(client->dst, s_addr)); /* the server's port */
 	g_assert_cmpint(0, ==, network_address_set_address(client->src, TEST_ADDR_CLIENT_UDP)); /* a random port */
 
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(client));
+	g_free(s_addr);
 
 	/* we are connected */
 
@@ -323,33 +393,58 @@ void t_network_socket_is_local_ipv4() {
 	network_socket *c_sock; /* the client side socket, that connects */
 	network_socket *a_sock; /* the server side, accepted socket */
 	int ret;
+	int s_port;
+	gchar *c_addr;
 
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
 
 	s_sock = network_socket_new();
-	network_address_set_address(s_sock->dst, "127.0.0.1:13307");
-
-	c_sock = network_socket_new();
-	network_address_set_address(c_sock->dst, "127.0.0.1:13307");
+	g_assert_cmpint(0, ==, network_address_set_address(s_sock->dst, "127.0.0.1:0")); /* pick a random port */
 
 	/* hack together a network_socket_accept() which we don't have in this tree yet */
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
+
+	s_port = ntohs(s_sock->dst->addr.ipv4.sin_port);
+	c_addr = g_strdup_printf("127.0.0.1:%d", s_port);
+	g_debug("%s: connect(%s)",
+			G_STRLOC,
+			c_addr);
+
+	c_sock = network_socket_new();
+	g_assert_cmpint(0, ==, network_address_set_address(c_sock->dst, c_addr));
+	g_free(c_addr);
 
 	switch ((ret = network_socket_connect(c_sock))) {
 	case NETWORK_SOCKET_SUCCESS:
 	case NETWORK_SOCKET_ERROR_RETRY:
 		break;
 	default:
-		g_assert(ret);
+		g_assert_cmpint(ret, ==, NETWORK_SOCKET_SUCCESS);
 		break;
 	}
-
-	if (ret == NETWORK_SOCKET_ERROR_RETRY) {
-		g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect_finish(c_sock));
-	}
-
+		
 	a_sock = network_socket_accept(s_sock);
 	g_assert(a_sock);
+
+	if (ret == NETWORK_SOCKET_ERROR_RETRY) {
+		fd_set write_fds;
+		struct timeval timeout;
+
+		g_debug("%s: connect() is delayed. wait for 500ms max",
+				G_STRLOC);
+
+		FD_ZERO(&write_fds);
+		FD_SET(c_sock->fd, &write_fds);
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 500 * 000; /* wait 500ms */
+		g_assert_cmpint(1, ==, select(c_sock->fd + 1, NULL, &write_fds, NULL, &timeout));
+	
+		if (NETWORK_SOCKET_SUCCESS != network_socket_connect_finish(c_sock)) {
+			g_error("%s: _connect_finish() failed: %s (%d)",
+					G_STRLOC,
+					g_strerror(errno), errno);
+		}
+	}
 
 	g_assert_cmpint(TRUE, ==, network_address_is_local(c_sock->dst, a_sock->dst));
 
@@ -367,19 +462,25 @@ void t_network_socket_is_local_ipv6() {
 	network_socket *c_sock; /* the client side socket, that connects */
 	network_socket *a_sock; /* the server side, accepted socket */
 	int ret;
+	int s_port;
+	gchar *c_addr;
 
 	g_log_set_always_fatal(G_LOG_FATAL_MASK); /* gtest modifies the fatal-mask */
 
 	s_sock = network_socket_new();
-	network_address_set_address(s_sock->dst, "[::1]:13307");
-
-	c_sock = network_socket_new();
-	network_address_set_address(c_sock->dst, "[::1]:13307");
-
-	g_assert_cmpint(TRUE, ==, network_address_is_local(c_sock->dst, s_sock->dst));
+	network_address_set_address(s_sock->dst, "[::1]:0");
 
 	/* hack together a network_socket_accept() which we don't have in this tree yet */
 	g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_bind(s_sock));
+
+	s_port = ntohs(s_sock->dst->addr.ipv6.sin6_port);
+	c_addr = g_strdup_printf("[::1]:%d", s_port);
+
+	c_sock = network_socket_new();
+	network_address_set_address(c_sock->dst, c_addr);
+	g_free(c_addr);
+
+	g_assert_cmpint(TRUE, ==, network_address_is_local(c_sock->dst, s_sock->dst));
 
 	switch ((ret = network_socket_connect(c_sock))) {
 	case NETWORK_SOCKET_SUCCESS:
@@ -390,12 +491,25 @@ void t_network_socket_is_local_ipv6() {
 		break;
 	}
 
+	a_sock = network_socket_accept(s_sock);
+	g_assert(a_sock);
+
 	if (ret == NETWORK_SOCKET_ERROR_RETRY) {
+		fd_set write_fds;
+		struct timeval timeout;
+
+		g_debug("%s: connect() is delayed. wait for 500ms max",
+				G_STRLOC);
+
+		FD_ZERO(&write_fds);
+		FD_SET(c_sock->fd, &write_fds);
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 500 * 000; /* wait 500ms */
+		g_assert_cmpint(1, ==, select(c_sock->fd + 1, NULL, &write_fds, NULL, &timeout));
+	
 		g_assert_cmpint(NETWORK_SOCKET_SUCCESS, ==, network_socket_connect_finish(c_sock));
 	}
 
-	a_sock = network_socket_accept(s_sock);
-	g_assert(a_sock);
 	g_assert_cmpint(TRUE, ==, network_address_is_local(c_sock->dst, a_sock->dst));
 
 	network_socket_free(a_sock);
@@ -519,7 +633,10 @@ int main(int argc, char **argv) {
 	g_test_bug_base("http://bugs.mysql.com/");
 
 	g_test_add_func("/core/network_socket_new", test_network_socket_new);
-	g_test_add_func("/core/network_socket_bind", t_network_socket_bind);
+	g_test_add_func("/core/network_socket_bind_ipv4_no_address", t_network_socket_bind_ipv4_no_address);
+	g_test_add_func("/core/network_socket_bind_ipv4_port_0",t_network_socket_bind_ipv4_port_0);
+	g_test_add_func("/core/network_socket_bind_ipv6_port_0",t_network_socket_bind_ipv6_port_0);
+	g_test_add_func("/core/network_socket_bind_ipv4_rebind", t_network_socket_bind_ipv4_rebind);
 	g_test_add_func("/core/network_socket_connect", t_network_socket_connect);
 	g_test_add_func("/core/network_queue_append", test_network_queue_append);
 	g_test_add_func("/core/network_queue_peek_string", test_network_queue_peek_string);
