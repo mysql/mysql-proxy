@@ -44,10 +44,14 @@ void t_network_address_set() {
 
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:3306"), ==, 0);
 	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1"), ==, 0);
-	g_assert_cmpint(network_address_set_address(addr, "[::1]"), ==, 0);
-	g_assert_cmpint(network_address_set_address(addr, "[::1]:3306"), ==, 0);
 
 	g_log_set_always_fatal(G_LOG_FATAL_MASK);
+	/* shouldn't crash.
+	 *
+	 * we can't test if it works as we can't know if the host has setup IPv6
+	 */
+	network_address_set_address(addr, "[::1]");
+	network_address_set_address(addr, "[::1]:3306");
 
 	/* should fail */	
 	g_assert_cmpint(network_address_set_address(addr, "500.0.0.1"), ==, -1);
