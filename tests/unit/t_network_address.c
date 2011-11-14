@@ -94,7 +94,12 @@ void t_network_address_resolve_ipv6() {
 	network_address *addr;
 
 	addr = network_address_new();
-	network_address_set_address(addr, "[::1]");
+	if (0 != network_address_set_address(addr, "[::1]")) {
+		/* skip test, if resolving ::1 fails */
+		network_address_free(addr);
+
+		return;
+	}
 
 	/* _set_address() should set the port number */
 
