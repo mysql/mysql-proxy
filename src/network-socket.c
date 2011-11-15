@@ -411,6 +411,20 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 		}
 
 		if (con->dst->addr.common.sa_family == AF_INET6) {
+#ifdef IPV6_V6ONLY
+			/* disable dual-stack IPv4-over-IPv6 sockets
+			 *
+			 * ... if it is supported:
+			 * - Linux
+			 * - Windows
+			 * - Mac OS X
+			 * - FreeBSD
+			 * - Solaris 10 and later
+			 *
+			 * no supported on:
+			 * - Solaris 9 and earlier
+			 */
+
 			/* IPV6_V6ONLY is int on unix, DWORD on win32 */
 #ifdef WIN32
 			DWORD val;
@@ -418,7 +432,6 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 			int val;
 #endif
 
-			/* disable dual-stack IPv4-over-IPv6 sockets */
 			val = 0;
 			if (0 != setsockopt(con->fd, IPPROTO_IPV6, IPV6_V6ONLY, SETSOCKOPT_OPTVAL_CAST &val, sizeof(val))) {
 				g_critical("%s: setsockopt(%s, IPPROTO_IPV6, IPV6_V6ONLY) failed: %s (%d)", 
@@ -427,6 +440,7 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 						g_strerror(errno), errno);
 				return NETWORK_SOCKET_ERROR;
 			}
+#endif
 		}
 
 
