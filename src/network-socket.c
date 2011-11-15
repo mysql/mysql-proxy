@@ -357,11 +357,16 @@ network_socket_retval_t network_socket_connect(network_socket *sock) {
  * @see network_address_set_address()
  */
 network_socket_retval_t network_socket_bind(network_socket * con) {
+	/* WIN32:      int setsockopt(SOCKET s, int level, int optname, const char *optval, int optlen);
+	 * HPUX:       int setsockopt(int s,    int level, int optname, const void *optval, int optlen);
+	 * all others: int setsockopt(int s,    int level, int optname, const void *optval, socklen_t optlen);
+	 */
 #ifdef WIN32
-	char val = 1;	/* Win32 setsockopt wants a const char* instead of the UNIX void*...*/
+#define SETSOCKOPT_OPTVAL_CAST (const char *)
 #else
-	int val = 1;
+#define SETSOCKOPT_OPTVAL_CAST (void *)
 #endif
+
 	g_return_val_if_fail(con->fd < 0, NETWORK_SOCKET_ERROR); /* socket is already bound */
 	g_return_val_if_fail((con->socket_type == SOCK_DGRAM) || (con->socket_type == SOCK_STREAM), NETWORK_SOCKET_ERROR);
 
@@ -379,15 +384,24 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 
 		if (con->dst->addr.common.sa_family == AF_INET || 
 		    con->dst->addr.common.sa_family == AF_INET6) {
-			if (0 != setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val))) {
+			/* TCP_NODELAY  is int on unix, BOOL on win32 */
+			/* SO_REUSEADDR is int on unix, BOOL on win32 */
+#ifdef WIN32
+			BOOL val;
+#else
+			int val;
+#endif
+
+			val = 1;
+			if (0 != setsockopt(con->fd, IPPROTO_TCP, TCP_NODELAY, SETSOCKOPT_OPTVAL_CAST &val, sizeof(val))) {
 				g_critical("%s: setsockopt(%s, IPPROTO_TCP, TCP_NODELAY) failed: %s (%d)", 
 						G_STRLOC,
 						con->dst->name->str,
 						g_strerror(errno), errno);
 				return NETWORK_SOCKET_ERROR;
 			}
-			
-			if (0 != setsockopt(con->fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val))) {
+		
+			if (0 != setsockopt(con->fd, SOL_SOCKET, SO_REUSEADDR, SETSOCKOPT_OPTVAL_CAST &val, sizeof(val))) {
 				g_critical("%s: setsockopt(%s, SOL_SOCKET, SO_REUSEADDR) failed: %s (%d)", 
 						G_STRLOC,
 						con->dst->name->str,
@@ -395,6 +409,26 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 				return NETWORK_SOCKET_ERROR;
 			}
 		}
+
+		if (con->dst->addr.common.sa_family == AF_INET6) {
+			/* IPV6_V6ONLY is int on unix, DWORD on win32 */
+#ifdef WIN32
+			DWORD val;
+#else
+			int val;
+#endif
+
+			/* disable dual-stack IPv4-over-IPv6 sockets */
+			val = 0;
+			if (0 != setsockopt(con->fd, IPPROTO_IPV6, IPV6_V6ONLY, SETSOCKOPT_OPTVAL_CAST &val, sizeof(val))) {
+				g_critical("%s: setsockopt(%s, IPPROTO_IPV6, IPV6_V6ONLY) failed: %s (%d)", 
+						G_STRLOC,
+						con->dst->name->str,
+						g_strerror(errno), errno);
+				return NETWORK_SOCKET_ERROR;
+			}
+		}
+
 
 		if (-1 == bind(con->fd, &con->dst->addr.common, con->dst->len)) {
 			g_critical("%s: bind(%s) failed: %s (%d)", 
