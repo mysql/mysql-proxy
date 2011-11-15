@@ -114,7 +114,13 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 	if (NULL == address ||
 	    address[0] == '\0') {
 		/* no ip */
-#ifdef AF_INET6
+#if 0
+		/* disabled as it breaks the default behaviour on FreeBSD and windows
+		 *
+		 * FreeBSD doesn't do IPv6+IPv4 sockets by default, other unixes do.
+		 * while we could change that to with setsockopt(..., IPV6_V6ONLY, ...)
+		 * it should be fixed by adding support for multiple sockets instead.
+		 */
 		struct in6_addr addr6 = IN6ADDR_ANY_INIT;
 
 		memset(&addr->addr.ipv6, 0, sizeof(struct sockaddr_in6));
