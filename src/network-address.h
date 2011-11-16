@@ -52,6 +52,19 @@ typedef int network_socklen_t;
 typedef socklen_t network_socklen_t;
 #endif
 
+
+#define NETWORK_ADDRESS_ERROR network_address_error()
+
+GQuark
+network_address_error(void);
+
+enum {
+	NETWORK_ADDRESS_ERROR_UNKNOWN,
+	NETWORK_ADDRESS_ERROR_INVALID_ADDRESS_FAMILY,
+	NETWORK_ADDRESS_ERROR_DST_TOO_SMALL,
+	NETWORK_ADDRESS_ERROR_INVALID
+};
+
 typedef struct {
 	union {
 		struct sockaddr_in ipv4;
@@ -74,5 +87,7 @@ NETWORK_API network_address *network_address_copy(network_address *dst, network_
 NETWORK_API gint network_address_set_address(network_address *addr, const gchar *address);
 NETWORK_API gint network_address_refresh_name(network_address *addr);
 NETWORK_API gint network_address_is_local(network_address *dst_addr, network_address *src_addr);
+NETWORK_API char *
+network_address_tostring(network_address *addr, char *dst, gsize *dst_len, GError **gerr);
 
 #endif

@@ -113,6 +113,81 @@ void t_network_address_resolve_ipv6() {
 	network_address_free(addr);
 }
 
+static void
+t_network_address_tostring_ipv4() {
+	network_address *addr;
+	char buf[255];
+	gsize buf_len = sizeof(buf);
+	GError *gerr = NULL;
+
+	addr = network_address_new();
+
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1"), ==, 0);
+
+	buf_len = sizeof(buf); /* should be large enough */
+	g_assert_cmpstr(network_address_tostring(addr, buf, &buf_len, NULL), ==, "127.0.0.1");
+	g_assert_cmpint(9 + 1, ==, buf_len);
+
+	buf_len = 4; /* too small */
+	g_assert(NULL == network_address_tostring(addr, buf, &buf_len, &gerr));
+	g_assert_cmpint(NETWORK_ADDRESS_ERROR, ==, gerr->domain);
+	g_assert_cmpint(NETWORK_ADDRESS_ERROR_DST_TOO_SMALL, ==, gerr->code);
+	g_clear_error(&gerr);
+
+	network_address_free(addr);
+}
+
+static void
+t_network_address_tostring_ipv6() {
+#ifdef AF_INET6
+	network_address *addr;
+	char buf[255];
+	gsize buf_len = sizeof(buf);
+	GError *gerr = NULL;
+
+	addr = network_address_new();
+
+	g_assert_cmpint(network_address_set_address(addr, "[::1]"), ==, 0);
+
+	buf_len = sizeof(buf); /* should be large enough */
+	g_assert_cmpstr(network_address_tostring(addr, buf, &buf_len, NULL), ==, "::1");
+	g_assert_cmpint(3 + 1, ==, buf_len);
+
+	buf_len = 3; /* too small */
+	g_assert(NULL == network_address_tostring(addr, buf, &buf_len, &gerr));
+	g_assert_cmpint(NETWORK_ADDRESS_ERROR, ==, gerr->domain);
+	g_assert_cmpint(NETWORK_ADDRESS_ERROR_DST_TOO_SMALL, ==, gerr->code);
+	g_clear_error(&gerr);
+
+	network_address_free(addr);
+#endif
+}
+
+static void
+t_network_address_tostring_unix() {
+#ifndef _WIN32
+	network_address *addr;
+	char buf[255];
+	gsize buf_len = sizeof(buf);
+	GError *gerr = NULL;
+
+	addr = network_address_new();
+
+	g_assert_cmpint(network_address_set_address(addr, "/foobar"), ==, 0);
+
+	buf_len = sizeof(buf); /* should be large enough */
+	g_assert_cmpstr(network_address_tostring(addr, buf, &buf_len, NULL), ==, "/foobar");
+	g_assert_cmpint(7 + 1, ==, buf_len);
+
+	buf_len = 3; /* too small */
+	g_assert(NULL == network_address_tostring(addr, buf, &buf_len, &gerr));
+	g_assert_cmpint(NETWORK_ADDRESS_ERROR, ==, gerr->domain);
+	g_assert_cmpint(NETWORK_ADDRESS_ERROR_DST_TOO_SMALL, ==, gerr->code);
+	g_clear_error(&gerr);
+
+	network_address_free(addr);
+#endif
+}
 
 int main(int argc, char **argv) {
 	g_test_init(&argc, &argv, NULL);
@@ -120,6 +195,9 @@ int main(int argc, char **argv) {
 
 	g_test_add_func("/core/network_address_new", t_network_address_new);
 	g_test_add_func("/core/network_address_set", t_network_address_set);
+	g_test_add_func("/core/network_address_tostring_ipv4", t_network_address_tostring_ipv4);
+	g_test_add_func("/core/network_address_tostring_ipv6", t_network_address_tostring_ipv6);
+	g_test_add_func("/core/network_address_tostring_unix", t_network_address_tostring_unix);
 	g_test_add_func("/core/network_address_resolve", t_network_address_resolve);
 	g_test_add_func("/core/network_address_resolve_ipv6", t_network_address_resolve_ipv6);
 
