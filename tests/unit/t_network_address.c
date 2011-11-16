@@ -147,7 +147,11 @@ t_network_address_tostring_ipv6() {
 
 	addr = network_address_new();
 
-	g_assert_cmpint(network_address_set_address(addr, "[::1]"), ==, 0);
+	if (0 != network_address_set_address(addr, "[::1]")) {
+		/* skip test, if resolving ::1 fails */
+		network_address_free(addr);
+		return;
+	}
 
 	buf_len = sizeof(buf); /* should be large enough */
 	g_assert_cmpstr(network_address_tostring(addr, buf, &buf_len, NULL), ==, "::1");
