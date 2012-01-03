@@ -524,6 +524,20 @@ void chassis_frontend_print_lua_version() {
 	lua_close(L);
 }
 
+/**
+ * log the versions of the initialized plugins
+*/
+int chassis_frontend_log_plugin_versions(GPtrArray *plugins) {
+	guint i;
+
+	for (i = 0; i < plugins->len; i++) {
+		chassis_plugin *p = plugins->pdata[i];
+
+		g_critical("MySQL %s %s started" CHASSIS_NEWLINE, p->name, p->version);
+	}
+
+	return 0;
+}
 
 int chassis_frontend_write_pidfile(const char *pid_file, GError **gerr) {
 	int fd;

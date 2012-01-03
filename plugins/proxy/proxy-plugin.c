@@ -2221,7 +2221,7 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 
 G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
-	p->name         = g_strdup("proxy");
+	p->name         = g_strdup("Proxy");
 	p->version		= g_strdup(PACKAGE_VERSION);
 
 	p->init         = network_mysqld_proxy_plugin_new;
