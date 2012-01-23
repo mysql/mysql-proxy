@@ -533,7 +533,7 @@ int chassis_frontend_log_plugin_versions(GPtrArray *plugins) {
 	for (i = 0; i < plugins->len; i++) {
 		chassis_plugin *p = plugins->pdata[i];
 
-		g_critical("MySQL %s %s started" CHASSIS_NEWLINE, p->name, p->version);
+		g_critical("%s %s started", p->name, p->version);
 	}
 
 	return 0;
