@@ -618,7 +618,7 @@ static int network_mysqld_admin_plugin_apply_config(chassis *chas, chassis_plugi
 
 G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
-	p->name         = g_strdup("Proxy Admin");
+	p->name         = g_strdup("admin");
 	p->version		= g_strdup(PACKAGE_VERSION);
 
 	p->init         = network_mysqld_admin_plugin_new;

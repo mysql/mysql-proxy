@@ -556,7 +556,7 @@ int network_mysqld_cli_plugin_apply_config(chassis *chas, chassis_plugin_config 
 int plugin_init(chassis_plugin *p) {
 	/* append the our init function to the init-hook-list */
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
-	p->name         = g_strdup("Proxy Client");
+	p->name         = g_strdup("client");
 	p->version		= g_strdup(PACKAGE_VERSION);
 
 	p->init         = network_mysqld_cli_plugin_init;

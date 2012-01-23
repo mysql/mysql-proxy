@@ -822,7 +822,7 @@ int network_mysqld_replicant_plugin_apply_config(chassis G_GNUC_UNUSED *chas, ch
 
 G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
-	p->name         = g_strdup("Proxy Replicant");
+	p->name         = g_strdup("replicant");
 	p->version		= g_strdup(PACKAGE_VERSION);
 	/* append the our init function to the init-hook-list */
 
