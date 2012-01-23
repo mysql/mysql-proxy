@@ -564,10 +564,10 @@ int main_cmdline(int argc, char **argv) {
 		}
 	}
 
-	/* the message has to be _after_ the g_option_content_parse() to 
-	 * hide from the output if the --help is asked for
+	/* 
+	 * log the versions of all loaded plugins
 	 */
-	g_message("%s started", PACKAGE_STRING); /* add tag to the logfile (after we opened the logfile) */
+	chassis_frontend_log_plugin_versions(srv->modules);
 
 #ifdef _WIN32
 	if (chassis_win32_is_service()) chassis_win32_service_set_state(SERVICE_RUNNING, 0);
