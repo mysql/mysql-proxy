@@ -31,6 +31,10 @@
 #define C_MODE_END G_END_DECLS
 typedef guint64 ulonglong;
 
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+
 #ifndef HAVE_ULONG
 #ifdef HAVE_ULONG_T
 typedef ulong_t	ulong;
