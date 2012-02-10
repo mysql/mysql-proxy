@@ -40,12 +40,18 @@ typedef struct {
 	} type;
 
 	struct event *ev;
+
+	struct timeval _tv_storage;
+	struct timeval *tv; /* points to ._tv_storage or to NULL */
 } chassis_event_op_t;
 
 CHASSIS_API chassis_event_op_t *chassis_event_op_new();
 CHASSIS_API void chassis_event_op_free(chassis_event_op_t *e);
+CHASSIS_API void chassis_event_op_set_timeout(chassis_event_op_t *op, struct timeval *tv); 
 CHASSIS_API void chassis_event_add(chassis *chas, struct event *ev);
+CHASSIS_API void chassis_event_add_with_timeout(chassis *chas, struct event *ev, struct timeval *tv);
 CHASSIS_API void chassis_event_add_local(chassis *chas, struct event *ev);
+CHASSIS_API void chassis_event_add_local_with_timeout(chassis *chas, struct event *ev, struct timeval *tv);
 
 /**
  * a event-thread

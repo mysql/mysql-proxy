@@ -176,6 +176,7 @@ typedef struct {
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_read_auth_old_password);
 	NETWORK_MYSQLD_PLUGIN_FUNC(con_send_auth_old_password);
 
+	NETWORK_MYSQLD_PLUGIN_FUNC(con_timeout);
 } network_mysqld_hooks;
 
 /**
@@ -358,6 +359,11 @@ struct network_mysqld_con {
 	 * 
 	 */
 	chassis_timestamps_t *timestamps;
+
+	/* connection specific timeouts */
+	struct timeval connect_timeout;
+	struct timeval read_timeout;
+	struct timeval write_timeout;
 };
 
 

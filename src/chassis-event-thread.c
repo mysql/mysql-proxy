@@ -81,12 +81,38 @@ void chassis_event_op_apply(chassis_event_op_t *op, struct event_base *event_bas
 	switch (op->type) {
 	case CHASSIS_EVENT_OP_ADD:
 		event_base_set(event_base, op->ev);
-		event_add(op->ev, NULL);
+		event_add(op->ev, op->tv);
 		break;
 	case CHASSIS_EVENT_OP_UNSET:
 		g_assert_not_reached();
 		break;
 	}
+}
+
+/**
+ * set the timeout 
+ *
+ * takes a deep-copy of the timeout as we have our own lifecycle independent of the caller 
+ */
+void
+chassis_event_op_set_timeout(chassis_event_op_t *op, struct timeval *tv) {
+	if (NULL != tv) {
+		op->_tv_storage = *tv;
+		op->tv = &(op->_tv_storage);
+	} else {
+		op->tv = NULL;
+	}
+}
+
+void chassis_event_add_with_timeout(chassis *chas, struct event *ev, struct timeval *tv) {
+	chassis_event_op_t *op = chassis_event_op_new();
+
+	op->type = CHASSIS_EVENT_OP_ADD;
+	op->ev   = ev;
+	chassis_event_op_set_timeout(op, tv);
+	g_async_queue_push(chas->threads->event_queue, op);
+
+	send(chas->threads->event_notify_fds[1], C("."), 0); /* ping the event handler */
 }
 
 /**
@@ -98,13 +124,7 @@ void chassis_event_op_apply(chassis_event_op_t *op, struct event_base *event_bas
  * @see network_mysqld_con_handle()
  */
 void chassis_event_add(chassis *chas, struct event *ev) {
-	chassis_event_op_t *op = chassis_event_op_new();
-
-	op->type = CHASSIS_EVENT_OP_ADD;
-	op->ev   = ev;
-	g_async_queue_push(chas->threads->event_queue, op);
-
-	send(chas->threads->event_notify_fds[1], C("."), 0); /* ping the event handler */
+	chassis_event_add_with_timeout(chas, ev, NULL);
 }
 
 GPrivate *tls_event_base_key = NULL;
@@ -116,7 +136,7 @@ GPrivate *tls_event_base_key = NULL;
  *
  * @see network_connection_pool_lua_add_connection()
  */
-void chassis_event_add_local(chassis G_GNUC_UNUSED *chas, struct event *ev) {
+void chassis_event_add_local_with_timeout(chassis G_GNUC_UNUSED *chas, struct event *ev, struct timeval *tv) {
 	struct event_base *event_base = ev->ev_base;
 	chassis_event_op_t *op;
 
@@ -128,12 +148,16 @@ void chassis_event_add_local(chassis G_GNUC_UNUSED *chas, struct event *ev) {
 
 	op->type = CHASSIS_EVENT_OP_ADD;
 	op->ev   = ev;
+	chassis_event_op_set_timeout(op, tv);
 
 	chassis_event_op_apply(op, event_base);
 	
 	chassis_event_op_free(op);
 }
 
+void chassis_event_add_local(chassis *chas, struct event *ev) {
+	chassis_event_add_local_with_timeout(chas, ev, NULL);
+}
 /**
  * handled events sent through the global event-queue 
  *
