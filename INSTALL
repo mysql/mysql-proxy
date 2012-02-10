@@ -119,13 +119,6 @@ Ubuntu/Debian
       libglib2.0-dev \
       libmysqlclient-dev
 
-On Debian and Ubuntu you need to tell the configure script that it has to use 
-"pkg-config lua5.1" to detect the lua-libriaries instead of the default 
-"pkg-config lua".
-
-  $ ./configure --with-lua=lua5.1
-
-
 MacOSX
 ------
 
