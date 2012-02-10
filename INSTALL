@@ -62,6 +62,7 @@ to make sure that the dependencies are in place;
 - glib2 2.16.0 or higher
 - pkg-config 
 - mysql 5.0.x or higher developer files
+- flex
 - Ensure $MYSQL_HOME/bin is in the PATH  (mysql_config required)
 
 CentOS release 4.3 (Final)
@@ -85,7 +86,8 @@ $ yum install \
     glib2 \
     glib2-devel \
     pkg-config \
-    mysqlclient14-devel
+    mysqlclient14-devel \
+    flex
 
 If you cannot upgrade the glib2 to the required minimum version, you'll have
 to hack up the glib2 package to install to /usr/local and compile the proxy with
@@ -117,7 +119,8 @@ Ubuntu/Debian
       libevent1  \
       libglib2.0-0 \
       libglib2.0-dev \
-      libmysqlclient-dev
+      libmysqlclient-dev \
+      flex
 
 MacOSX
 ------
@@ -139,6 +142,7 @@ installed (use YaST or any other package management tool to install these):
 - mysql-devel
 - lua-devel
 - libevent
+- flex
 
 You can convert the source tarball into an installable binary RPM by running
 the following command:
