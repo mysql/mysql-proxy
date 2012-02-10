@@ -1,5 +1,7 @@
 0.8.3 - 
 
+  * added network times for connect, read and write operations (#13332197)
+    - --proxy-connect-timeout, --proxy-read-timeout, --proxy-write-timeout
   * added IPv6 support
   * added initial support for the win-auth-method and its protocol extensions (MySQL 5.5.17)
   * added support for extracting the pluggable auth protocol information

@@ -104,6 +104,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <stdio.h>
+#include <math.h> /* floor() */
 
 #include <errno.h>
 
@@ -191,9 +192,61 @@ struct chassis_plugin_config {
 	gint start_proxy;
 
 	network_mysqld_con *listen_con;
+
+	gdouble connect_timeout_dbl; /* exposed in the config as double */
+	gdouble read_timeout_dbl; /* exposed in the config as double */
+	gdouble write_timeout_dbl; /* exposed in the config as double */
 };
 
+/**
+ * handle event-timeouts on the different states
+ *
+ * @note con->state points to the current state
+ *
+ */
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_timeout) {
+	network_mysqld_con_lua_t *st = con->plugin_con_state;
 
+	if (st == NULL) return NETWORK_SOCKET_ERROR;
+
+	switch (con->state) {
+	case CON_STATE_CONNECT_SERVER:
+		if (con->server) {
+			double timeout = con->connect_timeout.tv_sec +
+				con->connect_timeout.tv_usec / 1000000.0;
+
+			g_debug("%s: connecting to %s timed out after %.2f seconds. Trying another backend.",
+					G_STRLOC,
+					con->server->dst->name->str,
+					timeout);
+
+			st->backend->state = BACKEND_STATE_DOWN;
+			chassis_gtime_testset_now(&st->backend->state_since, NULL);
+			network_socket_free(con->server);
+			con->server = NULL;
+
+			/* stay in this state and let it pick another backend */
+
+			return NETWORK_SOCKET_SUCCESS;
+		}
+		/* fall through */
+	case CON_STATE_SEND_AUTH:
+		if (con->server) {
+			/* we tried to send the auth data to the server, but that timed out.
+			 * send the client and error
+			 */
+			network_mysqld_con_send_error(con->client, C("backend timed out"));
+			con->state = CON_STATE_SEND_AUTH_RESULT;
+			return NETWORK_SOCKET_SUCCESS;
+		}
+		/* fall through */
+	default:
+		/* the client timed out, close the connection */
+		con->state = CON_STATE_ERROR;
+		return NETWORK_SOCKET_SUCCESS;
+	}
+}
+	
 static network_mysqld_lua_stmt_ret proxy_lua_read_query_result(network_mysqld_con *con) {
 	network_socket *send_sock = con->client;
 	network_socket *recv_sock = con->server;
@@ -1779,8 +1832,23 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	return NETWORK_SOCKET_SUCCESS;
 }
 
+/**
+ * convert a double into a timeval
+ */
+static gboolean
+timeval_from_double(struct timeval *dst, double t) {
+	g_return_val_if_fail(dst != NULL, FALSE);
+	g_return_val_if_fail(t >= 0, FALSE);
+
+	dst->tv_sec = floor(t);
+	dst->tv_usec = floor((t - dst->tv_sec) * 1000000);
+
+	return TRUE;
+}
+
 NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
+	chassis_plugin_config *config = con->config;
 
 	g_assert(con->plugin_con_state == NULL);
 
@@ -1789,6 +1857,22 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_init) {
 	con->plugin_con_state = st;
 	
 	con->state = CON_STATE_CONNECT_SERVER;
+
+	/* set the connection specific timeouts
+	 *
+	 * TODO: expose these settings at runtime
+	 */
+	if (config->connect_timeout_dbl >= 0) {
+		timeval_from_double(&con->connect_timeout, config->connect_timeout_dbl);
+	}
+	if (config->read_timeout_dbl >= 0) {
+		timeval_from_double(&con->read_timeout, config->read_timeout_dbl);
+	}
+	if (config->write_timeout_dbl >= 0) {
+		timeval_from_double(&con->write_timeout, config->write_timeout_dbl);
+	}
+
+
 
 	return NETWORK_SOCKET_SUCCESS;
 }
@@ -2050,6 +2134,7 @@ int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
 	con->plugins.con_read_local_infile_result = proxy_read_local_infile_result;
 	con->plugins.con_send_local_infile_result = proxy_send_local_infile_result;
 	con->plugins.con_cleanup                   = proxy_disconnect_client;
+	con->plugins.con_timeout                   = proxy_timeout;
 
 	return 0;
 }
@@ -2071,6 +2156,11 @@ chassis_plugin_config * network_mysqld_proxy_plugin_new(void) {
 	config->start_proxy     = 1;
 	config->pool_change_user = 1; /* issue a COM_CHANGE_USER to cleanup the connection 
 					 when we get back the connection from the pool */
+
+	/* use negative values as defaults to make them ignored */
+	config->connect_timeout_dbl = -1.0;
+	config->read_timeout_dbl = -1.0;
+	config->write_timeout_dbl = -1.0;
 
 	return config;
 }
@@ -2129,6 +2219,10 @@ static GOptionEntry * network_mysqld_proxy_plugin_get_options(chassis_plugin_con
 		{ "no-proxy",                 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "don't start the proxy-module (default: enabled)", NULL },
 		
 		{ "proxy-pool-no-change-user", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, NULL, "don't use CHANGE_USER to reset the connection coming from the pool (default: enabled)", NULL },
+
+		{ "proxy-connect-timeout",    0, 0, G_OPTION_ARG_DOUBLE, NULL, "connect timeout in seconds (default: 2.0 seconds)", NULL },
+		{ "proxy-read-timeout",    0, 0, G_OPTION_ARG_DOUBLE, NULL, "read timeout in seconds (default: 8 hours)", NULL },
+		{ "proxy-write-timeout",    0, 0, G_OPTION_ARG_DOUBLE, NULL, "write timeout in seconds (default: 8 hours)", NULL },
 		
 		{ NULL,                       0, 0, G_OPTION_ARG_NONE,   NULL, NULL, NULL }
 	};
@@ -2144,6 +2238,9 @@ static GOptionEntry * network_mysqld_proxy_plugin_get_options(chassis_plugin_con
 	config_entries[i++].arg_data = &(config->lua_script);
 	config_entries[i++].arg_data = &(config->start_proxy);
 	config_entries[i++].arg_data = &(config->pool_change_user);
+	config_entries[i++].arg_data = &(config->connect_timeout_dbl);
+	config_entries[i++].arg_data = &(config->read_timeout_dbl);
+	config_entries[i++].arg_data = &(config->write_timeout_dbl);
 
 	return config_entries;
 }
