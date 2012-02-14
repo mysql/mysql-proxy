@@ -3,6 +3,7 @@ ADD_SUBDIRECTORY(proxy)
 INSTALL(FILES
 	active-queries.lua
 	active-transactions.lua
+	admin-sql.lua
 	analyze-query.lua
 	auditing.lua
 	commit-obfuscator.lua
@@ -10,6 +11,7 @@ INSTALL(FILES
 	histogram.lua
 	load-multi.lua
 	ro-balance.lua
+	ro-pooling.lua
 	rw-splitting.lua
 	xtab.lua
 

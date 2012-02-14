@@ -11,9 +11,11 @@ INSTALL(FILES
 	tutorial-monitor.lua
 	tutorial-packets.lua
 	tutorial-query-time.lua
+	tutorial-prep-stmts.lua
 	tutorial-resultset.lua
 	tutorial-rewrite.lua
 	tutorial-routing.lua
+	tutorial-scramble.lua
 	tutorial-states.lua
 	tutorial-tokenize.lua
 	tutorial-union.lua
