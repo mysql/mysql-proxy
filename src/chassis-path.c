@@ -125,11 +125,21 @@ gboolean chassis_resolve_path(const char *base_dir, gchar **filename) {
 	return TRUE;
 }
 
+/**
+ * Check if a path-string is parent of another
+ * @returns TRUE if the path-string is parent, FALSE if don't
+ */
 gboolean chassis_path_string_is_parent_of(const char *parent, const char *child) {
 
+	/* On Unix systems '/' is parent of all directories' */
 	if(0 == strcmp(parent, "/"))
 		return TRUE;
 
+	/* The path-string child can start with the same prefix string however the directory is not correct,
+	 * e.g. parent: /foo/bar , child: /foo/bar-foo.
+	 * To make the correct comparison we need to check if the parent path-string ends with the directory separator '/',
+	 * and if not, add it before doing the comparison
+	 */
 	if (parent[strlen(parent)-1] != G_DIR_SEPARATOR) {
                 char *temp_parent = g_strndup(parent, strlen(parent) + 1);
                 temp_parent[strlen(temp_parent)] = G_DIR_SEPARATOR;
