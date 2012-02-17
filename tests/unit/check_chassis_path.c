@@ -28,6 +28,8 @@
 
 #include "chassis-path.h"
 
+#include <string.h>
+
 #if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
 
@@ -94,6 +96,19 @@ START_TEST(test_abspath_basedir) {
 }
 /*@}*/
 
+void test_path_string_is_parent_of(void) {
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/foo", "/foo/bar/"));
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/", "/foo/"));
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/", "/foo"));
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/foo", "/foo/"));
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/foo/bar", "/foo/bar/bar)"));
+	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of("/foo/bar", "/foo/bar-foo"));
+	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of("/foo/bar2", "/foo/bar"));
+	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of("/foo/bar", "/foo/bar2"));
+}
+
+/*@}*/
+
 int main(int argc, char **argv) {
 	g_thread_init(NULL);
 
@@ -102,7 +117,8 @@ int main(int argc, char **argv) {
 	
 	g_test_add_func("/core/basedir/relpath", test_path_basedir);
 	g_test_add_func("/core/basedir/nobasedir", test_no_basedir);
-	g_test_add_func("/core/basedir/abspath", test_abspath_basedir);
+	g_test_add_func("/core/basedir/abspath", test_abspath_basedir);	
+	g_test_add_func("/core/path_string/is_parent_of", test_path_string_is_parent_of);
 	
 	return g_test_run();
 }

@@ -125,4 +125,27 @@ gboolean chassis_resolve_path(const char *base_dir, gchar **filename) {
 	return TRUE;
 }
 
+gboolean chassis_path_string_is_parent_of(const char *parent, const char *child) {
+
+	if(0 == strcmp(parent, "/"))
+		return TRUE;
+
+	if (parent[strlen(parent)-1] != G_DIR_SEPARATOR) {
+                char *temp_parent = g_strndup(parent, strlen(parent) + 1);
+                temp_parent[strlen(temp_parent)] = G_DIR_SEPARATOR;
+
+		if (0 == strncmp(temp_parent, child, strlen(temp_parent))) {
+			g_free(temp_parent);
+			return TRUE;
+		}
+
+		g_free(temp_parent);
+		return FALSE;
+	}
+
+	if (0 == strncmp(parent, child, strlen(parent) - 1))
+		return TRUE;
+	
+return FALSE;
+}
 
