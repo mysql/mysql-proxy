@@ -129,7 +129,7 @@ gboolean chassis_resolve_path(const char *base_dir, gchar **filename) {
  * Check if a path-string is parent of another
  * @returns TRUE if the path-string is parent, FALSE if don't
  */
-gboolean chassis_path_string_is_parent_of(const char *parent, const char *child) {
+gboolean chassis_path_string_is_parent_of(const char *parent, gsize parent_len, const char *child, gsize child_len) {
 
 	/* On Unix systems '/' is parent of all directories' */
 	if(0 == strcmp(parent, "/"))
@@ -140,11 +140,11 @@ gboolean chassis_path_string_is_parent_of(const char *parent, const char *child)
 	 * To make the correct comparison we need to check if the parent path-string ends with the directory separator '/',
 	 * and if not, add it before doing the comparison
 	 */
-	if (parent[strlen(parent)-1] != G_DIR_SEPARATOR) {
-                char *temp_parent = g_strndup(parent, strlen(parent) + 1);
-                temp_parent[strlen(temp_parent)] = G_DIR_SEPARATOR;
+	if (parent[parent_len - 1] != G_DIR_SEPARATOR) {
+                char *temp_parent = g_strndup(parent, parent_len + 1);
+                temp_parent[parent_len + 1] = G_DIR_SEPARATOR;
 
-		if (0 == strncmp(temp_parent, child, strlen(temp_parent))) {
+		if (0 == strncmp(temp_parent, child, parent_len + 1)) {
 			g_free(temp_parent);
 			return TRUE;
 		}
@@ -153,7 +153,7 @@ gboolean chassis_path_string_is_parent_of(const char *parent, const char *child)
 		return FALSE;
 	}
 
-	if (0 == strncmp(parent, child, strlen(parent) - 1))
+	if (0 == strncmp(parent, child, parent_len - 1))
 		return TRUE;
 	
 return FALSE;
