@@ -142,7 +142,7 @@ gboolean chassis_path_string_is_parent_of(const char *parent, gsize parent_len, 
 	 */
 	if (parent[parent_len - 1] != G_DIR_SEPARATOR) {
                 char *temp_parent = g_strndup(parent, parent_len + 1);
-                temp_parent[parent_len + 1] = G_DIR_SEPARATOR;
+                temp_parent[parent_len] = G_DIR_SEPARATOR;
 
 		if (0 == strncmp(temp_parent, child, parent_len + 1)) {
 			g_free(temp_parent);

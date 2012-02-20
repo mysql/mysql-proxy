@@ -97,14 +97,14 @@ START_TEST(test_abspath_basedir) {
 /*@}*/
 
 void test_path_string_is_parent_of(void) {
-	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/foo", "/foo/bar/"));
-	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/", "/foo/"));
-	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/", "/foo"));
-	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/foo", "/foo/"));
-	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of("/foo/bar", "/foo/bar/bar)"));
-	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of("/foo/bar", "/foo/bar-foo"));
-	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of("/foo/bar2", "/foo/bar"));
-	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of("/foo/bar", "/foo/bar2"));
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of(C("/foo"), C("/foo/bar/")));
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of(C("/"), C("/foo/")));
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of(C("/"), C("/foo")));
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of(C("/foo"), C("/foo/")));
+	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of(C("/foo/bar"), C("/foo/bar/bar")));
+	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C("/foo/bar"), C("/foo/bar-foo")));
+	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C("/foo/bar2"), C("/foo/bar")));
+	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C("/foo/bar"), C("/foo/bar2")));
 }
 
 /*@}*/
