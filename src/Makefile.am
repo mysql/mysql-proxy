@@ -22,7 +22,7 @@ plugindir = ${pkglibdir}/plugins
 
 
 BUILD_CPPFLAGS = $(LUA_CFLAGS) $(MYSQL_CFLAGS) $(GLIB_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS)
-BUILD_CFLAGS   = -DLUAEXTDIR="\"$(luaextdir)\""  -DPLUGINDIR="\"$(plugindir)\""
+BUILD_CFLAGS   = -DLUAEXTDIR="\"$(luaextdir)\""  -DPLUGINDIR="\"$(plugindir)\""  -DEXEC_PREFIX="\"$(exec_prefix)\""
 BUILD_LDADD    = $(GLIB_LIBS) $(GMODULE_LIBS) libmysql-chassis.la $(GTHREAD_LIBS) libmysql-proxy.la libmysql-chassis-glibext.la
 
 BUILT_SOURCES =
@@ -99,7 +99,7 @@ libmysql_chassis_la_SOURCES = \
 
 
 libmysql_chassis_la_LDFLAGS  = -export-dynamic -no-undefined -dynamic
-libmysql_chassis_la_CPPFLAGS = $(MYSQL_CFLAGS) $(EVENT_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS)
+libmysql_chassis_la_CPPFLAGS = $(MYSQL_CFLAGS) $(EVENT_CFLAGS) $(GLIB_CFLAGS) $(LUA_CFLAGS) $(GMODULE_CFLAGS) $(GTHREAD_CFLAGS) -DPLUGINDIR="\"$(plugindir)\""  -DEXEC_PREFIX="\"$(exec_prefix)\""
 libmysql_chassis_la_LIBADD   = $(EVENT_LIBS)   $(GLIB_LIBS)   $(LUA_LIBS) $(GMODULE_LIBS) $(GTHREAD_LIBS) libmysql-chassis-timing.la libmysql-chassis-glibext.la
 
 lib_LTLIBRARIES += libmysql-proxy.la

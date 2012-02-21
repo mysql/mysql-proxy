@@ -27,6 +27,7 @@
 
 CHASSIS_API gboolean chassis_resolve_path(const char *base_dir, gchar **filename);
 CHASSIS_API gchar *chassis_get_basedir(const gchar *prgname);
+CHASSIS_API gboolean chassis_path_string_is_parent_of(const char *parent, gsize parent_len, const char *child, gsize child_len);
 
 #endif
 

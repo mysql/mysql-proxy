@@ -308,11 +308,25 @@ int chassis_frontend_init_lua_cpath(const char *set_path, const char *base_dir, 
 
 int chassis_frontend_init_plugin_dir(char **_plugin_dir, const char *base_dir) {
 	char *plugin_dir = *_plugin_dir;
+	char *rel_plugin_dir;
 
 	if (plugin_dir) return 0;
 
 #ifdef WIN32
 	plugin_dir = g_build_filename(base_dir, "bin", NULL);
+
+#elif defined(PLUGINDIR) && defined(EXEC_PREFIX)
+
+	if (chassis_path_string_is_parent_of(C(EXEC_PREFIX), C(PLUGINDIR)) {
+		rel_plugin_dir = PLUGINDIR + sizeof(EXEC_PREFIX) - 1;
+
+		if (rel_plugin_dir[0] == G_DIR_SEPARATOR) rel_plugin_dir++; /* if plugindir starts with a /, skip it */
+
+		plugin_dir = g_build_filename(base_dir, rel_plugin_dir, NULL);
+	} else {
+		plugin_dir = g_strdup(PLUGINDIR);
+	}    
+
 #else
 	plugin_dir = g_build_filename(base_dir, "lib", PACKAGE, "plugins", NULL);
 #endif
