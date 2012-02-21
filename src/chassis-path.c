@@ -160,9 +160,6 @@ gboolean chassis_path_string_is_parent_of(const char *parent, gsize parent_len, 
 	if (child_len >= parent_len) {
 		if (0 == strncmp(parent, child, parent_len))
 			return TRUE;
-	} else {
-		if (0 == strncmp(parent, child, parent_len - 1))
-			return FALSE;
 	}
 
 	return FALSE;

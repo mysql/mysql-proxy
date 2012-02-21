@@ -317,9 +317,7 @@ int chassis_frontend_init_plugin_dir(char **_plugin_dir, const char *base_dir) {
 
 #elif defined(PLUGINDIR) && defined(EXEC_PREFIX)
 
-	g_assert_cmpint(sizeof(PLUGINDIR), >, sizeof(EXEC_PREFIX));
-
-        if (chassis_path_string_is_parent_of(C(PLUGINDIR), C(EXEC_PREFIX)) {
+	if (chassis_path_string_is_parent_of(C(PLUGINDIR), C(EXEC_PREFIX)) {
 		rel_plugin_dir = PLUGINDIR + sizeof(EXEC_PREFIX) - 1;
 
 		if (rel_plugin_dir[0] == G_DIR_SEPARATOR) rel_plugin_dir++; /* if plugindir starts with a /, skip it */
