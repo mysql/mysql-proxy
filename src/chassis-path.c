@@ -131,7 +131,10 @@ gboolean chassis_resolve_path(const char *base_dir, gchar **filename) {
  */
 gboolean chassis_path_string_is_parent_of(const char *parent, gsize parent_len, const char *child, gsize child_len) {
 
-	if(0 == strcmp(parent, ""))
+	if (child_len < parent_len)
+		return FALSE;
+
+	if(parent_len == 0)
 		return FALSE;
 
 	/* On Unix systems '/' is parent of all directories' */
@@ -157,10 +160,8 @@ gboolean chassis_path_string_is_parent_of(const char *parent, gsize parent_len, 
 		return FALSE;
 	}
 
-	if (child_len >= parent_len) {
-		if (0 == strncmp(parent, child, parent_len))
-			return TRUE;
-	}
+	if (0 == strncmp(parent, child, parent_len))
+		return TRUE;
 
 	return FALSE;
 }
