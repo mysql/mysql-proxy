@@ -106,6 +106,8 @@ void test_path_string_is_parent_of(void) {
 	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C("/foo/bar2"), C("/foo/bar")));
 	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C("/foo/bar"), C("/foo/bar2")));
 	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C(""), C("/foo")));
+	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C("/foo/bar/"), C("/foo/bar2")));
+	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C("/foo/bar/"), C("/foo/bar")));
 }
 
 /*@}*/

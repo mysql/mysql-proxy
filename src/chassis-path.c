@@ -144,6 +144,7 @@ gboolean chassis_path_string_is_parent_of(const char *parent, gsize parent_len, 
 	 * and if not, add it before doing the comparison
 	 */
 	if (parent[parent_len - 1] != G_DIR_SEPARATOR) {
+		/* g_strndup adds the trailing '\0' at the end of the new string */
 		char *temp_parent = g_strndup(parent, parent_len + 1);
 		temp_parent[parent_len] = G_DIR_SEPARATOR;
 
@@ -156,7 +157,13 @@ gboolean chassis_path_string_is_parent_of(const char *parent, gsize parent_len, 
 		return FALSE;
 	}
 
-	if (0 == strncmp(parent, child, parent_len - 1)) return TRUE;
+	if (child_len >= parent_len) {
+		if (0 == strncmp(parent, child, parent_len))
+			return TRUE;
+	} else {
+		if (0 == strncmp(parent, child, parent_len - 1))
+			return FALSE;
+	}
 
 	return FALSE;
 }
