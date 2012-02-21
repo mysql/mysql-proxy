@@ -28,6 +28,7 @@
 #else
 #include <stdlib.h> /* for realpath */
 #endif
+#include <string.h>
 #include "chassis-path.h"
 
 gchar *chassis_get_basedir(const gchar *prgname) {
