@@ -159,7 +159,7 @@ int network_backends_check(network_backends_t *bs) {
 	/* this also covers the "time went backards" case */
 	if (t_diff < G_USEC_PER_SEC) {
 		if (t_diff < 0) {
-			g_critical("%s: time went backwards (%"G_GINT64_FORMAT" usec)!",
+			g_message("%s: time went backwards (%"G_GINT64_FORMAT" usec)!",
 				G_STRLOC, t_diff);
 			bs->backend_last_check.tv_usec = 0;
 			bs->backend_last_check.tv_sec = 0;
