@@ -199,6 +199,19 @@ function read_query( packet )
 
 		return proxy.PROXY_SEND_RESULT
 	end
+	
+	-- COM_BINLOG_DUMP packet can't be balanced
+	--
+	-- so we must send it always to the master
+	if cmd.type == proxy.COM_BINLOG_DUMP then
+		-- if we don't have a backend selected, let's pick the master
+		--
+		if proxy.connection.backend_ndx == 0 then
+			proxy.connection.backend_ndx = lb.idle_failsafe_rw()
+		end
+
+		return
+	end
 
 	proxy.queries:append(1, packet, { resultset_is_needed = true })
 
