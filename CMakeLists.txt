@@ -268,7 +268,7 @@ ADD_SUBDIRECTORY(lib)
 ## make sure glib-2.0 is part of the install
 IF(WIN32)
 	FIND_FILE(GLIB_DLL 
-		libglib-2.0-0.dll 
+		NAMES libglib-2.0-0.dll glib-2.0.dll
 		PATHS "${GLIB_LIBRARY_DIRS}/../bin/"
 		NO_DEFAULT_PATH
 		)
@@ -277,7 +277,7 @@ IF(WIN32)
 		DESTINATION bin
 	)
 	FIND_FILE(GMODULE_DLL 
-		libgmodule-2.0-0.dll 
+		NAMES libgmodule-2.0-0.dll gmodule-2.0.dll
 		PATHS "${GLIB_LIBRARY_DIRS}/../bin/"
 		NO_DEFAULT_PATH
 		)
@@ -286,7 +286,7 @@ IF(WIN32)
 		DESTINATION bin
 	)
 	FIND_FILE(GTHREAD_DLL 
-		libgthread-2.0-0.dll 
+		NAMES libgthread-2.0-0.dll gthread-2.0.dll
 		PATHS "${GLIB_LIBRARY_DIRS}/../bin/"
 		NO_DEFAULT_PATH
 		)
