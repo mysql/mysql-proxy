@@ -53,7 +53,8 @@ local command_names = {
 	"COM_STMT_RESET",
 	"COM_SET_OPTION",
 	"COM_STMT_FETCH",
-	"COM_DAEMON"
+	"COM_DAEMON",
+	"COM_BINLOG_DUMP"
 }
 
 ---
@@ -86,6 +87,8 @@ function parse(packet)
 		cmd.schema = packet:sub(2)
 	elseif cmd.type == proxy.COM_SET_OPTION then
 		cmd.option = packet:sub(2)
+	elseif cmd.type == proxy.COM_BINLOG_DUMP then
+		-- nothing to decode
 	else
 		print("[debug] (command) unhandled type name:" .. tostring(cmd.type_name) .. " byte:" .. tostring(cmd.type))
 	end
