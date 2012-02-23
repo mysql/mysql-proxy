@@ -19,6 +19,7 @@
     - C-API added: chassis_keyfile_to_options_with_error()
     - C-API deprected: chassis_keyfile_to_options()
   * fixed crash if --max-open-files is invalid on win32
+  * fixed default plugin-dir for 64-bit Unix systems (lib64/ vs. lib/)
   * handle missing trailing \0 in MySQL 5.5.7-.10 in the auth-method name
 
 0.8.2 - 2011-08-18
