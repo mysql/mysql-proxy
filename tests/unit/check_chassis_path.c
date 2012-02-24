@@ -97,6 +97,9 @@ START_TEST(test_abspath_basedir) {
 /*@}*/
 
 void test_path_string_is_parent_of(void) {
+#ifndef _WIN32
+	 /* TODO: update the tests for win32 where G_DIR_SEPARATOR_C is not '/'
+	 */
 	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of(C("/foo"), C("/foo/bar/")));
 	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of(C("/"), C("/foo/")));
 	g_assert_cmpint(TRUE, ==, chassis_path_string_is_parent_of(C("/"), C("/foo")));
@@ -108,6 +111,7 @@ void test_path_string_is_parent_of(void) {
 	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C(""), C("/foo")));
 	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C("/foo/bar/"), C("/foo/bar2")));
 	g_assert_cmpint(FALSE, ==, chassis_path_string_is_parent_of(C("/foo/bar/"), C("/foo/bar")));
+#endif
 }
 
 /*@}*/
