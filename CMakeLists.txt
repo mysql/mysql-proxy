@@ -267,6 +267,15 @@ ADD_SUBDIRECTORY(lib)
 
 ## make sure glib-2.0 is part of the install
 IF(WIN32)
+	FIND_PROGRAM(GSPAWN_HELPER_EXE 
+		NAMES gspawn-win32-helper-console gspawn-win32-helper
+		PATHS "${GLIB_LIBRARY_DIRS}/../bin/"
+		NO_DEFAULT_PATH
+		)
+	INSTALL(PROGRAMS 
+		${GSPAWN_HELPER_EXE}
+		DESTINATION bin
+		)		
 	FIND_FILE(GLIB_DLL 
 		NAMES libglib-2.0-0.dll glib-2.0.dll
 		PATHS "${GLIB_LIBRARY_DIRS}/../bin/"
