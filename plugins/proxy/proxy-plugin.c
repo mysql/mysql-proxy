@@ -867,6 +867,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 
 					network_mysqld_queue_append(recv_sock, recv_sock->send_queue, 
 							S(auth_resp));
+					
+					/* the server side of connection is already up and authed and we have checked that
+					 * the username and client-scramble are the same as in the previous authed connection.
+					 * the auth phase is over so we need to reset the packet-id sequence
+					 */
+					network_mysqld_queue_reset(send_sock);
+					network_mysqld_queue_reset(recv_sock);
 
 					g_string_free(auth_resp, TRUE);
 				}
@@ -1821,7 +1828,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 
 		g_assert(con->client->challenge == NULL);
 		con->client->challenge = network_mysqld_auth_challenge_copy(con->server->challenge);
-		
+
 		con->state = CON_STATE_SEND_HANDSHAKE;
 
 		/**
