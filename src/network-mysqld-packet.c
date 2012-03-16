@@ -552,23 +552,32 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 	case COM_CHANGE_USER: 
 		/**
 		 * - OK
-		 * - ERR (in 5.1.12+ + a duplicate ERR)
+		 * - ERR
+		 * - EOF for auth switch TODO
 		 */
 		err = err || network_mysqld_proto_get_int8(packet, &status);
 		if (err) return -1;
 
 		switch (status) {
 		case MYSQLD_PACKET_ERR:
-			is_finished = 1;
-			break;
 		case MYSQLD_PACKET_OK:
 			is_finished = 1;
 			break;
+		case MYSQLD_PACKET_EOF:
+			/* TODO:
+			 * - added extra states to the state-engine in network-mysqld.c to track the packets that are sent back and forth
+			 *   to switch the auth-method in COM_CHANGE_USER
+			 */
+			g_message("%s: COM_CHANGE_USER's auth-method-switch detected, but is currently not supported. Closing connection.",
+					G_STRLOC);
+			return -1;
 		default:
-			g_error("%s.%d: COM_(0x%02x) should be (ERR|OK), got %02x",
-					__FILE__, __LINE__,
-					con->parse.command, status);
-			break;
+			g_debug_hexdump(G_STRLOC, S(packet->data));
+			g_message("%s: got a 0x%02x packet as respose for COM_[0%02x], but expected only (ERR|OK)",
+					G_STRLOC,
+					con->parse.command,
+					(guint8)status);
+			return -1;
 		}
 		break;
 	case COM_INIT_DB:
@@ -590,10 +599,12 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 			is_finished = 1;
 			break;
 		default:
-			g_error("%s.%d: COM_(0x%02x) should be (ERR|OK), got 0x%02x",
-					__FILE__, __LINE__,
-					con->parse.command, (guint8)status);
-			break;
+			g_debug_hexdump(G_STRLOC, S(packet->data));
+			g_message("%s: got a 0x%02x packet as respose for COM_[0%02x], but expected only (ERR|OK)",
+					G_STRLOC,
+					con->parse.command,
+					(guint8)status);
+			return -1;
 		}
 		break;
 	case COM_DEBUG:
@@ -608,10 +619,12 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 			is_finished = 1;
 			break;
 		default:
-			g_error("%s.%d: COM_(0x%02x) should be EOF, got x%02x",
-					__FILE__, __LINE__,
-					con->parse.command, (guint8)status);
-			break;
+			g_debug_hexdump(G_STRLOC, S(packet->data));
+			g_message("%s: got a 0x%02x packet as respose for COM_[0%02x], but expected only (ERR|EOF)",
+					G_STRLOC,
+					con->parse.command,
+					(guint8)status);
+			return -1;
 		}
 		break;
 
@@ -625,13 +638,15 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		case MYSQLD_PACKET_EOF:
 			is_finished = 1;
 			break;
+
 		case MYSQLD_PACKET_NULL:
 		case MYSQLD_PACKET_OK:
-			g_error("%s.%d: COM_(0x%02x) should not be (OK|ERR|NULL), got: %02x",
-					__FILE__, __LINE__,
-					con->parse.command, status);
-
-			break;
+			g_debug_hexdump(G_STRLOC, S(packet->data));
+			g_message("%s: got a 0x%02x packet as respose for COM_[0%02x], but expected only (ERR, EOF or field data)",
+					G_STRLOC,
+					con->parse.command,
+					(guint8)status);
+			return -1;
 		default:
 			break;
 		}
@@ -692,7 +707,8 @@ int network_mysqld_proto_get_query_result(network_packet *packet, network_mysqld
 		is_finished = 1;
 		break;
 	default:
-		g_critical("%s: COM_(0x%02x) is not handled", 
+		g_debug_hexdump(G_STRLOC, S(packet->data));
+		g_message("%s: COM_(0x%02x) is not handled", 
 				G_STRLOC,
 				con->parse.command);
 		err = 1;

@@ -22,6 +22,7 @@
   * fixed default plugin-dir for 64-bit Unix systems (lib64/ vs. lib/)
   * fixed crash if COM_BINLOG_DUMP is used with rw-splitting.lua (#34412)
   * handle missing trailing \0 in MySQL 5.5.7-.10 in the auth-method name
+  * fixed abort() in COM_CHANGE_USER+auth-method-switch
 
 0.8.2 - 2011-08-18
 

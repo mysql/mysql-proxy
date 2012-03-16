@@ -61,6 +61,10 @@ EXTRA_DIST = \
 		ignore-resultset-mock.lua \
 		ignore-resultset.options \
 		ignore-resultset.test \
+		invalid_response_packets-test.lua \
+		invalid_response_packets-mock.lua \
+		invalid_response_packets.options \
+		invalid_response_packets.test \
 		lineno.test \
 		lineno.lua \
 		lm1.lua \
