@@ -340,6 +340,11 @@ struct network_mysqld_con {
 	gboolean com_quit_seen;
 
 	/**
+	 * Flag indicating whether we have received all data from load data infile.
+	 */
+	gboolean local_file_data_is_finished;
+
+	/**
 	 * Contains the parsed packet.
 	 */
 	struct network_mysqld_con_parse parse;

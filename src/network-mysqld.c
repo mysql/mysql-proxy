@@ -1837,8 +1837,20 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 				if (con->state != ostate) break; /* the state has changed (e.g. CON_STATE_ERROR) */
 
+				/**
+				 * do the plugin call to decode the result-set to track if we are finished already
+				 * or we need to keep reading the data
+				 */
 				switch ((call_ret = plugin_call(srv, con, con->state))) {
 				case NETWORK_SOCKET_SUCCESS:
+					/**
+					 * if we still haven't read all data from LDLI, lets forward immediatly
+					 * the data to the backends so that we can read the next packets
+					 */
+					if (!con->local_file_data_is_finished && con->server) {
+						con->state = CON_STATE_SEND_LOCAL_INFILE_DATA;
+					}
+
 					break;
 				default:
 					g_critical("%s: plugin_call(%s) unexpected return value: %d",
@@ -1849,7 +1861,8 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 					con->state = CON_STATE_ERROR;
 					break;
 				}
-			} while (con->state == ostate); /* read packets from the network until the plugin decodes to go to the next state */
+			/* read packets from the network until the plugin decodes to go to the next state */
+			} while (con->state == CON_STATE_READ_LOCAL_INFILE_DATA);
 	
 			break; }
 		case CON_STATE_SEND_LOCAL_INFILE_DATA: 
@@ -1857,6 +1870,17 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 
 			switch (network_mysqld_write(srv, con->server)) {
 			case NETWORK_SOCKET_SUCCESS:
+				/* if we still haven't read all data from LDLI so we need to go back and read more
+				 */
+				if (!con->local_file_data_is_finished && con->server) {
+					con->state = CON_STATE_READ_LOCAL_INFILE_DATA;
+				}
+				/* we have read all data from LDLI so we need to read the LDLI result from the server
+				 */
+				else {
+					con->state = CON_STATE_READ_LOCAL_INFILE_RESULT;
+				}
+
 				break;
 			case NETWORK_SOCKET_WAIT_FOR_EVENT:
 				timeout = con->write_timeout;
