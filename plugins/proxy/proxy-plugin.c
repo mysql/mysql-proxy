@@ -2047,9 +2047,14 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_local_infile_data) {
 	g_assert_cmpint(com_query->state, ==, PARSE_COM_QUERY_LOCAL_INFILE_DATA);
 
 	query_result = network_mysqld_proto_get_query_result(&packet, con);
+
+	/* set the testing flag for all data received or not */ 
+	con->local_file_data_is_finished = (query_result == 1);
+
 	if (query_result == -1) return NETWORK_SOCKET_ERROR; /* something happend, let's get out of here */
 
 	if (con->server) {
+		/* we haven't received all data from load data infile, so let's continue reading and writing to the backend */
 		network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
 				g_queue_pop_tail(recv_sock->recv_queue->chunks));
 	} else {
@@ -2062,8 +2067,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_local_infile_data) {
 		while ((s = g_queue_pop_head(recv_sock->recv_queue->chunks))) g_string_free(s, TRUE);
 	}
 
-	if (query_result == 1) { /* we have everything, send it to the backend */
-		if (con->server) {
+	if (query_result == 1) {
+		if (con->server) { /* we have received all data, lets move forward reading the result from the server */
 			con->state = CON_STATE_SEND_LOCAL_INFILE_DATA;
 		} else {
 			network_mysqld_con_send_ok(con->client);
