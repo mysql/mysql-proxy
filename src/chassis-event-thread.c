@@ -106,13 +106,39 @@ chassis_event_op_set_timeout(chassis_event_op_t *op, struct timeval *tv) {
 
 void chassis_event_add_with_timeout(chassis *chas, struct event *ev, struct timeval *tv) {
 	chassis_event_op_t *op = chassis_event_op_new();
+	ssize_t ret;
 
 	op->type = CHASSIS_EVENT_OP_ADD;
 	op->ev   = ev;
 	chassis_event_op_set_timeout(op, tv);
 	g_async_queue_push(chas->threads->event_queue, op);
 
-	send(chas->threads->event_notify_fds[1], C("."), 0); /* ping the event handler */
+	/* ping the event handler */
+	if (1 != (ret = send(chas->threads->event_notify_fds[1], C("."), 0))) {
+		int last_errno; 
+
+#ifdef WIN32
+		last_errno = WSAGetLastError();
+#else
+		last_errno = errno;
+#endif
+
+		switch (last_errno) {
+		case EAGAIN:
+#if EAGAIN != EWOULDBLOCK
+		case EWOULDBLOCK:
+#endif
+			/* that's fine ... */
+			break;
+		default:
+			g_debug("%s: send() to event-notify-pipe failed: %s (len = %d)",
+					G_STRLOC,
+					g_strerror(errno),
+					g_async_queue_length(chas->threads->event_queue));
+			break;
+		}
+	}
+	
 }
 
 /**
@@ -173,7 +199,7 @@ void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events
 	chassis_event_op_t *op;
 	char ping[1024];
 	guint received = 0;
-	gssize removed;
+	gssize removed = 0;
 
 	while ((op = g_async_queue_try_pop(chas->threads->event_queue))) {
 		chassis_event_op_apply(op, event_base);
@@ -183,10 +209,38 @@ void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events
 		received++;
 	}
 
-	/* the pipe has one . per event, remove as many as we received */
+	/* the pipe has one . per event, remove as many as we received
+	 *
+	 * but the remote end may have dropped .'s as the pipe was full. */
 	while (received > 0 && 
 	       (removed = recv(event_thread->notify_fd, ping, MIN(received, sizeof(ping)), 0)) > 0) {
 		received -= removed;
+	}
+
+	if (removed == -1) {
+		/* we failed to pull .'s from the notify-queue */
+		int last_errno; 
+
+#ifdef WIN32
+		last_errno = WSAGetLastError();
+#else
+		last_errno = errno;
+#endif
+
+		switch (last_errno) {
+		case EAGAIN:
+#if EAGAIN != EWOULDBLOCK
+		case EWOULDBLOCK:
+#endif
+			/* that's fine ... */
+			break;
+		default:
+			g_debug("%s: recv() from event-notify-fd failed: %s (expected %d more)",
+					G_STRLOC,
+					g_strerror(last_errno),
+					received);
+			break;
+		}
 	}
 }
 
@@ -266,6 +320,10 @@ chassis_event_threads_t *chassis_event_threads_new() {
 	threads->event_threads = g_ptr_array_new();
 	threads->event_queue = g_async_queue_new();
 
+	/* make both ends non-blocking */
+	evutil_make_socket_nonblocking(threads->event_notify_fds[0]);
+	evutil_make_socket_nonblocking(threads->event_notify_fds[1]);
+
 	return threads;
 }
 
@@ -340,9 +398,6 @@ int chassis_event_threads_init_thread(chassis_event_threads_t *threads, chassis_
 	g_free(lpProtocolInfo);
 #else
 	event_thread->notify_fd = dup(threads->event_notify_fds[0]);
-#endif
-#if 0
-	evutil_make_socket_nonblocking(event_thread->notify_fd);
 #endif
 
 	event_set(&(event_thread->notify_fd_event), event_thread->notify_fd, EV_READ | EV_PERSIST, chassis_event_handle, event_thread);
