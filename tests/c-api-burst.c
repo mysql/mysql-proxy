@@ -112,8 +112,9 @@ connect_mysql_and_run(connect_mysql_and_run_config *config) {
 		}
 		g_mutex_unlock(threads_connected_mutex);
 
-		g_critical("%s: %s",
+		g_critical("%s: connecting thread[%d] to mysql failed: %s",
 				G_STRLOC,
+				config->id,
 				mysql_error(mysql));
 	
 		mysql_close(mysql);
@@ -182,6 +183,76 @@ connect_mysql_and_run(connect_mysql_and_run_config *config) {
 	mysql_thread_end();
 
 	return config;
+}
+
+#define MYSQL_ERROR mysql_error_quark()
+
+GQuark
+mysql_error_quark(void) {
+	return g_quark_from_static_string("mysql-error-quark");
+}
+
+static gboolean
+connect_mysql_and_run_connection_is_good(connect_mysql_and_run_config *config, GError **gerr) {
+	MYSQL      *mysql;
+	MYSQL_RES  *res = NULL;
+	gboolean is_ok = FALSE;
+
+	mysql = mysql_init(NULL);
+
+	/* connect */
+	if (NULL == mysql_real_connect(mysql, config->hostname, config->username, config->password, config->schemaname, config->port, config->socketpath, CLIENT_MULTI_RESULTS)) {
+		/* we failed to connected, wake up the waiting threads in case we were the last not-connected thread */
+		g_set_error(gerr,
+				MYSQL_ERROR,
+				mysql_errno(mysql),
+				"%s",
+				mysql_error(mysql));
+
+		/* check if max-connections is high enough to spawn the threads */
+		is_ok = FALSE;
+	} else if (0 != mysql_real_query(mysql, C("SELECT @@max_connections"))) {
+		g_set_error(gerr,
+				MYSQL_ERROR,
+				mysql_errno(mysql),
+				"%s",
+				mysql_error(mysql));
+
+		is_ok = FALSE;
+	} else if (NULL == (res = mysql_store_result(mysql))) {
+		g_set_error(gerr,
+				MYSQL_ERROR,
+				mysql_errno(mysql),
+				"%s",
+				mysql_error(mysql));
+
+		is_ok = FALSE;
+	} else if (1 != mysql_field_count(mysql)) {
+		g_set_error(gerr,
+				MYSQL_ERROR,
+				0,
+				"expected field-count == 1, got %d",
+				mysql_field_count(mysql));
+
+		is_ok = FALSE;
+	} else {
+		MYSQL_ROW row;
+
+		/* we have a result, process it */
+		while (NULL != (row = mysql_fetch_row(res))) {
+			g_print("max_connections = %s\n", row[0] ? row[0] : "null");
+		}
+
+		/* FIXME: we should evaluate it ... */
+
+		is_ok = TRUE;
+	}
+
+	if (res) mysql_free_result(res);
+	
+	mysql_close(mysql);
+
+	return is_ok;
 }
 
 int
@@ -294,6 +365,14 @@ main(int argc, char **argv) {
 	/* init the libs, mutex and conditions */
 	g_thread_init(NULL);
 	mysql_library_init(argc, argv, NULL);
+
+	/* test the connection */
+	if (!connect_mysql_and_run_connection_is_good(&config, &gerr)) {
+		g_critical("%s: running initial test for the provided config failed: %s",
+				G_STRLOC,
+				gerr->message);
+		return -1;
+	}
 
 	threads_connected_cond = g_cond_new();
 	threads_connected_mutex = g_mutex_new();
