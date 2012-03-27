@@ -111,7 +111,9 @@ void chassis_event_add_with_timeout(chassis *chas, struct event *ev, struct time
 	op->type = CHASSIS_EVENT_OP_ADD;
 	op->ev   = ev;
 	chassis_event_op_set_timeout(op, tv);
-	g_async_queue_push(chas->threads->event_queue, op);
+
+	g_async_queue_lock(chas->threads->event_queue);
+	g_async_queue_push_unlocked(chas->threads->event_queue, op);
 
 	/* ping the event handler */
 	if (1 != (ret = send(chas->threads->event_notify_fds[1], C("."), 0))) {
@@ -129,16 +131,20 @@ void chassis_event_add_with_timeout(chassis *chas, struct event *ev, struct time
 		case EWOULDBLOCK:
 #endif
 			/* that's fine ... */
-			break;
-		default:
 			g_debug("%s: send() to event-notify-pipe failed: %s (len = %d)",
 					G_STRLOC,
 					g_strerror(errno),
-					g_async_queue_length(chas->threads->event_queue));
+					g_async_queue_length_unlocked(chas->threads->event_queue));
+			break;
+		default:
+			g_critical("%s: send() to event-notify-pipe failed: %s (len = %d)",
+					G_STRLOC,
+					g_strerror(errno),
+					g_async_queue_length_unlocked(chas->threads->event_queue));
 			break;
 		}
 	}
-	
+	g_async_queue_unlock(chas->threads->event_queue);
 }
 
 /**
@@ -197,51 +203,47 @@ void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events
 	struct event_base *event_base = event_thread->event_base;
 	chassis *chas = event_thread->chas;
 	chassis_event_op_t *op;
-	char ping[1024];
-	guint received = 0;
-	gssize removed = 0;
 
-	while ((op = g_async_queue_try_pop(chas->threads->event_queue))) {
-		chassis_event_op_apply(op, event_base);
+	do {
+		char ping[1];
 
-		chassis_event_op_free(op);
+		g_async_queue_lock(chas->threads->event_queue);
+		if ((op = g_async_queue_try_pop_unlocked(chas->threads->event_queue))) {
+			ssize_t ret;
+			chassis_event_op_apply(op, event_base);
 
-		received++;
-	}
-
-	/* the pipe has one . per event, remove as many as we received
-	 *
-	 * but the remote end may have dropped .'s as the pipe was full. */
-	while (received > 0 && 
-	       (removed = recv(event_thread->notify_fd, ping, MIN(received, sizeof(ping)), 0)) > 0) {
-		received -= removed;
-	}
-
-	if (removed == -1) {
-		/* we failed to pull .'s from the notify-queue */
-		int last_errno; 
+			chassis_event_op_free(op);
+	       
+			if (1 != (ret = recv(event_thread->notify_fd, ping, 1, 0))) {
+				/* we failed to pull .'s from the notify-queue */
+				int last_errno; 
 
 #ifdef WIN32
-		last_errno = WSAGetLastError();
+				last_errno = WSAGetLastError();
 #else
-		last_errno = errno;
+				last_errno = errno;
 #endif
 
-		switch (last_errno) {
-		case EAGAIN:
+				switch (last_errno) {
+				case EAGAIN:
 #if EAGAIN != EWOULDBLOCK
-		case EWOULDBLOCK:
+				case EWOULDBLOCK:
 #endif
-			/* that's fine ... */
-			break;
-		default:
-			g_debug("%s: recv() from event-notify-fd failed: %s (expected %d more)",
-					G_STRLOC,
-					g_strerror(last_errno),
-					received);
-			break;
+					/* that's fine ... */
+					g_debug("%s: recv() from event-notify-fd failed: %s",
+							G_STRLOC,
+							g_strerror(last_errno));
+					break;
+				default:
+					g_critical("%s: recv() from event-notify-fd failed: %s",
+							G_STRLOC,
+							g_strerror(last_errno));
+					break;
+				}
+			}
 		}
-	}
+		g_async_queue_unlock(chas->threads->event_queue);
+	} while (op); /* even if op is 'free()d' it still is != NULL */
 }
 
 /**
