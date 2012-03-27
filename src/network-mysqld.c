@@ -2019,7 +2019,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 				break;
 			}
 				
-			con->state = CON_STATE_ERROR;
+			con->state = CON_STATE_CLOSE_CLIENT;
 
 			break;
 		}
