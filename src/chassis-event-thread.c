@@ -50,6 +50,29 @@
 #ifndef WIN32
 #define closesocket(x) close(x)
 #endif
+
+#ifdef _WIN32
+#define E_NET_CONNRESET WSAECONNRESET
+#define E_NET_CONNABORTED WSAECONNABORTED
+#define E_NET_WOULDBLOCK WSAEWOULDBLOCK
+#define E_NET_INPROGRESS WSAEINPROGRESS
+#else
+#define E_NET_CONNRESET ECONNRESET
+#define E_NET_CONNABORTED ECONNABORTED
+#define E_NET_INPROGRESS EINPROGRESS
+#if EWOULDBLOCK == EAGAIN
+/**
+ * some system make EAGAIN == EWOULDBLOCK which would lead to a 
+ * error in the case handling
+ *
+ * set it to -1 as this error should never happen
+ */
+#define E_NET_WOULDBLOCK -1
+#else
+#define E_NET_WOULDBLOCK EWOULDBLOCK
+#endif
+#endif
+
 /**
  * create a new event-op
  *
@@ -106,7 +129,7 @@ chassis_event_op_set_timeout(chassis_event_op_t *op, struct timeval *tv) {
 
 void chassis_event_add_with_timeout(chassis *chas, struct event *ev, struct timeval *tv) {
 	chassis_event_op_t *op = chassis_event_op_new();
-	ssize_t ret;
+	gssize ret;
 
 	op->type = CHASSIS_EVENT_OP_ADD;
 	op->ev   = ev;
@@ -127,9 +150,7 @@ void chassis_event_add_with_timeout(chassis *chas, struct event *ev, struct time
 
 		switch (last_errno) {
 		case EAGAIN:
-#if EAGAIN != EWOULDBLOCK
-		case EWOULDBLOCK:
-#endif
+		case E_NET_WOULDBLOCK:
 			/* that's fine ... */
 			g_debug("%s: send() to event-notify-pipe failed: %s (len = %d)",
 					G_STRLOC,
@@ -209,7 +230,7 @@ void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events
 
 		g_async_queue_lock(chas->threads->event_queue);
 		if ((op = g_async_queue_try_pop_unlocked(chas->threads->event_queue))) {
-			ssize_t ret;
+			gsize ret;
 			chassis_event_op_apply(op, event_base);
 
 			chassis_event_op_free(op);
@@ -226,9 +247,7 @@ void chassis_event_handle(int G_GNUC_UNUSED event_fd, short G_GNUC_UNUSED events
 
 				switch (last_errno) {
 				case EAGAIN:
-#if EAGAIN != EWOULDBLOCK
-				case EWOULDBLOCK:
-#endif
+				case E_NET_WOULDBLOCK:
 					/* that's fine ... */
 					g_debug("%s: recv() from event-notify-fd failed: %s",
 							G_STRLOC,
