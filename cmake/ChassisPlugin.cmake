@@ -14,7 +14,7 @@ MACRO(CHASSIS_PLUGIN_INSTALL _plugin_name)
 		)
 		## install the .pdb too
 		IF(CMAKE_BUILD_TYPE MATCHES "RelWithDebInfo")
-			STRING(REPLACE ${CMAKE_SHARED_LIBRARY_PREFIX} ".pdb" pdb_location ${built_location})
+			STRING(REPLACE ${CMAKE_SHARED_LIBRARY_SUFFIX} ".pdb" pdb_location ${built_location})
 			INSTALL(FILES
 				${pdb_location}
 				DESTINATION bin
