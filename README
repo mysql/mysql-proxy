@@ -1,4 +1,4 @@
-MySQL Proxy 0.8-1.0
+MySQL Proxy 0.8.3
 
 This is a release of MySQL Proxy, a simple program that 
 sits between your client and MySQL server(s) that can 
@@ -8,7 +8,7 @@ software is released under the version 2 of the GNU
 General Public License. MySQL Proxy is brought to you 
 by the MySQL team at Oracle.
 
-Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
 
 The MySQL Proxy is licensed under the terms of the GPLv2
 <http://www.gnu.org/licenses/old-licenses/gpl-2.0.html>.
