@@ -452,7 +452,7 @@ int main_cmdline(int argc, char **argv) {
 	}
 
 	/*
-	 * the MySQL Proxy should load 'admin' and 'proxy' plugins
+	 * the MySQL Proxy should load 'proxy' plugins
 	 */
 	if (!frontend->plugin_names) {
 		frontend->plugin_names = g_new(char *, 2);
