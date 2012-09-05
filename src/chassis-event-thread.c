@@ -142,7 +142,7 @@ void chassis_event_add_with_timeout(chassis *chas, struct event *ev, struct time
 	if (1 != (ret = send(chas->threads->event_notify_fds[1], C("."), 0))) {
 		int last_errno; 
 
-#ifdef WIN32
+#ifdef _WIN32
 		last_errno = WSAGetLastError();
 #else
 		last_errno = errno;
@@ -328,7 +328,7 @@ chassis_event_threads_t *chassis_event_threads_new() {
 	 */
 	if (0 != evutil_socketpair(AF_UNIX, SOCK_STREAM, 0, threads->event_notify_fds)) {
 		int err;
-#ifdef WIN32
+#ifdef _WIN32
 		err = WSAGetLastError();
 #else
 		err = errno;
@@ -402,23 +402,35 @@ void chassis_event_threads_add(chassis_event_threads_t *threads, chassis_event_t
  * @see chassis_event_handle()
  */ 
 int chassis_event_threads_init_thread(chassis_event_threads_t *threads, chassis_event_thread_t *event_thread, chassis *chas) {
-#ifdef WIN32
+#ifdef _WIN32
 	LPWSAPROTOCOL_INFO lpProtocolInfo;
 #endif
 	event_thread->event_base = event_base_new();
 	event_thread->chas = chas;
-#ifdef WIN32
+#ifdef _WIN32
 	lpProtocolInfo = g_malloc(sizeof(WSAPROTOCOL_INFO));
 	if (SOCKET_ERROR == WSADuplicateSocket(threads->event_notify_fds[0], GetCurrentProcessId(), lpProtocolInfo)) {
-		g_error("%s: Could not duplicate socket: %s (%d)", G_STRLOC, g_strerror(WSAGetLastError()), WSAGetLastError());
+		int _errno = WSAGetLastError();
+
+		g_critical("%s: Could not duplicate socket: %s (%d)", G_STRLOC, g_strerror(_errno), _errno);
+		g_free(lpProtocolInfo);
+		return -1;
 	}
 	event_thread->notify_fd = WSASocket(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, lpProtocolInfo, 0, 0);
 	if (INVALID_SOCKET == event_thread->notify_fd) {
-		g_error("%s: Could not create duplicated socket: %s (%d)", G_STRLOC, g_strerror(WSAGetLastError()), WSAGetLastError());
+		int _errno = WSAGetLastError();
+
+		g_critical("%s: Could not create duplicated socket: %s (%d)", G_STRLOC, g_strerror(_errno), _errno);
+		g_free(lpProtocolInfo);
+		return -1;
 	}
 	g_free(lpProtocolInfo);
 #else
 	event_thread->notify_fd = dup(threads->event_notify_fds[0]);
+	if (-1 == event_thread->notify_fd) {
+		g_critical("%s: Could not create duplicated socket: %s (%d)", G_STRLOC, g_strerror(errno), errno);
+		return -1;
+	}
 #endif
 
 	event_set(&(event_thread->notify_fd_event), event_thread->notify_fd, EV_READ | EV_PERSIST, chassis_event_handle, event_thread);
@@ -445,7 +457,11 @@ void *chassis_event_thread_loop(chassis_event_thread_t *event_thread) {
 		timeout.tv_sec = 1;
 		timeout.tv_usec = 0;
 
-		g_assert(event_base_loopexit(event_thread->event_base, &timeout) == 0);
+		r = event_base_loopexit(event_thread->event_base, &timeout);
+		if (r == -1) {
+			g_critical("%s: leaving chassis_event_thread_loop early. event_base_loopexit() failed", G_STRLOC);
+			break;
+		}
 
 		r = event_base_dispatch(event_thread->event_base);
 

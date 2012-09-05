@@ -249,7 +249,10 @@ int chassis_mainloop(void *_chas) {
 
 	/* add a event-handler for the "main" events */
 	mainloop_thread = chassis_event_thread_new();
-	chassis_event_threads_init_thread(chas->threads, mainloop_thread, chas);
+	if (0 != chassis_event_threads_init_thread(chas->threads, mainloop_thread, chas)) {
+		chassis_event_thread_free(mainloop_thread);
+		return -1;
+	}
 	chassis_event_threads_add(chas->threads, mainloop_thread);
 
 	chas->event_base = mainloop_thread->event_base; /* all global events go to the 1st thread */
@@ -336,7 +339,10 @@ int chassis_mainloop(void *_chas) {
 		chassis_event_thread_t *event_thread;
 	
 		event_thread = chassis_event_thread_new();
-		chassis_event_threads_init_thread(chas->threads, event_thread, chas);
+		if (0 != chassis_event_threads_init_thread(chas->threads, event_thread, chas)) {
+			chassis_event_thread_free(event_thread);
+			return -1;
+		}
 		chassis_event_threads_add(chas->threads, event_thread);
 	}
 
