@@ -152,16 +152,41 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 		struct addrinfo hint;
 		struct addrinfo *ai;
 		int ret;
-		
+
+		/* AI_ADDRCONFIG filters out ::1 and link-local addresses if there is no
+		 * global IPv6 address assigned to the local interfaces
+		 *
+		 * 1) try to resolve with ADDRCONFIG
+		 * 2) if 1) fails, try without ADDRCONFIG
+		 *
+		 * this should handle DNS problems where
+		 * - only IPv4 is configured, but DNS returns IPv6 records + IPv4 and 
+		 *   we would pick IPv6 (and fail)
+		 * - 
+		 */
+
 		memset(&hint, 0, sizeof(hint));
 		hint.ai_family = PF_UNSPEC;
 		hint.ai_socktype = SOCK_STREAM;
 		hint.ai_protocol = 0;
 		hint.ai_flags = AI_ADDRCONFIG;
 		if ((ret = getaddrinfo(address, NULL, &hint, &first_ai)) != 0) {
-			g_critical("getaddrinfo(\"%s\") failed: %s", address, 
-					   gai_strerror(ret));
-			return -1;
+			if (EAI_ADDRFAMILY == ret || /* AI_ADDRCONFIG with a non-global address */
+			    EAI_BADFLAGS == ret) {   /* AI_ADDRCONFIG isn't supported */
+				if (first_ai) freeaddrinfo(first_ai);
+				first_ai = NULL;
+
+				hint.ai_flags &= ~AI_ADDRCONFIG;
+
+				ret = getaddrinfo(address, NULL, &hint, &first_ai);
+			}
+
+			if (ret != 0) {
+				g_critical("getaddrinfo(\"%s\") failed: %s (%d)", address, 
+						   gai_strerror(ret),
+						   ret);
+				return -1;
+			}
 		}
 
 		ret = 0; /* bogus, just to make it explicit */
