@@ -29,3 +29,4 @@ SELECT row_count(1), bytes();
 SELECT 5.0;
 SELECT 4.1;
 SELECT "1", NULL, "1";
+SELECT NULL;

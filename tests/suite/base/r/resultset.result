@@ -24,3 +24,6 @@ row_count	bytes
 SELECT "1", NULL, "1";
 test_result
 1,nil,1
+SELECT NULL;
+row_count	bytes
+1	5

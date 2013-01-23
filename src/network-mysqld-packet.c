@@ -252,8 +252,8 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 				   0x00 is part of the protocol for binary row packets
 				 */
 			} else {
-				/* the first field might be a NULL for a text row packet */
-				break;
+				/* fallthrough to default:
+				 * the first field might be a NULL for a text row packet */
 			}
 		default:
 			query->rows++;
