@@ -59,7 +59,7 @@ local function dump_query_result( inj )
   for row in inj.resultset.rows do
     local cols = {}
     local o
-    for i = 1, field_count do
+    for i = 1, field_count + 1 do
       if not o then
         o = ""
       else 
@@ -86,7 +86,7 @@ local function dump_connection()
   
   print("| backend[ndx] = "      .. cur_backend_ndx)
   print("| connected_clients = " .. cur_backend["connected_clients"])
-  print("| address = "           .. cur_backend["address"])
+  print("| address = "           .. cur_backend["dst"].name)
   print("| server-version = "    .. proxy.connection.server["mysqld_version"])
   print("| default-db = "     .. proxy.connection.server["default_db"])
   print("| thread-id = "      .. proxy.connection.server["thread_id"])
