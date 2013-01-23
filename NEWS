@@ -1,3 +1,8 @@
+0.8.4 - 
+
+  * fixed res.row_count and res.bytes not updated when field resultset field is a NULL
+  * fixed access to backends.address in examples/tutorial-packets.lua
+
 0.8.3 - 
 
   * added network times for connect, read and write operations (#13332197)
