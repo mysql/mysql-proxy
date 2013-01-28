@@ -171,7 +171,11 @@ static gint network_address_set_address_ip(network_address *addr, const gchar *a
 		hint.ai_protocol = 0;
 		hint.ai_flags = AI_ADDRCONFIG;
 		if ((ret = getaddrinfo(address, NULL, &hint, &first_ai)) != 0) {
-			if (EAI_ADDRFAMILY == ret || /* AI_ADDRCONFIG with a non-global address */
+			if (
+			    /* FreeBSD doesn't provide EAI_ADDRFAMILY (since 2003) */
+#ifdef EAI_ADDRFAMILY
+			    EAI_ADDRFAMILY == ret || /* AI_ADDRCONFIG with a non-global address */
+#endif
 			    EAI_BADFLAGS == ret) {   /* AI_ADDRCONFIG isn't supported */
 				if (first_ai) freeaddrinfo(first_ai);
 				first_ai = NULL;
