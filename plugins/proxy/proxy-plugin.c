@@ -830,7 +830,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 							S(com_change_user));
 
 					/* we just injected a com_change_user packet so let's set the flag to track it on the connection */
-					con->com_change_user = TRUE;
+					st->is_in_com_change_user = TRUE;
 
 					/**
 					 * the server is already authenticated, the client isn't
@@ -1092,6 +1092,7 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_old_password) {
 	network_socket *recv_sock, *send_sock;
 	network_packet packet;
 	guint32 packet_len;
+	network_mysqld_con_lua_t *st = con->plugin_con_state;
 
 	/* move the packet to the send queue */
 
@@ -1141,9 +1142,9 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_old_password) {
 		/* let's check if the proxy plugin injected a com_change_user packet so we
 		 * need to fix the packet-id
 		 */
-		if(con->com_change_user) {
+		if(st->is_in_com_change_user) {
 			network_mysqld_proto_set_packet_id(packet.data, send_sock->last_packet_id + 1);
-			con->com_change_user = FALSE;
+			st->is_in_com_change_user = FALSE;
 		}
 
 		/* move the packet to the send-queue

@@ -73,6 +73,11 @@ typedef struct {
 	struct event evt_timer;        /**< The event structure used to implement the timer callback, currently unused. */
 
 	gboolean is_reconnecting;      /**< if true, critical messages concerning failed connect() calls are suppressed, as they are expected errors */
+
+	/**
+	 * Flag indicating whether we injected a COM_CHANGE_USER packet on the proxy plugin side
+	 */
+	gboolean is_in_com_change_user;
 } network_mysqld_con_lua_t;
 
 NETWORK_API network_mysqld_con_lua_t *network_mysqld_con_lua_new();
