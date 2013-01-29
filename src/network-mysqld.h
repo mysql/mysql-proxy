@@ -345,6 +345,11 @@ struct network_mysqld_con {
 	gboolean local_file_data_is_finished;
 
 	/**
+	 * Flag indicating whether we injected a COM_CHANGE_USER packet on the proxy plugin side
+	 */
+	gboolean com_change_user;
+
+	/**
 	 * Contains the parsed packet.
 	 */
 	struct network_mysqld_con_parse parse;
