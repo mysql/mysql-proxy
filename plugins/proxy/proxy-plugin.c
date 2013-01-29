@@ -1144,7 +1144,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_old_password) {
 		 */
 		if(st->is_in_com_change_user) {
 			network_mysqld_proto_set_packet_id(packet.data, send_sock->last_packet_id + 1);
-			st->is_in_com_change_user = FALSE;
 		}
 
 		/* move the packet to the send-queue
@@ -1318,6 +1317,13 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	send_sock = NULL;
 	recv_sock = con->client;
 	st->injected.sent_resultset = 0;
+
+	/* we already passed the CON_STATE_READ_AUTH_OLD_PASSWORD phase and sent all packets
+	 * to the client so we need to set the COM_CHANGE_USER flag back to FALSE
+	 */
+	if(st->is_in_com_change_user) {
+		st->is_in_com_change_user = FALSE;
+	}
 
 	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query::enter_lua");
 	ret = proxy_lua_read_query(con);
