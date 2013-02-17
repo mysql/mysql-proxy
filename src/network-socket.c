@@ -357,6 +357,7 @@ network_socket_retval_t network_socket_connect(network_socket *sock) {
  * @see network_address_set_address()
  */
 network_socket_retval_t network_socket_bind(network_socket * con) {
+	gchar *address_copy;
 	/* WIN32:      int setsockopt(SOCKET s, int level, int optname, const char *optval, int optlen);
 	 * HPUX:       int setsockopt(int s,    int level, int optname, const void *optval, int optlen);
 	 * all others: int setsockopt(int s,    int level, int optname, const void *optval, socklen_t optlen);
@@ -443,13 +444,49 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 #endif
 		}
 
-
 		if (-1 == bind(con->fd, &con->dst->addr.common, con->dst->len)) {
-			g_critical("%s: bind(%s) failed: %s (%d)", 
+			/* binding failed so the address/socket is already being used
+			 * let's check if we can connect to it so we check if is being used 
+			 * by some app
+			 */
+			if (-1 == connect(con->fd, &con->dst->addr.common, con->dst->len)) {
+				g_debug("%s.%d: connect(%s) failed: %s (%d)", 
+					__FILE__, __LINE__,
+					con->dst->name->str,
+					g_strerror(errno), errno);
+				/* we can't connect to the socket so no one is listening on it and we can
+				 * delete it and create an equal one
+				 */
+				address_copy = g_strdup(con->dst->name->str);
+				con->dst->can_unlink_socket = TRUE;
+
+				/* free the previous network_address and create a new one */
+				network_address_free(con->dst);
+				con->dst = network_address_new();
+				network_address_set_address(con->dst, address_copy);
+
+				g_debug("%s: retrying to bind(%s)",
+						G_STRLOC,
+						con->dst->name->str);
+
+				/* let's bind again with the new socket */
+				if (-1 == bind(con->fd, &con->dst->addr.common, con->dst->len)) {
+					g_critical("%s: bind(%s) failed: %s (%d)", 
+						G_STRLOC,
+						con->dst->name->str,
+						g_strerror(errno), errno);
+
+					return NETWORK_SOCKET_ERROR;
+				}
+			}
+			else {
+				g_critical("%s: bind(%s) failed: %s (%d)", 
 					G_STRLOC,
 					con->dst->name->str,
 					g_strerror(errno), errno);
-			return NETWORK_SOCKET_ERROR;
+
+				return NETWORK_SOCKET_ERROR;	
+			}
 		}
 
 		if (con->dst->addr.common.sa_family == AF_INET &&
