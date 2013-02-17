@@ -121,7 +121,19 @@ gboolean chassis_resolve_path(const char *base_dir, gchar **filename) {
 	
 	g_debug("%s.%d: adjusting relative path (%s) to base_dir (%s). New path: %s", __FILE__, __LINE__, *filename, base_dir, new_path);
 
+	/**
+	 * We're going to rewrite the value of *filename, so we need to free the memory held by the pointer or it will lead to a memory leak.
+	 *
+	 * g_option_context_parse() is called after this call, so if it fails it will try to free the pointer. Since the pointer
+	 * was free'd and changed here, the storage(GOptionContext) which helds the pointer will not know about it and result in an access violation.
+	 * 
+	 * To fix this bug(#14665885) we need to change the chassis API. The temporary fix is to remove the free() and avoid the possible crash.
+	 * It's a non repeating leak so a minor drawback.
+	 */
+#if 0
 	g_free(*filename);
+#endif
+
 	*filename = new_path;
 	return TRUE;
 }
