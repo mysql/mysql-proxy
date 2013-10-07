@@ -2028,7 +2028,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 		events   = 0;
 	} while (ostate != con->state);
 	NETWORK_MYSQLD_CON_TRACK_TIME(con, "con_handle_end");
-
+#if 0
 	/**
 	 * there are two ways to leave the state-engine:
 	 * - wait for event and return (WAIT_FOR_EVENT(); return;)
@@ -2041,7 +2041,7 @@ void network_mysqld_con_handle(int event_fd, short events, void *user_data) {
 	g_critical("%s: left the MySQL protocol's state-machine at state '%s'. You may see the connection hang now.",
 			G_STRLOC,
 			network_mysqld_con_state_get_name(con->state));
-
+#endif
 
 	return;
 }
