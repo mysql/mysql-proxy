@@ -36,7 +36,13 @@
 
 /** @addtogroup chassis */
 /*@{*/
-typedef struct {
+
+typedef struct _chassis_log chassis_log;
+
+typedef gboolean (*chassis_log_rotate_func)(chassis_log *, gpointer user_data, GError **gerr);
+
+
+struct _chassis_log {
 	GLogLevelFlags min_lvl;
 
 	gchar *log_filename;
@@ -56,7 +62,14 @@ typedef struct {
 	GString *last_msg;
 	time_t   last_msg_ts;
 	guint    last_msg_count;
-} chassis_log;
+
+	/* private */
+	chassis_log_rotate_func rotate_func;
+	gpointer rotate_func_data;
+	GDestroyNotify rotate_func_data_destroy;
+
+	gboolean is_rotated;
+};
 
 
 CHASSIS_API chassis_log *chassis_log_init(void) G_GNUC_DEPRECATED;
@@ -64,12 +77,18 @@ CHASSIS_API chassis_log *chassis_log_new(void);
 CHASSIS_API int chassis_log_set_level(chassis_log *log, const gchar *level);
 CHASSIS_API void chassis_log_free(chassis_log *log);
 CHASSIS_API int chassis_log_open(chassis_log *log);
+CHASSIS_API int chassis_log_close(chassis_log *log);
 CHASSIS_API void chassis_log_func(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data);
 CHASSIS_API void chassis_log_set_logrotate(chassis_log *log);
 CHASSIS_API int chassis_log_set_event_log(chassis_log *log, const char *app_name);
 CHASSIS_API const char *chassis_log_skip_topsrcdir(const char *message);
 CHASSIS_API void chassis_set_logtimestamp_resolution(chassis_log *log, int res);
 CHASSIS_API int chassis_get_logtimestamp_resolution(chassis_log *log);
+
+CHASSIS_API void
+chassis_log_set_rotate_func(chassis_log *log, chassis_log_rotate_func rotate_func,
+		gpointer userdata, GDestroyNotify userdata_free);
+
 /*@}*/
 
 #endif

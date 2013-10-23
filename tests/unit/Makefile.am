@@ -18,7 +18,7 @@
 # 
 #  $%ENDLICENSE%$
 
-SUBDIRS=lua
+SUBDIRS=. lua
 
 TESTS=\
 	check_sql_tokenizer \
@@ -54,13 +54,14 @@ t_chassis_shutdown_hooks_LDADD = $(GLIB_LIBS) $(GTHREAD_LIBS)
 t_chassis_frontend_SOURCES = t_chassis_frontend.c 
 
 t_chassis_frontend_CPPFLAGS = \
-	-I$(top_srcdir)/src/ $(GLIB_CFLAGS) -I$(top_srcdir) \
+	-I$(top_srcdir)/src/ \
+	-I$(top_srcdir) \
+	$(GLIB_CFLAGS) \
 	$(MYSQL_CFLAGS)
 
-t_chassis_frontend_LDADD = $(top_builddir)/src/libmysql-chassis.la
-# a hack for HP/UX ia64 to add a explicit -L to the location of the above lib 
-t_chassis_frontend_LDFLAGS = -L$(top_builddir)/src/.libs
-
+t_chassis_frontend_LDADD = \
+	$(top_builddir)/src/libmysql-chassis.la \
+	$(GLIB_LIBS)
 
 check_chassis_filemode_SOURCES = check_chassis_filemode.c \
 	$(top_srcdir)/src/chassis-filemode.c

@@ -78,6 +78,9 @@ const struct {
 	{ NULL, 0, 0, 0 }
 };
 
+static gboolean
+chassis_log_rotate_reopen(chassis_log *log, gpointer userdata, GError **gerr);
+
 /**
  * @deprecated will be removed in 1.0
  * @see chassis_log_new()
@@ -99,6 +102,9 @@ chassis_log *chassis_log_new(void) {
 	log->last_msg = g_string_new(NULL);
 	log->last_msg_ts = 0;
 	log->last_msg_count = 0;
+	log->rotate_func = NULL;
+
+	chassis_log_set_rotate_func(log, chassis_log_rotate_reopen, NULL, NULL);
 
 	return log;
 }
@@ -168,6 +174,10 @@ void chassis_log_free(chassis_log *log) {
 	g_string_free(log->last_msg, TRUE);
 
 	if (log->log_filename) g_free(log->log_filename);
+
+	if (log->rotate_func_data_destroy && log->rotate_func_data) {
+		log->rotate_func_data_destroy(log->rotate_func_data);
+	}
 
 	g_free(log);
 }
@@ -282,18 +292,43 @@ const char *chassis_log_skip_topsrcdir(const char *message) {
 	return message;
 }
 
-void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
+static gboolean
+chassis_log_rotate_reopen(chassis_log *log, gpointer userdata, GError **gerr) {
+	chassis_log_close(log);
+	chassis_log_open(log);
+
+	return TRUE;
+}
+
+gboolean chassis_log_rotate(chassis_log *log, GError **gerr) {
+	return log->rotate_func(log, log->rotate_func_data, gerr);
+}
+
+void
+chassis_log_set_rotate_func(chassis_log *log, chassis_log_rotate_func rotate_func,
+		gpointer userdata, GDestroyNotify userdata_free) {
+
+	if (log->rotate_func_data && log->rotate_func_data_destroy) {
+		log->rotate_func_data_destroy(log->rotate_func_data);
+		log->rotate_func_data = NULL;
+	}
+
+	log->rotate_func_data = userdata;
+	log->rotate_func_data_destroy = userdata_free;
+	log->rotate_func = rotate_func;
+
+	return;
+
+}
+
+static void
+chassis_log_func_locked(const gchar G_GNUC_UNUSED *log_domain, GLogLevelFlags log_level,
+		const gchar *message, gpointer user_data) {
 	chassis_log *log = user_data;
 	int i;
 	gchar *log_lvl_name = "(error)";
 	gboolean is_duplicate = FALSE;
-	gboolean is_log_rotated = FALSE;
 	const char *stripped_message = chassis_log_skip_topsrcdir(message);
-
-	/**
-	 * make sure we syncronize the order of the write-statements 
-	 */
-	static GStaticMutex log_mutex = G_STATIC_MUTEX_INIT;
 
 	/**
 	 * rotate logs straight away if log->rotate_logs is true
@@ -302,17 +337,25 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 	 */
 	if (-1 != log->log_file_fd) {
 		if (log->rotate_logs) {
-			chassis_log_close(log);
-			chassis_log_open(log);
+			gboolean is_rotated;
 
-			is_log_rotated = TRUE; /* we will need to dump even duplicates */
+			is_rotated = chassis_log_rotate(log, NULL);
+
+			log->rotate_logs = FALSE;
+
+			/* ->is_rotated stays set until the first message is logged
+			 * again to make sure we don't hide it as duplicate
+			 */
+			if (log->is_rotated == FALSE && is_rotated == TRUE) {
+				log->is_rotated = TRUE;
+			}
 		}
 	}
 
 	/* ignore the verbose log-levels */
-	if (log_level > log->min_lvl) return;
-
-	g_static_mutex_lock(&log_mutex);
+	if (log_level > log->min_lvl) {
+		return;
+	}
 
 	for (i = 0; log_lvl_map[i].name; i++) {
 		if (log_lvl_map[i].lvl == log_level) {
@@ -332,7 +375,7 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 	 * ignored at least 100 times, or they were last printed greater than 
 	 * 30 seconds ago.
 	 */
-	if (is_log_rotated ||
+	if (log->is_rotated ||
 	    !is_duplicate ||
 	    log->last_msg_count > 100 ||
 	    time(NULL) - log->last_msg_ts > 30) {
@@ -363,7 +406,18 @@ void chassis_log_func(const gchar *UNUSED_PARAM(log_domain), GLogLevelFlags log_
 		log->last_msg_count++;
 	}
 
-	log->rotate_logs = FALSE;
+	log->is_rotated = FALSE;
+}
+
+void chassis_log_func(const gchar *log_domain, GLogLevelFlags log_level, const gchar *message, gpointer user_data) {
+	/**
+	 * make sure we syncronize the order of the write-statements 
+	 */
+	static GStaticMutex log_mutex = G_STATIC_MUTEX_INIT;
+
+	g_static_mutex_lock(&log_mutex);
+
+	chassis_log_func_locked(log_domain, log_level, message, user_data);
 
 	g_static_mutex_unlock(&log_mutex);
 }
