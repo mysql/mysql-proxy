@@ -292,6 +292,24 @@ const char *chassis_log_skip_topsrcdir(const char *message) {
 	return message;
 }
 
+/*
+ * chassis_log_rotate_reopen:
+ * @log: a #chassis_log
+ * @userdata: ...
+ * @gerr: ...
+ *
+ * default log-rotate function
+ *
+ * assumes that:
+ * - log-file is moved to new name
+ * - SIGHUP is sent to process to announce log-file rotation
+ * - we reopen the log-file
+ *
+ * Only works on Unix has you can't move a file on windows if it was opened
+ * with open().
+ *
+ * Returns: %TRUE
+ */
 static gboolean
 chassis_log_rotate_reopen(chassis_log *log, gpointer userdata, GError **gerr) {
 	chassis_log_close(log);
@@ -300,10 +318,32 @@ chassis_log_rotate_reopen(chassis_log *log, gpointer userdata, GError **gerr) {
 	return TRUE;
 }
 
-gboolean chassis_log_rotate(chassis_log *log, GError **gerr) {
+/**
+ * chassis_log_rotate:
+ * @log: a #chassis_log
+ *
+ * rotate the logfile
+ *
+ * calls the rotation function provided by the user (or the default log-rotation function)
+ *
+ * Returns: %TRUE if the log-file was rotated, %FALSE on error
+ */
+gboolean
+chassis_log_rotate(chassis_log *log, GError **gerr) {
 	return log->rotate_func(log, log->rotate_func_data, gerr);
 }
 
+/**
+ * chassis_log_set_rotate_func:
+ * @log: a #chassis_log
+ * @rotate_func: (allow-none): log-file rotation function
+ * @userdata: (allow-none): userdata that is passed to @rotate_func
+ * @userdata_free: (allow-none): a #GDestroyNotify that is called when the rotate-function gets unset
+ *   
+ * set a rotate function that is called when logfile rotate is requested
+ *
+ * if @rotate_func is %NULL, the default log-rotation function is set
+ */
 void
 chassis_log_set_rotate_func(chassis_log *log, chassis_log_rotate_func rotate_func,
 		gpointer userdata, GDestroyNotify userdata_free) {
@@ -313,9 +353,14 @@ chassis_log_set_rotate_func(chassis_log *log, chassis_log_rotate_func rotate_fun
 		log->rotate_func_data = NULL;
 	}
 
+	if (NULL == rotate_func) {
+		log->rotate_func = chassis_log_rotate_reopen;
+	} else {
+		log->rotate_func = rotate_func;
+	}
+
 	log->rotate_func_data = userdata;
 	log->rotate_func_data_destroy = userdata_free;
-	log->rotate_func = rotate_func;
 
 	return;
 

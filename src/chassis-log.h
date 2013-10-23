@@ -39,7 +39,21 @@
 
 typedef struct _chassis_log chassis_log;
 
-typedef gboolean (*chassis_log_rotate_func)(chassis_log *, gpointer user_data, GError **gerr);
+/**
+ * chassis_log_rotate_func:
+ *
+ * prototype of the log rotation function
+ *
+ * used by #chassis_log_set_rotate_func and #chassis_log_rotate()
+ *
+ * the function has to 
+ * - return %TRUE if log-file rotation was successful,
+ *   %FALSE otherwise and set the @gerr accordingly
+ * - @user_data is passed through from #chassis_log_set_rotate_func()
+ * - @gerr is passed in from #chassis_log_rotate()
+ *
+ */
+typedef gboolean (*chassis_log_rotate_func)(chassis_log *log, gpointer user_data, GError **gerr);
 
 
 struct _chassis_log {
