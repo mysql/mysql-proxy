@@ -39,16 +39,27 @@ INCLUDE_DIRECTORIES(${EVENT_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR}) ## for the generated header file
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}) ## for the packaged header file
 
-IF(FLEX_EXECUTABLE)
-	FILE(REMOVE "${CMAKE_CURRENT_SOURCE_DIR}/sql-tokenizer.c")
+## don't require flex if we have sql-tokenizer.c in the source-dir
+## already as it was placed there at "make dist" time.
+SET(SQL_TOKENIZER_C "${CMAKE_CURRENT_SOURCE_DIR}/sql-tokenizer.c")
+
+IF(NOT EXISTS ${SQL_TOKENIZER_C})
+	FIND_PROGRAM(FLEX_EXECUTABLE NAMES flex DOC "full path of flex")
+	IF(NOT FLEX_EXECUTABLE)
+		MESSAGE(SEND_ERROR "flex wasn't found, -DFLEX_EXECUTABLE=...")
+	ENDIF()
+
+	SET(SQL_TOKENIZER_C "${CMAKE_CURRENT_BINARY_DIR}/sql-tokenizer.c")
 	ADD_CUSTOM_COMMAND(
-		OUTPUT  "${CMAKE_CURRENT_BINARY_DIR}/sql-tokenizer.c"
+		OUTPUT  ${SQL_TOKENIZER_C}
 		DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sql-tokenizer.l"
 		COMMAND ${FLEX_EXECUTABLE} 
-			-o"${CMAKE_CURRENT_BINARY_DIR}/sql-tokenizer.c"
+			-o ${SQL_TOKENIZER_C}
 			"${CMAKE_CURRENT_SOURCE_DIR}/sql-tokenizer.l"
 	)
-ENDIF(FLEX_EXECUTABLE)
+	SET_SOURCE_FILES_PROPERTIES(${SQL_TOKENIZER_C}
+		PROPERTIES GENERATED 1)
+ENDIF()
 
 ADD_EXECUTABLE(sql-tokenizer-gen
 	sql-tokenizer-tokens.c
@@ -72,7 +83,7 @@ SET(LUA_LFS_SOURCES
 )
 SET(LUA_MYSQL_SOURCES
 	mysql-proto.c
-	sql-tokenizer.c 
+	${SQL_TOKENIZER_C}
 	sql-tokenizer-keywords.c 
 	sql-tokenizer-tokens.c 
 	sql-tokenizer-lua.c 
