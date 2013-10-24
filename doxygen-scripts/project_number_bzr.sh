@@ -1,5 +1,5 @@
 #  $%BEGINLICENSE%$
-#  Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+#  Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
 # 
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License as
@@ -18,8 +18,6 @@
 # 
 #  $%ENDLICENSE%$
 #!/bin/sh
-# $%BEGINLICENSE%$
-# $%ENDLICENSE%$
 
 VERSION_INFO=`bzr version-info --custom --template="{branch_nick} Revision {revno} from {date}"`
 echo "\"$1 - $VERSION_INFO\""

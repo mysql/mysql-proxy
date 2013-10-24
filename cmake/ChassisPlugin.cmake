@@ -1,5 +1,5 @@
 #  $%BEGINLICENSE%$
-#  Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
+#  Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
 # 
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License as
@@ -17,8 +17,6 @@
 #  02110-1301  USA
 # 
 #  $%ENDLICENSE%$
-# $%BEGINLICENSE%$
-# $%ENDLICENSE%$
 
 MACRO(CHASSIS_PLUGIN_INSTALL _plugin_name)
 	IF(NOT WIN32)

@@ -1,5 +1,5 @@
 #  $%BEGINLICENSE%$
-#  Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+#  Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
 # 
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License as
@@ -18,7 +18,5 @@
 # 
 #  $%ENDLICENSE%$
 #!/bin/sh
-# $%BEGINLICENSE%$
-# $%ENDLICENSE%$
 
 bzr log --limit 1 --line $1 | sed -n 's/^\([0-9]*\):.*$/\1/p'
