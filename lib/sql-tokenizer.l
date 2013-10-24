@@ -62,6 +62,7 @@ sql_token_id comment_token_id = TK_UNKNOWN;
 %option never-interactive
 %option 8bit
 %option fast
+%option nounistd
 %x COMMENT LINECOMMENT QUOTED
 %%
 
