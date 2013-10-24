@@ -55,6 +55,8 @@ void chassis_plugin_free(chassis_plugin *p) {
 	if (p->module) g_module_close(p->module);
 	if (p->version) g_free(p->version);
 
+	if (p->stats && p->free_stats) p->free_stats(p->stats);
+
 	g_free(p);
 }
 
