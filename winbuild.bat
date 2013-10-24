@@ -1,5 +1,5 @@
 @rem  $%BEGINLICENSE%$
-@rem  Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+@rem  Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
 @rem 
 @rem  This program is free software; you can redistribute it and/or
 @rem  modify it under the terms of the GNU General Public License as
