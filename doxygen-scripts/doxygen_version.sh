@@ -1,3 +1,5 @@
+#!/bin/sh
+#
 #  $%BEGINLICENSE%$
 #  Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
 # 
@@ -17,6 +19,5 @@
 #  02110-1301  USA
 # 
 #  $%ENDLICENSE%$
-#!/bin/sh
 
 bzr log --limit 1 --line $1 | sed -n 's/^\([0-9]*\):.*$/\1/p'

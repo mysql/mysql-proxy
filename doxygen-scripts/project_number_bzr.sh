@@ -1,3 +1,5 @@
+#!/bin/sh
+#
 #  $%BEGINLICENSE%$
 #  Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
 # 
@@ -17,7 +19,6 @@
 #  02110-1301  USA
 # 
 #  $%ENDLICENSE%$
-#!/bin/sh
 
 VERSION_INFO=`bzr version-info --custom --template="{branch_nick} Revision {revno} from {date}"`
 echo "\"$1 - $VERSION_INFO\""
