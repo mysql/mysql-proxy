@@ -3,6 +3,8 @@
   * added callback to chassis_log to override the logfile rotation mechanism
   * fixed res.row_count and res.bytes not updated when field resultset field is a NULL
   * fixed access to backends.address in examples/tutorial-packets.lua
+  * don't accept --admin-password="" anymore
+
 
 0.8.3 - 
 
