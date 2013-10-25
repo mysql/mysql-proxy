@@ -457,7 +457,7 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 				/* we can't connect to the socket so no one is listening on it. We need
 				 * to unlink it (delete the name from the file system) to be able to
 				 * re-use it.
-				 * network_address_free does the the unlink, but to re-use it we need
+				 * network_address_free does the unlink, but to re-use it we need
 				 * to store the pathname associated with the socket before unlink it and
 				 * create a new socket with it.
 				 */
