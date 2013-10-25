@@ -41,7 +41,15 @@ CHASSIS_API GHashTable* chassis_stats_get(chassis_stats_t *user_data);
 
 #define CHASSIS_STATS_ALLOC_INC_NAME(name) ((chassis_global_stats != NULL) ? g_atomic_int_inc(&(chassis_global_stats->name ## _alloc)) : (void)0)
 #define CHASSIS_STATS_FREE_INC_NAME(name) ((chassis_global_stats != NULL) ? g_atomic_int_inc(&(chassis_global_stats->name ## _free)) : (void)0)
+
+/* the prototype of g_atomic_int_add() changed in 2.30.0 to
+ * return a gint instead of nothing (void)
+ */
+#if GLIB_CHECK_VERSION(2, 30, 0)
 #define CHASSIS_STATS_ADD_NAME(name, addme) ((chassis_global_stats != NULL) ? g_atomic_int_add(&(chassis_global_stats->name), addme) : 0)
+#else
+#define CHASSIS_STATS_ADD_NAME(name, addme) ((chassis_global_stats != NULL) ? g_atomic_int_add(&(chassis_global_stats->name), addme) : (void)0)
+#endif
 #define CHASSIS_STATS_GET_NAME(name) ((chassis_global_stats != NULL) ? g_atomic_int_get(&(chassis_global_stats->name)) : 0)
 #define CHASSIS_STATS_SET_NAME(name, setme) ((chassis_global_stats != NULL) ? g_atomic_int_set(&(chassis_global_stats->name), setme) : (void)0)
 
