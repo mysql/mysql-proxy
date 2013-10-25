@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -454,16 +454,22 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 					__FILE__, __LINE__,
 					con->dst->name->str,
 					g_strerror(errno), errno);
-				/* we can't connect to the socket so no one is listening on it and we can
-				 * delete it and create an equal one
+				/* we can't connect to the socket so no one is listening on it. We need
+				 * to unlink it (delete the name from the file system) to be able to
+				 * re-use it.
+				 * network_address_free does the the unlink, but to re-use it we need
+				 * to store the pathname associated with the socket before unlink it and
+				 * create a new socket with it.
 				 */
 				address_copy = g_strdup(con->dst->name->str);
 				con->dst->can_unlink_socket = TRUE;
-
-				/* free the previous network_address and create a new one */
 				network_address_free(con->dst);
+
 				con->dst = network_address_new();
 				network_address_set_address(con->dst, address_copy);
+
+				/* we can now free the address copy */
+				g_free(address_copy);
 
 				g_debug("%s: retrying to bind(%s)",
 						G_STRLOC,
@@ -478,8 +484,7 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 
 					return NETWORK_SOCKET_ERROR;
 				}
-			}
-			else {
+			} else {
 				g_critical("%s: bind(%s) failed: %s (%d)", 
 					G_STRLOC,
 					con->dst->name->str,
