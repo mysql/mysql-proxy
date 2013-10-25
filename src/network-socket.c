@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -443,13 +443,56 @@ network_socket_retval_t network_socket_bind(network_socket * con) {
 #endif
 		}
 
-
 		if (-1 == bind(con->fd, &con->dst->addr.common, con->dst->len)) {
-			g_critical("%s: bind(%s) failed: %s (%d)", 
+			gchar *address_copy;
+
+			/* binding failed so the address/socket is already being used
+			 * let's check if we can connect to it so we check if is being used 
+			 * by some app
+			 */
+			if (-1 == connect(con->fd, &con->dst->addr.common, con->dst->len)) {
+				g_debug("%s.%d: connect(%s) failed: %s (%d)", 
+					__FILE__, __LINE__,
+					con->dst->name->str,
+					g_strerror(errno), errno);
+				/* we can't connect to the socket so no one is listening on it. We need
+				 * to unlink it (delete the name from the file system) to be able to
+				 * re-use it.
+				 * network_address_free does the unlink, but to re-use it we need
+				 * to store the pathname associated with the socket before unlink it and
+				 * create a new socket with it.
+				 */
+				address_copy = g_strdup(con->dst->name->str);
+				con->dst->can_unlink_socket = TRUE;
+				network_address_free(con->dst);
+
+				con->dst = network_address_new();
+				network_address_set_address(con->dst, address_copy);
+
+				/* we can now free the address copy */
+				g_free(address_copy);
+
+				g_debug("%s: retrying to bind(%s)",
+						G_STRLOC,
+						con->dst->name->str);
+
+				/* let's bind again with the new socket */
+				if (-1 == bind(con->fd, &con->dst->addr.common, con->dst->len)) {
+					g_critical("%s: bind(%s) failed: %s (%d)", 
+						G_STRLOC,
+						con->dst->name->str,
+						g_strerror(errno), errno);
+
+					return NETWORK_SOCKET_ERROR;
+				}
+			} else {
+				g_critical("%s: bind(%s) failed: %s (%d)", 
 					G_STRLOC,
 					con->dst->name->str,
 					g_strerror(errno), errno);
-			return NETWORK_SOCKET_ERROR;
+
+				return NETWORK_SOCKET_ERROR;	
+			}
 		}
 
 		if (con->dst->addr.common.sa_family == AF_INET &&
