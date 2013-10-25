@@ -817,11 +817,20 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth) {
 					g_string_append_len(com_change_user, S(con->client->response->auth_plugin_data));
 
 					g_string_append_len(com_change_user, con->client->default_db->str, con->client->default_db->len + 1);
-					
+
+					network_mysqld_proto_append_int16(com_change_user, con->client->response->charset);
+
+					if (con->client->challenge->capabilities & CLIENT_PLUGIN_AUTH) {
+						g_string_append_len(com_change_user, con->client->response->auth_plugin_name->str, con->client->response->auth_plugin_name->len + 1);
+					}
+
 					network_mysqld_queue_append(
 							send_sock,
 							send_sock->send_queue, 
 							S(com_change_user));
+
+					/* we just injected a com_change_user packet so let's set the flag to track it on the connection */
+					st->is_in_com_change_user = TRUE;
 
 					/**
 					 * the server is already authenticated, the client isn't
@@ -1079,6 +1088,74 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_result) {
 	return NETWORK_SOCKET_SUCCESS;
 }
 
+NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_auth_old_password) {
+	network_socket *recv_sock, *send_sock;
+	network_packet packet;
+	guint32 packet_len;
+	network_mysqld_con_lua_t *st = con->plugin_con_state;
+
+	/* move the packet to the send queue */
+
+	recv_sock = con->client;
+	send_sock = con->server;
+
+	if (NULL == con->server) {
+		/**
+		 * we have to auth against same backend as we did before
+		 * but the user changed it
+		 */
+
+		network_mysqld_con_send_error(con->client, C("(lua) read-auth-old-password failed as backend_ndx got reset."));
+		con->state = CON_STATE_SEND_ERROR;
+		return NETWORK_SOCKET_SUCCESS;
+	}
+
+	packet.data = g_queue_peek_head(recv_sock->recv_queue->chunks);
+	packet.offset = 0;
+
+	packet_len = network_mysqld_proto_get_packet_len(packet.data);
+
+	if ((strleq(S(con->auth_switch_to_method), C("authentication_windows_client"))) &&
+	    (con->auth_switch_to_round == 0) &&
+	    (packet_len == 255)) {
+#if 1
+		/**
+		 * FIXME: the 2-packet win-auth protocol enhancements aren't properly tested yet.
+		 * therefore they are disabled for now.
+		 */
+		g_string_free(g_queue_pop_head(recv_sock->recv_queue->chunks), TRUE);
+
+		network_mysqld_con_send_error(recv_sock, C("long packets for windows-authentication aren't completely handled yet. Please use another auth-method for now."));
+
+		con->state = CON_STATE_SEND_ERROR;
+#else
+		con->auth_switch_to_round++;
+		/* move the packet to the send-queue
+		 */
+		network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
+				g_queue_pop_head(recv_sock->recv_queue->chunks));
+
+		/* stay in this state and read the next packet too */
+#endif
+	} else {
+		/* let's check if the proxy plugin injected a com_change_user packet so we
+		 * need to fix the packet-id
+		 */
+		if (st->is_in_com_change_user) {
+			network_mysqld_proto_set_packet_id(packet.data, send_sock->last_packet_id + 1);
+		}
+
+		/* move the packet to the send-queue
+		 */
+		network_mysqld_queue_append_raw(send_sock, send_sock->send_queue,
+				g_queue_pop_head(recv_sock->recv_queue->chunks));
+
+		con->state = CON_STATE_SEND_AUTH_OLD_PASSWORD;
+	}
+
+	return NETWORK_SOCKET_SUCCESS;
+}
+
 static network_mysqld_lua_stmt_ret proxy_lua_read_query(network_mysqld_con *con) {
 	network_mysqld_con_lua_t *st = con->plugin_con_state;
 	network_socket *recv_sock = con->client;
@@ -1239,6 +1316,11 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_read_query) {
 	send_sock = NULL;
 	recv_sock = con->client;
 	st->injected.sent_resultset = 0;
+
+	/* we already passed the CON_STATE_READ_AUTH_OLD_PASSWORD phase and sent all packets
+	 * to the client so we need to set the COM_CHANGE_USER flag back to FALSE
+	 */
+	st->is_in_com_change_user = FALSE;
 
 	NETWORK_MYSQLD_CON_TRACK_TIME(con, "proxy::ready_query::enter_lua");
 	ret = proxy_lua_read_query(con);
@@ -2139,6 +2221,7 @@ int network_mysqld_proxy_connection_init(network_mysqld_con *con) {
 	con->plugins.con_read_handshake            = proxy_read_handshake;
 	con->plugins.con_read_auth                 = proxy_read_auth;
 	con->plugins.con_read_auth_result          = proxy_read_auth_result;
+	con->plugins.con_read_auth_old_password	   = proxy_read_auth_old_password;
 	con->plugins.con_read_query                = proxy_read_query;
 	con->plugins.con_read_query_result         = proxy_read_query_result;
 	con->plugins.con_send_query_result         = proxy_send_query_result;
