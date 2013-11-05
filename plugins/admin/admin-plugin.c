@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -97,6 +97,10 @@
 
 #define C(x) x, sizeof(x) -1
 #define S(x) x->str, x->len
+
+#ifndef PLUGIN_VERSION
+#define PLUGIN_VERSION PACKAGE_VERSION "." CHASSIS_BUILD_TAG
+#endif
 
 struct chassis_plugin_config {
 	gchar *address;                   /**< listening address of the admin interface */
@@ -624,7 +628,7 @@ static int network_mysqld_admin_plugin_apply_config(chassis *chas, chassis_plugi
 G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
 	p->name         = g_strdup("admin");
-	p->version		= g_strdup(PACKAGE_VERSION);
+	p->version		= g_strdup(PLUGIN_VERSION);
 
 	p->init         = network_mysqld_admin_plugin_new;
 	p->get_options  = network_mysqld_admin_plugin_get_options;

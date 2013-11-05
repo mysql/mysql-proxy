@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2010, 2013, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -492,9 +492,11 @@ int chassis_options_set_cmdline_only_options(chassis_options_t *opts,
 int chassis_frontend_print_version() {
 	/* allow to pass down a build-tag at build-time which gets hard-coded into the binary */
 #ifndef CHASSIS_BUILD_TAG
-#define CHASSIS_BUILD_TAG PACKAGE_STRING
+#define CHASSIS_BUILD_TAG PACKAGE_VERSION
+	g_print("  chassis: %s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG);
+#else
+	g_print("  chassis: %s.%s" CHASSIS_NEWLINE, PACKAGE_VERSION, CHASSIS_BUILD_TAG);
 #endif
-	g_print("  chassis: %s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG); 
 	g_print("  glib2: %d.%d.%d" CHASSIS_NEWLINE, GLIB_MAJOR_VERSION, GLIB_MINOR_VERSION, GLIB_MICRO_VERSION);
 	g_print("  libevent: %s" CHASSIS_NEWLINE, event_get_version());
 

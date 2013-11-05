@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -34,6 +34,10 @@
 /* readline.h doesn't include stdio.h on darwin - Apple bug #5704686 */
 #include <stdio.h>
 #include <readline/readline.h>
+
+#ifndef PLUGIN_VERSION
+#define PLUGIN_VERSION PACKAGE_VERSION "." CHASSIS_BUILD_TAG
+#endif
 
 typedef struct {
 	gchar *command;
@@ -557,7 +561,7 @@ int plugin_init(chassis_plugin *p) {
 	/* append the our init function to the init-hook-list */
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
 	p->name         = g_strdup("client");
-	p->version		= g_strdup(PACKAGE_VERSION);
+	p->version		= g_strdup(PLUGIN_VERSION);
 
 	p->init         = network_mysqld_cli_plugin_init;
 	p->get_options  = network_mysqld_cli_plugin_get_options;

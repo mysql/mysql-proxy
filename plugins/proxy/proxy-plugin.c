@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -156,6 +156,10 @@ typedef int socklen_t;
 /* backward compat with MySQL pre-5.5.7 */
 #ifndef CLIENT_PLUGIN_AUTH
 #define CLIENT_PLUGIN_AUTH (1 << 19)
+#endif
+
+#ifndef PLUGIN_VERSION
+#define PLUGIN_VERSION PACKAGE_VERSION "." CHASSIS_BUILD_TAG
 #endif
 
 #define HASH_INSERT(hash, key, expr) \
@@ -2414,7 +2418,7 @@ int network_mysqld_proxy_plugin_apply_config(chassis *chas, chassis_plugin_confi
 G_MODULE_EXPORT int plugin_init(chassis_plugin *p) {
 	p->magic        = CHASSIS_PLUGIN_MAGIC;
 	p->name         = g_strdup("proxy");
-	p->version		= g_strdup(PACKAGE_VERSION);
+	p->version		= g_strdup(PLUGIN_VERSION);
 
 	p->init         = network_mysqld_proxy_plugin_new;
 	p->get_options  = network_mysqld_proxy_plugin_get_options;

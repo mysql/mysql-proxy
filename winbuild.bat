@@ -1,5 +1,5 @@
 @rem  $%BEGINLICENSE%$
-@rem  Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
+@rem  Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
 @rem 
 @rem  This program is free software; you can redistribute it and/or
 @rem  modify it under the terms of the GNU General Public License as
@@ -74,7 +74,7 @@
 @rem del CMakeCache.txt
 
 :CMAKE
-@cmake -G %GENERATOR% -DBUILD_NUMBER=%BUILD_NUMBER% -DMYSQL_LIBRARY_DIRS:PATH=%MYSQL_DIR%\lib\debug -DMYSQL_INCLUDE_DIRS:PATH=%MYSQL_DIR%\include -DGLIB_LIBRARY_DIRS:PATH=%GLIB_DIR%\lib -DGLIB_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGMODULE_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGTHREAD_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DCMAKE_BUILD_TYPE=Release .
+@cmake -G %GENERATOR% -DBUILD_TAG=%BUILD_TAG% -DMYSQL_LIBRARY_DIRS:PATH=%MYSQL_DIR%\lib\debug -DMYSQL_INCLUDE_DIRS:PATH=%MYSQL_DIR%\include -DGLIB_LIBRARY_DIRS:PATH=%GLIB_DIR%\lib -DGLIB_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGMODULE_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DGTHREAD_INCLUDE_DIRS:PATH=%GLIB_DIR%\include\glib-2.0;%GLIB_DIR%\lib\glib-2.0\include -DCMAKE_BUILD_TYPE=Release .
 
 @IF NOT %GENERATOR%=="NMake Makefiles" (GOTO VS08BUILD)
 nmake

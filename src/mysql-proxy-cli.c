@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -336,11 +336,13 @@ int main_cmdline(int argc, char **argv) {
 	if (frontend->print_version) {
 #ifndef CHASSIS_BUILD_TAG
 #define CHASSIS_BUILD_TAG PACKAGE_STRING
+		g_print("%s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG);
+#else
+		g_print("%s.%s" CHASSIS_NEWLINE, PACKAGE_STRING, CHASSIS_BUILD_TAG);
 #endif
-		g_print("%s" CHASSIS_NEWLINE, CHASSIS_BUILD_TAG); 
 		chassis_frontend_print_version();
 	}
-	
+
 	/* add the other options which can also appear in the configfile */
 	opts = chassis_options_new();
 	chassis_frontend_set_chassis_options(frontend, opts);
