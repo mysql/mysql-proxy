@@ -25,6 +25,7 @@ AC_EXEEXT
 
 
 # Checks for programs.
+AM_PROG_AR
 AC_PROG_CC
 AC_PROG_LD
 AC_PROG_INSTALL
@@ -55,7 +56,7 @@ AC_SUBST(RST2HTML)
 
 
 dnl more automake stuff
-AM_C_PROTOTYPES
+dnl AM_C_PROTOTYPES
 AC_C_BIGENDIAN
 
 dnl libtool
