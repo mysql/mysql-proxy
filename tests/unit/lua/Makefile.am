@@ -26,6 +26,14 @@ TESTS=proxy-test.lua \
       mysql-proto.lua \
       chassis.lua
 
+## as long as we support automake 1.10 we have to stick with the
+## serial test-suite to allow passing down the "lua-runner" via 
+## TESTS_ENVIRONMENT
+##
+## see https://www.gnu.org/software/automake/manual/html_node/Parallel-Test-Harness.html#Parallel-Test-Harness
+
+AUTOMAKE_OPTIONS=serial-tests
+
 TESTS_ENVIRONMENT = \
 	LUA_PATH="${top_srcdir}/lib/?.lua" \
 	LUA_CPATH=".libs/?.@DYNLIB_LUA_SUFFIX@;${top_builddir}/lib/.libs/?.@DYNLIB_LUA_SUFFIX@" \
