@@ -137,6 +137,28 @@ t_network_address_tostring_ipv4() {
 	network_address_free(addr);
 }
 
+/*
+ * check that the re-encoded address is the same
+ * as we provided
+ *
+ * Bug#16664004
+ */ 
+static void
+t_network_address_tostring_ipv4_with_port(void) {
+	network_address *addr;
+	char buf[255];
+	gsize buf_len = sizeof(buf);
+
+	addr = network_address_new();
+
+	g_assert_cmpint(network_address_set_address(addr, "127.0.0.1:3307"), ==, 0);
+	g_assert_cmpstr(addr->name->len, >, 0);
+	g_assert_cmpstr(addr->name->str, ==, "127.0.0.1:3307");
+
+	network_address_free(addr);
+}
+
+
 static void
 t_network_address_tostring_ipv6() {
 #ifdef AF_INET6
@@ -200,6 +222,7 @@ int main(int argc, char **argv) {
 	g_test_add_func("/core/network_address_new", t_network_address_new);
 	g_test_add_func("/core/network_address_set", t_network_address_set);
 	g_test_add_func("/core/network_address_tostring_ipv4", t_network_address_tostring_ipv4);
+	g_test_add_func("/core/network_address_tostring_ipv4-with-port", t_network_address_tostring_ipv4_with_port);
 	g_test_add_func("/core/network_address_tostring_ipv6", t_network_address_tostring_ipv6);
 	g_test_add_func("/core/network_address_tostring_unix", t_network_address_tostring_unix);
 	g_test_add_func("/core/network_address_resolve", t_network_address_resolve);

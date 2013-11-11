@@ -350,36 +350,6 @@ network_address_error(void) {
 /**
  * resolve a struct sockaddr into a string 
  */
-#ifdef _WIN32
-static const gchar *
-network_address_tostring_win32(network_address *addr, gchar *dst, gsize *dst_len, GError **gerr) {
-	DWORD addr_str_len = *dst_len;
-
-	if (0 != WSAAddressToString(&addr->addr, sizeof(addr->addr), NULL, dst, &addr_str_len)) {
-		int err = WSAGetLastError();
-
-		if (err == WSAEFAULT) {
-			g_set_error(gerr,
-					NETWORK_ADDRESS_ERROR,
-					NETWORK_ADDRESS_ERROR_DST_TOO_SMALL,
-					"WSAAddressToString() failed: %d",
-					err);
-			*dst_len = addr_str_len;
-		} else {
-			g_set_error(gerr,
-					NETWORK_ADDRESS_ERROR,
-					NETWORK_ADDRESS_ERROR_UNKNOWN,
-					"WSAAddressToString() failed: %d",
-					err);
-		}
-		return NULL;
-	}
-	*dst_len = addr_str_len; /* addr_str_len is incl. the \0 char */
-
-	return dst;
-}
-#endif
-
 static const gchar *
 network_address_tostring_inet_ntoa(network_address *addr, gchar *dst, gsize *dst_len, GError **gerr) {
 	const char *addr_str;
@@ -530,9 +500,7 @@ network_address_tostring(network_address *addr, char *dst, gsize *dst_len, GErro
 		return NULL;
 	}
 
-#ifdef _WIN32
-	addr_str = network_address_tostring_win32(addr, dst, dst_len, gerr);
-#elif defined(HAVE_INET_NTOP)
+#if defined(HAVE_INET_NTOP)
 	addr_str = network_address_tostring_inet_ntop(addr, dst, dst_len, gerr);
 #else
 	addr_str = network_address_tostring_inet_ntoa(addr, dst, dst_len, gerr);
