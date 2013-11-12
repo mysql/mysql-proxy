@@ -25,7 +25,9 @@ AC_EXEEXT
 
 
 # Checks for programs.
-AM_PROG_AR
+## automake-1.12 requires AM_PROG_AR, but automake-1.11 doesn't provide that yet
+## http://lists.gnu.org/archive/html/automake/2012-05/msg00014.html
+m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 AC_PROG_CC
 AC_PROG_LD
 AC_PROG_INSTALL
