@@ -19,14 +19,6 @@
 #  $%ENDLICENSE%$
 SUBDIRS=base bugs
 
-## as long as we support automake 1.10 we have to stick with the
-## serial test-suite to allow passing down the "lua-runner" via 
-## TESTS_ENVIRONMENT
-##
-## see https://www.gnu.org/software/automake/manual/html_node/Parallel-Test-Harness.html#Parallel-Test-Harness
-
-AUTOMAKE_OPTIONS=serial-tests
-
 TESTS_ENVIRONMENT = \
 	MYSQL_TEST_BIN="${MYSQL_TEST_BIN}" \
 	LUA_USER_PATH="${top_srcdir}/lib/?.lua" \
