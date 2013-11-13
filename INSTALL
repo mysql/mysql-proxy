@@ -18,7 +18,7 @@ Later you can update the tree by running
 As you built from BZR none of the configure scripts is prepared. You need:
 
 - autoconf 2.56 or higher
-- automake 1.9 or higher
+- automake 1.10, 1.11 or 1.12 (automake-1.13+ need a patch, see configure.ac)
 - libtool 1.5.x (not higher)
 - flex 
 

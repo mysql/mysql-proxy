@@ -7,6 +7,29 @@ AC_CONFIG_SRCDIR([src/mysql-proxy-cli.c])
 AC_CANONICAL_TARGET
 
 dnl require 1.10 to get abs_top_builddir and docdir
+dnl 
+dnl if running with automake 1.12+ add 'serial-tests' to this list
+dnl 
+dnl 1.10 is serial-tests implicitly
+dnl 1.11 added "parallel-tests" option (serial-tests still default)
+dnl 1.12 "serials-tests" option added
+dnl 1.13 "parallel-tests" default
+dnl
+dnl problem is:
+dnl * unknown options are an error
+dnl   "serial-tests" can only to be added if we are run with automake-1.12 or higher
+dnl * detecting the version we are running with at automake-runtime is tricky.
+dnl   AM_SET_CURRENT_AUTOMAKE_VERSION() sets $am__api_version at configure-runtime
+dnl
+dnl options:
+dnl
+dnl 1) port tests to "parallel tests" and require automake 1.11
+dnl 2) use "serial-tests" and require automake 1.12
+dnl 3) support automake 1.10+ and make users of 1.13+ add the "serial-tests" to AM_INIT_AUTOMAKE
+dnl    with a patch
+dnl
+dnl for now with stick with 3)
+dnl
 AM_INIT_AUTOMAKE([1.10 gnits -Wall])
 
 dnl enable silent rules if they are available (automake 1.11+)
