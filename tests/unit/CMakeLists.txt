@@ -205,8 +205,11 @@ set_property(TARGET check_chassis_log check_plugin check_mysqld_proto
 		COMPILE_DEFINITIONS "mysql_chassis_STATIC")
 ENDIF(WIN32)
 
-## adding all tests
-
+## adding all tests on Unix
+##
+## TODO: copy glib and the other shared lib dependencies into the tests/unit/ folder 
+## to allow the tests the find them. 
+IF(NOT WIN32)
 ADD_TEST(check_chassis_log check_chassis_log)
 ADD_TEST(check_plugin check_plugin)
 ADD_TEST(check_mysqld_proto check_mysqld_proto)
@@ -217,4 +220,4 @@ ADD_TEST(check_chassis_filemode check_chassis_filemode)
 ADD_TEST(t_network_injection t_network_injection)
 ADD_TEST(t_network_backend t_network_backend)
 ADD_TEST(t_chassis_frontend t_chassis_frontend)
-
+ENDIF()
