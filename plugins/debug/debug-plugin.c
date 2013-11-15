@@ -39,7 +39,11 @@
 #include <gmodule.h>
 
 #ifndef PLUGIN_VERSION
+#ifdef CHASSIS_BUILD_TAG
 #define PLUGIN_VERSION PACKAGE_VERSION "." CHASSIS_BUILD_TAG
+#else
+#define PLUGIN_VERSION PACKAGE_VERSION
+#endif
 #endif
 
 /**

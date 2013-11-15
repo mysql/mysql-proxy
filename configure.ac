@@ -304,11 +304,12 @@ AM_CONDITIONAL(USE_WRAPPER_SCRIPT, test x$WITH_WRAPPER_SCRIPT = xyes)
 dnl Check for a special build number to use
 AC_MSG_CHECKING(if we have a build number to use)
 AC_ARG_WITH([build-tag],
-	AC_HELP_STRING([--with-build-tag], [the build tag to use (default=0)]),
-	[CHASSIS_BUILD_TAG=$withval],
-	[CHASSIS_BUILD_TAG=0])
-AC_MSG_RESULT([using $CHASSIS_BUILD_TAG])
-AC_DEFINE_UNQUOTED([CHASSIS_BUILD_TAG], ["$CHASSIS_BUILD_TAG"], [proxy-build-tag])
+	AC_HELP_STRING([--with-build-tag], [the build tag to use (default=nil)]),
+	[AC_DEFINE_UNQUOTED([CHASSIS_BUILD_TAG],
+		["$withval"],
+		[proxy-build-tag])
+	AC_MSG_RESULT([using $withval])],
+	[AC_MSG_RESULT([no build-tag])])
 
 dnl Check for lua
 AC_MSG_CHECKING(which pkg-config file to use to find Lua)
