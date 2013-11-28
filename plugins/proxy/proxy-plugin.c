@@ -1746,6 +1746,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	if (con->server) {
 		switch (network_socket_connect_finish(con->server)) {
 		case NETWORK_SOCKET_SUCCESS:
+			/* increment the connected clients value only if we connected successfully */
+			st->backend->connected_clients++;
 			break;
 		case NETWORK_SOCKET_ERROR:
 		case NETWORK_SOCKET_ERROR_RETRY:
@@ -1870,8 +1872,6 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 	if (NULL == con->server) {
 		con->server = network_socket_new();
 		network_address_copy(con->server->dst, st->backend->addr);
-	
-		st->backend->connected_clients++;
 
 		switch(network_socket_connect(con->server)) {
 		case NETWORK_SOCKET_ERROR_RETRY:
@@ -1879,6 +1879,8 @@ NETWORK_MYSQLD_PLUGIN_PROTO(proxy_connect_server) {
 			 * call getsockopt() to see if we are done */
 			return NETWORK_SOCKET_ERROR_RETRY;
 		case NETWORK_SOCKET_SUCCESS:
+			/* increment the connected clients value only if we connected successfully */
+			st->backend->connected_clients++;
 			break;
 		default:
 			g_message("%s.%d: connecting to backend (%s) failed, marking it as down for ...", 
