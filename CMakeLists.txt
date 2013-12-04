@@ -76,6 +76,11 @@ IF(WIN32)
     ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS -D_SCL_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE)
     # turn off common warnings that are completely harmless in our case.
     ADD_DEFINITIONS(/wd4005 /wd4113 /wd4244 /wd4273 /wd4996)
+
+    ## add checksums to .exe and .dll
+    SET(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO} /RELEASE")
+    ## do not omit framepointers
+    SET(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} /Oy-")
 ENDIF(WIN32)
 
 MESSAGE(STATUS "libevent at libs:${EVENT_LIBRARY_DIRS} incl:${EVENT_INCLUDE_DIRS}")
