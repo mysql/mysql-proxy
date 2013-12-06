@@ -3,6 +3,8 @@ SUBDIRS =	cmake src lib plugins examples scripts tests m4 doc
 EXTRA_DIST = \
 		config.h.cmake \
 		Doxyfile \
+		COPYING.rtf \
+		README.rtf \
 		README.TESTS \
 		autogen.sh \
 		mysql-proxy.spec \
