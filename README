@@ -1,4 +1,4 @@
-MySQL Proxy 0.8.3
+MySQL Proxy 0.8
 
 This is a release of MySQL Proxy, a simple program that 
 sits between your client and MySQL server(s) that can 
@@ -8,7 +8,7 @@ software is released under the version 2 of the GNU
 General Public License. MySQL Proxy is brought to you 
 by the MySQL team at Oracle.
 
-Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
 
 The MySQL Proxy is licensed under the terms of the GPLv2
 <http://www.gnu.org/licenses/old-licenses/gpl-2.0.html>.
@@ -1278,10 +1278,10 @@ including the appropriate copyright notice somewhere in your product or
 its documentation.
 
 The LuaFileSystem library is designed and implemented by Roberto
-Ierusalimschy, André Carregal and Tomás Guisasola. The implementation is
+Ierusalimschy, Andre' Carregal and Toma's Guisasola. The implementation is
 not derived from licensed software.
 
-Copyright © 2003 Kepler Project.
+Copyright (c) 2003 Kepler Project.
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the
@@ -1359,7 +1359,7 @@ liblua
 Use of any of this software is governed by the terms of the license below:
 
 License for Lua 5.0 and later versions
-Copyright © 1994-2008 Lua.org, PUC-Rio.
+Copyright (c) 1994-2008 Lua.org, PUC-Rio.
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the
@@ -1389,7 +1389,7 @@ Use of any of this software is governed by the terms of the license below:
 
 License
 
-Copyright © 2008 Lua.org, PUC-Rio.
+Copyright (c) 2008 Lua.org, PUC-Rio.
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the
