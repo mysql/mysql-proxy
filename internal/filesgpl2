@@ -48,6 +48,7 @@ examples/tutorial-inject.lua
 examples/tutorial-keepalive.lua
 examples/tutorial-monitor.lua
 examples/tutorial-packets.lua
+examples/tutorial-prep-stmts.lua
 examples/tutorial-query-time.lua
 examples/tutorial-resultset.lua
 examples/tutorial-rewrite.lua
