@@ -152,9 +152,13 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 			break;
 		case MYSQLD_PACKET_EOF:
 			/**
-			 * in 5.0 we have CURSORs which have no rows, just a field definition
+			 * in 5.0 we have CURSORs
 			 *
-			 * TODO: find a test-case for it, is it COM_STMT_EXECUTE only?
+			 * COM_STMT_EXECUTE would have _CURSOR_EXISTS set in the EOF and no resultset
+			 * COM_STMT_FETCH would be executed afterwards to fetch the rows from the cursor
+			 *
+			 * Other commands may have that flag set too, with no special meaning
+			 * 
 			 */
 			if (packet->data->len == 9) {
 				eof_packet = network_mysqld_eof_packet_new();
@@ -167,10 +171,15 @@ int network_mysqld_proto_get_com_query_result(network_packet *packet, network_my
 					 * EOF together with SERVER_STATUS_CURSOR_EXISTS. In that case,
 					 * we aren't finished. (#61998)
 					 *
-					 * Only if _CURSOR_EXISTS is set alone, we have a field-definition-only
-					 * resultset
+					 * Only if _CURSOR_EXISTS is set alone AND this is COM_STMT_EXECUTE,
+					 * we have a field-definition-only resultset
+					 *
+					 * CURSOR_EXISTS indications that COM_STMT_FETCH should be used to
+					 * fetch data for this cursor, but can only be don't if we have 
+					 * a prepared statement
 					 */
-					if (eof_packet->server_status & SERVER_STATUS_CURSOR_EXISTS &&
+					if (use_binary_row_data &&
+					    eof_packet->server_status & SERVER_STATUS_CURSOR_EXISTS &&
 					    !(eof_packet->server_status & SERVER_MORE_RESULTS_EXISTS)) {
 						is_finished = 1;
 					} else {
