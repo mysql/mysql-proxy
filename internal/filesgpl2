@@ -250,6 +250,7 @@ src/test-latency.c
 
 shell: tests/CMakeLists.txt
 tests/gtester-to-junit.xslt
+tests/c-api-burst.c
 tests/Makefile.am
 
 tests/suite/base/Makefile.am
@@ -311,6 +312,16 @@ tests/suite/base/t/bug_46141-mock.lua
 tests/suite/base/t/bug_46141-test.lua
 tests/suite/base/t/bug_46141.options
 tests/suite/base/t/bug_46141.test
+tests/suite/base/t/bug_49248-mock.lua
+tests/suite/base/t/bug_49248-test.lua
+tests/suite/base/t/bug_49248.options
+tests/suite/base/t/bug_49248.test
+tests/suite/base/t/bug_55459-mock.lua
+tests/suite/base/t/bug_55459-test.lua
+tests/suite/base/t/bug_55459.options
+tests/suite/base/t/bug_55459.test
+tests/suite/base/t/bug_61998.lua
+tests/suite/base/t/bug_61998.test
 tests/suite/base/t/chain1.options
 tests/suite/base/t/chain1.test
 tests/suite/base/t/chain1a.lua
@@ -425,12 +436,14 @@ tests/unit/Makefile.am
 tests/unit/t_chassis_shutdown_hooks.c
 tests/unit/t_chassis_timings.c
 tests/unit/t_network_address.c
+tests/unit/t_network_asn1.c
 tests/unit/t_network_backend.c
 tests/unit/t_network_injection.c
 tests/unit/t_network_mysqld_masterinfo.c
 tests/unit/t_network_mysqld_packet.c
 tests/unit/t_network_queue.c
 tests/unit/t_network_socket.c
+tests/unit/t_network_spnego.c
 
 skip: THANKS
 winbuild.bat
