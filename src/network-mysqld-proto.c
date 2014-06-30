@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2007, 2014, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -962,7 +962,7 @@ int network_mysqld_proto_password_scramble(GString *response,
 	GString *step2;
 
 	g_return_val_if_fail(NULL != challenge, -1);
-	g_return_val_if_fail(20 == challenge_len, -1);
+	g_return_val_if_fail(20 == challenge_len || 21 == challenge_len, -1);
 	g_return_val_if_fail(NULL != hashed_password, -1);
 	g_return_val_if_fail(20 == hashed_password_len, -1);
 
@@ -984,13 +984,24 @@ int network_mysqld_proto_password_scramble(GString *response,
 
 	/* 2. SHA1(challenge + SHA1(hashed_password) */
 	cs = g_checksum_new(G_CHECKSUM_SHA1);
+
+	/* if the challenge is 21 bytes long it means we're behing a 5.5.7 or up server
+	 * that supports authentication plugins. After auth-plugin-data-2 the protocol adds
+	 * a spacing character to split it from the next part of the packet: auth-plugin-name.
+	 * That spacing char '\0' is the 21th byte.
+	 *
+	 * We assume that auth-plugin-data is always 20 bytes, on this scnenario it is 21 so we need
+	 * to ignore the last byte: the trailing '\0'.
+	 */
+	if (challenge_len == 21) challenge_len--;
+
 	g_checksum_update(cs, (guchar *)challenge, challenge_len);
 	g_checksum_update(cs, (guchar *)step2->str, step2->len);
-	
+
 	g_string_set_size(response, g_checksum_type_get_length(G_CHECKSUM_SHA1));
 	response->len = response->allocated_len;
 	g_checksum_get_digest(cs, (guchar *)response->str, &(response->len));
-	
+
 	g_checksum_free(cs);
 
 	/* XOR the hashed_password with SHA1(challenge + SHA1(hashed_password)) */
@@ -1088,11 +1099,21 @@ gboolean network_mysqld_proto_password_check(
 	g_return_val_if_fail(NULL != response, FALSE);
 	g_return_val_if_fail(20 == response_len, FALSE);
 	g_return_val_if_fail(NULL != challenge, FALSE);
-	g_return_val_if_fail(20 == challenge_len, FALSE);
+	g_return_val_if_fail(20 == challenge_len || 21 == challenge_len, FALSE);
 	g_return_val_if_fail(NULL != double_hashed, FALSE);
 	g_return_val_if_fail(20 == double_hashed_len, FALSE);
 
 	hashed_password = g_string_new(NULL);
+
+	/* if the challenge is 21 bytes long it means we're behind a 5.5.7 or up server
+	 * that supports authentication plugins. After auth-plugin-data-2 the protocol adds
+	 * a spacing character to split it from the next part of the packet: auth-plugin-name.
+	 * That spacing char '\0' is the 21th byte.
+	 *
+	 * We assume that auth-plugin-data is always 20 bytes, on this scenario it is 21 so we need
+	 * to ignore the last byte: the trailing '\0'.
+	 */
+	if (challenge_len == 21) challenge_len--;
 
 	network_mysqld_proto_password_unscramble(hashed_password, 
 			challenge, challenge_len,
