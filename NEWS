@@ -1,3 +1,7 @@
+0.8.5 -
+
+  * fixed handling of the challenge in network_mysqld_password_check()
+
 0.8.4 - 
 
   * added callback to chassis_log to override the logfile rotation mechanism
