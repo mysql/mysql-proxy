@@ -501,7 +501,7 @@ test_mysqld_check_password(void) {
 
 	g_assert_cmpint(0, ==, network_mysqld_proto_password_hash(hashed_password, S(hashed_password)));
 
-	g_assert_true(network_mysqld_proto_password_check(S(challenge), S(auth_plugin_data), S(hashed_password)));
+	g_assert_cmpint(TRUE, ==, network_mysqld_proto_password_check(S(challenge), S(auth_plugin_data), S(hashed_password)));
 
 	g_string_free(challenge, TRUE);
 	g_string_free(hashed_password, TRUE);
