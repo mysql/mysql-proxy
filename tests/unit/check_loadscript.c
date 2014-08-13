@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2008, 2014, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -23,7 +23,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
 #include <glib.h>
+#include <glib/gstdio.h>
+
+#include <errno.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -36,6 +43,7 @@
 #endif
 
 #include "lua-scope.h"
+#include "lua-load-factory.h"
 
 #if GLIB_CHECK_VERSION(2, 16, 0)
 #define C(x) x, sizeof(x) - 1
@@ -57,7 +65,7 @@ START_TEST(test_luaL_loadfile_factory) {
 #ifdef HAVE_LUA_H
 	lua_scope *sc = lua_scope_new();
 	g_assert(sc->L != NULL);
-	
+
 	/* lua_scope_load_script used to give a bus error, when supplying a non-existant script */
 	lua_scope_load_script(sc, "/this/is/not/there.lua");
 	g_assert(lua_isstring(sc->L, -1));		/* if it's a string, loading failed. exactly what we expect */
@@ -65,6 +73,52 @@ START_TEST(test_luaL_loadfile_factory) {
 	lua_scope_free(sc);
 #else
 	g_assert(1 != 0);	/* always succeeds */
+#endif
+} END_TEST
+
+/**
+ * @test luaL_loadfile_factory() errors
+ *
+ */
+START_TEST(test_luaL_loadfile_factory_errors) {
+#ifdef HAVE_LUA_H
+	lua_State *L = luaL_newstate();
+	gchar *tmp_file;
+	gchar *tmp_dir;
+	int fd;
+
+	tmp_dir = g_dir_make_tmp("TestDir-XXXXXX", NULL);
+
+	/* luaL_loadfile_factory returns LUA_ERRFILE if we use a directory and fopen sets as error EISDIR */
+	g_assert_cmpint(LUA_ERRFILE, ==, luaL_loadfile_factory(L, tmp_dir));
+
+	g_assert(lua_isstring(L, -1));
+	g_assert_cmpstr(g_strerror(EISDIR), == , lua_tostring(L, -1));
+
+	/* luaL_loadfile_factory returns LUA_ERRFILE if we don't set a path and fopen sets as error EFAULT */
+	g_assert_cmpint(LUA_ERRFILE, ==, luaL_loadfile_factory(L, NULL));
+
+	g_assert(lua_isstring(L, -1));
+	g_assert_cmpstr(g_strerror(EFAULT), == , lua_tostring(L, -1));
+
+	/* luaL_loadfile_factory returns LUA_ERRFILE if we don't set a path and fopen sets as error ENOENT */
+	g_assert_cmpint(LUA_ERRFILE, ==, luaL_loadfile_factory(L, "non-existant-file"));
+
+	g_assert(lua_isstring(L, -1));
+	g_assert_cmpstr(g_strerror(ENOENT), == , lua_tostring(L, -1));
+
+	/* luaL_loadfile_factory returns 0 if it succeeded */
+
+	fd = g_file_open_tmp("TestFile-XXXXXX", &tmp_file, NULL);
+
+	g_assert_cmpint(0, ==, luaL_loadfile_factory(L, tmp_file));
+
+	close(fd);
+	g_unlink(tmp_file);
+	g_rmdir(tmp_dir);
+	g_free(tmp_file);
+	g_free(tmp_dir);
+	lua_close(L);
 #endif
 } END_TEST
 
@@ -80,6 +134,7 @@ int main(int argc, char **argv) {
 	g_test_bug_base("http://bugs.mysql.com/");
 
 	g_test_add_func("/core/lua-load-factory", test_luaL_loadfile_factory);
+	g_test_add_func("/core/lua-loadfile-factory-dir", test_luaL_loadfile_factory_errors);
 
 	return g_test_run();
 }

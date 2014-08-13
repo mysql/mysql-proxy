@@ -1,5 +1,5 @@
 /* $%BEGINLICENSE%$
- Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2007, 2014, Oracle and/or its affiliates. All rights reserved.
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License as
@@ -96,7 +96,7 @@ const char *loadstring_factory_reader(lua_State G_GNUC_UNUSED *L, void *data, si
 				factory->state = LOAD_STATE_POSTFIX;
 				*size = 1;
 			}
-			
+
 			return factory->data.file.content;
 		}
 	case LOAD_STATE_POSTFIX:
@@ -134,7 +134,22 @@ int luaL_loadfile_factory(lua_State *L, const char *filename) {
 
 	factory.data.file.f = fopen(filename, "rb");
 
+	if (NULL == factory.data.file.f) {
+		lua_pop(L, 1); /* old error-msg */
+		lua_pushstring(L, g_strerror(errno));
+		ret = LUA_ERRFILE;
+
+		/* fopen failed, we cannot continue */
+		return ret;
+	}
+
 	ret = lua_load(L, loadstring_factory_reader, &factory, filename);
+
+	if (ferror(factory.data.file.f)) {
+		lua_pop(L, 1); /* old error-msg */
+		lua_pushstring(L, g_strerror(errno));
+		ret = LUA_ERRFILE;
+	}
 
 	fclose(factory.data.file.f);
 
