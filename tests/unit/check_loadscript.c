@@ -27,6 +27,10 @@
 #include <unistd.h>
 #endif
 
+#ifdef _WIN32
+#include <io.h> /* open, close, ...*/
+#endif
+
 #include <glib.h>
 #include <glib/gstdio.h>
 
