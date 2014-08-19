@@ -33,6 +33,10 @@
 #include <unistd.h>
 #endif
 
+#ifdef _WIN32
+#include <io.h> /* for close() */
+#endif
+
 #include <glib.h>
 #include <glib/gstdio.h>
 
@@ -87,11 +91,11 @@ static void test_log_skip_topsrcdir(void) {
 	g_assert_cmpstr("no prefix", ==, l->last_msg->str);
 
 	/* if we are built with absolute source filenames, make sure they are stripped */ 
-	g_critical("%s: with G_STRLOC", G_STRLOC); g_assert_cmpint(__LINE__, ==, 90); /* keep this in one line as the next ones are referencing it */
+	g_critical("%s: with G_STRLOC", G_STRLOC); g_assert_cmpint(__LINE__, ==, 94); /* keep this in one line as the next ones are referencing it */
 	if (g_path_is_absolute(__FILE__)) {
-		g_assert_cmpstr("tests" G_DIR_SEPARATOR_S "unit" G_DIR_SEPARATOR_S "check_chassis_log.c:90: with G_STRLOC", ==, l->last_msg->str);
+		g_assert_cmpstr("tests" G_DIR_SEPARATOR_S "unit" G_DIR_SEPARATOR_S "check_chassis_log.c:94: with G_STRLOC", ==, l->last_msg->str);
 	} else {
-		g_assert_cmpstr(__FILE__ ":90: with G_STRLOC", ==, l->last_msg->str);
+		g_assert_cmpstr(__FILE__ ":94: with G_STRLOC", ==, l->last_msg->str);
 	}
 
 	/* Bug#58941
