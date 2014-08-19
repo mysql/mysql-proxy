@@ -88,10 +88,10 @@ START_TEST(test_luaL_loadfile_factory_errors) {
 #ifdef HAVE_LUA_H
 	lua_State *L = luaL_newstate();
 	gchar *tmp_file;
-	gchar *tmp_dir;
+	const gchar *tmp_dir;
 	int fd;
 
-	tmp_dir = g_dir_make_tmp("TestDir-XXXXXX", NULL);
+	tmp_dir = g_get_tmp_dir();
 
 	/* luaL_loadfile_factory returns LUA_ERRFILE if we use a directory and fopen sets as error EISDIR */
 	g_assert_cmpint(LUA_ERRFILE, ==, luaL_loadfile_factory(L, tmp_dir));
@@ -119,9 +119,7 @@ START_TEST(test_luaL_loadfile_factory_errors) {
 
 	close(fd);
 	g_unlink(tmp_file);
-	g_rmdir(tmp_dir);
 	g_free(tmp_file);
-	g_free(tmp_dir);
 	lua_close(L);
 #endif
 } END_TEST
