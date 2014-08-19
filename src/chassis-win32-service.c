@@ -36,7 +36,7 @@ chassis_win32_invalid_parameter_handler_ignore(
 		const wchar_t * expression,
 		const wchar_t * function, 
 		const wchar_t * file, 
-		int line,
+		unsigned int line,
 		uintptr_t pReserved) {
 	/* do nothing */
 }
@@ -46,7 +46,7 @@ chassis_win32_invalid_parameter_handler_log(
 		const wchar_t * expression,
 		const wchar_t * function, 
 		const wchar_t * file, 
-		int line,
+		unsigned int line,
 		uintptr_t pReserved) {
 #ifdef _DEBUG
 	/* only if we linked against the debug-MSVCRT.dll we have useful information */

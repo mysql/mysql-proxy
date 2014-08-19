@@ -40,14 +40,14 @@ chassis_win32_invalid_parameter_handler_ignore(
 		const wchar_t * expression,
 		const wchar_t * function, 
 		const wchar_t * file, 
-		int line,
+		unsigned int line,
 		uintptr_t pReserved);
 void
 chassis_win32_invalid_parameter_handler_log(
 		const wchar_t * expression,
 		const wchar_t * function, 
 		const wchar_t * file, 
-		int line,
+		unsigned int line,
 		uintptr_t pReserved);
 
 _invalid_parameter_handler
